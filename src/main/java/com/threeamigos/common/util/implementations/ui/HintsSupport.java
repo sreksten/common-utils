@@ -13,8 +13,8 @@ public class HintsSupport {
     private final List<Hint<String>> hints;
     private int hintIndex;
 
-    protected HintsSupport(HintsPreferences hintsPreferences,
-                           HintsCollector<String> hintsCollector) {
+    public HintsSupport(HintsPreferences hintsPreferences,
+                        HintsCollector<String> hintsCollector) {
         this.hintsPreferences = hintsPreferences;
         hints = new ArrayList<>();
         hints.addAll(hintsCollector.getHints());
