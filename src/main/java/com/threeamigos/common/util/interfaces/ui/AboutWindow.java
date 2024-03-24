@@ -10,6 +10,6 @@ import java.awt.*;
 @FunctionalInterface
 public interface AboutWindow {
 
-    public void about(Component component);
+    void about(Component component);
 
 }
