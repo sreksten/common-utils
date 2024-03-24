@@ -13,6 +13,6 @@ public interface HintsDisplayer {
     /**
      * @param component parent component used to show hints (can be null)
      */
-    public void showHints(Component component);
+    void showHints(Component component);
 
 }

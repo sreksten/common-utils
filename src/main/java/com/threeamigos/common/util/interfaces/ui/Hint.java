@@ -9,5 +9,5 @@ package com.threeamigos.common.util.interfaces.ui;
 @FunctionalInterface
 public interface Hint<T> {
 
-    public T getHint();
+    T getHint();
 }

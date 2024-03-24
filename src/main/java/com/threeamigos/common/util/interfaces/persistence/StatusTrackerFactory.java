@@ -9,6 +9,6 @@ package com.threeamigos.common.util.interfaces.persistence;
 @FunctionalInterface
 public interface StatusTrackerFactory<T> {
 
-    public StatusTracker<T> buildStatusTracker(T entity);
+    StatusTracker<T> buildStatusTracker(T entity);
 
 }

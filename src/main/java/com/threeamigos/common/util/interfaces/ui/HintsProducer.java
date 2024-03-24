@@ -14,6 +14,6 @@ public interface HintsProducer<T> {
     /**
      * @return a collection of {@link Hint}s to show at startup.
      */
-    public Collection<Hint<T>> getHints();
+    Collection<Hint<T>> getHints();
 
 }
