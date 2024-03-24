@@ -8,11 +8,12 @@ import java.util.Collection;
  * @param <T> type of hint (e.g. java.lang.String)
  * @author Stefano Reksten
  */
+@FunctionalInterface
 public interface HintsProducer<T> {
 
-	/**
-	 * @return a collection of {@link Hint}s to show at startup.
-	 */
-	public Collection<Hint<T>> getHints();
+    /**
+     * @return a collection of {@link Hint}s to show at startup.
+     */
+    public Collection<Hint<T>> getHints();
 
 }

@@ -5,11 +5,12 @@ package com.threeamigos.common.util.interfaces.persistence;
  *
  * @author Stefano Reksten
  */
+@FunctionalInterface
 public interface Persistable {
 
-	/**
-	 * Ask the Persistable to save its state.
-	 */
-	void persist();
+    /**
+     * Ask the Persistable to save its state.
+     */
+    void persist();
 
 }

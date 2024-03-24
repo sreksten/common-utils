@@ -7,6 +7,7 @@ import java.awt.*;
  *
  * @author Stefano Reksten
  */
+@FunctionalInterface
 public interface HintsDisplayer {
 
     /**

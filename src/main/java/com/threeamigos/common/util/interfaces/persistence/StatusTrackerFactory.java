@@ -6,8 +6,9 @@ package com.threeamigos.common.util.interfaces.persistence;
  * @param <T>
  * @author Stefano Reksten
  */
+@FunctionalInterface
 public interface StatusTrackerFactory<T> {
 
-	public StatusTracker<T> buildStatusTracker(T entity);
+    public StatusTracker<T> buildStatusTracker(T entity);
 
 }
