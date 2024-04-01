@@ -9,44 +9,44 @@ import com.threeamigos.common.util.interfaces.preferences.Preferences;
  */
 public interface WindowPreferences extends Preferences {
 
-	/**
-	 * @param width preferred window width
-	 */
-	public void setWidth(int width);
+    /**
+     * @param width preferred window width
+     */
+    void setWidth(int width);
 
-	/**
-	 * @return preferred window width
-	 */
-	public int getWidth();
+    /**
+     * @return preferred window width
+     */
+    int getWidth();
 
-	/**
-	 * @param height preferred window height
-	 */
-	public void setHeight(int height);
+    /**
+     * @param height preferred window height
+     */
+    void setHeight(int height);
 
-	/**
-	 * @return preferred window height
-	 */
-	public int getHeight();
+    /**
+     * @return preferred window height
+     */
+    int getHeight();
 
-	/**
-	 * @param x preferred window x coordinate
-	 */
-	public void setX(int x);
+    /**
+     * @param x preferred window x coordinate
+     */
+    void setX(int x);
 
-	/**
-	 * @return preferred window x coordinate
-	 */
-	public int getX();
+    /**
+     * @return preferred window x coordinate
+     */
+    int getX();
 
-	/**
-	 * @param y preferred window y coordinate
-	 */
-	public void setY(int y);
+    /**
+     * @param y preferred window y coordinate
+     */
+    void setY(int y);
 
-	/**
-	 * @return preferred window y coordinate
-	 */
-	public int getY();
+    /**
+     * @return preferred window y coordinate
+     */
+    int getY();
 
 }

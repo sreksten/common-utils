@@ -10,6 +10,6 @@ import com.threeamigos.common.util.interfaces.PropertyChangeAware;
  */
 public interface UserInputTracker extends PropertyChangeAware {
 
-	public InputConsumer getInputConsumer();
+    InputConsumer getInputConsumer();
 
 }

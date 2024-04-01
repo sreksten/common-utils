@@ -9,9 +9,9 @@ import com.threeamigos.common.util.interfaces.persistence.PersistResult;
  */
 public interface FilePersistResult extends PersistResult {
 
-	/**
-	 * @return the name of the file bound to the object
-	 */
-	public String getFilename();
+    /**
+     * @return the name of the file bound to the object
+     */
+    String getFilename();
 
 }

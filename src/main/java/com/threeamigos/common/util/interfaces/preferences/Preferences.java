@@ -13,17 +13,22 @@ public interface Preferences extends PropertyChangeAware {
     /**
      * @return a description of this set of preferences.
      */
-    public String getDescription();
+    String getDescription();
 
     /**
      * Checks if the preferences are in a valid state.
      * If not it may throw a RuntimeException.
      */
-    public void validate();
+    default void validate() {
+        /*
+        Standard implementation does nothing, just to prevent adding a lot of empty methods.
+        Not all preferences require to validate their values.
+         */
+    }
 
     /**
      * Loads the default values for this set of preferences.
      */
-    public void loadDefaultValues();
+    void loadDefaultValues();
 
 }

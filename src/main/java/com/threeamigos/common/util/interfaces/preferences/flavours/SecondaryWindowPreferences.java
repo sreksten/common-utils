@@ -7,16 +7,16 @@ package com.threeamigos.common.util.interfaces.preferences.flavours;
  */
 public interface SecondaryWindowPreferences extends WindowPreferences {
 
-	public static final boolean VISIBLE_DEFAULT = false;
+    boolean VISIBLE_DEFAULT = false;
 
-	/**
-	 * @param visible true if the window should be visible, thus opened at startup
-	 */
-	public void setVisible(boolean visible);
+    /**
+     * @param visible true if the window should be visible, thus opened at startup
+     */
+    void setVisible(boolean visible);
 
-	/**
-	 * @return true if the window is currently visible
-	 */
-	public boolean isVisible();
+    /**
+     * @return true if the window is currently visible
+     */
+    boolean isVisible();
 
 }

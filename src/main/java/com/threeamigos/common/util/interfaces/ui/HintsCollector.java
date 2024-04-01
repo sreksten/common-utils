@@ -9,24 +9,24 @@ import java.util.Collection;
  */
 public interface HintsCollector<T> {
 
-	/**
-	 * @param hint a Hint to add
-	 */
-	public void addHint(Hint<T> hint);
+    /**
+     * @param hint a Hint to add
+     */
+    void addHint(Hint<T> hint);
 
-	/**
-	 * @param hints a collection of hints to add
-	 */
-	public void addHints(Collection<Hint<T>> hints);
+    /**
+     * @param hints a collection of hints to add
+     */
+    void addHints(Collection<Hint<T>> hints);
 
-	/**
-	 * @param hintsProducer returns a collection of hints to add
-	 */
-	public void addHints(HintsProducer<T> hintsProducer);
+    /**
+     * @param hintsProducer returns a collection of hints to add
+     */
+    void addHints(HintsProducer<T> hintsProducer);
 
-	/**
-	 * @return all hints collected so far
-	 */
-	public Collection<Hint<T>> getHints();
+    /**
+     * @return all hints collected so far
+     */
+    Collection<Hint<T>> getHints();
 
 }

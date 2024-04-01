@@ -9,27 +9,27 @@ import com.threeamigos.common.util.interfaces.preferences.Preferences;
  */
 public interface HintsPreferences extends Preferences {
 
-	public static final boolean HINTS_PREFERENCES_VISIBLE_DEFAULT = true;
-	public static final int HINTS_PREFERENCES_INDEX_DEFAULT = -1;
+    boolean HINTS_PREFERENCES_VISIBLE_DEFAULT = true;
+    int HINTS_PREFERENCES_INDEX_DEFAULT = -1;
 
-	/**
-	 * @param hintsVisibleAtStartup true if hints should be shown at startup.
-	 */
-	public void setHintsVisibleAtStartup(boolean hintsVisibleAtStartup);
+    /**
+     * @param hintsVisibleAtStartup true if hints should be shown at startup.
+     */
+    void setHintsVisibleAtStartup(boolean hintsVisibleAtStartup);
 
-	/**
-	 * @return true if hints should be visible at startup.
-	 */
-	public boolean isHintsVisibleAtStartup();
+    /**
+     * @return true if hints should be visible at startup.
+     */
+    boolean isHintsVisibleAtStartup();
 
-	/**
-	 * @param lastHintIndex index of the last hint shown to the user.
-	 */
-	public void setLastHintIndex(int lastHintIndex);
+    /**
+     * @param lastHintIndex index of the last hint shown to the user.
+     */
+    void setLastHintIndex(int lastHintIndex);
 
-	/**
-	 * @return index of last hint shown to the user.
-	 */
-	public int getLastHintIndex();
+    /**
+     * @return index of last hint shown to the user.
+     */
+    int getLastHintIndex();
 
 }
