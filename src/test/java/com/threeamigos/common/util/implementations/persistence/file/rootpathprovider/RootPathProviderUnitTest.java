@@ -47,7 +47,8 @@ public class RootPathProviderUnitTest {
         @Test
         @DisplayName("Should throw NullClassException when class parameter is null")
         void shouldThrowExceptionWhenClassIsNull() {
-            assertThrows(NullClassException.class, () -> new RootPathProviderImpl((Class<?>) null, messageHandler));
+            Class<?> clazz = null;
+            assertThrows(NullClassException.class, () -> new RootPathProviderImpl(clazz, messageHandler));
         }
 
         @Test
@@ -116,7 +117,7 @@ public class RootPathProviderUnitTest {
             new RootPathProviderImpl(testClass, messageHandler);
             // Then
             assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(NoPackageException.class, messageHandler.getAllExceptions().getFirst().getClass());
+            assertEquals(NoPackageException.class, messageHandler.getAllExceptions().get(0).getClass());
         }
 
         @Test
@@ -129,7 +130,7 @@ public class RootPathProviderUnitTest {
             new RootPathProviderImpl(testClass, messageHandler);
             // Then
             assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(NoCanonicalNameException.class, messageHandler.getAllExceptions().getFirst().getClass());
+            assertEquals(NoCanonicalNameException.class, messageHandler.getAllExceptions().get(0).getClass());
         }
     }
 
@@ -179,7 +180,7 @@ public class RootPathProviderUnitTest {
             }
             // Then
             assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(EmptyPathException.class, messageHandler.getAllExceptions().getFirst().getClass());
+            assertEquals(EmptyPathException.class, messageHandler.getAllExceptions().get(0).getClass());
         }
 
         @Test
@@ -204,7 +205,7 @@ public class RootPathProviderUnitTest {
     class ParentDirectory {
         @Test
         @DisplayName("Should be valid if readable and writeable")
-        void shouldBeValidIfReadableAndWriteable() throws IOException {
+        void shouldBeValidIfReadableAndWriteable() {
             // Given
             File targetDir = new File(temporaryDirectory.getAbsolutePath()
                     + File.separator + "my"
@@ -233,7 +234,7 @@ public class RootPathProviderUnitTest {
             }
             // Then
             assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(ParentDirectoryNotWriteableException.class, messageHandler.getAllExceptions().getFirst().getClass());
+            assertEquals(ParentDirectoryNotWriteableException.class, messageHandler.getAllExceptions().get(0).getClass());
         }
 
         @Test
@@ -267,7 +268,7 @@ public class RootPathProviderUnitTest {
             }
             // Then
             assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(ParentDirectoryNotReadableException.class, messageHandler.getAllExceptions().getFirst().getClass());
+            assertEquals(ParentDirectoryNotReadableException.class, messageHandler.getAllExceptions().get(0).getClass());
         }
 
         @Test
@@ -294,7 +295,7 @@ public class RootPathProviderUnitTest {
     class TargetDirectory {
         @Test
         @DisplayName("Should be accessible if readable and writeable")
-        void shouldBeAccessible() throws IOException {
+        void shouldBeAccessible() {
             // Given
             RootPathProvider sut;
             synchronized (System.getProperties()) {
@@ -303,7 +304,7 @@ public class RootPathProviderUnitTest {
                 sut = new RootPathProviderImpl(this, messageHandler);
             }
             // Then
-            String expectedRootPath = temporaryDirectory.getAbsolutePath() + File.separator + "." + this.getClass().getPackageName();
+            String expectedRootPath = temporaryDirectory.getAbsolutePath() + File.separator + "." + this.getClass().getPackage().getName();
             assertTrue(sut.isRootPathAccessible());
             assertEquals(expectedRootPath, sut.getRootPath());
             assertFalse(sut.hasUnrecoverableErrors());
@@ -325,7 +326,7 @@ public class RootPathProviderUnitTest {
                 }
                 // Then
                 assertEquals(1, messageHandler.getAllExceptions().size());
-                assertEquals(DirectoryNotReadableException.class, messageHandler.getAllExceptions().getFirst().getClass());
+                assertEquals(DirectoryNotReadableException.class, messageHandler.getAllExceptions().get(0).getClass());
             }
 
             @Test
@@ -361,7 +362,7 @@ public class RootPathProviderUnitTest {
                 }
                 // Then
                 assertEquals(1, messageHandler.getAllExceptions().size());
-                assertEquals(DirectoryNotWriteableException.class, messageHandler.getAllExceptions().getFirst().getClass());
+                assertEquals(DirectoryNotWriteableException.class, messageHandler.getAllExceptions().get(0).getClass());
             }
 
             @Test
@@ -387,7 +388,7 @@ public class RootPathProviderUnitTest {
         class IsFile {
             @Test
             @DisplayName("Should warn")
-            void shouldWarnStd(TestReporter report) throws IOException {
+            void shouldWarnStd() throws IOException {
                 // Given
                 File tmp = FileUtils.createTemporaryDirectory();
                 File file = new File(tmp.getAbsolutePath() + File.separator + "test.txt");
@@ -401,12 +402,12 @@ public class RootPathProviderUnitTest {
                 }
                 // Then
                 assertEquals(1, messageHandler.getAllExceptions().size());
-                assertEquals(PathPointsToFileException.class, messageHandler.getAllExceptions().getFirst().getClass());
+                assertEquals(PathPointsToFileException.class, messageHandler.getAllExceptions().get(0).getClass());
             }
 
             @Test
             @DisplayName("Path should not be accessible")
-            void shouldNotBeAccessible(TestReporter report) throws IOException {
+            void shouldNotBeAccessible() throws IOException {
                 File tmp = FileUtils.createTemporaryDirectory();
                 File file = new File(tmp.getAbsolutePath() + File.separator + "test.txt");
                 if (!file.createNewFile()) {
@@ -422,7 +423,7 @@ public class RootPathProviderUnitTest {
                 assertFalse(sut.isRootPathAccessible());
                 assertNull(sut.getRootPath());
                 assertFalse(sut.hasUnrecoverableErrors());
-                assertEquals(PathPointsToFileException.class, messageHandler.getAllExceptions().getFirst().getClass());
+                assertEquals(PathPointsToFileException.class, messageHandler.getAllExceptions().get(0).getClass());
             }
         }
     }

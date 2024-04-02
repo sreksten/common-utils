@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.beans.PropertyChangeListener;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("hints")
 class HintsSupportUnitTest {
 
-    private Collection<Hint<String>> hints;
     private HintsPreferences hintsPreferences;
     private HintsCollector<String> hintsCollector;
 
@@ -31,7 +30,10 @@ class HintsSupportUnitTest {
         Hint<String> firstHint = new StringHint("First hint");
         Hint<String> secondHint = new StringHint("Second hint");
         Hint<String> thirdHint = new StringHint("Third hint");
-        hints = List.of(firstHint, secondHint, thirdHint);
+        Collection<Hint<String>> hints = new ArrayList<>();
+        hints.add(firstHint);
+        hints.add(secondHint);
+        hints.add(thirdHint);
         hintsPreferences = new HintsPreferencesImpl("Preferences changed");
         hintsCollector = new HintsCollectorImpl<>();
         hintsCollector.addHints(hints);
@@ -77,7 +79,7 @@ class HintsSupportUnitTest {
         // Given
         HintsSupport sut = new HintsSupport(hintsPreferences, hintsCollector);
         // When
-        Hint<String> hint = sut.getPreviousHint();
+        sut.getPreviousHint();
         // Then
         assertEquals(2, hintsPreferences.getLastHintIndex());
     }

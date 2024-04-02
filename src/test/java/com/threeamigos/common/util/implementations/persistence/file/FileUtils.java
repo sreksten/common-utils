@@ -6,11 +6,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,24 +27,14 @@ public class FileUtils {
         return tmpFile;
     }
 
-    public static File createTemporaryDirectory(PosixFilePermission permission) throws IOException {
-        FileAttribute<Set<PosixFilePermission>> fileAttribute = createFileAttributes(permission);
-        Path tmpPath = Files.createTempDirectory("temporaryDirectory", fileAttribute);
-        File tmpFile = tmpPath.toFile();
-        tmpFile.deleteOnExit();
-        return tmpFile;
-    }
-
     public static void applyFileAttributes(File file, PosixFilePermission... filePermissions) throws IOException {
         applyFileAttributes(file.toPath(), filePermissions);
     }
 
     public static void applyFileAttributes(Path path, PosixFilePermission... filePermissions) throws IOException {
-        Files.setPosixFilePermissions(path, new HashSet<>(List.of(filePermissions)));
-    }
-
-    public static FileAttribute<Set<PosixFilePermission>> createFileAttributes(PosixFilePermission... filePermissions) {
-        return PosixFilePermissions.asFileAttribute(new HashSet<>(List.of(filePermissions)));
+        Set<PosixFilePermission> permissions = new HashSet<>();
+        Collections.addAll(permissions, filePermissions);
+        Files.setPosixFilePermissions(path, permissions);
     }
 
     public static OutputStream createFailingOutputStream() throws IOException {

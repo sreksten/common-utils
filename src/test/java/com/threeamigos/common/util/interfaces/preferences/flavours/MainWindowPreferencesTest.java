@@ -23,6 +23,5 @@ class MainWindowPreferencesTest {
         // Then
         Assertions.assertNotNull(description);
         Assertions.assertFalse(description.isEmpty());
-        Assertions.assertFalse(description.isBlank());
     }
 }

@@ -24,6 +24,7 @@ class JsonFilePreferencesCollectorUnitTest {
 
     @Test
     @DisplayName("Should add preferences")
+    @SuppressWarnings("unchecked")
     void shouldAddPreferences() {
         // Given
         MessageHandler messageHandler = mock(MessageHandler.class);
@@ -43,6 +44,7 @@ class JsonFilePreferencesCollectorUnitTest {
 
     @Test
     @DisplayName("Should keep track of preferences")
+    @SuppressWarnings("unchecked")
     void shouldKeepTrackOfPreferences() {
         // Given
         MessageHandler messageHandler = mock(MessageHandler.class);

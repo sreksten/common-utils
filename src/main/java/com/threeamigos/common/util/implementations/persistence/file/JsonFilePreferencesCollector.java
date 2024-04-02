@@ -49,6 +49,8 @@ public class JsonFilePreferencesCollector<T extends Preferences> extends BasicPe
     public boolean isTracking(final Preferences preferences) {
         return getPersistables()
                 .stream()
-                .anyMatch(p -> p instanceof JsonFilePreferencesManager<?> manager && manager.isTracking(preferences));
+                .filter(p -> p instanceof JsonFilePreferencesManager<?>)
+                .map(p -> (JsonFilePreferencesManager<?>) p)
+                .anyMatch(p -> p.isTracking(preferences));
     }
 }

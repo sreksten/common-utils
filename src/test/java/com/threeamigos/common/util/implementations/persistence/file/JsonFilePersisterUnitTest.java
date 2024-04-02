@@ -37,7 +37,7 @@ class JsonFilePersisterUnitTest {
     private ExceptionHandler exceptionHandler;
 
     @BeforeEach
-    void setup(@TempDir File targetDirectory) throws IOException {
+    void setup(@TempDir File targetDirectory) {
         exceptionHandler = new InMemoryMessageHandler();
         this.targetDirectory = targetDirectory;
         synchronized (System.getProperties()) {
@@ -54,7 +54,7 @@ class JsonFilePersisterUnitTest {
 
     @Test
     @DisplayName("Should build a filename adding extension")
-    void shouldBuildFilenameAddingExtension() throws IOException {
+    void shouldBuildFilenameAddingExtension() {
         // Given
         JsonFilePersister<TestClass> sut = new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
         // When
@@ -65,7 +65,7 @@ class JsonFilePersisterUnitTest {
 
     @Test
     @DisplayName("Should keep track of entity description")
-    void shouldKeepsTrackOfEntityDescription() throws IOException {
+    void shouldKeepsTrackOfEntityDescription() {
         // Given
         JsonFilePersister<TestClass> sut = new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
         // When
@@ -76,11 +76,11 @@ class JsonFilePersisterUnitTest {
 
     @Test
     @DisplayName("Should build complete filename")
-    void shouldBuildCompleteFilename() throws IOException {
+    void shouldBuildCompleteFilename() {
         // Given
         JsonFilePersister<TestClass> sut = new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
         String expectedCompleteFilename = targetDirectory.getAbsolutePath() + File.separatorChar +
-                "." + this.getClass().getPackageName() + File.separatorChar + sut.getNamePart();
+                "." + this.getClass().getPackage().getName() + File.separatorChar + sut.getNamePart();
         // When
         String filenameWithPath = sut.getFilenameWithPath();
         // Then
@@ -89,7 +89,7 @@ class JsonFilePersisterUnitTest {
 
     @Test
     @DisplayName("Should throw exception if filename contains path separator")
-    void shouldThrowsExceptionIfFilenameContainsPathSeparator() throws IOException {
+    void shouldThrowsExceptionIfFilenameContainsPathSeparator() {
         // Given
         String illegalFilename = "file" + File.separatorChar + "name";
         // When

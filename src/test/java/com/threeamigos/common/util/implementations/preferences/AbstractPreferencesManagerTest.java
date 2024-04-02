@@ -94,7 +94,7 @@ class AbstractPreferencesManagerTest {
         String expectedValue = String.format(INVALID_PREFERENCES_TEMPLATE, mockInstance.getDescription(), "I/O error");
         verify(mockInstance, times(1)).loadDefaultValues();
         assertEquals(1, messageHandler.getAllErrorMessages().size());
-        assertEquals(expectedValue, messageHandler.getAllErrorMessages().getFirst());
+        assertEquals(expectedValue, messageHandler.getAllErrorMessages().get(0));
     }
 
     @Test
@@ -105,8 +105,7 @@ class AbstractPreferencesManagerTest {
         TestClass mockInstance = mock(TestClass.class);
         doThrow(new IllegalArgumentException("Test exception")).when(mockInstance).validate();
         // When
-        PreferencesManager<TestClass> sut = new BasicPreferencesManager<>(mockInstance, mockPersister,
-                mockStatusTrackerFactory, messageHandler);
+        new BasicPreferencesManager<>(mockInstance, mockPersister, mockStatusTrackerFactory, messageHandler);
         // Then
         verify(mockInstance, times(1)).loadDefaultValues();
     }
@@ -120,12 +119,11 @@ class AbstractPreferencesManagerTest {
         when(mockInstance.getDescription()).thenReturn("Test preferences");
         doThrow(new IllegalArgumentException("Invalid data...")).when(mockInstance).validate();
         // When
-        PreferencesManager<TestClass> sut = new BasicPreferencesManager<>(mockInstance, mockPersister,
-                mockStatusTrackerFactory, messageHandler);
+        new BasicPreferencesManager<>(mockInstance, mockPersister, mockStatusTrackerFactory, messageHandler);
         // Then
         String expectedValue = String.format(INVALID_PREFERENCES_TEMPLATE, mockInstance.getDescription(), "Invalid data...");
         assertEquals(1, messageHandler.getAllErrorMessages().size());
-        assertEquals(expectedValue, messageHandler.getAllErrorMessages().getFirst());
+        assertEquals(expectedValue, messageHandler.getAllErrorMessages().get(0));
     }
 
     @Test
@@ -175,6 +173,6 @@ class AbstractPreferencesManagerTest {
         // Then
         verify(mockPersister, times(1)).save(instance);
         assertEquals(1, messageHandler.getAllErrorMessages().size());
-        assertEquals("I/O error", messageHandler.getAllErrorMessages().getFirst());
+        assertEquals("I/O error", messageHandler.getAllErrorMessages().get(0));
     }
 }

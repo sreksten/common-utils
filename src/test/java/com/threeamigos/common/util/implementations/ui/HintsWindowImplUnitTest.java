@@ -13,8 +13,8 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.parallel.ResourceAccessMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -28,7 +28,10 @@ class HintsWindowImplUnitTest {
 
     @BeforeEach
     void setup() {
-        Collection<Hint<String>> hints = List.of(new StringHint("First hint"), new StringHint("Second hint"), new StringHint("Third hint"));
+        Collection<Hint<String>> hints = new ArrayList<>();
+        hints.add(new StringHint("First hint"));
+        hints.add(new StringHint("Second hint"));
+        hints.add(new StringHint("Third hint"));
         hintsPreferences = new HintsPreferencesImpl("hints preferences");
         HintsCollector<String> hintsCollector = new HintsCollectorImpl<>();
         hintsCollector.addHints(hints);

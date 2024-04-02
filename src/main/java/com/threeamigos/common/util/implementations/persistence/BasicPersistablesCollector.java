@@ -3,7 +3,10 @@ package com.threeamigos.common.util.implementations.persistence;
 import com.threeamigos.common.util.interfaces.persistence.Persistable;
 import com.threeamigos.common.util.interfaces.persistence.PersistablesCollector;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * An implementation of the {@link PersistablesCollector} interface.
@@ -20,7 +23,7 @@ public class BasicPersistablesCollector implements PersistablesCollector {
 
     protected BasicPersistablesCollector(final Persistable... persistables) {
         this();
-        this.persistables.addAll((List.of(persistables)));
+        Collections.addAll(this.persistables, persistables);
     }
 
     @Override

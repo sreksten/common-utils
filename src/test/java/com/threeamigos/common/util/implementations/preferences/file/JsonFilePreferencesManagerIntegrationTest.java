@@ -27,8 +27,8 @@ class JsonFilePreferencesManagerIntegrationTest {
     private Persister<TestClass> persister;
     private StatusTrackerFactory<TestClass> statusTrackerFactory;
 
-
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setup() {
         instance = new TestClass();
 

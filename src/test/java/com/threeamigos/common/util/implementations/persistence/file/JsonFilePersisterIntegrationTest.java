@@ -13,6 +13,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.*;
+import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermission;
 
 import static com.threeamigos.common.util.implementations.TestClass.*;
@@ -93,7 +94,7 @@ class JsonFilePersisterIntegrationTest {
 
     @Test
     @DisplayName("Should report file not found if file is not present in target directory")
-    void shouldReportFileNotFoundIfFileNotPresentInTargetDirectory() throws IOException {
+    void shouldReportFileNotFoundIfFileNotPresentInTargetDirectory() {
         // Given
         TestClass entity = new TestClass();
         JsonFilePersister<TestClass> sut = createSystemUnderTest(temporaryDirectory);
@@ -143,7 +144,7 @@ class JsonFilePersisterIntegrationTest {
 
     private void createFileIn(File temporaryDirectory, PosixFilePermission permission) throws IOException {
         // Create a subdirectory within
-        File subdirectory = new File(temporaryDirectory.getAbsolutePath() + File.separatorChar + "." + this.getClass().getPackageName());
+        File subdirectory = new File(temporaryDirectory.getAbsolutePath() + File.separatorChar + "." + this.getClass().getPackage().getName());
         if (!subdirectory.mkdirs()) {
             fail("Can't create subdirectories");
         }
@@ -191,7 +192,7 @@ class JsonFilePersisterIntegrationTest {
         private Json<TestClass> json;
 
         @BeforeEach
-        void setup() throws IOException {
+        void setup() {
             synchronized (System.getProperties()) {
                 System.setProperty(RootPathProviderImpl.ROOT_PATH_DIRECTORY_PARAMETER, temporaryDirectory.getAbsolutePath());
                 rootPathProvider = new RootPathProviderImpl(this, exceptionHandler);
@@ -201,7 +202,7 @@ class JsonFilePersisterIntegrationTest {
 
         @Test
         @DisplayName("Should not be successful when saving to target directory")
-        void shouldNotBeSuccessfulWhenFailingToSaveFileToTargetDirectory() throws IOException {
+        void shouldNotBeSuccessfulWhenFailingToSaveFileToTargetDirectory() {
             // Given
             TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
             JsonFilePersister<TestClass> sut = new FailingJsonFilePersister<>("filename-write", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
@@ -227,7 +228,7 @@ class JsonFilePersisterIntegrationTest {
             assertEquals(FileUtils.FILE_CORRUPTED_OR_ANY_OTHER_CAUSE, persistResult.getError());
         }
 
-        private static class FailingJsonFilePersister<T> extends JsonFilePersister<T> {
+        private class FailingJsonFilePersister<T> extends JsonFilePersister<T> {
 
             public FailingJsonFilePersister(String filename, String entityDescription, RootPathProvider rootPathProvider, ExceptionHandler exceptionHandler, Json<T> json) {
                 super(filename, entityDescription, rootPathProvider, exceptionHandler, json);
@@ -257,14 +258,14 @@ class JsonFilePersisterIntegrationTest {
 
     private void createFileWithJsonRepresentation(String filename) throws IOException {
         File file = new File(filename);
-        try (PrintStream stream = new PrintStream(new FileOutputStream(file))) {
+        try (PrintStream stream = new PrintStream(Files.newOutputStream(file.toPath()))) {
             stream.println(JSON_REPRESENTATION);
         }
     }
 
     private void createCorruptedFileWithJsonRepresentation(String filename) throws IOException {
         File file = new File(filename);
-        try (PrintStream stream = new PrintStream(new FileOutputStream(file))) {
+        try (PrintStream stream = new PrintStream(Files.newOutputStream(file.toPath()))) {
             stream.println(JSON_REPRESENTATION.substring(0, JSON_REPRESENTATION.length() / 2));
         }
     }

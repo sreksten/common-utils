@@ -7,8 +7,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -36,7 +36,9 @@ class HintsCollectorImplUnitTest {
     void shouldTrackHintsFromACollection() {
         // Given
         HintsCollector<String> sut = new HintsCollectorImpl<>();
-        Collection<Hint<String>> hints = List.of(new StringHint("A hint"), new StringHint("Another hint"));
+        Collection<Hint<String>> hints = new ArrayList<>();
+        hints.add(new StringHint("A hint"));
+        hints.add(new StringHint("Another hint"));
         // When
         sut.addHints(hints);
         // Then
@@ -48,13 +50,10 @@ class HintsCollectorImplUnitTest {
     void shouldTrackHintsFromAProducer() {
         // Given
         HintsCollector<String> sut = new HintsCollectorImpl<>();
-        final Collection<Hint<String>> hints = List.of(new StringHint("A hint"), new StringHint("Another hint"));
-        HintsProducer<String> producer = new HintsProducer<String>() {
-            @Override
-            public Collection<Hint<String>> getHints() {
-                return hints;
-            }
-        };
+        Collection<Hint<String>> hints = new ArrayList<>();
+        hints.add(new StringHint("A hint"));
+        hints.add(new StringHint("Another hint"));
+        HintsProducer<String> producer = () -> hints;
         // When
         sut.addHints(producer);
         // Then

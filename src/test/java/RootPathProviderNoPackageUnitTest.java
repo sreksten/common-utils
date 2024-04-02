@@ -37,9 +37,9 @@ class RootPathProviderNoPackageUnitTest {
         InMemoryMessageHandler messageHandler = new InMemoryMessageHandler();
         Class<?> clazz = TestClassWithoutPackage.class;
         // When
-        RootPathProvider sut = new RootPathProviderImpl(clazz, messageHandler);
+        new RootPathProviderImpl(clazz, messageHandler);
         // Then
         assertEquals(1, messageHandler.getAllExceptions().size());
-        assertEquals(EmptyPackageException.class, messageHandler.getAllExceptions().getFirst().getClass());
+        assertEquals(EmptyPackageException.class, messageHandler.getAllExceptions().get(0).getClass());
     }
 }

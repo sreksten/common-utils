@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
-import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.dnd.DropTargetDropEvent;
 import java.io.File;
 import java.io.IOException;
@@ -32,7 +31,10 @@ class DragAndDropSupportHelperUnitTest {
         File file1 = new File("first");
         File file2 = new File("second");
         File file3 = new File("third");
-        List<File> files = List.of(file1, file2, file3);
+        List<File> files = new ArrayList<>();
+        files.add(file1);
+        files.add(file2);
+        files.add(file3);
 
         Transferable transferable = new TransferableImpl(DataFlavor.javaFileListFlavor, files);
         DropTargetDropEvent mockEvent = mock(DropTargetDropEvent.class);
@@ -51,7 +53,10 @@ class DragAndDropSupportHelperUnitTest {
     @DisplayName("Should not support drag and drop of a list of strings")
     void shouldNotSupportDragAndDropOfListOfFiles() {
         // Given
-        List<String> strings = List.of("First", "Second", "Third");
+        List<String> strings = new ArrayList<>();
+        strings.add("First");
+        strings.add("Second");
+        strings.add("Third");
 
         Transferable transferable = new TransferableImpl(DataFlavor.stringFlavor, strings);
         DropTargetDropEvent mockEvent = mock(DropTargetDropEvent.class);
@@ -72,7 +77,7 @@ class DragAndDropSupportHelperUnitTest {
         // Given
         Transferable transferable = new TransferableImpl(DataFlavor.javaFileListFlavor, null) {
             @Override
-            public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException, IOException {
+            public Object getTransferData(DataFlavor flavor) throws IOException {
                 throw new IOException("Test I/O exception");
             }
         };
@@ -86,7 +91,7 @@ class DragAndDropSupportHelperUnitTest {
         // Then
         List<Exception> exceptions = sut.exceptionHandler.getAllExceptions();
         assertEquals(1, exceptions.size());
-        assertEquals("Test I/O exception", exceptions.getFirst().getMessage());
+        assertEquals("Test I/O exception", exceptions.get(0).getMessage());
     }
 
     private static class DndSupportClass extends Component implements Consumer<List<File>>, ExceptionHandler {
@@ -136,7 +141,7 @@ class DragAndDropSupportHelperUnitTest {
         }
 
         @Override
-        public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException, IOException {
+        public Object getTransferData(DataFlavor flavor) throws IOException {
             return object;
         }
     }

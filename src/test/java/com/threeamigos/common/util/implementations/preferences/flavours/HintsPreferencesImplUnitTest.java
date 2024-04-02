@@ -41,7 +41,6 @@ class HintsPreferencesImplUnitTest {
         // When
         String description = sut.getDescription();
         // Then
-        assertFalse(description.isBlank());
         assertFalse(description.isEmpty());
     }
 

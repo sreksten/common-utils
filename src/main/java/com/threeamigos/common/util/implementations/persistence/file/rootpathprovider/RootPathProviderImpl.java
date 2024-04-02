@@ -117,10 +117,11 @@ public class RootPathProviderImpl implements RootPathProvider {
         String home;
         String pathProperty = System.getProperty(ROOT_PATH_DIRECTORY_PARAMETER);
         if (pathProperty != null) {
-            if (pathProperty.isBlank()) {
+            pathProperty = pathProperty.trim();
+            if (pathProperty.isEmpty()) {
                 throw new EmptyPathException();
             } else {
-                home = pathProperty.trim();
+                home = pathProperty;
             }
         } else {
             home = System.getProperty("user.home");
