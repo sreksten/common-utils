@@ -37,14 +37,12 @@ class AboutWindowImplUnitTest {
     void shouldDisplaydAboutWindowWithCustomImage() {
         // Given
         AboutWindow sut = new AboutWindowImpl("3AM Test Application with custom image",
+                getClass().getResource("/custom_logo.png"),
                 "by Stefano Reksten - stefano.reksten@gmail.com",
-                "Released under the 3AM license",
-                getClass().getResource("/custom_logo.png"));
+                "Released under the 3AM license");
         // When
         sut.about(null);
         // Then it should simply work
         assertTrue(true);
     }
-
-
 }

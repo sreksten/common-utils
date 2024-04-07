@@ -14,22 +14,19 @@ import java.net.URL;
 public class AboutWindowImpl implements AboutWindow {
 
     private final String applicationName;
-    private final String author;
-    private final String releaseNotes;
     private final URL imgUrl;
+    private final String[] releaseNotes;
 
-    public AboutWindowImpl(String applicationName, String author, String releaseNotes) {
+    public AboutWindowImpl(String applicationName, String... releaseNotes) {
         this.applicationName = applicationName;
-        this.author = author;
-        this.releaseNotes = releaseNotes;
         this.imgUrl = getClass().getResource("/3AM_logo.png");
+        this.releaseNotes = releaseNotes;
     }
 
-    public AboutWindowImpl(String applicationName, String author, String releaseNotes, URL imageUrl) {
+    public AboutWindowImpl(String applicationName, URL imageUrl, String... releaseNotes) {
         this.applicationName = applicationName;
-        this.author = author;
-        this.releaseNotes = releaseNotes;
         this.imgUrl = imageUrl;
+        this.releaseNotes = releaseNotes;
     }
 
     @Override
@@ -49,17 +46,13 @@ public class AboutWindowImpl implements AboutWindow {
         mandelbrotLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         panel.add(mandelbrotLabel);
 
-        panel.add(Box.createVerticalStrut(5));
+        for (String note : releaseNotes) {
+            panel.add(Box.createVerticalStrut(5));
 
-        JLabel authorLabel = new JLabel(author);
-        authorLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(authorLabel);
-
-        panel.add(Box.createVerticalStrut(5));
-
-        JLabel license = new JLabel(releaseNotes);
-        license.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(license);
+            JLabel label = new JLabel(note);
+            label.setAlignmentX(Component.CENTER_ALIGNMENT);
+            panel.add(label);
+        }
 
         JOptionPane.showOptionDialog(component, panel, applicationName, JOptionPane.DEFAULT_OPTION,
                 JOptionPane.PLAIN_MESSAGE, null, null, null);
