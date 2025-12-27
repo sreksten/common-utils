@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.persistence.file.rootpathpro
 import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.io.File;
 import java.util.ResourceBundle;
@@ -10,7 +11,7 @@ import java.util.ResourceBundle;
 /**
  * An implementation of the {@link RootPathProvider} interface. Unless a root_path_directory System property
  * is specified, it uses the user.home System property as a starting point for the root path for the application.
- * It then adds the package name of the object passed as an argument and creates the directory structure if needed.
+ * It then adds the package name of the object or class passed as an argument and creates the directory structure if needed.
  */
 public class RootPathProviderImpl implements RootPathProvider {
 
@@ -23,11 +24,25 @@ public class RootPathProviderImpl implements RootPathProvider {
         return bundle;
     }
 
+    // End of static methods
+
     private final ExceptionHandler exceptionHandler;
     private String rootPath;
     private boolean rootPathAccessible;
     private boolean hasUnrecoverableErrors;
 
+    /**
+     * Builds a new RootPathProviderImpl instance. This is a class that determines a root path for the application in
+     * which files are stored. Unless a root_path_directory System property is specified, it uses the user.home System
+     * property as a starting point for the root path of the application, in which a subdirectory is created using the
+     * package name of the object passed as an argument. The application's main class should be used.<br/>
+     * If something goes wrong, the {@link #hasUnrecoverableErrors()} method returns true. In this case the program
+     * should abort or somehow choose another path.
+     * If the {@link #isRootPathAccessible()} method returns true the chosen path can be used to store files.
+     *
+     * @param object the object to use for root path determination
+     * @param exceptionHandler the exception handler to use
+     */
     public RootPathProviderImpl(final @NonNull Object object, final @NonNull ExceptionHandler exceptionHandler) {
         this.exceptionHandler = exceptionHandler;
         if (object == null) {
@@ -36,6 +51,18 @@ public class RootPathProviderImpl implements RootPathProvider {
         impl(object.getClass());
     }
 
+    /**
+     * Builds a new RootPathProviderImpl instance. This is a class that determines a root path for the application in
+     * which files are stored. Unless a root_path_directory System property is specified, it uses the user.home System
+     * property as a starting point for the root path of the application, in which a subdirectory is created using the
+     * package name of the class passed as an argument. The application's main class should be used.<br/>
+     * If something goes wrong, the {@link #hasUnrecoverableErrors()} method returns true. In this case the program
+     * should abort or somehow choose another path.
+     * If the {@link #isRootPathAccessible()} method returns true the chosen path can be used to store files.
+     *
+     * @param clazz the class to use for root path determination
+     * @param exceptionHandler the exception handler to use
+     */
     public RootPathProviderImpl(final @NonNull Class<?> clazz, final @NonNull ExceptionHandler exceptionHandler) {
         this.exceptionHandler = exceptionHandler;
         impl(clazz);
@@ -67,8 +94,13 @@ public class RootPathProviderImpl implements RootPathProvider {
 
     private void createNewDirectory(final File file, final String preferencesPath, final String packageName) {
         if (checkParentPathIsAccessible(file)) {
-            rootPath = buildRootPath(preferencesPath, packageName);
-            rootPathAccessible = true;
+            try {
+                rootPath = buildRootPath(preferencesPath, packageName);
+                rootPathAccessible = true;
+            } catch (DirectoryNotWriteableException e) {
+                rootPathAccessible = false;
+                hasUnrecoverableErrors = true;
+            }
         }
     }
 
@@ -87,7 +119,10 @@ public class RootPathProviderImpl implements RootPathProvider {
         return rootPathAccessible;
     }
 
-    public @NonNull String getRootPath() {
+    /**
+     * @return null if the root path is not accessible, otherwise the root path
+     */
+    public @Nullable String getRootPath() {
         return rootPath;
     }
 
@@ -199,7 +234,7 @@ public class RootPathProviderImpl implements RootPathProvider {
         File file = new File(completePath);
         if (!file.exists()) {
             if (!new File(completePath).mkdirs()) {
-                throw new RuntimeException(format("couldNotCreateDirectories", completePath));
+                throw new DirectoryNotWriteableException(format("directoryNotWriteable", completePath));
             }
         }
         return completePath;

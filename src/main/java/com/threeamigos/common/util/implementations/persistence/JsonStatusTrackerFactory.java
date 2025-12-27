@@ -8,9 +8,9 @@ import org.jspecify.annotations.NonNull;
 import java.util.ResourceBundle;
 
 /**
- * An implementation able to provide a state tracker for an object.
+ * An implementation able to provide a status tracker for an object.
  *
- * @param <T>
+ * @param <T> type of object to track
  * @author Stefano Reksten
  */
 public class JsonStatusTrackerFactory<T> implements StatusTrackerFactory<T> {
@@ -23,6 +23,8 @@ public class JsonStatusTrackerFactory<T> implements StatusTrackerFactory<T> {
         }
         return bundle;
     }
+
+    // End of static methods
 
     private final Json<T> json;
 

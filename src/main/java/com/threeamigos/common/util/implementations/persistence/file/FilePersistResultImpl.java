@@ -48,6 +48,8 @@ class FilePersistResultImpl implements FilePersistResult {
         return new FilePersistResultImpl(String.format(getBundle().getString("fileCannotBeWritten"), fileDescription));
     }
 
+    // End of static methods
+
     private final boolean successful;
     private boolean notFound;
 

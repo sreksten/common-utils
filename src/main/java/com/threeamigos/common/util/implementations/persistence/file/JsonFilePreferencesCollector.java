@@ -27,6 +27,8 @@ public class JsonFilePreferencesCollector<T extends Preferences> extends BasicPe
         return bundle;
     }
 
+    // End of static methods
+
     private final RootPathProvider rootPathProvider;
     private final MessageHandler messageHandler;
     private final StatusTrackerFactory<T> statusTrackerFactory;

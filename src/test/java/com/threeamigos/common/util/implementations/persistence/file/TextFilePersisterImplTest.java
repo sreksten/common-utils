@@ -6,6 +6,7 @@ import com.threeamigos.common.util.implementations.persistence.file.rootpathprov
 import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
 import com.threeamigos.common.util.interfaces.persistence.Persister;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -88,7 +89,7 @@ class TextFilePersisterImplTest {
         }
 
         @Override
-        protected void loadFromText(BufferedReader reader, TestClass entity) throws IOException, IllegalArgumentException {
+        protected void loadFromText(@NonNull BufferedReader reader, @NonNull TestClass entity) throws IllegalArgumentException {
             reader.lines().forEach(line -> {
                 if (line.startsWith("STRING:")) {
                     entity.setString(line.substring(7));
@@ -99,7 +100,7 @@ class TextFilePersisterImplTest {
         }
 
         @Override
-        protected void saveAsText(PrintWriter printWriter, TestClass entity) throws IOException, IllegalArgumentException {
+        protected void saveAsText(@NonNull PrintWriter printWriter, @NonNull TestClass entity) throws IllegalArgumentException {
             printWriter.print("STRING:");
             printWriter.println(entity.getString());
             printWriter.print("VALUE:");

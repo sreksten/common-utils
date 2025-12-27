@@ -3,7 +3,9 @@ package com.threeamigos.common.util.interfaces.messagehandler;
 import org.jspecify.annotations.NonNull;
 
 /**
- * An interface used to handle error messages.
+ * An interface used to handle error messages.<br/>
+ * If the message construction may be expensive, consider using a supplier instead
+ * (see {@link SupplierErrorMessageHandler}).
  *
  * @author Stefano Reksten
  */

@@ -15,7 +15,8 @@ public interface RootPathProvider {
     String ROOT_PATH_DIRECTORY_PARAMETER = "root_path_directory";
 
     /**
-     * @return true if unrecoverable errors were found (directory not existing, not readable, ...).
+     * @return true if unrecoverable errors were found (any programming error, such as passing a class without package,
+     * or any filesystem problem, such as a directory not existing, not readable, ...).
      * In this case the program should abort or somehow choose another path.
      */
     boolean hasUnrecoverableErrors();

@@ -4,7 +4,9 @@ package com.threeamigos.common.util.interfaces.messagehandler;
 import org.jspecify.annotations.NonNull;
 
 /**
- * An interface used to handle trace messages.
+ * An interface used to handle trace messages.<br/>
+ * If the message construction may be expensive, consider using a supplier instead
+ * (see {@link SupplierTraceMessageHandler}).
  *
  * @author Stefano Reksten
  */

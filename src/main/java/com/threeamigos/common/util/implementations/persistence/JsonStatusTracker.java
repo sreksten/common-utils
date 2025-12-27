@@ -24,6 +24,8 @@ public class JsonStatusTracker<T> implements StatusTracker<T> {
         return bundle;
     }
 
+    // End of static methods
+
     private final T entity;
     private final Json<T> json;
 

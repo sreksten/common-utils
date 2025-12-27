@@ -32,6 +32,8 @@ public class BasicPreferencesManager<T extends Preferences> implements Preferenc
         return bundle;
     }
 
+    // End of static methods
+
     static final String INVALID_PREFERENCES_TEMPLATE = "%s were invalid and have been replaced with default values. Error was: %s";
 
     private final T preferences;

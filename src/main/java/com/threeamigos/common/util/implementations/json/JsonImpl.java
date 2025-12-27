@@ -29,6 +29,8 @@ class JsonImpl<T> implements Json<T> {
         return bundle;
     }
 
+    // End of static methods
+
     private final Class<T> tClass;
     private final Map<Class<?>, JsonAdapter<?>> typeAdapters;
 

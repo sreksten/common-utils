@@ -32,6 +32,8 @@ public class JsonFilePersister<T> extends AbstractFilePersister<T> implements Pe
         return bundle;
     }
 
+    // End of static methods
+
     private final String filename;
     private final String entityDescription;
     private final Json<T> json;

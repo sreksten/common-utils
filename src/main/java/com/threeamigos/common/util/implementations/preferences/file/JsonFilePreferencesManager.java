@@ -9,7 +9,7 @@ import com.threeamigos.common.util.interfaces.preferences.PreferencesManager;
 import org.jspecify.annotations.NonNull;
 
 /**
- * An implementation of the {@link PreferencesManager} that uses Json both as
+ * An implementation of the {@link PreferencesManager} that uses JSON both as
  * file format and status tracker.
  *
  * @param <T> a set of {@link Preferences}

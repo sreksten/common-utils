@@ -24,7 +24,7 @@ public abstract class TextFilePersister<T> extends AbstractFilePersister<T> {
     }
 
     /**
-     * @param inputStream the stream from which data should be read
+     * @param inputStream the stream from which data should be read (UTF-8 encoded)
      * @param entity      the entity to be populated
      * @throws IllegalArgumentException if the file is mangled
      */
@@ -41,7 +41,7 @@ public abstract class TextFilePersister<T> extends AbstractFilePersister<T> {
             throws IOException, IllegalArgumentException;
 
     /**
-     * @param outputStream the stream to which a text-based representation of the entity should be saved
+     * @param outputStream the stream to which a text-based representation of the entity should be saved (UTF-8 encoded)
      * @param entity       the entity to persist
      */
     @Override

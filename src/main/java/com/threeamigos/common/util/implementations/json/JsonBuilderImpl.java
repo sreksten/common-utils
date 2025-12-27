@@ -25,6 +25,8 @@ class JsonBuilderImpl implements JsonBuilder {
         return bundle;
     }
 
+    // End of static methods
+
     private final Map<Class<?>, JsonAdapter<?>> map = new HashMap<>();
 
     @Override

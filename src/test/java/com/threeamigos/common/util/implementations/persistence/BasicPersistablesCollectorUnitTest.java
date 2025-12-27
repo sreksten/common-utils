@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collection;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -26,6 +27,21 @@ class BasicPersistablesCollectorUnitTest {
     void setup() {
         persistable1 = mock(Persistable.class);
         persistable2 = mock(Persistable.class);
+    }
+
+    @Test
+    @DisplayName("Collection constructor should throw exception if null collection is passed")
+    void collectionConstructorShouldThrowExceptionIfNullArrayIsPassed() {
+        assertThrows(IllegalArgumentException.class, () -> new BasicPersistablesCollector((Collection<Persistable>) null));
+    }
+
+    @Test
+    @DisplayName("Collection constructor should throw exception if null Persistable is passed")
+    void collectionConstructorShouldThrowExceptionIfNullPersistableIsPassed() {
+        // Given
+        Collection<Persistable> persistables = new ArrayList<>();
+        persistables.add(null);
+        assertThrows(IllegalArgumentException.class, () -> new BasicPersistablesCollector(persistables));
     }
 
     @Test

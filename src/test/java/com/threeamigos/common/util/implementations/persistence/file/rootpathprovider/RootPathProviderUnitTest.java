@@ -293,6 +293,32 @@ public class RootPathProviderUnitTest {
     @Nested
     @DisplayName("Target directory")
     class TargetDirectory {
+
+        @Test
+        @DisplayName("Should not be accessible if directory cannot be created")
+        void shouldWarnIfCannotBeCreated() throws IOException {
+            // Given a particular situation where the desired root path should create a subdirectory but part of the
+            // path traverses a file instead, e.g. /tmp/sub1/sub2/file.txt where sub2 is an existing file.
+            String subdirectoryName = temporaryDirectory.getAbsolutePath() + File.separator + "sub1";
+            File subdirectory = new File(subdirectoryName);
+            if (!subdirectory.createNewFile()) {
+                fail("Can't create file " + subdirectoryName);
+            }
+            subdirectoryName += File.separator + "sub2";
+            subdirectory = new File(subdirectoryName);
+            // When
+            RootPathProvider sut;
+            synchronized (System.getProperties()) {
+                System.setProperty(RootPathProvider.ROOT_PATH_DIRECTORY_PARAMETER, subdirectory.getAbsolutePath());
+                // When
+                sut = new RootPathProviderImpl(this, messageHandler);
+            }
+            // Then
+            assertFalse(sut.isRootPathAccessible());
+            assertNull(sut.getRootPath());
+            assertTrue(sut.hasUnrecoverableErrors());
+        }
+
         @Test
         @DisplayName("Should be accessible if readable and writeable")
         void shouldBeAccessible() {

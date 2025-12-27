@@ -18,6 +18,8 @@ public class HintsPreferencesImpl extends BasicPropertyChangeAware implements Hi
         return bundle;
     }
 
+    // End of static methods
+
     private boolean hintsVisibleAtStartup;
     private int lastHintIndex = -1;
     private final String propertyName;

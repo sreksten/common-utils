@@ -23,10 +23,20 @@ public class BasicPersistablesCollector implements PersistablesCollector {
         return bundle;
     }
 
+    // End of static methods
+
     private final Set<Persistable> persistables = new HashSet<>();
 
     protected BasicPersistablesCollector() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::persist));
+    }
+
+    protected BasicPersistablesCollector(final Collection<Persistable> persistables) {
+        this();
+        if (persistables == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullPersistablesProvided"));
+        }
+        addAllPersistables(persistables);
     }
 
     protected BasicPersistablesCollector(final Persistable... persistables) {
@@ -34,12 +44,16 @@ public class BasicPersistablesCollector implements PersistablesCollector {
         if (persistables == null) {
             throw new IllegalArgumentException(getBundle().getString("nullPersistablesProvided"));
         }
+        addAllPersistables(Arrays.asList(persistables));
+    }
+
+    private void addAllPersistables(final Collection<Persistable> persistables) {
         for (Persistable persistable : persistables) {
             if (persistable == null) {
                 throw new IllegalArgumentException(getBundle().getString("cannotAddNullPersistable"));
             }
+            this.persistables.add(persistable);
         }
-        Collections.addAll(this.persistables, persistables);
     }
 
     @Override
@@ -58,14 +72,19 @@ public class BasicPersistablesCollector implements PersistablesCollector {
         persistables.remove(persistable);
     }
 
+    /**
+     * @return an unmodifiable collection of tracked Persistables.
+     */
     @Override
     public @NonNull Collection<Persistable> getPersistables() {
         return Collections.unmodifiableSet(persistables);
     }
 
+    /**
+     * Persists all tracked Persistables.
+     */
     @Override
     public void persist() {
         persistables.forEach(Persistable::persist);
     }
-
 }

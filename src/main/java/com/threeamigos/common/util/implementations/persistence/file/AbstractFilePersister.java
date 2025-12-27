@@ -14,7 +14,7 @@ import java.util.ResourceBundle;
  * Boilerplate code added to return a {@link PersistResult}, but the load and save methods for serializing and
  * deserializing the entity must be overridden.
  *
- * @param <T>
+ * @param <T> type of entity
  * @author Stefano Reksten
  */
 public abstract class AbstractFilePersister<T> implements Persister<T> {
@@ -28,10 +28,16 @@ public abstract class AbstractFilePersister<T> implements Persister<T> {
         return bundle;
     }
 
+    // End of static methods
+
     protected final ExceptionHandler exceptionHandler;
     private final String rootPath;
     private final boolean rootPathAccessible;
 
+    /**
+     * @param rootPathProvider to know where to store the entity
+     * @param exceptionHandler to inform the end user if any error arises
+     */
     protected AbstractFilePersister(final @NonNull RootPathProvider rootPathProvider, final @NonNull ExceptionHandler exceptionHandler) {
         if (rootPathProvider == null) {
             throw new IllegalArgumentException(getBundle().getString("noRootPathProviderProvided"));

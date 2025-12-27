@@ -7,6 +7,7 @@ import com.threeamigos.common.util.interfaces.persistence.PersistResult;
  *
  * @author Stefano Reksten
  */
+
 public interface FilePersistResult extends PersistResult {
 
     /**

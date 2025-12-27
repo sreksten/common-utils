@@ -24,6 +24,8 @@ public class JsonColorAdapter implements JsonAdapter<Color> {
         return bundle;
     }
 
+    // End of static methods
+
     @Override
     public JsonElement serialize(final @NonNull Color src, final Type typeOfSrc, final JsonSerializationContext context) {
         if (src == null) {

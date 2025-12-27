@@ -77,11 +77,11 @@ class BasicPropertyChangeAwareUnitTest {
         sut.addPropertyChangeListener(secondListener);
         // When
         sut.removePropertyChangeListener(firstListener);
-        sut.firePropertyChange("Property change", "Previous", "Current");
+        sut.firePropertyChange("Another property change", "Previous", "Current");
         // Then
         verify(firstListener, times(0)).propertyChange(firstCaptor.capture());
         verify(secondListener, times(1)).propertyChange(secondCaptor.capture());
-        assertEquals("Property change", secondCaptor.getValue().getPropertyName());
+        assertEquals("Another property change", secondCaptor.getValue().getPropertyName());
         assertEquals("Previous", secondCaptor.getValue().getOldValue());
         assertEquals("Current", secondCaptor.getValue().getNewValue());
     }

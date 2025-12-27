@@ -8,7 +8,6 @@ package com.threeamigos.common.util.interfaces.persistence;
 public interface PersistResult {
 
 	/**
-	 *
 	 * @return true if the operation was successful, false otherwise.
 	 */
 	boolean isSuccessful();

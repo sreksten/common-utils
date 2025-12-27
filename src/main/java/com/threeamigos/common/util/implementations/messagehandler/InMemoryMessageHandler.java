@@ -6,7 +6,6 @@ import org.jspecify.annotations.NonNull;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.ResourceBundle;
 
 /**
  * An implementation of the {@link MessageHandler} interface that stores
@@ -15,16 +14,7 @@ import java.util.ResourceBundle;
  *
  * @author Stefano Reksten
  */
-public class InMemoryMessageHandler implements MessageHandler {
-
-    private static ResourceBundle bundle;
-
-    private static ResourceBundle getBundle() {
-        if (bundle == null) {
-            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler.InMemoryMessageHandler");
-        }
-        return bundle;
-    }
+public class InMemoryMessageHandler extends AbstractMessageHandler {
 
     private final List<String> allMessages = new ArrayList<>();
     private final List<String> allInfoMessages = new ArrayList<>();
@@ -37,87 +27,107 @@ public class InMemoryMessageHandler implements MessageHandler {
     private String lastMessage;
 
     @Override
-    public void handleInfoMessage(final @NonNull String message) {
-        handleImpl(message);
+    protected void handleInfoMessageImpl(final @NonNull String message) {
         allInfoMessages.add(message);
+        handleImpl(message);
     }
 
     @Override
-    public void handleWarnMessage(final @NonNull String message) {
-        handleImpl(message);
+    protected void handleWarnMessageImpl(final @NonNull String message) {
         allWarnMessages.add(message);
+        handleImpl(message);
     }
 
     @Override
-    public void handleErrorMessage(final @NonNull String message) {
-        handleImpl(message);
+    protected void handleErrorMessageImpl(final @NonNull String message) {
         allErrorMessages.add(message);
+        handleImpl(message);
     }
 
     @Override
-    public void handleDebugMessage(final @NonNull String message) {
-        handleImpl(message);
+    protected void handleDebugMessageImpl(final @NonNull String message) {
         allDebugMessages.add(message);
-    }
-
-    @Override
-    public void handleTraceMessage(final @NonNull String message) {
         handleImpl(message);
-        allTraceMessages.add(message);
     }
 
     @Override
-    public void handleException(final @NonNull Exception exception) {
-        if (exception == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullExceptionProvided"));
-        }
-        handleImpl(exception.getMessage());
+    protected void handleTraceMessageImpl(final @NonNull String message) {
+        allTraceMessages.add(message);
+        handleImpl(message);
+    }
+
+    @Override
+    protected void handleExceptionImpl(final @NonNull Exception exception) {
         allExceptionMessages.add(exception.getMessage());
         allExceptions.add(exception);
+        handleImpl(exception.getMessage());
     }
 
-    private void handleImpl(final String message) {
-        if (message == null) {
-            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
-        }
+    private void handleImpl(final @NonNull String message) {
         allMessages.add(message);
         lastMessage = message;
     }
 
+    /**
+     * @return an unmodifiable list of all messages handled by this instance.
+     */
     public List<String> getAllMessages() {
         return Collections.unmodifiableList(allMessages);
     }
 
+    /**
+     * @return an unmodifiable list of all info messages handled by this instance.
+     */
     public List<String> getAllInfoMessages() {
         return Collections.unmodifiableList(allInfoMessages);
     }
 
+    /**
+     * @return an unmodifiable list of all warning messages handled by this instance.
+     */
     public List<String> getAllWarnMessages() {
         return Collections.unmodifiableList(allWarnMessages);
     }
 
+    /**
+     * @return an unmodifiable list of all error messages handled by this instance.
+     */
     public List<String> getAllErrorMessages() {
         return Collections.unmodifiableList(allErrorMessages);
     }
 
+    /**
+     * @return an unmodifiable list of all debug messages handled by this instance.
+     */
     public List<String> getAllDebugMessages() {
         return Collections.unmodifiableList(allDebugMessages);
     }
 
+    /**
+     * @return an unmodifiable list of all trace messages handled by this instance.
+     */
     public List<String> getAllTraceMessages() {
         return Collections.unmodifiableList(allTraceMessages);
     }
 
+    /**
+     * @return an unmodifiable list of all exception messages handled by this instance.
+     */
     public List<String> getAllExceptionMessages() {
         return Collections.unmodifiableList(allExceptionMessages);
     }
 
+    /**
+     * @return an unmodifiable list of all exceptions handled by this instance.
+     */
     public List<Exception> getAllExceptions() {
         return Collections.unmodifiableList(allExceptions);
     }
 
+    /**
+     * @return the last message handled by this instance.
+     */
     public String getLastMessage() {
         return lastMessage;
     }
-
 }
