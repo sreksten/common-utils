@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.persistence.file;
 
 import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
+import org.jspecify.annotations.NonNull;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -18,7 +19,7 @@ public abstract class TextFilePersister<T> extends AbstractFilePersister<T> {
      * @param rootPathProvider to provide the root path where the entity should be persisted
      * @param exceptionHandler to inform the end user if any error arises
      */
-    protected TextFilePersister(final RootPathProvider rootPathProvider, final ExceptionHandler exceptionHandler) {
+    protected TextFilePersister(final @NonNull RootPathProvider rootPathProvider, final @NonNull ExceptionHandler exceptionHandler) {
         super(rootPathProvider, exceptionHandler);
     }
 
@@ -28,7 +29,7 @@ public abstract class TextFilePersister<T> extends AbstractFilePersister<T> {
      * @throws IllegalArgumentException if the file is mangled
      */
     @Override
-    protected void load(final InputStream inputStream, final T entity) throws IOException, IllegalArgumentException {
+    protected void load(final @NonNull InputStream inputStream, final @NonNull T entity) throws IOException, IllegalArgumentException {
         loadFromText(new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8)), entity);
     }
 
@@ -36,7 +37,7 @@ public abstract class TextFilePersister<T> extends AbstractFilePersister<T> {
      * @param reader the reader used to fetch data
      * @param entity the entity to be populated
      */
-    protected abstract void loadFromText(final BufferedReader reader, final T entity)
+    protected abstract void loadFromText(final @NonNull BufferedReader reader, final @NonNull T entity)
             throws IOException, IllegalArgumentException;
 
     /**
@@ -44,7 +45,7 @@ public abstract class TextFilePersister<T> extends AbstractFilePersister<T> {
      * @param entity       the entity to persist
      */
     @Override
-    protected void save(final OutputStream outputStream, final T entity) throws IOException {
+    protected void save(final @NonNull OutputStream outputStream, final @NonNull T entity) throws IOException {
         try (PrintWriter printWriter = new PrintWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8))) {
             saveAsText(printWriter, entity);
         }
@@ -55,7 +56,7 @@ public abstract class TextFilePersister<T> extends AbstractFilePersister<T> {
      * @param entity      the entity to persist
      * @throws IllegalArgumentException if for any reason the entity could not be saved
      */
-    protected abstract void saveAsText(final PrintWriter printWriter, final T entity)
+    protected abstract void saveAsText(final @NonNull PrintWriter printWriter, final @NonNull T entity)
             throws IOException, IllegalArgumentException;
 
 }

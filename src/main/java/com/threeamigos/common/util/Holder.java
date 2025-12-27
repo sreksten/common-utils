@@ -1,5 +1,7 @@
 package com.threeamigos.common.util;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A generic holder for objects of type T
  *
@@ -13,15 +15,15 @@ public class Holder<T> {
     public Holder() {
     }
 
-    public Holder(final T object) {
+    public Holder(final @Nullable T object) {
         this.object = object;
     }
 
-    public T get() {
+    public @Nullable T get() {
         return object;
     }
 
-    public void set(T object) {
+    public void set(@Nullable T object) {
         this.object = object;
     }
 

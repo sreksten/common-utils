@@ -28,7 +28,7 @@ public interface HintsPreferences extends Preferences {
     void setLastHintIndex(int lastHintIndex);
 
     /**
-     * @return index of last hint shown to the user.
+     * @return index of the last hint shown to the user.
      */
     int getLastHintIndex();
 

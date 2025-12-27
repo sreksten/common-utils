@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.interfaces.preferences.flavours;
 
 /**
- * An interface that keeps track of preferences of a secondary window of an application.
+ * An interface that keeps track of the preferences for a secondary window of an application.
  *
  * @author Stefano Reksten
  */

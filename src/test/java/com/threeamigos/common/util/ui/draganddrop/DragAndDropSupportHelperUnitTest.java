@@ -2,6 +2,7 @@ package com.threeamigos.common.util.ui.draganddrop;
 
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -106,7 +107,7 @@ class DragAndDropSupportHelperUnitTest {
         }
 
         @Override
-        public void handleException(Exception exception) {
+        public void handleException(@NonNull Exception exception) {
             exceptionHandler.handleException(exception);
         }
 

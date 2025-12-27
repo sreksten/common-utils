@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.persistence.file.rootpathpro
 
 public class ParentDirectoryNotReadableException extends IllegalArgumentException {
 
-    public ParentDirectoryNotReadableException(final String s) {
-        super(String.format("Folder parent %s cannot be read.", s));
+    public ParentDirectoryNotReadableException(final String localizedError) {
+        super(localizedError);
     }
 }

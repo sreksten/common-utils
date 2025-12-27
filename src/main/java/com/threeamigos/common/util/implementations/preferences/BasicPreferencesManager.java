@@ -7,8 +7,10 @@ import com.threeamigos.common.util.interfaces.persistence.StatusTracker;
 import com.threeamigos.common.util.interfaces.persistence.StatusTrackerFactory;
 import com.threeamigos.common.util.interfaces.preferences.Preferences;
 import com.threeamigos.common.util.interfaces.preferences.PreferencesManager;
+import org.jspecify.annotations.NonNull;
 
 import java.util.Objects;
+import java.util.ResourceBundle;
 
 /**
  * A basic implementation of the {@link PreferencesManager} interface,
@@ -20,6 +22,15 @@ import java.util.Objects;
  * @author Stefano Reksten
  */
 public class BasicPreferencesManager<T extends Preferences> implements PreferencesManager<T> {
+
+    private static ResourceBundle bundle;
+
+    private static ResourceBundle getBundle() {
+        if (bundle == null) {
+            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.preferences.BasicPreferencesManager.BasicPreferencesManager");
+        }
+        return bundle;
+    }
 
     static final String INVALID_PREFERENCES_TEMPLATE = "%s were invalid and have been replaced with default values. Error was: %s";
 
@@ -36,9 +47,21 @@ public class BasicPreferencesManager<T extends Preferences> implements Preferenc
      *                             in the set of Preferences
      * @param messageHandler       a {@link MessageHandler} used if problems arise
      */
-    public BasicPreferencesManager(final T preferences, final Persister<T> persister,
-                                   final StatusTrackerFactory<T> statusTrackerFactory,
-                                   final MessageHandler messageHandler) {
+    public BasicPreferencesManager(final @NonNull T preferences, final @NonNull Persister<T> persister,
+                                   final @NonNull StatusTrackerFactory<T> statusTrackerFactory,
+                                   final @NonNull MessageHandler messageHandler) {
+        if (preferences == null) {
+            throw new IllegalArgumentException(getBundle().getString("noPreferencesProvided"));
+        }
+        if (persister == null) {
+            throw new IllegalArgumentException(getBundle().getString("noPersisterProvided"));
+        }
+        if (statusTrackerFactory == null) {
+            throw new IllegalArgumentException(getBundle().getString("noStatusTrackerFactoryProvided"));
+        }
+        if (messageHandler == null) {
+            throw new IllegalArgumentException(getBundle().getString("noMessageHandlerProvided"));
+        }
         this.preferences = preferences;
         this.statusTracker = statusTrackerFactory.buildStatusTracker(preferences);
         this.persister = persister;
@@ -77,7 +100,10 @@ public class BasicPreferencesManager<T extends Preferences> implements Preferenc
         }
     }
 
-    public boolean isTracking(final Preferences preferences) {
+    public boolean isTracking(final @NonNull Preferences preferences) {
+        if (preferences == null) {
+            throw new IllegalArgumentException(getBundle().getString("noPreferencesProvided"));
+        }
         return Objects.equals(this.preferences, preferences);
     }
 }

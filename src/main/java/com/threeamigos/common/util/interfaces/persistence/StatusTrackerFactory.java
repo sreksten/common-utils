@@ -1,7 +1,9 @@
 package com.threeamigos.common.util.interfaces.persistence;
 
+import org.jspecify.annotations.NonNull;
+
 /**
- * An interface able to provide state trackers for objects.
+ * An interface able to provide status trackers for objects.
  *
  * @param <T>
  * @author Stefano Reksten
@@ -9,6 +11,6 @@ package com.threeamigos.common.util.interfaces.persistence;
 @FunctionalInterface
 public interface StatusTrackerFactory<T> {
 
-    StatusTracker<T> buildStatusTracker(T entity);
+    StatusTracker<T> buildStatusTracker(@NonNull T entity);
 
 }

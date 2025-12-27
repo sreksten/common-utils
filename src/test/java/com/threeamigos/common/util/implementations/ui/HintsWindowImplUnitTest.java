@@ -40,7 +40,7 @@ class HintsWindowImplUnitTest {
 
     @Test
     @DisplayName("Should open a hint window")
-    @EnabledIfEnvironmentVariable(named = "AWT_TESTS", matches = "true", disabledReason = "AWT_TESTS is not true")
+    @EnabledIfEnvironmentVariable(named = "AWT_TESTS", matches = "true", disabledReason = "Environment variable AWT_TESTS is not true")
     @ResourceLock(value = "java.lang.System#properties", mode = ResourceAccessMode.READ_WRITE)
     void shouldOpenHintWindow() {
         // Given

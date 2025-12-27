@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.interfaces.preferences;
 
 import com.threeamigos.common.util.interfaces.PropertyChangeAware;
+import org.jspecify.annotations.NonNull;
 
 /**
  * A set of preferences for part of an application. Extending {@link PropertyChangeAware},
@@ -13,16 +14,16 @@ public interface Preferences extends PropertyChangeAware {
     /**
      * @return a description of this set of preferences.
      */
-    String getDescription();
+    @NonNull String getDescription();
 
     /**
      * Checks if the preferences are in a valid state.
-     * If not it may throw a RuntimeException.
+     * If not, it may throw a RuntimeException.
      */
     default void validate() {
         /*
         Standard implementation does nothing, just to prevent adding a lot of empty methods.
-        Not all preferences require to validate their values.
+        Not all preferences require validating their values.
          */
     }
 

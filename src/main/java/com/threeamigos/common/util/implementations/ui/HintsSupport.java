@@ -7,6 +7,12 @@ import com.threeamigos.common.util.interfaces.ui.HintsCollector;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A class used to provide Hints support. Able to keep track of which hint was shown last and if hints are to be
+ * shown at startup.
+ *
+ * @author Stefano Reksten
+ */
 public class HintsSupport {
 
     private final HintsPreferences hintsPreferences;

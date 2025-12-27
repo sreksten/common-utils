@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import org.jspecify.annotations.NonNull;
 
 import java.util.*;
 
@@ -12,17 +13,41 @@ import java.util.*;
  */
 public class CompositeMessageHandler implements MessageHandler {
 
+    private static ResourceBundle bundle;
+
+    private static ResourceBundle getBundle() {
+        if (bundle == null) {
+            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.CompositeMessageHandler.CompositeMessageHandler");
+        }
+        return bundle;
+    }
+
     private final List<MessageHandler> messageHandlers = new ArrayList<>();
 
     public CompositeMessageHandler(final MessageHandler... handlers) {
-        messageHandlers.addAll(Arrays.asList(handlers));
+        if (handlers == null) {
+            throw new IllegalArgumentException(getBundle().getString("noMessageHandlersProvided"));
+        }
+        for (MessageHandler handler : handlers) {
+            if (handler == null) {
+                throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
+            } else {
+                messageHandlers.add(handler);
+            }
+        }
     }
 
-    public void addMessageHandler(final MessageHandler messageHandler) {
+    public void addMessageHandler(final @NonNull MessageHandler messageHandler) {
+        if (messageHandler == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
+        }
         messageHandlers.add(messageHandler);
     }
 
-    public void removeMessageHandler(final MessageHandler messageHandler) {
+    public void removeMessageHandler(final @NonNull MessageHandler messageHandler) {
+        if (messageHandler == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
+        }
         messageHandlers.remove(messageHandler);
     }
 
@@ -31,22 +56,50 @@ public class CompositeMessageHandler implements MessageHandler {
     }
 
     @Override
-    public void handleInfoMessage(final String message) {
+    public void handleInfoMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
         messageHandlers.forEach(mh -> mh.handleInfoMessage(message));
     }
 
     @Override
-    public void handleWarnMessage(final String message) {
+    public void handleWarnMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
         messageHandlers.forEach(mh -> mh.handleWarnMessage(message));
     }
 
     @Override
-    public void handleErrorMessage(final String message) {
+    public void handleErrorMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
         messageHandlers.forEach(mh -> mh.handleErrorMessage(message));
     }
 
     @Override
-    public void handleException(final Exception exception) {
+    public void handleDebugMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
+        messageHandlers.forEach(mh -> mh.handleDebugMessage(message));
+    }
+
+    @Override
+    public void handleTraceMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
+        messageHandlers.forEach(mh -> mh.handleTraceMessage(message));
+    }
+
+    @Override
+    public void handleException(final @NonNull Exception exception) {
+        if (exception == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullExceptionProvided"));
+        }
         messageHandlers.forEach(mh -> mh.handleException(exception));
     }
 

@@ -7,13 +7,25 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.persistence.StatusTrackerFactory;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
 import com.threeamigos.common.util.interfaces.preferences.Preferences;
+import org.jspecify.annotations.NonNull;
+
+import java.util.ResourceBundle;
 
 /**
- * A collector for preferences stored in files.
+ * A PersistablesCollector for Preferences stored in files in JSON format.
  *
  * @author Stefano Reksten
  */
 public class JsonFilePreferencesCollector<T extends Preferences> extends BasicPersistablesCollector {
+
+    private static ResourceBundle bundle;
+
+    private static ResourceBundle getBundle() {
+        if (bundle == null) {
+            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.persistence.file.JsonFilePreferencesCollector.JsonFilePreferencesCollector");
+        }
+        return bundle;
+    }
 
     private final RootPathProvider rootPathProvider;
     private final MessageHandler messageHandler;
@@ -25,9 +37,21 @@ public class JsonFilePreferencesCollector<T extends Preferences> extends BasicPe
      * @param messageHandler   to inform the end user of loa and save operations
      *                         results
      */
-    public JsonFilePreferencesCollector(final RootPathProvider rootPathProvider, final MessageHandler messageHandler,
-                                        final StatusTrackerFactory<T> statusTrackerFactory, final Json<T> json) {
+    public JsonFilePreferencesCollector(final @NonNull RootPathProvider rootPathProvider, final @NonNull MessageHandler messageHandler,
+                                        final @NonNull StatusTrackerFactory<T> statusTrackerFactory, final @NonNull Json<T> json) {
         super();
+        if (rootPathProvider == null) {
+            throw new IllegalArgumentException(getBundle().getString("noRootPathProviderProvided"));
+        }
+        if (messageHandler == null) {
+            throw new IllegalArgumentException(getBundle().getString("noMessageHandlerProvided"));
+        }
+        if (statusTrackerFactory == null) {
+            throw new IllegalArgumentException(getBundle().getString("noStatusTrackerFactoryProvided"));
+        }
+        if (json == null) {
+            throw new IllegalArgumentException(getBundle().getString("noJsonProvided"));
+        }
         this.rootPathProvider = rootPathProvider;
         this.messageHandler = messageHandler;
         this.statusTrackerFactory = statusTrackerFactory;
@@ -40,13 +64,26 @@ public class JsonFilePreferencesCollector<T extends Preferences> extends BasicPe
      * @param preferences the preferences object
      * @param filename    the filename to use to save and retrieve those preferences
      */
-    public void add(final T preferences, final String filename) {
+    public void add(final @NonNull T preferences, final @NonNull String filename) {
+        if (preferences == null) {
+            throw new IllegalArgumentException(getBundle().getString("noPreferencesProvided"));
+        }
+        if (filename == null) {
+            throw new IllegalArgumentException(getBundle().getString("noFilenameProvided"));
+        }
         JsonFilePersister<T> persister = new JsonFilePersister<>(filename, preferences.getDescription(),
                 rootPathProvider, messageHandler, json);
         add(new JsonFilePreferencesManager<>(preferences, statusTrackerFactory, persister, messageHandler));
     }
 
-    public boolean isTracking(final Preferences preferences) {
+    /**
+     * @param preferences a set of Preferences
+     * @return true if this collector is tracking the given preferences
+     */
+    public boolean isTracking(final @NonNull Preferences preferences) {
+        if (preferences == null) {
+            throw new IllegalArgumentException(getBundle().getString("noPreferencesProvided"));
+        }
         return getPersistables()
                 .stream()
                 .filter(p -> p instanceof JsonFilePreferencesManager<?>)

@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.persistence.file.rootpathpro
 
 public class DirectoryNotWriteableException extends IllegalArgumentException {
 
-    public DirectoryNotWriteableException(final String s) {
-        super(String.format("Folder %s cannot be written.", s));
+    public DirectoryNotWriteableException(final String localizedError) {
+        super(localizedError);
     }
 }

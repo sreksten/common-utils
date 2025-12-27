@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations;
 
 import com.threeamigos.common.util.interfaces.PropertyChangeAware;
+import org.jspecify.annotations.NonNull;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
@@ -17,21 +18,21 @@ public class BasicPropertyChangeAware implements PropertyChangeAware {
      */
     private final transient PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this); //NOSONAR
 
-    protected void firePropertyChange(final String propertyName) {
+    protected void firePropertyChange(final @NonNull String propertyName) {
         propertyChangeSupport.firePropertyChange(propertyName, null, null);
     }
 
-    protected void firePropertyChange(final String propertyName, final Object oldValue, final Object newValue) {
+    protected void firePropertyChange(final @NonNull String propertyName, final Object oldValue, final Object newValue) {
         propertyChangeSupport.firePropertyChange(propertyName, oldValue, newValue);
     }
 
     @Override
-    public void addPropertyChangeListener(final PropertyChangeListener pcl) {
+    public void addPropertyChangeListener(final @NonNull PropertyChangeListener pcl) {
         propertyChangeSupport.addPropertyChangeListener(pcl);
     }
 
     @Override
-    public void removePropertyChangeListener(final PropertyChangeListener pcl) {
+    public void removePropertyChangeListener(final @NonNull PropertyChangeListener pcl) {
         propertyChangeSupport.removePropertyChangeListener(pcl);
     }
 

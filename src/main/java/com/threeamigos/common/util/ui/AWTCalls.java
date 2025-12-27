@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.ui;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -14,7 +17,14 @@ public class AWTCalls {
     private AWTCalls() {
     }
 
-    public static void showOptionPane(Component parentComponent, String message, String title, int icon) {
+    /**
+     * Shows a JOptionPane.
+     * @param parentComponent the parent window. Can be null.
+     * @param message a message to show.
+     * @param title a title for the message window.
+     * @param icon should be one of the JOptionPane constants.
+     */
+    public static void showOptionPane(@Nullable Component parentComponent, @NonNull String message, @NonNull String title, int icon) {
         JOptionPane.showMessageDialog(parentComponent, message, title, icon);
     }
 }

@@ -6,6 +6,7 @@ import com.threeamigos.common.util.interfaces.persistence.Persister;
 import com.threeamigos.common.util.interfaces.persistence.StatusTrackerFactory;
 import com.threeamigos.common.util.interfaces.preferences.Preferences;
 import com.threeamigos.common.util.interfaces.preferences.PreferencesManager;
+import org.jspecify.annotations.NonNull;
 
 /**
  * An implementation of the {@link PreferencesManager} that uses Json both as
@@ -24,8 +25,8 @@ public class JsonFilePreferencesManager<T extends Preferences> extends BasicPref
      * @param messageHandler       a {@link MessageHandler} to be used if problems
      *                             arise.
      */
-    public JsonFilePreferencesManager(final T preferences, final StatusTrackerFactory<T> statusTrackerFactory,
-                                      final Persister<T> persister, final MessageHandler messageHandler) {
+    public JsonFilePreferencesManager(final @NonNull T preferences, final @NonNull StatusTrackerFactory<T> statusTrackerFactory,
+                                      final @NonNull Persister<T> persister, final @NonNull MessageHandler messageHandler) {
         super(preferences, persister, statusTrackerFactory, messageHandler);
     }
 }

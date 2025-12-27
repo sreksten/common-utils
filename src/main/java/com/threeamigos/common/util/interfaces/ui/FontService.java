@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces.ui;
 
+import org.jspecify.annotations.NonNull;
+
 import java.awt.*;
 
 /**
@@ -12,6 +14,14 @@ public interface FontService {
 
     String STANDARD_FONT_NAME = "Serif";
 
-    Font getFont(String fontName, int fontAttributes, int fontHeight);
+    /**
+     * Retrieves a Font object with the specified attributes.
+     *
+     * @param fontName name of the font
+     * @param fontAttributes required attributes for the font
+     * @param fontHeight height of the font
+     * @return Font object with the specified attributes
+     */
+    Font getFont(@NonNull String fontName, int fontAttributes, int fontHeight);
 
 }

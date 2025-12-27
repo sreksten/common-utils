@@ -2,9 +2,11 @@ package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.ui.AWTCalls;
+import org.jspecify.annotations.NonNull;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ResourceBundle;
 
 /**
  * An implementation of the {@link MessageHandler} interface that uses an
@@ -13,6 +15,15 @@ import java.awt.*;
  * @author Stefano Reksten
  */
 public class SwingMessageHandler implements MessageHandler {
+
+    private static ResourceBundle bundle;
+
+    private static ResourceBundle getBundle() {
+        if (bundle == null) {
+            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler.SwingMessageHandler");
+        }
+        return bundle;
+    }
 
     private Component parentComponent;
 
@@ -31,19 +42,45 @@ public class SwingMessageHandler implements MessageHandler {
         return parentComponent;
     }
 
-    public void handleInfoMessage(final String message) {
-        AWTCalls.showOptionPane(parentComponent, message, "Info", JOptionPane.INFORMATION_MESSAGE);
+    public void handleInfoMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
+        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("info"), JOptionPane.INFORMATION_MESSAGE);
     }
 
-    public void handleWarnMessage(final String message) {
-        AWTCalls.showOptionPane(parentComponent, message, "Warning", JOptionPane.WARNING_MESSAGE);
+    public void handleWarnMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
+        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("warning"), JOptionPane.WARNING_MESSAGE);
     }
 
-    public void handleErrorMessage(final String message) {
-        AWTCalls.showOptionPane(parentComponent, message, "Error", JOptionPane.ERROR_MESSAGE);
+    public void handleErrorMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
+        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("error"), JOptionPane.ERROR_MESSAGE);
     }
 
-    public void handleException(final Exception exception) {
-        AWTCalls.showOptionPane(parentComponent, exception.getMessage(), "Exception", JOptionPane.ERROR_MESSAGE);
+    public void handleDebugMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
+        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("debug"), JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    public void handleTraceMessage(final @NonNull String message) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
+        AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("trace"), JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    public void handleException(final @NonNull Exception exception) {
+        if (exception == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullExceptionProvided"));
+        }
+        AWTCalls.showOptionPane(parentComponent, exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

@@ -13,6 +13,22 @@ import static org.junit.jupiter.api.Assertions.*;
 class HintsPreferencesImplUnitTest {
 
     @Test
+    @DisplayName("Should throw exception when constructor is passed a null properties name")
+    void shouldThrowExceptionWhenConstructorIsPassedANullPropertiesName() {
+        assertThrows(IllegalArgumentException.class, () -> new HintsPreferencesImpl(null));
+    }
+
+    @Test
+    @DisplayName("Should load ResourceBundle only once")
+    /*
+     * Since we have a single localized message, the Resource Bundle is loaded only once
+     * and we have not complete coverage
+     */
+    void shouldLoadResourceBundleOnlyOnce() {
+        assertThrows(IllegalArgumentException.class, () -> new HintsPreferencesImpl(null));
+    }
+
+    @Test
     @DisplayName("Should load default values")
     void shouldLoadDefaultValues() {
         // Given

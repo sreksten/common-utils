@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
+import org.jspecify.annotations.NonNull;
+
 /**
  * An interface used to handle error messages.
  *
@@ -13,6 +15,6 @@ public interface ErrorMessageHandler {
      *
      * @param errorMessage an error message to show to the user
      */
-    void handleErrorMessage(String errorMessage);
+    void handleErrorMessage(@NonNull String errorMessage);
 
 }

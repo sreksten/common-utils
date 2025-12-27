@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
+import org.jspecify.annotations.NonNull;
+
 /**
  * An interface used to handle warning messages.
  *
@@ -13,6 +15,6 @@ public interface WarnMessageHandler {
      *
      * @param message a warning message to show to the user
      */
-    void handleWarnMessage(String message);
+    void handleWarnMessage(@NonNull String message);
 
 }

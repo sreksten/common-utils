@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces.ui;
 
+import org.jspecify.annotations.Nullable;
+
 import java.awt.*;
 
 /**
@@ -10,6 +12,10 @@ import java.awt.*;
 @FunctionalInterface
 public interface AboutWindow {
 
-    void about(Component component);
+    /**
+     * Shows information about this application.
+     * @param component the parent component containing the window (can be null)
+     */
+    void about(@Nullable Component component);
 
 }

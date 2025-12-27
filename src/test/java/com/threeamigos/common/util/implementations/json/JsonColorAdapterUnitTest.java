@@ -27,6 +27,17 @@ class JsonColorAdapterUnitTest {
     private static final int ALPHA = 0xDD;
 
     @Test
+    @DisplayName("Should throw IllegalArgumentException if no color provided")
+    void shouldThrowIllegalArgumentExceptionIfNoColorProvided() {
+        // Given
+        JsonColorAdapter sut = new JsonColorAdapter();
+        // When
+        Color color = null;
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.serialize(color, null, null));
+    }
+
+    @Test
     @DisplayName("Should serialize a color")
     void shouldSerializeColor() {
         // Given
@@ -36,6 +47,17 @@ class JsonColorAdapterUnitTest {
         JsonElement result = sut.serialize(color, null, null);
         // Then
         assertEquals("DDAABBCC", result.getAsString(), "Wrong serialized color representation");
+    }
+
+    @Test
+    @DisplayName("Should throw IllegalArgumentException if no json provided")
+    void shouldThrowIllegalArgumentExceptionIfNoJsonProvided() {
+        // Given
+        JsonColorAdapter sut = new JsonColorAdapter();
+        // When
+        JsonPrimitive jsonPrimitive = null;
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.deserialize(jsonPrimitive, null, null));
     }
 
     @Test

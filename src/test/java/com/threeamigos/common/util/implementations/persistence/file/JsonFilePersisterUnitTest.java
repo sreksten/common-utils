@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.persistence.file;
 
 import com.threeamigos.common.util.implementations.TestClass;
-import com.threeamigos.common.util.implementations.json.JsonBuilderImpl;
+import com.threeamigos.common.util.implementations.json.JsonBuilderFactory;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.implementations.persistence.file.rootpathprovider.RootPathProviderImpl;
 import com.threeamigos.common.util.interfaces.json.Json;
@@ -20,6 +20,7 @@ import static org.hamcrest.Matchers.hasProperty;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 @DisplayName("JsonFilePersister unit test")
 @Tag("unit")
@@ -44,12 +45,42 @@ class JsonFilePersisterUnitTest {
             System.setProperty(RootPathProviderImpl.ROOT_PATH_DIRECTORY_PARAMETER, targetDirectory.getAbsolutePath());
             rootPathProvider = new RootPathProviderImpl(this, exceptionHandler);
         }
-        json = new JsonBuilderImpl().build(TestClass.class);
+        json = JsonBuilderFactory.builder().build(TestClass.class);
     }
 
     @AfterEach
     void cleanup() {
         System.clearProperty(RootPathProviderImpl.ROOT_PATH_DIRECTORY_PARAMETER);
+    }
+
+    @Test
+    @DisplayName("Should throw exception if filename is null")
+    void shouldThrowsExceptionIfFilenameIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(null, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json));
+    }
+
+    @Test
+    @DisplayName("Should throw exception if entity description is null")
+    void shouldThrowsExceptionIfEntityDescriptionIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, null, rootPathProvider, exceptionHandler, json));
+    }
+
+    @Test
+    @DisplayName("Should throw exception if rootPathProvider is null")
+    void shouldThrowsExceptionIfRootPathProviderIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, null, exceptionHandler, json));
+    }
+
+    @Test
+    @DisplayName("Should throw exception if ExceptionHandler is null")
+    void shouldThrowsExceptionIfExceptionHandlerIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, null, json));
+    }
+
+    @Test
+    @DisplayName("Should throw exception if Json is null")
+    void shouldThrowsExceptionIfJsonIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, null));
     }
 
     @Test
@@ -99,6 +130,17 @@ class JsonFilePersisterUnitTest {
     }
 
     @Test
+    @DisplayName("Should throw an exception if entity to save is null")
+    void shouldThrowExceptionIfEntityToSaveIsNull() {
+        // Given
+        TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
+        OutputStream outputStream = new ByteArrayOutputStream();
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.save(outputStream, null));
+    }
+
+    @Test
     @DisplayName("Should serialize an entity to OutputStream")
     void shouldSerializeToOutputStream() throws IOException {
         // Given
@@ -109,6 +151,17 @@ class JsonFilePersisterUnitTest {
         sut.save(outputStream, instance);
         // Then
         assertEquals(TestClass.JSON_REPRESENTATION, outputStream.toString());
+    }
+
+    @Test
+    @DisplayName("Shuold throw an exception if entity to load is null")
+    void shouldThrowExceptionIfEntityToLoadIsNull() {
+        // Given
+        TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
+        InputStream inputStream = mock(InputStream.class);
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.load(inputStream, null));
     }
 
     @Test

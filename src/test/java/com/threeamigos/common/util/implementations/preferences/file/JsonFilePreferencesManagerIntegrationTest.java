@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.preferences.file;
 
 import com.threeamigos.common.util.implementations.TestClass;
-import com.threeamigos.common.util.implementations.json.JsonBuilderImpl;
+import com.threeamigos.common.util.implementations.json.JsonBuilderFactory;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.implementations.persistence.JsonStatusTrackerFactory;
 import com.threeamigos.common.util.interfaces.json.Json;
@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 @DisplayName("JsonFilePreferencesManager integration test")
@@ -45,8 +46,40 @@ class JsonFilePreferencesManagerIntegrationTest {
         when(persister.load(instance)).thenReturn(notFound);
         when(persister.save(instance)).thenReturn(savedSuccessfully);
 
-        Json<TestClass> json = new JsonBuilderImpl().build(TestClass.class);
+        Json<TestClass> json = JsonBuilderFactory.builder().build(TestClass.class);
         statusTrackerFactory = new JsonStatusTrackerFactory<>(json);
+    }
+
+    @Test
+    @DisplayName("Constructor should throw exception if preferences are null")
+    void constructorShouldThrowExceptionIfPreferencesAreNull() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new JsonFilePreferencesManager<>(null, statusTrackerFactory, persister, messageHandler);
+        });
+    }
+
+    @Test
+    @DisplayName("Constructor should throw exception if status tracker factory is null")
+    void constructorShouldThrowExceptionIfStatusTrackerFactoryIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new JsonFilePreferencesManager<>(instance, null, persister, messageHandler);
+        });
+    }
+
+    @Test
+    @DisplayName("Constructor should throw exception if persister is null")
+    void constructorShouldThrowExceptionIfPersisterIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new JsonFilePreferencesManager<>(instance, statusTrackerFactory, null, messageHandler);
+        });
+    }
+
+    @Test
+    @DisplayName("Constructor should throw exception if message handler is null")
+    void constructorShouldThrowExceptionIfMessageHandlerIsNull() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            new JsonFilePreferencesManager<>(instance, statusTrackerFactory, persister, null);
+        });
     }
 
     @Test
@@ -88,4 +121,15 @@ class JsonFilePreferencesManagerIntegrationTest {
         verify(persister, times(0)).save(instance);
     }
 
+    @Test
+    @DisplayName("Should throw exception if isTracking() is passed a null object")
+    void isTrackingShouldThrowExceptionIfPreferencesIsNull() {
+        // Given
+        JsonFilePreferencesManager<TestClass> sut = new JsonFilePreferencesManager<>(instance,
+                statusTrackerFactory, persister, messageHandler);
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> {
+            sut.isTracking(null);
+        });
+    }
 }

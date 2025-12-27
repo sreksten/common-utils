@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations;
 
 import com.threeamigos.common.util.interfaces.preferences.Preferences;
+import org.jspecify.annotations.NonNull;
 
 import java.beans.PropertyChangeListener;
 
@@ -9,6 +10,7 @@ public class TestClass implements Preferences {
     public static final String TEST_STRING = "My test string";
     public static final int TEST_VALUE = 50;
     public static final String JSON_REPRESENTATION = "{\"string\":\"" + TEST_STRING + "\",\"value\":" + TEST_VALUE + "}";
+    public static final String INVALID_JSON_REPRESENTATION = "{string:\"" + TEST_STRING + "\" value:" + TEST_VALUE + "}";
 
     private String string;
     private int value;
@@ -38,20 +40,16 @@ public class TestClass implements Preferences {
     }
 
     @Override
-    public void addPropertyChangeListener(PropertyChangeListener pcl) {
+    public void addPropertyChangeListener(@NonNull PropertyChangeListener pcl) {
     }
 
     @Override
-    public void removePropertyChangeListener(PropertyChangeListener pcl) {
+    public void removePropertyChangeListener(@NonNull PropertyChangeListener pcl) {
     }
 
     @Override
-    public String getDescription() {
+    public @NonNull String getDescription() {
         return "TestClass Description";
-    }
-
-    @Override
-    public void validate() {
     }
 
     @Override

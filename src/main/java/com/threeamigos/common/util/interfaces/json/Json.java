@@ -1,67 +1,70 @@
 package com.threeamigos.common.util.interfaces.json;
 
+import org.jspecify.annotations.NonNull;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * An interface used to pass from an entity to its Json representation and vice versa.
+ * An interface able to convert an entity to its JSON representation and vice versa. To build an instance of this
+ * converter, see the {@link JsonBuilder} interface. Based on Google's JSON classes.
  *
- * @param <T> type of entity
+ * @param <T> type of the entity
+ *
+ * @author Stefano Reksten
  */
 public interface Json<T> {
 
     /**
-     * Given an entity returns its Json representation
+     * Given an entity, returns its JSON representation.
      *
-     * @param entity the entity to represent
-     * @return Json entity representation as a string
+     * @param entity the entity to represent in a JSON format
+     * @return JSON entity representation as a string
      */
-    public String toJson(T entity);
+    String toJson(@NonNull T entity);
 
     /**
-     * Given an entity writes its Json representation to an OutputStream
+     * Given an entity, writes its JSON representation to an OutputStream.
      *
-     * @param entity       the entity to represent
+     * @param entity the entity to represent in a JSON format
      * @param outputStream destination
-     * @throws IOException
      */
-    public void toJson(T entity, OutputStream outputStream) throws IOException;
+    void toJson(@NonNull T entity, @NonNull OutputStream outputStream) throws IOException;
 
     /**
-     * Given a Json string returns an entity
+     * Given a JSON string, returns an entity of type T populated using values in its JSON representation.
      *
-     * @param string the Json representation of the entity
-     * @return
+     * @param string the JSON representation of the entity
+     * @return an instance of T populated using values in its JSON representation
      */
-    public T fromJson(String string);
+    T fromJson(@NonNull String string);
 
     /**
-     * Given an InputStream retrieves an entity
+     * Given an InputStream, retrieves an entity of type T populated using values in its JSON representation.
+     * Based on Google's JSON classes.
      *
-     * @param inputStream source
-     * @return an entity
-     * @throws IOException
+     * @param inputStream source of data
+     * @return an entity populated using values in its JSON representation
      */
-    public T fromJson(InputStream inputStream) throws IOException;
+    T fromJson(@NonNull InputStream inputStream) throws IOException;
 
     /**
      * Given an entity and a String, populates that entity fetching data
-     * from a Json representation contained in the string
+     * from a JSON representation contained in the string.
      *
-     * @param json   source of data
+     * @param json source of data
      * @param entity entity to populate
      */
-    public void fromJson(String json, T entity);
+    void fromJson(@NonNull String json, @NonNull T entity);
 
     /**
      * Given an entity and an InputStream, populates the entity fetching
-     * data from the InputStream that should contain a Json representation
+     * data from the InputStream that should contain a JSON representation.
      *
      * @param inputStream source of data
      * @param entity      entity to populate
-     * @throws IOException
      */
-    public void fromJson(InputStream inputStream, T entity) throws IOException;
+    void fromJson(@NonNull InputStream inputStream, @NonNull T entity) throws IOException;
 
 }

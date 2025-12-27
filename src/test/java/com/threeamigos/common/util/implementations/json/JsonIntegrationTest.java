@@ -68,8 +68,8 @@ class JsonIntegrationTest {
     }
 
     private Json<JsonColorClass> buildSystemUnderTest() {
-        return new JsonBuilderImpl()
-                .registerAdapter(Color.class, new JsonColorAdapter())
+        return JsonBuilderFactory.builder()
+                .registerColorAdapter()
                 .build(JsonColorClass.class);
     }
 
@@ -80,15 +80,8 @@ class JsonIntegrationTest {
             this.color = color;
         }
 
-        public JsonColorClass() {
-        }
-
         public Color getColor() {
             return color;
-        }
-
-        public void setColor(Color color) {
-            this.color = color;
         }
     }
 }

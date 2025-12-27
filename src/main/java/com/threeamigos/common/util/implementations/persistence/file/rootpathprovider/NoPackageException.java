@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.persistence.file.rootpathpro
 
 public class NoPackageException extends IllegalArgumentException {
 
-    public NoPackageException() {
-        super("A class with no package was passed to the RootPathProvider. This means you may be passing an array type, a primitive type or void. Pass the main class instead.");
+    public NoPackageException(final String localizedError) {
+        super(localizedError);
     }
 }

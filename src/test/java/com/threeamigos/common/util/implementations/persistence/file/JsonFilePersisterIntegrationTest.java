@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.persistence.file;
 
 import com.threeamigos.common.util.implementations.TestClass;
-import com.threeamigos.common.util.implementations.json.JsonBuilderImpl;
+import com.threeamigos.common.util.implementations.json.JsonBuilderFactory;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.implementations.persistence.file.rootpathprovider.RootPathProviderImpl;
 import com.threeamigos.common.util.interfaces.json.Json;
@@ -9,6 +9,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
 import com.threeamigos.common.util.interfaces.persistence.PersistResult;
 import com.threeamigos.common.util.interfaces.persistence.file.FilePersistResult;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -47,6 +48,29 @@ class JsonFilePersisterIntegrationTest {
     }
 
     @Test
+    @DisplayName("Should throw an exception if entity to save is null")
+    void shouldThrowExceptionIfEntityToSaveIsNull() {
+        // Given
+        JsonFilePersister<TestClass> sut = createSystemUnderTest(temporaryDirectory);
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.save(null));
+    }
+
+    @Test
+    @DisplayName("Should return error if destination file is readonly")
+    void shouldReturnErrorIfDestinationFileIsReadonly() throws IOException {
+        // Given
+        createUnwritableFileIn(temporaryDirectory);
+        JsonFilePersister<TestClass> sut = createSystemUnderTest(temporaryDirectory);
+        TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
+        // When
+        PersistResult result = sut.save(instance);
+        // Then
+        assertThat(result, hasProperty("successful", is(false)));
+        assertThat(result, hasProperty("error", notNullValue()));
+    }
+
+    @Test
     @DisplayName("Should save a file to target directory")
     void shouldSaveFileToTargetDirectory() throws IOException {
         // Given
@@ -58,6 +82,31 @@ class JsonFilePersisterIntegrationTest {
         assertThat(result, hasProperty("successful", is(true)));
         assertEquals(TestClass.JSON_REPRESENTATION, FileUtils.readTextFileContent(new File(sut.getFilenameWithPath())));
         assertTrue(((FilePersistResult) result).getFilename().endsWith("filename.json"));
+    }
+
+    @Test
+    @DisplayName("Should overwrite a file to target directory")
+    void shouldOverwriteFileToTargetDirectory() throws IOException {
+        // Given
+        TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
+        JsonFilePersister<TestClass> sut = createSystemUnderTest(temporaryDirectory);
+        PersistResult result = sut.save(instance);
+        // When
+        result = sut.save(instance);
+        // Then
+        assertThat(result, hasProperty("successful", is(true)));
+        assertEquals(TestClass.JSON_REPRESENTATION, FileUtils.readTextFileContent(new File(sut.getFilenameWithPath())));
+        assertTrue(((FilePersistResult) result).getFilename().endsWith("filename.json"));
+    }
+
+    @Test
+    @DisplayName("Should throw an exception if loading into a null entity")
+    void shouldThrowAnExceptionIfLoadingIntoANullEntity() throws IOException {
+        // Given
+        JsonFilePersister<TestClass> sut = createSystemUnderTest(temporaryDirectory);
+        createFileWithJsonRepresentation(sut.getFilenameWithPath());
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.load(null));
     }
 
     @Test
@@ -197,7 +246,7 @@ class JsonFilePersisterIntegrationTest {
                 System.setProperty(RootPathProviderImpl.ROOT_PATH_DIRECTORY_PARAMETER, temporaryDirectory.getAbsolutePath());
                 rootPathProvider = new RootPathProviderImpl(this, exceptionHandler);
             }
-            json = new JsonBuilderImpl().build(TestClass.class);
+            json = JsonBuilderFactory.builder().build(TestClass.class);
         }
 
         @Test
@@ -235,12 +284,12 @@ class JsonFilePersisterIntegrationTest {
             }
 
             @Override
-            protected InputStream createInputStream(String filename) throws IOException {
+            protected InputStream createInputStream(@NonNull String filename) throws IOException {
                 return FileUtils.createFailingInputStream();
             }
 
             @Override
-            protected OutputStream createOutputStream(String filename) throws IOException {
+            protected OutputStream createOutputStream(@NonNull String filename) throws IOException {
                 return FileUtils.createFailingOutputStream();
             }
         }
@@ -252,7 +301,7 @@ class JsonFilePersisterIntegrationTest {
             System.setProperty(RootPathProviderImpl.ROOT_PATH_DIRECTORY_PARAMETER, directory.getAbsolutePath());
             rootPathProvider = new RootPathProviderImpl(this, exceptionHandler);
         }
-        Json<TestClass> json = new JsonBuilderImpl().build(TestClass.class);
+        Json<TestClass> json = JsonBuilderFactory.builder().build(TestClass.class);
         return new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
     }
 

@@ -1,9 +1,11 @@
 package com.threeamigos.common.util.interfaces.persistence;
 
+import org.jspecify.annotations.NonNull;
+
 import java.util.Collection;
 
 /**
- * An utility interface that helps keeping track of various {@link Persistable} objects.
+ * A utility interface that helps keep track of various {@link Persistable} objects.
  * PersistablesCollector is a Persistable itself. When the persist() method is called, it
  * should ask all tracked Persistables to persist.
  *
@@ -16,10 +18,10 @@ public interface PersistablesCollector extends Persistable {
      *
      * @param persistable a Persistable to track
      */
-    void add(Persistable persistable);
+    void add(@NonNull Persistable persistable);
 
-    void remove(Persistable persistable);
+    void remove(@NonNull Persistable persistable);
 
-    Collection<Persistable> getPersistables();
+    @NonNull Collection<Persistable> getPersistables();
 
 }

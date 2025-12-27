@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.interfaces.persistence;
 
 /**
- * An interface that tracks state changes of an object.
+ * An interface that tracks changes in an object.
  *
  * @param <T>
  * @author Stefano Reksten
@@ -14,7 +14,7 @@ public interface StatusTracker<T> {
     void loadInitialValues();
 
     /**
-     * @return true if the state of the tracked object has changed.
+     * @return true if the tracked object has changed.
      */
     boolean hasChanged();
 

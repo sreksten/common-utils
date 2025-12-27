@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
+import org.jspecify.annotations.NonNull;
+
 /**
  * An interface used to handle information messages.
  *
@@ -13,6 +15,6 @@ public interface InfoMessageHandler {
      *
      * @param infoMessage an info message to show to the user
      */
-    void handleInfoMessage(String infoMessage);
+    void handleInfoMessage(@NonNull String infoMessage);
 
 }

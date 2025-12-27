@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces;
 
+import org.jspecify.annotations.NonNull;
+
 import java.beans.PropertyChangeListener;
 
 /**
@@ -9,8 +11,8 @@ import java.beans.PropertyChangeListener;
  */
 public interface PropertyChangeAware {
 
-    void addPropertyChangeListener(PropertyChangeListener pcl);
+    void addPropertyChangeListener(@NonNull PropertyChangeListener pcl);
 
-    void removePropertyChangeListener(PropertyChangeListener pcl);
+    void removePropertyChangeListener(@NonNull PropertyChangeListener pcl);
 
 }

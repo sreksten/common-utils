@@ -11,6 +11,7 @@ import java.util.Collection;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 @DisplayName("BasicPersistablesCollector unit test")
@@ -28,6 +29,18 @@ class BasicPersistablesCollectorUnitTest {
     }
 
     @Test
+    @DisplayName("Varargs constructor should throw exception if null array is passed")
+    void varargConstructorShouldThrowExceptionIfNullArrayIsPassed() {
+        assertThrows(IllegalArgumentException.class, () -> new BasicPersistablesCollector((Persistable[]) null));
+    }
+
+    @Test
+    @DisplayName("Varargs constructor should throw exception if null Persistable is passed")
+    void varargConstructorShouldThrowExceptionIfNullPersistableIsPassed() {
+        assertThrows(IllegalArgumentException.class, () -> new BasicPersistablesCollector(persistable1, null));
+    }
+
+    @Test
     @DisplayName("Varargs constructor should keep track of all persistables")
     void varargConstructorShouldKeepTrackOfAllPersistables() {
         // Given
@@ -36,6 +49,15 @@ class BasicPersistablesCollectorUnitTest {
         Collection<Persistable> allPersistables = collector.getPersistables();
         // Then
         assertThat(allPersistables, containsInAnyOrder(persistable1, persistable2));
+    }
+
+    @Test
+    @DisplayName("add method should throw Exception if adding a null Persistable")
+    void addMethodShouldThrowExceptionIfAddingNullPersistable() {
+        // Given
+        BasicPersistablesCollector collector = new BasicPersistablesCollector();
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> collector.add(null));
     }
 
     @Test
@@ -49,6 +71,15 @@ class BasicPersistablesCollectorUnitTest {
         Collection<Persistable> allPersistables = collector.getPersistables();
         // Then
         assertThat(allPersistables, containsInAnyOrder(persistable1, persistable2));
+    }
+
+    @Test
+    @DisplayName("remove  method should throw Exception if adding a null Persistable")
+    void removeMethodShouldThrowExceptionIfAddingNullPersistable() {
+        // Given
+        BasicPersistablesCollector collector = new BasicPersistablesCollector();
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> collector.remove(null));
     }
 
     @Test

@@ -12,7 +12,7 @@ import java.util.function.BiConsumer;
 /**
  * An implementation of the {@link InputConsumer} that accepts one or more
  * prioritized delegates. An event is passed to all delegates until one of them
- * consumes it.
+ * consumes it. Delegates with higher priority are checked first.
  *
  * @author Stefano Reksten
  */
@@ -22,6 +22,9 @@ public class ChainedInputConsumer implements InputConsumer {
     public static final int PRIORITY_MEDIUM = 5;
     public static final int PRIORITY_HIGH = 10;
 
+    /*
+     * A Map that holds consumers sorted from highest to lowest priority
+     */
     private final Map<Integer, List<InputConsumer>> inputConsumers = new TreeMap<>(Comparator.reverseOrder());
     private List<InputConsumer> sortedConsumers = Collections.emptyList();
 
@@ -99,5 +102,4 @@ public class ChainedInputConsumer implements InputConsumer {
             }
         }
     }
-
 }

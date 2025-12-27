@@ -2,8 +2,10 @@ package com.threeamigos.common.util.implementations.persistence.file.rootpathpro
 
 import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
+import org.jspecify.annotations.NonNull;
 
 import java.io.File;
+import java.util.ResourceBundle;
 
 /**
  * An implementation of the {@link RootPathProvider} interface. Unless a root_path_directory System property
@@ -12,30 +14,40 @@ import java.io.File;
  */
 public class RootPathProviderImpl implements RootPathProvider {
 
-    protected ExceptionHandler exceptionHandler;
+    private static ResourceBundle bundle;
+
+    private static ResourceBundle getBundle() {
+        if (bundle == null) {
+            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.persistence.file.rootpathprovider.RootPathProviderImpl.RootPathProviderImpl");
+        }
+        return bundle;
+    }
+
+    private final ExceptionHandler exceptionHandler;
     private String rootPath;
     private boolean rootPathAccessible;
     private boolean hasUnrecoverableErrors;
 
-    public RootPathProviderImpl(final Object object, final ExceptionHandler exceptionHandler) {
+    public RootPathProviderImpl(final @NonNull Object object, final @NonNull ExceptionHandler exceptionHandler) {
+        this.exceptionHandler = exceptionHandler;
         if (object == null) {
-            throw new NullObjectException();
+            throw new NullObjectException(getBundle().getString("nullObject"));
         }
-        impl(object.getClass(), exceptionHandler);
+        impl(object.getClass());
     }
 
-    public RootPathProviderImpl(final Class<?> clazz, final ExceptionHandler exceptionHandler) {
-        impl(clazz, exceptionHandler);
+    public RootPathProviderImpl(final @NonNull Class<?> clazz, final @NonNull ExceptionHandler exceptionHandler) {
+        this.exceptionHandler = exceptionHandler;
+        impl(clazz);
     }
 
-    private void impl(final Class<?> clazz, final ExceptionHandler exceptionHandler) {
+    private void impl(final Class<?> clazz) {
         if (clazz == null) {
-            throw new NullClassException();
+            throw new NullClassException(getBundle().getString("nullClass"));
         }
         if (exceptionHandler == null) {
-            throw new NullExceptionHandlerException();
+            throw new NullExceptionHandlerException(getBundle().getString("nullExceptionHandler"));
         }
-        this.exceptionHandler = exceptionHandler;
         String packageName = extractPackageName(clazz);
         if (packageName == null) {
             hasUnrecoverableErrors = true;
@@ -75,7 +87,7 @@ public class RootPathProviderImpl implements RootPathProvider {
         return rootPathAccessible;
     }
 
-    public String getRootPath() {
+    public @NonNull String getRootPath() {
         return rootPath;
     }
 
@@ -88,18 +100,18 @@ public class RootPathProviderImpl implements RootPathProvider {
         }
     }
 
-    private static String extractPackageNameImpl(final Class<?> clazz) {
+    private String extractPackageNameImpl(final Class<?> clazz) {
         String canonicalName = clazz.getCanonicalName();
         if (canonicalName == null) {
-            throw new NoCanonicalNameException();
+            throw new NoCanonicalNameException(getBundle().getString("noCanonicalName"));
         }
         Package classPackage = clazz.getPackage();
         if (classPackage == null) {
-            throw new NoPackageException();
+            throw new NoPackageException(getBundle().getString("noPackage"));
         }
         String packageName = classPackage.getName();
         if (packageName.isEmpty()) {
-            throw new EmptyPackageException();
+            throw new EmptyPackageException(getBundle().getString("emptyPackage"));
         }
         return packageName;
     }
@@ -113,13 +125,13 @@ public class RootPathProviderImpl implements RootPathProvider {
         }
     }
 
-    private static String getPreferencesPathImpl() {
+    private String getPreferencesPathImpl() {
         String home;
         String pathProperty = System.getProperty(ROOT_PATH_DIRECTORY_PARAMETER);
         if (pathProperty != null) {
             pathProperty = pathProperty.trim();
             if (pathProperty.isEmpty()) {
-                throw new EmptyPathException();
+                throw new EmptyPathException(format("emptyPath", ROOT_PATH_DIRECTORY_PARAMETER));
             } else {
                 home = pathProperty;
             }
@@ -139,15 +151,15 @@ public class RootPathProviderImpl implements RootPathProvider {
         }
     }
 
-    private static void checkParentPathIsAccessibleImpl(final File file) {
+    private void checkParentPathIsAccessibleImpl(final File file) {
         File parentDirectory = file.getParentFile();
         while (true) {
             if (parentDirectory.exists()) {
                 if (!parentDirectory.canRead()) {
-                    throw new ParentDirectoryNotReadableException(parentDirectory.getAbsolutePath());
+                    throw new ParentDirectoryNotReadableException(format("parentDirectoryNotReadable", parentDirectory.getAbsolutePath()));
                 }
                 if (!parentDirectory.canWrite()) {
-                    throw new ParentDirectoryNotWriteableException(parentDirectory.getAbsolutePath());
+                    throw new ParentDirectoryNotWriteableException(format("parentDirectoryNotWriteable", parentDirectory.getAbsolutePath()));
                 }
                 return;
             }
@@ -165,22 +177,31 @@ public class RootPathProviderImpl implements RootPathProvider {
         }
     }
 
-    private static void checkFolderIsAccessibleImpl(final File file) {
+    private void checkFolderIsAccessibleImpl(final File file) {
         if (!file.isDirectory()) {
-            throw new PathPointsToFileException(file.getAbsolutePath());
+            throw new PathPointsToFileException(format("pathPointsToFile", file.getAbsolutePath()));
         }
         if (!file.canRead()) {
-            throw new DirectoryNotReadableException(file.getAbsolutePath());
+            throw new DirectoryNotReadableException(format("directoryNotReadable", file.getAbsolutePath()));
         }
         if (!file.canWrite()) {
-            throw new DirectoryNotWriteableException(file.getAbsolutePath());
+            throw new DirectoryNotWriteableException(format("directoryNotWriteable", file.getAbsolutePath()));
         }
+    }
+
+    private String format(String key, String value) {
+        return String.format(getBundle().getString(key), value);
     }
 
     private String buildRootPath(final String home, final String packageName) {
         String completePath = home + File.separator + "." + packageName;
         // Create directories if needed
-        new File(completePath).mkdirs();
+        File file = new File(completePath);
+        if (!file.exists()) {
+            if (!new File(completePath).mkdirs()) {
+                throw new RuntimeException(format("couldNotCreateDirectories", completePath));
+            }
+        }
         return completePath;
     }
 }

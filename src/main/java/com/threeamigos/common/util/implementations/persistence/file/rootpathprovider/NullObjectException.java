@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.persistence.file.rootpathpro
 
 public class NullObjectException extends IllegalArgumentException {
 
-    public NullObjectException() {
-        super("No object was passed to the RootPathProvider.");
+    public NullObjectException(final String localizedError) {
+        super(localizedError);
     }
 }

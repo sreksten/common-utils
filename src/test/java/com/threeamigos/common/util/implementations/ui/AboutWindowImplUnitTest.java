@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("AboutWindowImpl unit test")
 @Tag("unit")
-@EnabledIfEnvironmentVariable(named = "AWT_TESTS", matches = "true", disabledReason = "AWT_TESTS is not true")
+@EnabledIfEnvironmentVariable(named = "AWT_TESTS", matches = "true", disabledReason = "Environment variable AWT_TESTS is not true")
 @Execution(ExecutionMode.SAME_THREAD)
 @ResourceLock(value = "java.lang.System#properties", mode = ResourceAccessMode.READ_WRITE)
 class AboutWindowImplUnitTest {
@@ -25,7 +25,7 @@ class AboutWindowImplUnitTest {
         // Given
         AboutWindow sut = new AboutWindowImpl("3AM Test Application",
                 "by Stefano Reksten - stefano.reksten@gmail.com",
-                "Released under the 3AM license");
+                "Released under the Apache 2.0 license");
         // When
         sut.about(null);
         // Then it should simply work
@@ -39,7 +39,7 @@ class AboutWindowImplUnitTest {
         AboutWindow sut = new AboutWindowImpl("3AM Test Application with custom image",
                 getClass().getResource("/custom_logo.png"),
                 "by Stefano Reksten - stefano.reksten@gmail.com",
-                "Released under the 3AM license");
+                "Released under the Apache 2.0 license");
         // When
         sut.about(null);
         // Then it should simply work

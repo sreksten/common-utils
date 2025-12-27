@@ -4,6 +4,11 @@ import com.threeamigos.common.util.interfaces.ui.Hint;
 
 import javax.swing.*;
 
+/**
+ * A JTextArea that accepts a Hint in its constructor
+ *
+ * @author Stefano Reksten
+ */
 public class JHintArea extends JTextArea {
 
     private static final long serialVersionUID = 1L;

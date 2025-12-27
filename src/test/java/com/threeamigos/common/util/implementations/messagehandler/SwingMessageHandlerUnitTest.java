@@ -16,8 +16,7 @@ import org.mockito.stubbing.Answer;
 import javax.swing.*;
 import java.awt.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -59,9 +58,75 @@ class SwingMessageHandlerUnitTest {
         assertEquals(component, swingMessageHandler.getParentComponent(), "Wrong parent component");
     }
 
+    @Test
+    @DisplayName("Should throw an exception if a null info message is provided")
+    void shouldThrowAnExceptionIfANullInfoMessageIsProvided() {
+        // Given
+        SwingMessageHandler sut = new SwingMessageHandler();
+        // When
+        String infoMessage = null;
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.handleInfoMessage(infoMessage));
+    }
+
+    @Test
+    @DisplayName("Should throw an exception if a null warn message is provided")
+    void shouldThrowAnExceptionIfANullWarnMessageIsProvided() {
+        // Given
+        SwingMessageHandler sut = new SwingMessageHandler();
+        // When
+        String warnMessage = null;
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.handleWarnMessage(warnMessage));
+    }
+
+    @Test
+    @DisplayName("Should throw an exception if a null error message is provided")
+    void shouldThrowAnExceptionIfANullErrorMessageIsProvided() {
+        // Given
+        SwingMessageHandler sut = new SwingMessageHandler();
+        // When
+        String errorMessage = null;
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.handleErrorMessage(errorMessage));
+    }
+
+    @Test
+    @DisplayName("Should throw an exception if a null debug message is provided")
+    void shouldThrowAnExceptionIfANullDebugMessageIsProvided() {
+        // Given
+        SwingMessageHandler sut = new SwingMessageHandler();
+        // When
+        String debugMessage = null;
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.handleDebugMessage(debugMessage));
+    }
+
+    @Test
+    @DisplayName("Should throw an exception if a null trace message is provided")
+    void shouldThrowAnExceptionIfANullTraceMessageIsProvided() {
+        // Given
+        SwingMessageHandler sut = new SwingMessageHandler();
+        // When
+        String traceMessage = null;
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.handleTraceMessage(traceMessage));
+    }
+
+    @Test
+    @DisplayName("Should throw an exception if a null exception is provided")
+    void shouldThrowAnExceptionIfANullExceptionIsProvided() {
+        // Given
+        SwingMessageHandler sut = new SwingMessageHandler();
+        // When
+        Exception exception = null;
+        // Then
+        assertThrows(IllegalArgumentException.class, () -> sut.handleException(exception));
+    }
+
     @Nested
     @DisplayName("Display in headless mode")
-    @DisabledIfEnvironmentVariable(named = "AWT_TESTS", matches = "true", disabledReason = "AWT_TESTS is true")
+    @DisabledIfEnvironmentVariable(named = "AWT_TESTS", matches = "true", disabledReason = "Environment variable AWT_TESTS is true")
     class DisplayHeadlessMode {
 
         private ArgumentCaptor<String> titleCaptor;
@@ -147,7 +212,7 @@ class SwingMessageHandlerUnitTest {
 
     @Nested
     @DisplayName("Display in graphic mode")
-    @EnabledIfEnvironmentVariable(named = "AWT_TESTS", matches = "true", disabledReason = "AWT_TESTS is not true")
+    @EnabledIfEnvironmentVariable(named = "AWT_TESTS", matches = "true", disabledReason = "Environment variable AWT_TESTS is not true")
     @Execution(ExecutionMode.SAME_THREAD)
     @ResourceLock(value = "java.lang.System#properties", mode = ResourceAccessMode.READ_WRITE)
     class DisplayGraphicsMode {
@@ -211,6 +276,40 @@ class SwingMessageHandlerUnitTest {
                 assertEquals("Error", titleCaptor.getValue());
                 assertEquals("My error", messageCaptor.getValue());
                 assertEquals(JOptionPane.ERROR_MESSAGE, iconCaptor.getValue());
+            }
+        }
+
+        @Test
+        @DisplayName("Displays a Debug message")
+        void displaysDebugMessage() {
+            // Given
+            SwingMessageHandler swingMessageHandler = new SwingMessageHandler();
+            try (MockedStatic<AWTCalls> mockAWTCalls = Mockito.mockStatic(AWTCalls.class)) {
+                mockAWTCalls.when(() -> AWTCalls.showOptionPane(any(), anyString(), anyString(), anyInt())).thenCallRealMethod();
+                // When
+                swingMessageHandler.handleDebugMessage("My debug");
+                // Then
+                mockAWTCalls.verify(() -> AWTCalls.showOptionPane(any(), messageCaptor.capture(), titleCaptor.capture(), iconCaptor.capture()), times(1));
+                assertEquals("Debug", titleCaptor.getValue());
+                assertEquals("My debug", messageCaptor.getValue());
+                assertEquals(JOptionPane.INFORMATION_MESSAGE, iconCaptor.getValue());
+            }
+        }
+
+        @Test
+        @DisplayName("Displays a Trace message")
+        void displaysTraceMessage() {
+            // Given
+            SwingMessageHandler swingMessageHandler = new SwingMessageHandler();
+            try (MockedStatic<AWTCalls> mockAWTCalls = Mockito.mockStatic(AWTCalls.class)) {
+                mockAWTCalls.when(() -> AWTCalls.showOptionPane(any(), anyString(), anyString(), anyInt())).thenCallRealMethod();
+                // When
+                swingMessageHandler.handleTraceMessage("My trace");
+                // Then
+                mockAWTCalls.verify(() -> AWTCalls.showOptionPane(any(), messageCaptor.capture(), titleCaptor.capture(), iconCaptor.capture()), times(1));
+                assertEquals("Trace", titleCaptor.getValue());
+                assertEquals("My trace", messageCaptor.getValue());
+                assertEquals(JOptionPane.INFORMATION_MESSAGE, iconCaptor.getValue());
             }
         }
 

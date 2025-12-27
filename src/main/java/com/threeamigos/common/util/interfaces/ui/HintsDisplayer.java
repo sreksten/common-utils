@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces.ui;
 
+import org.jspecify.annotations.Nullable;
+
 import java.awt.*;
 
 /**
@@ -11,8 +13,8 @@ import java.awt.*;
 public interface HintsDisplayer {
 
     /**
-     * @param component parent component used to show hints (can be null)
+     * @param component the parent component used to show hints (can be null)
      */
-    void showHints(Component component);
+    void showHints(@Nullable Component component);
 
 }

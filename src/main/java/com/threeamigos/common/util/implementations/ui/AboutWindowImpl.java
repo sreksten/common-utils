@@ -1,13 +1,14 @@
 package com.threeamigos.common.util.implementations.ui;
 
 import com.threeamigos.common.util.interfaces.ui.AboutWindow;
+import org.jspecify.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
 import java.net.URL;
 
 /**
- * An implementation of an about window
+ * An implementation of a window showing info about this application
  *
  * @author Stefano Reksten
  */
@@ -30,7 +31,7 @@ public class AboutWindowImpl implements AboutWindow {
     }
 
     @Override
-    public void about(Component component) {
+    public void about(@Nullable Component component) {
 
         Box panel = Box.createVerticalBox();
 
@@ -40,11 +41,11 @@ public class AboutWindowImpl implements AboutWindow {
 
         panel.add(Box.createVerticalStrut(10));
 
-        JLabel mandelbrotLabel = new JLabel(applicationName);
+        JLabel applicationLabel = new JLabel(applicationName);
         Font font = new Font("Serif", Font.BOLD, 16);
-        mandelbrotLabel.setFont(font);
-        mandelbrotLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(mandelbrotLabel);
+        applicationLabel.setFont(font);
+        applicationLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(applicationLabel);
 
         for (String note : releaseNotes) {
             panel.add(Box.createVerticalStrut(5));

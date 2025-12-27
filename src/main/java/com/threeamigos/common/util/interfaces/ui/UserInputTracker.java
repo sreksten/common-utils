@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.interfaces.ui;
 
 import com.threeamigos.common.util.interfaces.PropertyChangeAware;
+import org.jspecify.annotations.NonNull;
 
 /**
  * An interface that keeps track of user inputs (keyboard and mouse) and
@@ -10,6 +11,6 @@ import com.threeamigos.common.util.interfaces.PropertyChangeAware;
  */
 public interface UserInputTracker extends PropertyChangeAware {
 
-    InputConsumer getInputConsumer();
+    @NonNull InputConsumer getInputConsumer();
 
 }

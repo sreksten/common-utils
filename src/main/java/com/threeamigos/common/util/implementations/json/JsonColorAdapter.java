@@ -2,26 +2,43 @@ package com.threeamigos.common.util.implementations.json;
 
 import com.google.gson.*;
 import com.threeamigos.common.util.interfaces.json.JsonAdapter;
+import org.jspecify.annotations.NonNull;
 
 import java.awt.*;
 import java.lang.reflect.Type;
+import java.util.ResourceBundle;
 
 /**
- * A class able to (de)serialize a {@link java.awt.Color} in Json format
+ * A class able to (de)serialize a {@link java.awt.Color} in JSON format using an AARRGGBB string representation.
  *
  * @author Stefano Reksten
  */
 public class JsonColorAdapter implements JsonAdapter<Color> {
 
+    private static ResourceBundle bundle;
+
+    private static ResourceBundle getBundle() {
+        if (bundle == null) {
+            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.json.JsonColorAdapter.JsonColorAdapter");
+        }
+        return bundle;
+    }
+
     @Override
-    public JsonElement serialize(final Color src, final Type typeOfSrc, final JsonSerializationContext context) {
+    public JsonElement serialize(final @NonNull Color src, final Type typeOfSrc, final JsonSerializationContext context) {
+        if (src == null) {
+            throw new IllegalArgumentException(getBundle().getString("noColorProvided"));
+        }
         return new JsonPrimitive(
                 String.format("%02X%02X%02X%02X", src.getAlpha(), src.getRed(), src.getGreen(), src.getBlue()));
     }
 
     @Override
-    public Color deserialize(final JsonElement json, final Type typeOfT, final JsonDeserializationContext context)
+    public @NonNull Color deserialize(final @NonNull JsonElement json, final Type typeOfT, final JsonDeserializationContext context)
             throws JsonParseException {
+        if (json == null) {
+            throw new IllegalArgumentException(getBundle().getString("noJsonProvided"));
+        }
         String argb = json.getAsJsonPrimitive().getAsString();
         if (argb.length() != 8) {
             throw invalidColor(argb);
@@ -42,6 +59,6 @@ public class JsonColorAdapter implements JsonAdapter<Color> {
     }
 
     private JsonParseException invalidColor(final String colorRepresentation) {
-        return new JsonParseException(String.format("Invalid color representation: %s", colorRepresentation));
+        return new JsonParseException(String.format(getBundle().getString("invalidColorRepresentation"), colorRepresentation));
     }
 }
