@@ -136,3 +136,8 @@ Revision history:
 - handlers now support debug and trace messages
 - 100% test coverage
 - exceptions are thrown when null objects are passed as NonNull parameters
+
+1.0.5:
+- PersistResultReturnCodeEnum added to PersistResult
+- PersistResultBuilder added
+

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermission;
+import java.util.ResourceBundle;
 
 import static com.threeamigos.common.util.implementations.TestClass.*;
 import static com.threeamigos.common.util.implementations.persistence.file.FileUtils.applyFileAttributes;
@@ -31,6 +32,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class JsonFilePersisterIntegrationTest {
 
     private static final String ENTITY_DESCRIPTION = "entityDescription";
+    private static final String FILENAME = "filename";
+
+    private ResourceBundle filePersistResultBundle;
 
     private ExceptionHandler exceptionHandler;
 
@@ -40,6 +44,8 @@ class JsonFilePersisterIntegrationTest {
     void setup(@TempDir File temporaryDirectory) {
         exceptionHandler = new InMemoryMessageHandler();
         this.temporaryDirectory = temporaryDirectory;
+
+        filePersistResultBundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.persistence.file.FilePersistResultImpl.FilePersistResultImpl");
     }
 
     @AfterEach
@@ -152,7 +158,7 @@ class JsonFilePersisterIntegrationTest {
         // Then
         assertThat(persistResult, hasProperty("successful", is(false)));
         assertThat(persistResult, hasProperty("notFound", is(true)));
-        assertThat(persistResult, hasProperty("error", is(FilePersistResultImpl.notFound(ENTITY_DESCRIPTION).getError())));
+        assertThat(persistResult, hasProperty("error", is(String.format(filePersistResultBundle.getString("fileNotFound"), sut.getFilenameWithPath()))));
     }
 
     @Test
@@ -166,7 +172,7 @@ class JsonFilePersisterIntegrationTest {
         PersistResult persistResult = sut.load(entity);
         // Then
         assertThat(persistResult, hasProperty("successful", is(false)));
-        assertThat(persistResult, hasProperty("error", is(FilePersistResultImpl.pathNotAccessible().getError())));
+        assertThat(persistResult, hasProperty("error", is(String.format(filePersistResultBundle.getString("directoryCannotBeAccessed"), sut.getFilenameWithPath()))));
     }
 
     @Test
@@ -180,7 +186,7 @@ class JsonFilePersisterIntegrationTest {
         PersistResult persistResult = sut.load(entity);
         // Then
         assertThat(persistResult, hasProperty("successful", is(false)));
-        assertThat(persistResult, hasProperty("error", is(FilePersistResultImpl.cannotBeRead(ENTITY_DESCRIPTION).getError())));
+        assertThat(persistResult, hasProperty("error", is(String.format(filePersistResultBundle.getString("fileCannotBeRead"), sut.getFilenameWithPath()))));
     }
 
     private void createUnreadableFileIn(File temporaryDirectory) throws IOException {
@@ -197,7 +203,7 @@ class JsonFilePersisterIntegrationTest {
         if (!subdirectory.mkdirs()) {
             fail("Can't create subdirectories");
         }
-        String completeFilename = subdirectory.getAbsolutePath() + File.separatorChar + "filename" + FILENAME_EXTENSION;
+        String completeFilename = subdirectory.getAbsolutePath() + File.separatorChar + FILENAME + FILENAME_EXTENSION;
         File file = new File(completeFilename);
         if (!file.createNewFile()) {
             fail("Can't create file " + completeFilename);
@@ -216,7 +222,7 @@ class JsonFilePersisterIntegrationTest {
         PersistResult persistResult = sut.save(entity);
         // Then
         assertThat(persistResult, hasProperty("successful", is(false)));
-        assertThat(persistResult, hasProperty("error", is(FilePersistResultImpl.fileNotWriteable(ENTITY_DESCRIPTION).getError())));
+        assertThat(persistResult, hasProperty("error", is(String.format(filePersistResultBundle.getString("fileCannotBeWritten"), sut.getFilenameWithPath()))));
     }
 
     @Test
@@ -230,7 +236,7 @@ class JsonFilePersisterIntegrationTest {
         PersistResult persistResult = sut.save(entity);
         // Then
         assertThat(persistResult, hasProperty("successful", is(false)));
-        assertThat(persistResult, hasProperty("error", is(FilePersistResultImpl.pathNotAccessible().getError())));
+        assertThat(persistResult, hasProperty("error", is(String.format(filePersistResultBundle.getString("directoryCannotBeAccessed"), sut.getFilenameWithPath()))));
     }
 
     @Nested
@@ -302,7 +308,7 @@ class JsonFilePersisterIntegrationTest {
             rootPathProvider = new RootPathProviderImpl(this, exceptionHandler);
         }
         Json<TestClass> json = JsonBuilderFactory.builder().build(TestClass.class);
-        return new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        return new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
     }
 
     private void createFileWithJsonRepresentation(String filename) throws IOException {

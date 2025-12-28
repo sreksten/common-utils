@@ -77,27 +77,26 @@ public abstract class AbstractFilePersister<T> implements Persister<T> {
         if (entity == null) {
             throw new IllegalArgumentException(getBundle().getString("noEntityProvided"));
         }
+        String entityDescription = getEntityDescription();
+        String filename = getFilenameWithPath();
         if (rootPathAccessible) {
-            String filename = getFilenameWithPath();
             File file = new File(filename);
             if (!file.exists()) {
-                return FilePersistResultImpl.notFound(getEntityDescription());
+                return FilePersistResultBuilder.notFound(entityDescription, filename);
             }
             if (!file.canRead()) {
-                return FilePersistResultImpl.cannotBeRead(getEntityDescription());
+                return FilePersistResultBuilder.notReadable(entityDescription, filename);
             }
 
             try (InputStream inputStream = createInputStream(filename)) {
                 load(inputStream, entity);
             } catch (Exception e) {
-                return new FilePersistResultImpl(e.getMessage());
+                return FilePersistResultBuilder.error(entityDescription, filename, e.getMessage());
             }
 
-            FilePersistResultImpl result = new FilePersistResultImpl();
-            result.setFilename(filename);
-            return result;
+            return FilePersistResultBuilder.successful(entityDescription, filename);
         } else {
-            return FilePersistResultImpl.pathNotAccessible();
+            return FilePersistResultBuilder.pathNotAccessible(entityDescription, filename);
         }
     }
 
@@ -118,22 +117,21 @@ public abstract class AbstractFilePersister<T> implements Persister<T> {
         if (entity == null) {
             throw new IllegalArgumentException(getBundle().getString("noEntityProvided"));
         }
+        String entityDescription = getEntityDescription();
+        String filename = getFilenameWithPath();
         if (rootPathAccessible) {
-            String filename = getFilenameWithPath();
             File file = new File(filename);
             if (file.exists() && !file.canWrite()) {
-                return FilePersistResultImpl.fileNotWriteable(getEntityDescription());
+                return FilePersistResultBuilder.notWriteable(entityDescription, filename);
             }
             try (OutputStream outputStream = createOutputStream(filename)) {
                 save(outputStream, entity);
             } catch (IOException e) {
-                return new FilePersistResultImpl(e.getMessage());
+                return FilePersistResultBuilder.error(entityDescription, filename, e.getMessage());
             }
-            FilePersistResultImpl result = new FilePersistResultImpl();
-            result.setFilename(filename);
-            return result;
+            return FilePersistResultBuilder.successful(entityDescription, filename);
         } else {
-            return FilePersistResultImpl.pathNotAccessible();
+            return FilePersistResultBuilder.pathNotAccessible(entityDescription, filename);
         }
     }
 

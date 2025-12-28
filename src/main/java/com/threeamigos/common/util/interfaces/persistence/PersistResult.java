@@ -8,6 +8,11 @@ package com.threeamigos.common.util.interfaces.persistence;
 public interface PersistResult {
 
 	/**
+	 * @return a description of the object being persisted or loaded.
+	 */
+	String getDescription();
+
+	/**
 	 * @return true if the operation was successful, false otherwise.
 	 */
 	boolean isSuccessful();
@@ -18,8 +23,18 @@ public interface PersistResult {
 	boolean isNotFound();
 
 	/**
+	 * @return a localized string reporting that a problem occurred for file description
+	 */
+	String getProblemOccurredForFileDescription();
+
+	/**
 	 * @return a human-readable error explaining what happened.
 	 */
 	String getError();
+
+	/**
+	 * @return a machine-readable error code
+	 */
+	PersistResultReturnCodeEnum getReturnCode();
 
 }
