@@ -143,3 +143,4 @@ Revision history:
 
 1.0.5-SNAPSHOT:
 - added Resolution interface and implementations
+- added PriorityDeque interface and implementations
