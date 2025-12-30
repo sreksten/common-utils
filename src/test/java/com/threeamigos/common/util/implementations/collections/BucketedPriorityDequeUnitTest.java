@@ -112,18 +112,54 @@ class BucketedPriorityDequeUnitTest {
 
     }
 
-    @Test
-    @DisplayName("Should clear deque")
-    void shouldClearDeque() {
-        // Given
-        PriorityDeque<String> sut = new BucketedPriorityDeque<>(DEFAULT_BUCKET_SIZE);
-        sut.add("test", 1);
-        sut.add("test2", 2);
-        // When
-        sut.clear();
-        int size = sut.size();
-        // Then
-        assertEquals(0, size);
+    @Nested
+    @DisplayName("Clearing operations")
+    class ClearingOperations {
+
+        @Test
+        @DisplayName("Should clear deque")
+        void shouldClearDeque() {
+            // Given
+            PriorityDeque<String> sut = new BucketedPriorityDeque<>(DEFAULT_BUCKET_SIZE);
+            sut.add("test", 1);
+            sut.add("test2", 2);
+            // When
+            sut.clear();
+            int size = sut.size();
+            // Then
+            assertEquals(0, size);
+        }
+
+        @Test
+        @DisplayName("Should clear by priority")
+        void shouldClearDequeByPriority() {
+            // Given
+            PriorityDeque<String> sut = new BucketedPriorityDeque<>(DEFAULT_BUCKET_SIZE);
+            sut.add("test", 1);
+            sut.add("test2", 1);
+            sut.add("test3", 2);
+            // When
+            sut.clear(2);
+            int size = sut.size();
+            // Then
+            assertEquals(2, size);
+        }
+
+        @Test
+        @DisplayName("Should clear by filter")
+        void shouldClearDequeByFilter() {
+            // Given
+            PriorityDeque<String> sut = new BucketedPriorityDeque<>(DEFAULT_BUCKET_SIZE);
+            sut.add("test-A", 1);
+            sut.add("test-A", 2);
+            sut.add("test-B", 2);
+            // When
+            sut.clear(t -> t.endsWith("-A"));
+            int size = sut.size();
+            // Then
+            assertEquals(1, size);
+        }
+
     }
 
     @Test
@@ -268,6 +304,20 @@ class BucketedPriorityDequeUnitTest {
             assertEquals("test", s);
         }
 
+        @Test
+        @DisplayName("Given different priorities, should remove given priority element from the deque (3)")
+        void shouldRemoveGivenPriorityElementFromDeque3() {
+            // Given
+            PriorityDeque<String> sut = new BucketedPriorityDeque<>(DEFAULT_BUCKET_SIZE);
+            sut.add("test2", 2);
+            sut.add("test", 1);
+            sut.add("test3", 1);
+            // When
+            String s = sut.pollFifo(1);
+            // Then
+            assertEquals("test", s);
+        }
+
     }
 
     @Nested
@@ -387,5 +437,20 @@ class BucketedPriorityDequeUnitTest {
             // Then
             assertEquals("test", s);
         }
+
+        @Test
+        @DisplayName("Given different priorities, should remove given priority element from the deque (3)")
+        void shouldRemoveGivenPriorityElementFromDeque3() {
+            // Given
+            PriorityDeque<String> sut = new BucketedPriorityDeque<>(DEFAULT_BUCKET_SIZE);
+            sut.add("test2", 2);
+            sut.add("test", 1);
+            sut.add("test3", 1);
+            // When
+            String s = sut.pollLifo(1);
+            // Then
+            assertEquals("test3", s);
+        }
+
     }
 }

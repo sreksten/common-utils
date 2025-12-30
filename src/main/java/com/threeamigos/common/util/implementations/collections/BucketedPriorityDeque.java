@@ -2,11 +2,12 @@ package com.threeamigos.common.util.implementations.collections;
 
 import com.threeamigos.common.util.interfaces.collections.PriorityDeque;
 import java.util.ArrayDeque;
+import java.util.function.Function;
 
 /**
- * Ultra-fast implementation of the {@link PriorityDeque} (small, fixed-range priorities).
+ * Ultra-fast, thread-safe implementation of the {@link PriorityDeque} (small, fixed-range priorities).
  * Perfect when priorities are known and limited (range limit is 0..31).
- * Uses an array of Deques and a bitset to find the next non-empty priority in constant time.<br/>
+ * Uses an array of Deque and a bitset to find the next non-empty priority in constant time.<br/>
  * <br/>
  * Complexity:
  * <ul>
@@ -46,20 +47,22 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         }
     }
 
-    public int getHighestNotEmptyPriority() {
+    public synchronized int getHighestNotEmptyPriority() {
         if (nonEmptyMask == 0) return -1;
         return 31 - Integer.numberOfLeadingZeros(nonEmptyMask);
     }
 
-    public void add(T task, int priority) {
+    public synchronized void add(T task, int priority) {
         ArrayDeque<T> q = buckets[priority];
         q.addLast(task);
         nonEmptyMask |= (1 << priority);
     }
 
-    public T pollFifo() {
+    public synchronized T pollFifo() {
         int p = getHighestNotEmptyPriority();
-        if (p < 0) return null;
+        if (p < 0) {
+            return null;
+        }
         ArrayDeque<T> q = buckets[p];
         T t = q.pollFirst();
         if (q.isEmpty()) {
@@ -68,14 +71,20 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public T pollFifo(int priority) {
+    public synchronized T pollFifo(int priority) {
         ArrayDeque<T> q = buckets[priority];
-        return q.pollFirst();
+        T t = q.pollFirst();
+        if (q.isEmpty()) {
+            nonEmptyMask &= ~(1 << priority);
+        }
+        return t;
     }
 
-    public T pollLifo() {
+    public synchronized T pollLifo() {
         int p = getHighestNotEmptyPriority();
-        if (p < 0) return null;
+        if (p < 0) {
+            return null;
+        }
         ArrayDeque<T> q = buckets[p];
         T t = q.pollLast();
         if (q.isEmpty()) {
@@ -84,16 +93,20 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public T pollLifo(int priority) {
+    public synchronized T pollLifo(int priority) {
         ArrayDeque<T> q = buckets[priority];
-        return q.pollLast();
+        T t = q.pollLast();
+        if (q.isEmpty()) {
+            nonEmptyMask &= ~(1 << priority);
+        }
+        return t;
     }
 
-    public boolean isEmpty() {
+    public synchronized boolean isEmpty() {
         return nonEmptyMask == 0;
     }
 
-    public int size() {
+    public synchronized int size() {
         int size = 0;
         for (int i = 0; i <= maxPriority; i++) {
             size += buckets[i].size();
@@ -101,14 +114,24 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return size;
     }
 
-    public int size(int priority) {
+    public synchronized int size(int priority) {
         return buckets[priority].size();
     }
 
-    public void clear() {
+    public synchronized void clear() {
         for (int i = 0; i <= maxPriority; i++) {
             buckets[i].clear();
         }
         nonEmptyMask = 0;
+    }
+
+    public synchronized void clear(int priority) {
+        buckets[priority].clear();
+    }
+
+    public synchronized void clear(Function<T, Boolean> filteringFunction) {
+        for (int i = 0; i <= maxPriority; i++) {
+            buckets[i].removeIf(filteringFunction::apply);
+        }
     }
 }

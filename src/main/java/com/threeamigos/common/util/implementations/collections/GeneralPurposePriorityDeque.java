@@ -5,9 +5,10 @@ import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.function.Function;
 
 /**
- * General-purpose implementation of a {@link PriorityDeque} (arbitrary priority integers).
+ * General-purpose, thread-safe implementation of a {@link PriorityDeque} (arbitrary priority integers).
  * Works for any integer priorities, sparse ranges, dynamic inserts/removals.<br/>
  * <br/>
  * Complexity:
@@ -29,14 +30,14 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     private final NavigableMap<Integer, ArrayDeque<T>> byPriority = new TreeMap<>();
     private int nonEmptyCount = 0;
 
-    public int getHighestNotEmptyPriority() {
+    public synchronized int getHighestNotEmptyPriority() {
         if (isEmpty()) {
             return -1;
         }
         return byPriority.lastKey();
     }
 
-    public void add(T task, int priority) {
+    public synchronized void add(T task, int priority) {
         ArrayDeque<T> q = byPriority.computeIfAbsent(priority, p -> {
             nonEmptyCount++;
             return new ArrayDeque<>();
@@ -45,9 +46,11 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     /** Take the next task preferring the highest priority, FIFO within that priority */
-    public T pollFifo() {
+    public synchronized T pollFifo() {
         Map.Entry<Integer, ArrayDeque<T>> e = byPriority.lastEntry();
-        if (e == null) return null;
+        if (e == null) {
+            return null;
+        }
         ArrayDeque<T> q = e.getValue();
         T t = q.pollFirst();
         if (q.isEmpty()) {
@@ -57,15 +60,25 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public T pollFifo(int priority) {
+    public synchronized T pollFifo(int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
-        return q == null ? null : q.pollFirst();
+        if (q == null) {
+            return null;
+        }
+        T t = q.pollFirst();
+        if (q.isEmpty()) {
+            byPriority.remove(priority);
+            nonEmptyCount--;
+        }
+        return t;
     }
 
     /** Take the next task preferring the highest priority, LIFO within that priority */
-    public T pollLifo() {
+    public synchronized T pollLifo() {
         Map.Entry<Integer, ArrayDeque<T>> e = byPriority.lastEntry();
-        if (e == null) return null;
+        if (e == null) {
+            return null;
+        }
         ArrayDeque<T> q = e.getValue();
         T t = q.pollLast();
         if (q.isEmpty()) {
@@ -75,26 +88,44 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public T pollLifo(int priority) {
+    public synchronized T pollLifo(int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
-        return q == null ? null : q.pollLast();
+        if (q == null) {
+            return null;
+        }
+        T t = q.pollLast();
+        if (q.isEmpty()) {
+            byPriority.remove(priority);
+            nonEmptyCount--;
+        }
+        return t;
     }
 
-    public boolean isEmpty() {
+    public synchronized boolean isEmpty() {
         return nonEmptyCount == 0;
     }
 
-    public int size() {
+    public synchronized int size() {
         return byPriority.values().stream().mapToInt(ArrayDeque::size).sum();
     }
 
-    public int size(int priority) {
+    public synchronized int size(int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         return q == null ? 0 : q.size();
     }
 
-    public void clear() {
+    public synchronized void clear() {
         byPriority.clear();
         nonEmptyCount = 0;
     }
+
+    public synchronized void clear(int priority) {
+        byPriority.remove(priority);
+    }
+
+    public synchronized void clear(Function<T, Boolean> filteringFunction) {
+        byPriority.values().forEach(q -> q.removeIf(filteringFunction::apply));
+        nonEmptyCount = byPriority.values().stream().mapToInt(ArrayDeque::size).sum();
+    }
+
 }

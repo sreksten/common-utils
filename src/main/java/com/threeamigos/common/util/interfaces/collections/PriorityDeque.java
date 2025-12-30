@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces.collections;
 
+import java.util.function.Function;
+
 /**
  * A prioritized Deque. When polling, objects with higher priority are returned first.<br/>
  * You can, however, count or poll objects with a given priority using FIFO or LIFO policies.
@@ -66,4 +68,16 @@ public interface PriorityDeque<T> {
      * Clears the deque.
      */
     void clear();
+
+    /**
+     * Clears all objects with given priority.
+     * @param priority priority of objects to be removed
+     */
+    void clear(int priority);
+
+    /**
+     * Clears all objects that satisfy the given filtering function.
+     * @param filteringFunction filtering function; if true, then the object is removed
+     */
+    void clear(Function<T, Boolean>filteringFunction);
 }
