@@ -141,6 +141,6 @@ Revision history:
 - PersistResultReturnCodeEnum added to PersistResult
 - PersistResultBuilder added
 
-1.0.5-SNAPSHOT:
+1.0.6:
 - added Resolution interface and implementations
 - added PriorityDeque interface and implementations

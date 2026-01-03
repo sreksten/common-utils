@@ -1,7 +1,8 @@
 package com.threeamigos.common.util.implementations.collections;
 
 import com.threeamigos.common.util.interfaces.collections.PriorityDeque;
-import java.util.ArrayDeque;
+
+import java.util.*;
 import java.util.function.Function;
 
 /**
@@ -29,8 +30,10 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     public static final int MAX_PRIORITY = 31;
 
     private final ArrayDeque<T>[] buckets;
-    private int nonEmptyMask = 0; // bit i set => bucket i has items
     private final int maxPriority; // inclusive
+
+    private Policy policy;
+    private int nonEmptyMask = 0; // bit i set => bucket i has items
 
     @SuppressWarnings("unchecked")
     public BucketedPriorityDeque(int maxPriority) {
@@ -45,17 +48,52 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         for (int i = 0; i <= maxPriority; i++) {
             buckets[i] = new ArrayDeque<>();
         }
+        this.policy = Policy.FIFO;
     }
 
-    public synchronized int getHighestNotEmptyPriority() {
-        if (nonEmptyMask == 0) return -1;
-        return 31 - Integer.numberOfLeadingZeros(nonEmptyMask);
+    public BucketedPriorityDeque(int maxPriority, Policy policy) {
+        this(maxPriority);
+        this.policy = policy;
+    }
+
+    public void setPolicy(Policy policy) {
+        this.policy = policy;
+    }
+
+    public Policy getPolicy() {
+        return policy;
     }
 
     public synchronized void add(T task, int priority) {
         ArrayDeque<T> q = buckets[priority];
         q.addLast(task);
         nonEmptyMask |= (1 << priority);
+    }
+
+    public synchronized T peek() {
+        return policy == Policy.FIFO ? peekFifo() : peekLifo();
+    }
+
+    public synchronized T peekFifo() {
+        if (nonEmptyMask == 0) {
+            return null;
+        }
+        return buckets[getHighestNotEmptyPriority()].peekFirst();
+    }
+
+    public synchronized T peekLifo() {
+        if (nonEmptyMask == 0) {
+            return null;
+        }
+        return buckets[getHighestNotEmptyPriority()].peekLast();
+    }
+
+    public synchronized T poll() {
+        if (policy == Policy.FIFO) {
+            return pollFifo();
+        } else {
+            return pollLifo();
+        }
     }
 
     public synchronized T pollFifo() {
@@ -132,6 +170,151 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     public synchronized void clear(Function<T, Boolean> filteringFunction) {
         for (int i = 0; i <= maxPriority; i++) {
             buckets[i].removeIf(filteringFunction::apply);
+        }
+    }
+
+    public synchronized int getHighestNotEmptyPriority() {
+        if (nonEmptyMask == 0) return -1;
+        return 31 - Integer.numberOfLeadingZeros(nonEmptyMask);
+    }
+
+    @Override
+    public synchronized boolean contains(T t) {
+        for (ArrayDeque<T> q : buckets) {
+            if (q.contains(t)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public synchronized boolean containsAll(Collection<T> iterable) {
+        for (T t : iterable) {
+            if (!contains(t)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public synchronized boolean remove() {
+        T t = poll();
+        if (t == null) {
+            throw new NoSuchElementException();
+        }
+        return true;
+    }
+
+    @Override
+    public synchronized boolean remove(T t) {
+        for (ArrayDeque<T> q : buckets) {
+            if (q.remove(t)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public synchronized boolean removeAll(Collection<T> iterable) {
+        boolean result = true;
+        for (T t : iterable) {
+            if (!remove(t)) {
+                result = false;
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public synchronized boolean retainAll(Collection<T> iterable) {
+        boolean result = false;
+        for (int i = 0; i <= maxPriority; i++) {
+            if (buckets[i].retainAll(iterable)) {
+                result = true;
+            }
+        }
+        return result;
+    }
+
+    public synchronized List<T> toList() {
+        List<T> result = new ArrayList<>();
+        // Iterate from maxPriority down to MIN_PRIORITY (highest first)
+        for (int i = maxPriority; i >= MIN_PRIORITY; i--) {
+            ArrayDeque<T> bucket = buckets[i];
+            if (bucket.isEmpty()) {
+                continue;
+            }
+            if (policy == Policy.FIFO) {
+                // FIFO: elements in the order they were added
+                result.addAll(bucket);
+            } else {
+                // LIFO: elements in reverse order of addition
+                bucket.descendingIterator().forEachRemaining(result::add);
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public synchronized Iterator<T> iterator() {
+        return new PriorityIterator();
+    }
+
+    private class PriorityIterator implements Iterator<T> {
+        private int currentBucketIndex;
+        private Iterator<T> currentDequeIterator;
+        private ArrayDeque<T> currentDeque;
+
+        PriorityIterator() {
+            // Start from the highest possible priority
+            this.currentBucketIndex = maxPriority;
+        }
+
+        @Override
+        public boolean hasNext() {
+            // If we don't have an iterator or the current one is exhausted
+            while (currentDequeIterator == null || !currentDequeIterator.hasNext()) {
+                currentBucketIndex--; // Move to the next bucket index
+
+                if (currentBucketIndex < 0) {
+                    return false; // No more buckets to check
+                }
+
+                currentDeque = buckets[currentBucketIndex];
+                // Only create an iterator if the bucket actually has items
+                if (!currentDeque.isEmpty()) {
+                    currentDequeIterator = (policy == Policy.FIFO)
+                            ? currentDeque.iterator()
+                            : currentDeque.descendingIterator();
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public T next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return currentDequeIterator.next();
+        }
+
+        @Override
+        public void remove() {
+            if (currentDequeIterator == null) {
+                throw new IllegalStateException();
+            }
+
+            synchronized (BucketedPriorityDeque.this) {
+                currentDequeIterator.remove();
+                if (currentDeque.isEmpty()) {
+                    // Update the bitmask if the bucket is now empty
+                    nonEmptyMask &= ~(1 << currentBucketIndex);
+                }
+            }
         }
     }
 }

@@ -1,5 +1,9 @@
 package com.threeamigos.common.util.interfaces.collections;
 
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.BlockingQueue;
 import java.util.function.Function;
 
 /**
@@ -10,10 +14,23 @@ import java.util.function.Function;
  */
 public interface PriorityDeque<T> {
 
+    enum Policy {
+        FIFO, // First-In-First-Out
+        LIFO // Last-In-First-Out
+    };
+
     /**
-     * @return the maximum priority between all objects in the deque.
+     * Sets the policy for polling objects from the deque.
+     * The default policy is FIFO.
+     * @param policy the policy to set
      */
-    int getHighestNotEmptyPriority();
+    void setPolicy(Policy policy);
+
+    /**
+     * Gets the policy for polling objects from the deque.
+     * @return the policy
+     */
+    Policy getPolicy();
 
     /**
      * Adds an object to the deque.
@@ -21,6 +38,28 @@ public interface PriorityDeque<T> {
      * @param priority priority of the object
      */
     void add(T t, int priority);
+
+    /**
+     * Retrieves, but does not remove, the head of this deque (with the highest priority).
+     * @return the head of this deque, or null if empty
+     */
+    T peek();
+
+    /**
+     * Retrieves, but does not remove, the head of the highest priority bucket (FIFO).
+     */
+    T peekFifo();
+
+    /**
+     * Retrieves, but does not remove, the head of the highest priority bucket (LIFO).
+     */
+    T peekLifo();
+    /**
+     * Retrieves and removes an object with the highest priority from the deque.
+     * The default policy is FIFO.
+     * @return the oldest object with the highest priority
+     */
+    T poll();
 
     /**
      * Retrieves and removes an object with the highest priority from the deque using a FIFO policy.
@@ -80,4 +119,26 @@ public interface PriorityDeque<T> {
      * @param filteringFunction filtering function; if true, then the object is removed
      */
     void clear(Function<T, Boolean>filteringFunction);
+
+    /**
+     * @return the maximum priority between all objects in the deque.
+     */
+    int getHighestNotEmptyPriority();
+
+    boolean contains(T t);
+
+    boolean containsAll(Collection<T> iterable);
+
+    boolean remove();
+
+    boolean remove(T t);
+
+    boolean removeAll(Collection<T> iterable);
+
+    boolean retainAll(Collection<T> iterable);
+
+    List<T> toList();
+
+    Iterator<T> iterator();
+
 }
