@@ -1,0 +1,8 @@
+package com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.subpackage;
+
+import com.threeamigos.common.util.annotations.injection.Alternative;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAbstractClass;
+
+@Alternative( "alternative3")
+public class MultipleAnnotatedConcreteClassesAlternative3 extends MultipleAnnotatedConcreteClassesAbstractClass {
+}
