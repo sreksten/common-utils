@@ -73,7 +73,6 @@ class ClassResolver {
     /*
      * package-private to run the tests
      */
-    @SuppressWarnings("unchecked")
     <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Class<T> abstractClass, String packageName, String identifier) throws Exception {
         /*
          * If we have a concrete class, return that class.
@@ -222,7 +221,7 @@ class ClassResolver {
     /*
      * package-private to run the tests
      */
-    List<Class<?>> findClassesInJar(ClassLoader classLoader, URL jarUrl, String packageName) throws IOException, ClassNotFoundException {
+    List<Class<?>> findClassesInJar(ClassLoader classLoader, URL jarUrl, String packageName) throws IOException {
         List<Class<?>> classes = new ArrayList<>();
         // Extract the file path properly handling 'jar:file': and '!'
         String urlString = jarUrl.toString();
