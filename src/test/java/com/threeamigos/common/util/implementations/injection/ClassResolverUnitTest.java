@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
@@ -472,7 +471,7 @@ class ClassResolverUnitTest {
         Path jarPath = tempDir.resolve("test-classes.jar");
         String packageName = "com.threeamigos.common.util.implementations.injection";
         String baseEntryName = packageName.replace('.', '/');
-        createJarFile(jarPath, packageName, baseEntryName);
+        createJarFile(jarPath, baseEntryName);
 
         // 3. Create a custom ClassLoader WITH parent delegation
         URL[] urls = { jarPath.toUri().toURL() };
@@ -496,13 +495,13 @@ class ClassResolverUnitTest {
         }
     }
 
-    static final String[] getPackageNamesToFilter() {
+    static String[] getPackageNamesToFilter() {
         return new String[] { "com.threeamigos.common.util.implementations.injection", "", null };
     }
 
     @Test
     @DisplayName("Should handle non-standard JAR URLs using fallback logic")
-    void shouldHandleNonStandardJarUrl() throws Exception {
+    void shouldHandleNonStandardJarUrl() {
         ClassResolver sut = new ClassResolver();
 
         // 1. Create a URL string with an unencoded space.
@@ -518,16 +517,11 @@ class ClassResolverUnitTest {
         // but we can verify that the code reached the fallback by checking the logs or
         // debugging the File object creation.
 
-        assertThrows(IOException.class, () -> {
-            sut.findClassesInJar(
-                    Thread.currentThread().getContextClassLoader(),
-                    mockUrl,
-                    "com.package"
-            );
-        });
+        assertThrows(IOException.class, () -> sut.findClassesInJar(Thread.currentThread().getContextClassLoader(),
+                    mockUrl, "com.package"));
     }
 
-    private void createJarFile(Path jarPath, String packageName, String baseEntryName) throws Exception {
+    private void createJarFile(Path jarPath, String baseEntryName) throws Exception {
         // Note: We are packaging an existing compiled class from the project into this JAR
         // Usually, target/test-classes/... holds these files during test execution
         URL classUrl = getClass().getClassLoader().getResource(baseEntryName);
@@ -569,7 +563,7 @@ class ClassResolverUnitTest {
         }
     }
 
-    private URLClassLoader createURLClassLoader(URL[] urls, String packageName, String baseEntryName) throws Exception {
+    private URLClassLoader createURLClassLoader(URL[] urls, String packageName, String baseEntryName) {
         return new URLClassLoader(urls, getClass().getClassLoader()) {
             @Override
             public Class<?> loadClass(String name) throws ClassNotFoundException {
