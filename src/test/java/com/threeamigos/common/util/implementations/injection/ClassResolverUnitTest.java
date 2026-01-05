@@ -533,6 +533,7 @@ class ClassResolverUnitTest {
         File packageDir = new File(rootUrl.toURI());
 
         // 2. Package the entire directory into a JAR
+        //noinspection IOStreamConstructor
         try (JarOutputStream jos = new JarOutputStream(new FileOutputStream(jarPath.toFile()))) {
             addFiles(jos, baseEntryName, packageDir);
 
