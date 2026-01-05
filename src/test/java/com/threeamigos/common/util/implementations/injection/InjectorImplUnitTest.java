@@ -121,7 +121,7 @@ class InjectorImplUnitTest {
                  * Warning: Anonymous new Runnable() can be replaced with lambda. But if we do,
                  * that becomes a synthetic class, not an anonymous class. LEAVE IT AS IS!
                  */
-                Runnable anonymousRunnable = new Runnable() {
+                @SuppressWarnings("Convert2Lambda") Runnable anonymousRunnable = new Runnable() {
                     @Override
                     public void run() {
                         System.out.println("Hello from anonymous class!");
@@ -697,6 +697,7 @@ class InjectorImplUnitTest {
      * But if we do, that would not be any longer a NON-STATIC inner class, and we need one for our tests.
      * LEAVE IT AS IS!
      */
+    @SuppressWarnings("InnerClassMayBeStatic")
     class NonStaticInnerClass { }
 
     @Singleton static class SingletonClass { }
