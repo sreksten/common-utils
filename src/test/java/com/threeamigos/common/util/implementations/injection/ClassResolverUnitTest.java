@@ -533,6 +533,7 @@ class ClassResolverUnitTest {
         File packageDir = new File(rootUrl.toURI());
 
         // 2. Package the entire directory into a JAR
+        // at least until I decide not to support Java 8 any longer
         //noinspection IOStreamConstructor
         try (JarOutputStream jos = new JarOutputStream(new FileOutputStream(jarPath.toFile()))) {
             addFiles(jos, baseEntryName, packageDir);
