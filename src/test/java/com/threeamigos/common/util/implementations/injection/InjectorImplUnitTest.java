@@ -84,17 +84,13 @@ class InjectorImplUnitTest {
             @Test
             @DisplayName("Enums")
             void shouldThrowExceptionIfInjectingAnEnum() {
-                assertThrows(IllegalArgumentException.class, () -> {
-                    new InjectorImpl().inject(TestEnum.class);
-                });
+                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(TestEnum.class));
             }
 
             @Test
             @DisplayName("Primitives")
             void shouldThrowExceptionIfInjectingAPrimitive() {
-                assertThrows(IllegalArgumentException.class, () -> {
-                    new InjectorImpl().inject(int.class);
-                });
+                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(int.class));
             }
 
             @Test
@@ -104,21 +100,17 @@ class InjectorImplUnitTest {
                 final Class<?> syntheticClass = ((Runnable)() -> {}).getClass();
                 // Then
                 assertTrue(syntheticClass.isSynthetic());
-                assertThrows(IllegalArgumentException.class, () -> {
-                    new InjectorImpl().inject(syntheticClass);
-                });
+                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(syntheticClass));
             }
 
             @Test
             @DisplayName("Local classes")
             void shouldThrowExceptionIfInjectingALocalClass() {
                 // Given
-                class MyLocalClass {};
+                class MyLocalClass {}
                 // Then
                 assertTrue(MyLocalClass.class.isLocalClass());
-                assertThrows(IllegalArgumentException.class, () -> {
-                    new InjectorImpl().inject(MyLocalClass.class);
-                });
+                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(MyLocalClass.class));
             }
 
             @Test
@@ -133,17 +125,13 @@ class InjectorImplUnitTest {
                 };
                 // Then
                 assertTrue(anonymousRunnable.getClass().isAnonymousClass());
-                assertThrows(IllegalArgumentException.class, () -> {
-                    new InjectorImpl().inject(anonymousRunnable.getClass());
-                });
+                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(anonymousRunnable.getClass()));
             }
 
             @Test
             @DisplayName("Non-static inner classes")
             void shouldThrowExceptionIfInjectingNonStaticInnerClass() {
-                assertThrows(IllegalArgumentException.class, () -> {
-                    new InjectorImpl().inject(NonStaticInnerClass.class);
-                });
+                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(NonStaticInnerClass.class));
             }
         }
     }
@@ -177,6 +165,7 @@ class InjectorImplUnitTest {
         @DisplayName("Should throw IllegalStateException if more than one constructor is annotated with @Inject")
         void shouldThrowExceptionWhenMoreThanOneConstructorIsAnnotatedWithInject() {
             // Given
+            @SuppressWarnings("unused")
             class TestClass {
                 @Inject
                 public TestClass(java.util.Date date) { }
@@ -195,6 +184,7 @@ class InjectorImplUnitTest {
         @DisplayName("Should return constructor marked with @Inject when available, preferring it to the no-arguments constructor")
         void shouldReturnConstructorAnnotatedWithInjectPreferringItToTheNoArgsConstructor() throws NoSuchMethodException {
             // Given
+            @SuppressWarnings("unused")
             class TestClass {
                 @Inject
                 public TestClass(java.util.Date date) { }
@@ -233,6 +223,7 @@ class InjectorImplUnitTest {
         @DisplayName("Should throw NoSuchMethodException if no constructor annotated with @Inject is found and no-arguments constructor is not available")
         void shouldThrowNoSuchMethodExceptionIFNoCompatibleConstructorFound() {
             // Given
+            @SuppressWarnings("unused")
             class TestClass {
                 TestClass(int i) { }
             }
@@ -249,6 +240,7 @@ class InjectorImplUnitTest {
         @DisplayName("Should throw IllegalArgumentException if any parameter is not an interface, an abstract or a concrete class")
         void shouldThrowIllegalArgumentExceptionIfInvalidParameter() {
             // Given
+            @SuppressWarnings("unused")
             class TestClass {
                 @Inject
                 public TestClass(int i) { }
