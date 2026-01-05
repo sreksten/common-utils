@@ -1,7 +1,23 @@
 package com.threeamigos.common.util.interfaces.injection;
 
+import com.threeamigos.common.util.annotations.injection.Alternative;
+import com.threeamigos.common.util.annotations.injection.Any;
+import com.threeamigos.common.util.annotations.injection.Inject;
+
 /**
- * A dependency injector.
+ * A dependency injector. Given a class, it provides an instance of that class
+ * with all dependencies injected.<br/>
+ * The constructor for that class must be marked with {@link Inject} and should
+ * list all dependencies needed (no method or instance injection at the moment).<br/>
+ * If the class is an interface or an abstract class, an implementation is provided
+ * chosen from those that are available in the classpath.<br/>
+ * If more than one implementation is available, all but one should be marked as
+ * {@link Alternative}, otherwise an exception will be thrown.<br/>
+ * Use {@link Alternative} to annotate parameters to specify alternative implementations.<br/>
+ * When a parameter is an {@link Instance}, use {@link Any} to get all possible
+ * implementations, omit it to retrieve the default implementation or use {@link Alternative}.<br/>
+ * To build the class, the Injector uses reflection to instantiate the class,
+ * recursively injecting the parameters with their own dependencies.<br/>
  *
  * @author Stefano Reksten
  */

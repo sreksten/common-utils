@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.annotations.injection.Alternative;
 import com.threeamigos.common.util.annotations.injection.Any;
 import com.threeamigos.common.util.annotations.injection.Inject;
 import com.threeamigos.common.util.annotations.injection.Singleton;
@@ -14,6 +15,16 @@ import java.lang.reflect.ParameterizedType;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * The InjectorImpl class is responsible for injecting dependencies into classes, using the constructor annotated
+ * with {@link Inject}.<br/> Only one constructor is allowed to be annotated with @Inject. If such a constructor
+ * is not found, the Injector will try to instantiate the class using the no-args constructor. This is done to
+ * instantiate dependencies needed by the class.<br/>
+ * It uses the ClassResolver to find concrete implementations of abstract classes and interfaces.<br/>
+ * The Unit Test for this class gives information about the expected behavior and edge cases.
+ *
+ * @author Stefano Reksten
+ */
 public class InjectorImpl implements Injector {
 
     private final Map<Class<?>, Object> singletonCache = new HashMap<>();
@@ -30,15 +41,21 @@ public class InjectorImpl implements Injector {
         this.packageName = packageName;
     }
 
-    @SuppressWarnings("unchecked")
     public <T> T inject(@NonNull Class<T> classToInject) throws Exception {
+        return inject(classToInject, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T inject(@NonNull Class<T> classToInject, String identifier) throws Exception {
         checkClassValidity(classToInject);
-        boolean singleton = isSingleton(classToInject);
-        if (isSingleton(classToInject) && singletonCache.containsKey(classToInject)) {
-            return (T) singletonCache.get(classToInject);
+
+        Class<? extends T> resolvedClass = classResolver.resolveImplementation(classToInject, packageName, identifier);
+
+        boolean singleton = isSingleton(resolvedClass);
+        if (singleton && singletonCache.containsKey(resolvedClass)) {
+            return (T) singletonCache.get(resolvedClass);
         }
 
-        Class<? extends T> resolvedClass = classResolver.resolveImplementation(classToInject, packageName, null);
         Constructor<? extends T> constructor = getConstructor(resolvedClass);
 
         Parameter[] parameters = constructor.getParameters();
@@ -50,14 +67,15 @@ public class InjectorImpl implements Injector {
                 args[i] = createInstanceWrapper(param);
             } else {
                 checkClassValidity(param.getType());
-                args[i] = inject(param.getType());
+                Alternative alternative = param.getAnnotation(Alternative.class);
+                args[i] = inject(param.getType(), alternative != null ? alternative.value() : null);
             }
         }
 
         T t = buildInstance(constructor, args);
 
         if (singleton) {
-            singletonCache.put(classToInject, t);
+            singletonCache.put(resolvedClass, t);
         }
 
         return t;
@@ -118,11 +136,13 @@ public class InjectorImpl implements Injector {
         ParameterizedType type = (ParameterizedType) param.getParameterizedType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
         boolean isAny = param.isAnnotationPresent(Any.class);
+        Alternative alternative = param.getAnnotation(Alternative.class);
+        String identifier = alternative != null ? alternative.value() : null;
 
         return new Instance<Object>() {
             @Override
             public Object get() throws Exception {
-                return inject(genericType);
+                return inject(genericType, identifier);
             }
 
             @Override
@@ -130,7 +150,7 @@ public class InjectorImpl implements Injector {
                 try {
                     Collection<? extends Class<?>> classes = isAny
                             ? classResolver.resolveImplementations(genericType, packageName)
-                            : Collections.singletonList(classResolver.resolveImplementation(genericType, packageName, null));
+                            : Collections.singletonList(classResolver.resolveImplementation(genericType, packageName, identifier));
 
                     List<Object> instances = new ArrayList<>();
                     for (Class<?> clazz : classes) {

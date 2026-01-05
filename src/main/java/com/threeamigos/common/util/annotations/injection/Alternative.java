@@ -5,7 +5,12 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Target(ElementType.TYPE)
+/**
+ * Used to specify that a specific implementation of a given type should be injected.
+ *
+ * @author Stefano Reksten
+ */
+@Target({ElementType.TYPE, ElementType.PARAMETER})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Alternative {
     /**

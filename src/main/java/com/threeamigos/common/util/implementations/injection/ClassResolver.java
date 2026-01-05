@@ -4,6 +4,9 @@ import com.threeamigos.common.util.implementations.injection.exceptions.Alternat
 import com.threeamigos.common.util.implementations.injection.exceptions.AmbiguousImplementationFoundException;
 import com.threeamigos.common.util.implementations.injection.exceptions.ConcreteClassNotFoundException;
 import com.threeamigos.common.util.implementations.injection.exceptions.ImplementationNotFoundException;
+import com.threeamigos.common.util.interfaces.injection.Instance;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import java.io.File;
 import java.io.IOException;
@@ -13,47 +16,85 @@ import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-public class ClassResolver {
+/**
+ * ClassResolver is responsible for resolving concrete implementations of abstract classes or interfaces.<br/>
+ * Given an abstract class, a package name, and an optional identifier, it returns the concrete
+ * implementation(s) of the abstract class. If no concrete implementation is found, it throws an
+ * ImplementationNotFoundException. IF the class is a concrete class, it just returns the class itself.<br/>
+ * The Unit Test for this class gives information about the expected behavior and edge cases.<br/>
+ * This class, however, is to be used by the Injector class.
+ *
+ * @author Stefano Reksten
+ */
+class ClassResolver {
 
+    /**
+     * First cache - to avoid browsing the classpath multiple times for the same package
+     */
     private final Map<String, List<Class<?>>> classesCache = new HashMap<>();
+    /**
+     * Second cache - to avoid scanning the classes multiple times for the same interface or class
+     */
     private final Map<Class<?>, Collection<Class<?>>> resolvedClasses = new HashMap<>();
 
-    public <T> Class<? extends T> resolveImplementation(Class<T> abstractClass, String packageName, String identifier) throws Exception {
+    /**
+     * Resolves an abstract class or an interface returning the concrete class that implements the interface or
+     * that extends the abstract class. When more implementations are present, the default implementation should not
+     * be annotated, while alternative implementations should be marked with {@link Alternative @Alternative}.<br/>
+     * If the identifier is specified, it will look for that particular alternative; otherwise the main implementation
+     * will be returned.
+     *
+     * @param abstractClass the class to resolve
+     * @param packageName package name used to reduce scanning
+     * @param identifier an @Alternative annotation value
+     * @return the resolved class
+     * @param <T> type of the class to resolve
+     */
+    <T> Class<? extends T> resolveImplementation(@NonNull Class<T> abstractClass,
+                                                        @Nullable String packageName,
+                                                        @Nullable String identifier) throws Exception {
         return resolveImplementation(Thread.currentThread().getContextClassLoader(), abstractClass, packageName, identifier);
     }
 
-    public <T> Collection<Class<? extends T>> resolveImplementations(Class<T> abstractClass, String packageName) throws Exception {
+    /**
+     * Resolves an abstract class or an interface returning all concrete classes that implement the interface or
+     * extend the abstract class. Used for the {@link Instance} interface.
+     *
+     * @param abstractClass the class to resolve
+     * @param packageName package name used to reduce scanning
+     * @return the resolved classes
+     * @param <T> type of the class to resolve
+     */
+    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Class<T> abstractClass,
+                                                                     @Nullable String packageName) throws Exception {
         return resolveImplementations(Thread.currentThread().getContextClassLoader(), abstractClass, packageName);
     }
 
     /*
-     * package-private to run the tests for a jar file
+     * package-private to run the tests
      */
     @SuppressWarnings("unchecked")
     <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Class<T> abstractClass, String packageName, String identifier) throws Exception {
+        /*
+         * If we have a concrete class, return that class.
+         */
         if (!abstractClass.isInterface() && !Modifier.isAbstract(abstractClass.getModifiers())) {
             return abstractClass;
         }
 
-        List<Class<?>> allPackageClasses = getAllPackageClasses(classLoader, packageName);
-
+        Collection<Class<?extends T>> resolvedClasses = resolveImplementations(classLoader, abstractClass, packageName);
         List<Class<? extends T>> candidates = new ArrayList<>();
-
-        for (Class<?> clazz : allPackageClasses) {
-            if (abstractClass.isAssignableFrom(clazz) && !clazz.isInterface() && !Modifier.isAbstract(clazz.getModifiers())) {
-
-                Alternative alternative = clazz.getAnnotation(Alternative.class);
-
-                if (identifier != null) {
-                    // If we have an identifier, only look for matching Alternatives
-                    if (alternative != null && alternative.value().equals(identifier)) {
-                        return (Class<? extends T>) clazz;
-                    }
-                } else {
-                    // If no identifier, skip all Alternatives
-                    if (alternative == null) {
-                        candidates.add((Class<? extends T>) clazz);
-                    }
+        for (Class<? extends T> clazz : resolvedClasses) {
+            Alternative alternative = clazz.getAnnotation(Alternative.class);
+            if (identifier != null) {
+                // If we have an identifier, only look for matching Alternatives
+                if (alternative != null && alternative.value().equals(identifier)) {
+                    return clazz;
+                }
+            } else {
+                // If no identifier, skip all Alternatives
+                if (alternative == null) {
+                    candidates.add(clazz);
                 }
             }
         }
@@ -69,37 +110,53 @@ public class ClassResolver {
                 throw new ConcreteClassNotFoundException("No concrete class found for " + abstractClass.getName());
             }
         } else if (candidates.size() > 1) {
+            String candidatesAsList = candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get();
             if (abstractClass.isInterface()) {
-                throw new AmbiguousImplementationFoundException("More than one implementation found for " + abstractClass.getName() + ": " + candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get());
+                throw new AmbiguousImplementationFoundException("More than one implementation found for " + abstractClass.getName() + ": " + candidatesAsList);
             } else {
-                throw new AmbiguousImplementationFoundException("More than one concrete class found for " + abstractClass.getName() + ": " + candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get());
+                throw new AmbiguousImplementationFoundException("More than one concrete class found for " + abstractClass.getName() + ": " + candidatesAsList);
             }
         }
         return candidates.get(0);
     }
 
     /*
-     * package-private to run the tests for a jar file
+     * package-private to run the tests
      */
     @SuppressWarnings("unchecked")
     <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Class<T> abstractClass, String packageName) throws Exception {
+        /*
+         * If we have a concrete class, return that class.
+         */
         if (!abstractClass.isInterface() && !Modifier.isAbstract(abstractClass.getModifiers())) {
             return Collections.singletonList(abstractClass);
         }
 
-        List<Class<?>> allPackageClasses = getAllPackageClasses(classLoader, packageName);
-
         List<Class<? extends T>> candidates = new ArrayList<>();
 
-        for (Class<?> clazz : allPackageClasses) {
-            if (abstractClass.isAssignableFrom(clazz) && !clazz.isInterface() && !Modifier.isAbstract(clazz.getModifiers())) {
-                candidates.add((Class<? extends T>) clazz);
+        /*
+         * Look for a cache-hit
+         */
+        if (resolvedClasses.containsKey(abstractClass)) {
+            resolvedClasses.get(abstractClass).forEach(c -> candidates.add((Class<? extends T>)c));
+        } else {
+            List<Class<?>> allPackageClasses = getAllPackageClasses(classLoader, packageName);
+
+            for (Class<?> clazz : allPackageClasses) {
+                if (abstractClass.isAssignableFrom(clazz) && !clazz.isInterface() && !Modifier.isAbstract(clazz.getModifiers())) {
+                    candidates.add((Class<? extends T>) clazz);
+                }
             }
+            List<Class<?>> mapValue = new ArrayList<>(candidates);
+            resolvedClasses.put(abstractClass, mapValue);
         }
         return candidates;
     }
 
     private List<Class<?>> getAllPackageClasses(ClassLoader classLoader, String packageName) throws ClassNotFoundException, IOException {
+        /*
+         * Look for a cache-hit
+         */
         List<Class<?>> allPackageClasses = classesCache.get(packageName);
         if (allPackageClasses == null) {
             allPackageClasses = getClasses(classLoader, packageName);
@@ -118,10 +175,12 @@ public class ClassResolver {
         while (resources.hasMoreElements()) {
             classes.addAll(getClassesFromResource(classLoader, resources.nextElement(), packageName));
         }
-        System.out.println("Found " + classes.size() + " classes in package \"" + packageName + "\"");
         return classes;
     }
 
+    /*
+     * package-private to run the tests
+     */
     List<Class<?>> getClassesFromResource(ClassLoader classLoader, URL resource, String packageName) throws ClassNotFoundException, IOException{
         if (resource.getProtocol().equals("file")) {
             return findClassesInDirectory(classLoader, new File(resource.getFile()), packageName);
@@ -132,6 +191,9 @@ public class ClassResolver {
         }
     }
 
+    /*
+     * package-private to run the tests
+     */
     List<Class<?>> findClassesInDirectory(ClassLoader classLoader, File directory, String packageName) throws ClassNotFoundException {
         if (!directory.exists()) {
             return Collections.emptyList();
@@ -157,6 +219,9 @@ public class ClassResolver {
         return classes;
     }
 
+    /*
+     * package-private to run the tests
+     */
     List<Class<?>> findClassesInJar(ClassLoader classLoader, URL jarUrl, String packageName) throws IOException, ClassNotFoundException {
         List<Class<?>> classes = new ArrayList<>();
         // Extract the file path properly handling 'jar:file': and '!'
@@ -170,7 +235,6 @@ public class ClassResolver {
             // Fallback for non-standard URI formats
             jarFile = new File(jarFilePath.replace("file:", ""));
         }
-
         String packagePath = packageName.replace('.', '/');
 
         try (JarFile jar = new JarFile(jarFile)) {

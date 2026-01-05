@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.annotations.injection.Alternative;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative1;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative2;
@@ -27,6 +28,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -52,7 +56,7 @@ class ClassResolverUnitTest {
     Path tempDir;
 
     @Nested
-    @DisplayName("Null or empty package")
+    @DisplayName("When package is empty or null")
     class NullOrEmptyPackage {
 
         @Test
@@ -79,12 +83,12 @@ class ClassResolverUnitTest {
     }
 
     @Nested
-    @DisplayName("Wrong paths")
+    @DisplayName("Wrong parameters")
     class WrongPaths {
 
         @Test
-        @DisplayName("Should throw ImplementationNotFoundException if package to search is a generic file")
-        void shouldThrowImplementationNotFoundExceptionIfPackageToSearchIsAGenericFile() {
+        @DisplayName("Should throw ImplementationNotFoundException if package to search is a file")
+        void shouldThrowImplementationNotFoundExceptionIfPackageToSearchIsAFile() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
@@ -93,7 +97,7 @@ class ClassResolverUnitTest {
         }
 
         @Test
-        @DisplayName("Should throw ImplementationNotFoundException if package to search is not found")
+        @DisplayName("Should throw ImplementationNotFoundException if package to search does not exist")
         void shouldThrowImplementationNotFoundExceptionIfPackageToSearchDoesNotExist() {
             // Given
             ClassResolver sut = new ClassResolver();
@@ -145,8 +149,28 @@ class ClassResolverUnitTest {
     }
 
     @Test
-    @DisplayName("Should use the cache")
+    @DisplayName("Should use the cache to avoid redundant class loading")
     void shouldUseTheCache() throws Exception {
+        // Given
+        ClassResolver sut = new ClassResolver();
+        ClassLoader mockLoader = mock(ClassLoader.class);
+        String packageName = "com.threeamigos";
+        String expectedPath = "com/threeamigos";
+
+        // Stub getResources to return an empty enumeration so the loop finishes
+        when(mockLoader.getResources(expectedPath)).thenReturn(Collections.emptyEnumeration());
+
+        // When - calling the public method that internally calls getClasses
+        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class, packageName);
+        sut.resolveImplementations(mockLoader, MultipleAnnotatedImplementationsInterface.class, packageName);
+
+        // Then - Verify the ClassLoader was queried exactly once
+        verify(mockLoader, times(1)).getResources(expectedPath);
+    }
+
+    @Test
+    @DisplayName("Should remember already resolved classes")
+    void shouldRememberAlreadyResolvedClasses() throws Exception {
         // Given
         ClassResolver sut = new ClassResolver();
         ClassLoader mockLoader = mock(ClassLoader.class);
@@ -169,7 +193,7 @@ class ClassResolverUnitTest {
     class InterfaceTests {
 
         @Test
-        @DisplayName("Should throw exception if no implementations found")
+        @DisplayName("Should throw ImplementationNotFoundException if no implementations found")
         void shouldThrowExceptionIfNoImplementationsFound() {
             // Given
             ClassResolver sut = new ClassResolver();
@@ -177,6 +201,9 @@ class ClassResolverUnitTest {
             assertThrows(ImplementationNotFoundException.class, () -> sut.resolveImplementation(NoImplementationsInterface.class, getPackageName(NoImplementationsInterface.class), null));
         }
 
+        /**
+         * If we have a unique implementation, it does not need to be annotated.
+         */
         @Test
         @DisplayName("Should resolve an interface with a single standard implementation")
         void shouldResolveInterfaceWithSingleStandardImplementation() throws Exception {
@@ -188,6 +215,10 @@ class ClassResolverUnitTest {
             assertEquals(SingleImplementationClass.class, resolved);
         }
 
+        /**
+         * When we have multiple implementations, the only one of them not annotated with {@link Alternative} is
+         * considered the standard implementation.
+         */
         @Test
         @DisplayName("Should resolve an interface with multiple implementations with standard implementation")
         void shouldResolveInterfaceWithStandardImplementation() throws Exception {
@@ -199,6 +230,10 @@ class ClassResolverUnitTest {
             assertEquals(MultipleAnnotatedImplementationsStandardImplementation.class, resolved);
         }
 
+        /**
+         * When we have multiple implementations, we can specify one of the alternate implementations to be used
+         * by specifying the qualifier.
+         */
         @Test
         @DisplayName("Should resolve an interface with specified alternate implementation")
         void shouldResolveInterfaceWithSpecifiedAlternateImplementation() throws Exception {
@@ -210,8 +245,12 @@ class ClassResolverUnitTest {
             assertEquals(MultipleAnnotatedImplementationsAlternativeImplementation1.class, resolved);
         }
 
+        /**
+         * We can have multiple implementations without having a standard one, but in this case we must
+         * always specify the qualifier, or we will get an exception.
+         */
         @Test
-        @DisplayName("Should throw exception if only alternative implementations found and no qualifier specified")
+        @DisplayName("Should throw ImplementationNotFoundException if only alternative implementations found and no qualifier specified")
         void shouldThrowExceptionIfOnlyAlternativeImplementationsFoundAndNoQualifierSpecified() {
             // Given
             ClassResolver sut = new ClassResolver();
@@ -219,6 +258,10 @@ class ClassResolverUnitTest {
             assertThrows(ImplementationNotFoundException.class, () -> sut.resolveImplementation(AlternativeImplementationsOnlyInterface.class, getPackageName(AlternativeImplementationsOnlyInterface.class), null));
         }
 
+        /**
+         * We can have multiple implementations without having a standard one, but in this case we must
+         * always specify the qualifier to get the desired one.
+         */
         @Test
         @DisplayName("Should resolve an interface if only alternative implementations found but qualifier specified")
         void shouldResolveInterfaceIfOnlyAlternativeImplementationsFoundButQualifierSpecified() throws Exception {
@@ -230,8 +273,12 @@ class ClassResolverUnitTest {
             assertEquals(AlternativeImplementationsOnlyImplementation1.class, resolved);
         }
 
+        /**
+         * We can have multiple implementations, but only one can be missing the {@link Alternative} annotation,
+         * or we will get an exception.
+         */
         @Test
-        @DisplayName("Should throw an exception with an interface with more than one standard implementations")
+        @DisplayName("Should throw AmbiguousImplementationFoundException with an interface with more than one standard implementations")
         void shouldThrowExceptionWithInterfaceWithMoreThanOneStandardImplementations() {
             // Given
             ClassResolver sut = new ClassResolver();
@@ -239,8 +286,12 @@ class ClassResolverUnitTest {
             assertThrows(AmbiguousImplementationFoundException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedImplementationsInterface.class, getPackageName(MultipleNotAnnotatedImplementationsInterface.class), null));
         }
 
+        /**
+         * If we specify a wrong qualifier (no class exists that is marked with that value for {@link Alternative}),
+         * we will get an exception.
+         */
         @Test
-        @DisplayName("Should throw an exception if specified alternate implementation is not found")
+        @DisplayName("Should throw AlternativeNotFoundException if specified alternative implementation is not found")
         void shouldThrowExceptionIfAlternateImplementationNotFound() {
             // Given
             ClassResolver sut = new ClassResolver();
@@ -248,6 +299,9 @@ class ClassResolverUnitTest {
             assertThrows(AlternativeNotFoundException.class, () -> sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), "not-found"));
         }
 
+        /**
+         * If we have multiple implementations, we can retrieve all of them to subsequently choose the one we want.
+         */
         @Test
         @DisplayName("Should return all implementations for a given interface")
         void shouldReturnAllImplementationsForAGivenInterface() throws Exception {
@@ -269,6 +323,10 @@ class ClassResolverUnitTest {
     @DisplayName("Class tests")
     class ClassTests {
 
+        /**
+         * If we inject a concrete class, it should be resolved by itself. IT will then be injected with all
+         * dependencies.
+         */
         @Nested
         @DisplayName("A concrete class should be resolved by itself")
         class ConcreteClassShouldBeResolvedByItself {
@@ -297,6 +355,9 @@ class ClassResolverUnitTest {
             }
         }
 
+        /**
+         * If we try to inject an abstract class that has no concrete implementations, we will get an exception.
+         */
         @Test
         @DisplayName("Should throw ConcreteClassNotFoundException if no concrete classes found")
         void shouldThrowConcreteClassNotFoundExceptionIfNoConcreteClassesFound() {
@@ -306,6 +367,9 @@ class ClassResolverUnitTest {
             assertThrows(ConcreteClassNotFoundException.class, () -> sut.resolveImplementation(NoConcreteClassesAbstractClass.class, getPackageName(NoConcreteClassesAbstractClass.class), null));
         }
 
+        /**
+         * If we have a unique implementation, it does not need to be annotated.
+         */
         @Test
         @DisplayName("Should resolve an abstract class with a single standard implementation")
         void shouldResolveAnAbstractClassWithStandardImplementation() throws Exception {
@@ -317,18 +381,10 @@ class ClassResolverUnitTest {
             assertEquals(SingleImplementationConcreteClass.class, resolved);
         }
 
-        @Test
-        @DisplayName("Should resolve a concrete class with with itself")
-        void shouldResolveAConcreteClassWithItself() throws Exception {
-            // Given
-            ClassResolver sut = new ClassResolver();
-            // When
-            Class<?> resolved = sut.resolveImplementation(SingleImplementationConcreteClass.class, getPackageName(SingleImplementationConcreteClass.class), null);
-            // Then
-            assertEquals(SingleImplementationConcreteClass.class, resolved);
-        }
-
-        @Test
+        /**
+         * When we have multiple concrete classes, the only one of them not annotated with {@link Alternative} is
+         * considered the standard implementation.
+         */        @Test
         @DisplayName("Should resolve an abstract class with multiple implementations with standard implementation")
         void shouldResolveInterfaceWithStandardImplementation() throws Exception {
             // Given
@@ -339,6 +395,10 @@ class ClassResolverUnitTest {
             assertEquals(MultipleAnnotatedConcreteClassesStandardClass.class, resolved);
         }
 
+        /**
+         * When we have multiple concrete classes, we can specify one of the alternate implementations to be used
+         * by specifying the qualifier.
+         */
         @Test
         @DisplayName("Should resolve a class with specified alternate implementation")
         void shouldResolveClassWithSpecifiedAlternateImplementation() throws Exception {
@@ -350,6 +410,10 @@ class ClassResolverUnitTest {
             assertEquals(MultipleAnnotatedConcreteClassesAlternative1.class, resolved);
         }
 
+        /**
+         * We can have multiple implementations, but only one can be missing the {@link Alternative} annotation,
+         * or we will get an exception.
+         */
         @Test
         @DisplayName("Should throw AmbiguousImplementationFoundException with more than one standard concrete classes")
         void shouldThrowAmbiguousImplementationFoundExceptionWithMoreThanOneStandardConcreteClasses() {
@@ -359,6 +423,10 @@ class ClassResolverUnitTest {
             assertThrows(AmbiguousImplementationFoundException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedAbstractClass.class, getPackageName(MultipleNotAnnotatedAbstractClass.class), null));
         }
 
+        /**
+         * If we specify a wrong qualifier (no class exists that is marked with that value for {@link Alternative}),
+         * we will get an exception.
+         */
         @Test
         @DisplayName("Should throw AlternativeNotFoundException if specified alternative implementation is not found")
         void shouldThrowAlternativeNotFoundExceptionIfSpecifiedAlternateImplementationNotFound() {
@@ -368,6 +436,9 @@ class ClassResolverUnitTest {
             assertThrows(AlternativeNotFoundException.class, () -> sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), "not-found"));
         }
 
+        /**
+         * If we have multiple implementations, we can retrieve all of them to subsequently choose the one we want.
+         */
         @Test
         @DisplayName("Should return all concrete classes for a given abstract class")
         void shouldReturnAllConcreteClassesForAGivenAbstractClass() throws Exception {
@@ -386,9 +457,17 @@ class ClassResolverUnitTest {
         }
     }
 
-    @Test
+    private String getPackageName(Class<?> clazz) {
+        return clazz.getPackage().getName();
+    }
+
+    /**
+     * The following test and the later methods are used to ensure class browsing works when running from a jar file.
+     */
+    @ParameterizedTest
     @DisplayName("Should resolve implementations from a JAR file")
-    void shouldResolveImplementationsFromJar() throws Exception {
+    @MethodSource("getPackageNamesToFilter")
+    void shouldResolveImplementationsFromJar(String packageNameToFilter) throws Exception {
         // 1. Create a dummy JAR file in the temp directory
         Path jarPath = tempDir.resolve("test-classes.jar");
         String packageName = "com.threeamigos.common.util.implementations.injection";
@@ -405,7 +484,7 @@ class ClassResolverUnitTest {
             // 4. Resolve using the custom loader
             Class<?> abstractClass = testLoader.loadClass(MultipleAnnotatedConcreteClassesAbstractClass.class.getName());
 
-            Class<?> result = sut.resolveImplementation(testLoader, abstractClass, packageName,null);
+            Class<?> result = sut.resolveImplementation(testLoader, abstractClass, packageNameToFilter,null);
 
             // 5. Verification
             assertNotNull(result);
@@ -415,6 +494,10 @@ class ClassResolverUnitTest {
             String location = result.getProtectionDomain().getCodeSource().getLocation().toString();
             assertTrue(location.endsWith(".jar"), "Class should be loaded from JAR, but was: " + location);
         }
+    }
+
+    static final String[] getPackageNamesToFilter() {
+        return new String[] { "com.threeamigos.common.util.implementations.injection", "", null };
     }
 
     @Test
@@ -510,10 +593,6 @@ class ClassResolverUnitTest {
                 return super.getResources(name);
             }
         };
-    }
-
-    private String getPackageName(Class<?> clazz) {
-        return clazz.getPackage().getName();
     }
 
 }

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.annotations.injection.Alternative;
 import com.threeamigos.common.util.annotations.injection.Any;
 import com.threeamigos.common.util.annotations.injection.Inject;
 import com.threeamigos.common.util.annotations.injection.Singleton;
@@ -11,6 +12,9 @@ import com.threeamigos.common.util.implementations.injection.abstractclasses.mul
 import com.threeamigos.common.util.implementations.injection.abstractclasses.noconcreteclasses.NoConcreteClassesAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsAlternativeImplementation2;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsInterface;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsStandardImplementation;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.interfaces.injection.Instance;
 import org.junit.jupiter.api.DisplayName;
@@ -27,12 +31,16 @@ class InjectorImplUnitTest {
 
     private static final String TEST_PACKAGE_NAME = "com.threeamigos";
 
+    /**
+     * The Injector can work on Interfaces, Abstract Classes, and Concrete Classes.
+     * Other types of objects are not supported because the Injector could not instantiate them.
+     */
     @Nested
-    @DisplayName("Search Constructor tests")
-    class SearchConstructorTests {
+    @DisplayName("Check class compatibility")
+    class ClassCompatibilityTests {
 
         @Nested
-        @DisplayName("Tests for valid classes")
+        @DisplayName("Accept valid classes")
         class ValidClasses {
 
             @Test
@@ -70,7 +78,7 @@ class InjectorImplUnitTest {
         }
 
         @Nested
-        @DisplayName("Tests for invalid classes")
+        @DisplayName("Fail with invalid classes")
         class InvalidClasses {
 
             @Test
@@ -107,6 +115,7 @@ class InjectorImplUnitTest {
                 // Given
                 class MyLocalClass {};
                 // Then
+                assertTrue(MyLocalClass.class.isLocalClass());
                 assertThrows(IllegalArgumentException.class, () -> {
                     new InjectorImpl().inject(MyLocalClass.class);
                 });
@@ -123,6 +132,7 @@ class InjectorImplUnitTest {
                     }
                 };
                 // Then
+                assertTrue(anonymousRunnable.getClass().isAnonymousClass());
                 assertThrows(IllegalArgumentException.class, () -> {
                     new InjectorImpl().inject(anonymousRunnable.getClass());
                 });
@@ -136,9 +146,17 @@ class InjectorImplUnitTest {
                 });
             }
         }
+    }
 
+    @Nested
+    @DisplayName("Search Constructor tests")
+    class SearchConstructorTests {
+
+        /**
+         * The Injector will look for a constructor annotated with @Inject.
+         */
         @Test
-        @DisplayName("Should return constructor annotated with @Inject")
+        @DisplayName("Should return the only constructor annotated with @Inject")
         void shouldReturnConstructorAnnotatedWithInject() throws NoSuchMethodException {
             // Given
             class TestClass {
@@ -152,38 +170,11 @@ class InjectorImplUnitTest {
             assertNotNull(constructor);
         }
 
+        /**
+         * If more than one constructor is annotated with @Inject, IllegalStateException will be thrown.
+         */
         @Test
-        @DisplayName("Should throw NoSuchMethodException if no constructor annotated with @Inject is found and no-arguments constructor is not available")
-        void shouldThrow() {
-            // Given
-            class TestClass {
-                TestClass(int i) { }
-            }
-            InjectorImpl sut = new InjectorImpl();
-            // When, Then
-            assertThrows(NoSuchMethodException.class, () -> sut.getConstructor(TestClass.class));
-        }
-
-        @Test
-        @DisplayName("Should return constructor marked with @Inject when available, preferring it to the no-arguments constructor")
-        void shouldReturnConstructorAnnotatedWithInjectPreferringItToTheNoArgsConstructor() throws NoSuchMethodException {
-            // Given
-            class TestClass {
-                @Inject
-                public TestClass(java.util.Date date) { }
-                public TestClass() { }
-            }
-            InjectorImpl sut = new InjectorImpl();
-            Constructor<TestClass> constructor = sut.getConstructor(TestClass.class);
-            // When
-            int numberOfArguments = constructor.getParameterCount();
-            // Then
-            // Being TestClass a non-static inner class, the constructor has the class itself as the first argument
-            assertEquals(2, numberOfArguments);
-        }
-
-        @Test
-        @DisplayName("Should throw exception if more than one constructor is annotated with @Inject")
+        @DisplayName("Should throw IllegalStateException if more than one constructor is annotated with @Inject")
         void shouldThrowExceptionWhenMoreThanOneConstructorIsAnnotatedWithInject() {
             // Given
             class TestClass {
@@ -197,9 +188,66 @@ class InjectorImplUnitTest {
             assertThrows(IllegalStateException.class, () -> sut.getConstructor(TestClass.class));
         }
 
+        /**
+         * If more constructors are available, the Injector will choose the one annotated with @Inject.
+         */
         @Test
-        @DisplayName("Should throw exception if any parameter is not an interface, an abstract or a concrete class")
-        void shouldThrowExceptionIfInvalidParameter() {
+        @DisplayName("Should return constructor marked with @Inject when available, preferring it to the no-arguments constructor")
+        void shouldReturnConstructorAnnotatedWithInjectPreferringItToTheNoArgsConstructor() throws NoSuchMethodException {
+            // Given
+            class TestClass {
+                @Inject
+                public TestClass(java.util.Date date) { }
+                public TestClass() { }
+                public TestClass(String s) { }
+            }
+            InjectorImpl sut = new InjectorImpl();
+            Constructor<TestClass> constructor = sut.getConstructor(TestClass.class);
+            // When
+            int numberOfArguments = constructor.getParameterCount();
+            // Then
+            // Being TestClass a non-static inner class, the constructor has the class itself as the first argument
+            assertEquals(2, numberOfArguments);
+        }
+
+        /**
+         * If there is no constructor marked with @Inject, the Injector will use the no-args constructor.
+         */
+        @Test
+        @DisplayName("Should use no-args constructor if no constructor annotated with @Inject is found")
+        void shouldUseNoArgsConstructorIfNoCompatibleConstructorFound() throws NoSuchMethodException {
+            // Given
+            InjectorImpl sut = new InjectorImpl();
+            Constructor<TestClass> constructor = sut.getConstructor(TestClass.class);
+            // When
+            int numberOfArguments = constructor.getParameterCount();
+            // Then
+            assertEquals(0, numberOfArguments);
+        }
+
+        /**
+         * If no constructor is annotated with @Inject and a no-arguments constructor is not available, a
+         * NoSuchMethodException will be thrown.
+         */
+        @Test
+        @DisplayName("Should throw NoSuchMethodException if no constructor annotated with @Inject is found and no-arguments constructor is not available")
+        void shouldThrowNoSuchMethodExceptionIFNoCompatibleConstructorFound() {
+            // Given
+            class TestClass {
+                TestClass(int i) { }
+            }
+            InjectorImpl sut = new InjectorImpl();
+            // When, Then
+            assertThrows(NoSuchMethodException.class, () -> sut.getConstructor(TestClass.class));
+        }
+
+        /**
+         * Once the constructor was identified, the parameters will be checked, and if any of them is not an interface,
+         * an abstract class, or a concrete class, an IllegalArgumentException will be thrown.
+         */
+        @Test
+        @DisplayName("Should throw IllegalArgumentException if any parameter is not an interface, an abstract or a concrete class")
+        void shouldThrowIllegalArgumentExceptionIfInvalidParameter() {
             // Given
             class TestClass {
                 @Inject
@@ -215,6 +263,24 @@ class InjectorImplUnitTest {
     @DisplayName("Instantiation tests")
     class InstantiationTests {
 
+        /**
+         * If no constructor is annotated with @Inject, the Injector will use the no-args constructor.
+         */
+        @Test
+        @DisplayName("Should instantiate an object with a no-args constructor if no other annotated constructors are present")
+        void shouldInstantiateAnObjectWithNoArgsConstructorIfNoOtherAnnotatedConstructorsArePresent() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl();
+            // When
+            TestClassWithNoArgsConstructor instance = sut.inject(TestClassWithNoArgsConstructor.class);
+            // Then
+            assertNotNull(instance);
+        }
+
+        /**
+         * The no-args constructor can be annotated, but this is not necessary because if there is no other constructor
+         * annotated with @Inject, the Injector will use the no-args constructor by default.
+         */
         @Test
         @DisplayName("Should instantiate an object with annotated no-args constructor")
         void shouldInstantiateAnObjectWithAnnotatedNoArgsConstructor() throws Exception {
@@ -226,40 +292,100 @@ class InjectorImplUnitTest {
             assertNotNull(instance);
         }
 
+        /**
+         * Once the constructor marked with @Inject has been identified, the Injector will instantiate the object.
+         * TestClassWithAnnotatedConstructor has a constructor that needs a TestClass as a dependency.
+         * TestClass is a concrete class.
+         */
         @Test
-        @DisplayName("Should instantiate an object with a no-args constructor if no other annotated constructors are present")
-        void shouldInstantiateAnObjectWithNoArgsConstructorIfNoOtherAnnotatedConstructorsArePResent() throws Exception {
-            // Given
-            InjectorImpl sut = new InjectorImpl();
-            // When
-            TestClassWithAnnotatedNoArgsConstructor instance = sut.inject(TestClassWithAnnotatedNoArgsConstructor.class);
-            // Then
-            assertNotNull(instance);
-        }
-
-        @Test
-        @DisplayName("Should instantiate an object with an annotated constructor")
-        void shouldInstantiateAnObjectWithAnAnnotatedConstructor() throws Exception {
+        @DisplayName("Should instantiate an object with an annotated constructor and a concrete dependency")
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndConcreteDependency() throws Exception {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When
-            TestClassWithAnnotatedConstructor instance = sut.inject(TestClassWithAnnotatedConstructor.class);
+            TestClassWithAnnotatedConstructorAndConcreteDependency instance =
+                    sut.inject(TestClassWithAnnotatedConstructorAndConcreteDependency.class);
             // Then
             assertNotNull(instance);
+            assertNotNull(instance.getTestClass());
+            assertEquals(TestClass.class, instance.getTestClass().getClass());
         }
 
+        /**
+         * The class can, however, have a dependency on an interface or abstract class. In this case the Injector will
+         * resolve the implementation based on the annotations on the class and its dependencies. Here we have only
+         * one implementation.
+         */
+        @Test
+        @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency with a single implementation")
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependency() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            TestClassWithAnnotatedConstructorAndAbstractDependency instance =
+                    sut.inject(TestClassWithAnnotatedConstructorAndAbstractDependency.class);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getTestInterface());
+            assertEquals(TestClass.class, instance.getTestInterface().getClass());
+        }
+
+        /**
+         * If we have a dependency on an interface or abstract class that has more than one implementation, the Injector
+         * will resolve the implementation based on the annotations on the class and its dependencies. Normally it uses
+         * the default implementation (not annotated with {@link Alternative}.
+         */
+        @Test
+        @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency with more implementations (get default)")
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault instance =
+                    sut.inject(TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault.class);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getMultipleAnnotatedImplementationsInterface());
+            assertEquals(MultipleAnnotatedImplementationsStandardImplementation .class, instance.getMultipleAnnotatedImplementationsInterface().getClass());
+        }
+
+        /**
+         * If we have a dependency on an interface or abstract class that has more than one implementation, the Injector
+         * will resolve the implementation based on the annotations on the class and its dependencies. In this case
+         * we specify to use a particular alternative implementation.
+         */
+        @Test
+        @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency (get alternative implementation)")
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative instance =
+                    sut.inject(TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative.class);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getMultipleAnnotatedImplementationsInterface());
+            assertEquals(MultipleAnnotatedImplementationsAlternativeImplementation2.class, instance.getMultipleAnnotatedImplementationsInterface().getClass());
+        }
+
+        /**
+         * If a class is annotated with {@link Singleton}, this class will be instantiated only once. The same
+         * instance will be passed to every object that needs it as a dependency.
+         */
         @Test
         @DisplayName("Should instantiate a singleton class only once")
         void shouldInstantiateASingletonClass() throws Exception {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
-            Class<?> singletonClass = SingletonClass.class;
             SingletonClass instance1 = sut.inject(SingletonClass.class);
             // When
             SingletonClass instance2 = sut.inject(SingletonClass.class);
             assertSame(instance1, instance2);
         }
 
+        /**
+         * A class that is not annotated with {@link Singleton} can be instantiated as many times as needed.
+         */
         @Test
         @DisplayName("Should instantiate a non-singleton class as much as needed")
         void shouldInstantiateANonSingletonClassAsMuchAsNeeded() throws Exception {
@@ -272,37 +398,78 @@ class InjectorImplUnitTest {
             assertNotSame(instance1, instance2);
         }
 
-        @Test
-        @DisplayName("Should instantiate an object with private constructor")
-        void shouldInstantiateObjectWithPrivateConstructor() throws Exception {
-            // Given
-            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
-            // When
-            ClassWithPrivateConstructor instance = sut.inject(ClassWithPrivateConstructor.class);
-            // Then
-            assertNotNull(instance);
+        /**
+         * A class can be instantiated even if it has a private constructor.
+         */
+        @Nested
+        @DisplayName("Private Constructor Tests")
+        class PrivateConstructorTests {
 
+            @Test
+            @DisplayName("Should instantiate an object with private constructor and no dependencies")
+            void shouldInstantiateObjectWithPrivateConstructorAndNoDependencies() throws Exception {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                // When
+                ClassWithPrivateConstructor instance = sut.inject(ClassWithPrivateConstructor.class);
+                // Then
+                assertNotNull(instance);
+
+            }
+
+            @Test
+            @DisplayName("Should instantiate an object with private constructor and dependencies")
+            void shouldInstantiateObjectWithPrivateConstructorAndDependencies() throws Exception {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                // When
+                ClassWithPrivateConstructorWithDependencies instance = sut.inject(ClassWithPrivateConstructorWithDependencies.class);
+                // Then
+                assertNotNull(instance);
+                assertNotNull(instance.getAbstractClass());
+                assertEquals(ConcreteClass.class, instance.getAbstractClass().getClass());
+            }
         }
     }
 
+    /**
+     * Tests for the Instance Wrapper functionality.
+     * The Instance allows resolving instances of interfaces or abstract classes.
+     * Instance.get() returns the resolved instance of the interface or abstract class.
+     * Instance.iterator(), if annotated with {@link Any}, returns an iterator over all the concrete implementations of
+     * the interface or abstract class. Otherwise, the iterator will contain only one element (the default one, or
+     * an {@link com.threeamigos.common.util.annotations.injection.Alternative} if that option was specified).
+     */
     @Nested
     @DisplayName("Instance Wrapper Tests")
     class InstanceWrapperTests {
 
+        /**
+         * ClassWithInstance has a dependency that is an Instance of TestInterface. The only implementation of
+         * TestInterface is TestClass.
+         */
         @Test
         @DisplayName("Instance with single implementation")
         void instanceWithSingleImplementation() throws Exception {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
-            ClassWithInstance classWithInstance = sut.inject(ClassWithInstance.class);
+            ClassWithInstanceOfTestInterface classWithInstanceOFTestInterface =
+                    sut.inject(ClassWithInstanceOfTestInterface.class);
             // When
-            Instance<TestInterface> instance = classWithInstance.getTestInterfaceInstance();
-            TestInterface resolvedInstance = instance.get();
+            Instance<TestInterface> instance = classWithInstanceOFTestInterface.getTestInterfaceInstance();
             // Then
+            assertNotNull(instance);
+            TestInterface resolvedInstance = instance.get();
             assertNotNull(resolvedInstance);
             assertInstanceOf(TestInterface.class, resolvedInstance);
+            assertEquals(TestClass.class, resolvedInstance.getClass());
         }
 
+        /**
+         * ClassWithAnyInstanceAndSingleImplementation has a dependency that is an Instance of
+         * SingleImplementationAbstractClass. Since we have only one implementation, the iterator will contain only
+         * one element.
+         */
         @Test
         @DisplayName("@Any Instance with single implementation")
         void anyInstanceWithSingleImplementation() throws Exception {
@@ -321,17 +488,25 @@ class InjectorImplUnitTest {
             assertEquals(SingleImplementationConcreteClass.class, implementations.get(0));
         }
 
+        /**
+         * ClassWithAnyInstanceAndMultipleImplementations has a dependency that is an Instance of
+         * MultipleAnnotatedConcreteClassesAbstractClass. This class is annotated with @Any, so the iterator will
+         * contain all possible implementations of that dependency class. Note that
+         * MultipleAnnotatedConcreteClassesAlternative3 is contained in another package than that of the
+         * abstract class.
+         */
         @Test
         @DisplayName("@Any Instance and multiple implementations")
         void anyInstanceAndMultipleImplementations() throws Exception {
             // Given
-            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
-            ClassWithAnyInstanceAndMultipleImplementations classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithAnyInstanceAndMultipleImplementations.class);
             List<Class<? extends MultipleAnnotatedConcreteClassesAbstractClass>> expectedImplementations = new ArrayList<>();
             expectedImplementations.add(MultipleAnnotatedConcreteClassesStandardClass.class);
             expectedImplementations.add(MultipleAnnotatedConcreteClassesAlternative1.class);
             expectedImplementations.add(MultipleAnnotatedConcreteClassesAlternative2.class);
             expectedImplementations.add(MultipleAnnotatedConcreteClassesAlternative3.class);
+
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ClassWithAnyInstanceAndMultipleImplementations classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithAnyInstanceAndMultipleImplementations.class);
             // When
             Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
             // Then
@@ -342,9 +517,47 @@ class InjectorImplUnitTest {
             }
             expectedImplementations.sort(Comparator.comparing(Class::getName));
             implementations.sort(Comparator.comparing(Class::getName));
+            // The iterator returned the same classes (possibly in a different order)
             assertEquals(expectedImplementations, implementations);
         }
 
+        /**
+         * When a dependency has multiple possible implementations, we can use the default one or an alternative one
+         * annotated with @Alternative. This test checks that the default implementation is returned when no @Alternative
+         * is specified.
+         */
+        @Test
+        @DisplayName("Default implementation should be returned when no @Alternative is specified")
+        void defaultImplementationShouldBeReturnedWhenNoAlternativeIsSpecified() throws Exception {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ClassWithInstanceAndMultipleImplementationsDefault classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
+            // When
+            Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
+            // Then
+            assertNotNull(instance);
+            assertEquals(MultipleAnnotatedConcreteClassesStandardClass.class, instance.get().getClass());
+        }
+
+        /**
+         * If, however, we specify an @Alternative annotation, the alternative implementation should be returned.
+         */
+        @Test
+        @DisplayName("Alternative implementation should be returned when @Alternative is specified")
+        void alternativeImplementationShouldBeReturnedWhenAlternativeIsSpecified() throws Exception {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ClassWithInstanceAndMultipleImplementationsAlternative classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithInstanceAndMultipleImplementationsAlternative.class);
+            // When
+            Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
+            // Then
+            assertNotNull(instance);
+            assertEquals(MultipleAnnotatedConcreteClassesAlternative2.class, instance.get().getClass());
+        }
+
+        /**
+         * When we have to deal with an Instance of an abstract class or interface with no concrete implementations:
+         */
         @Nested
         @DisplayName("Instance with no concrete implementations")
         class InstancesWithNoConcreteImplementations {
@@ -353,6 +566,9 @@ class InjectorImplUnitTest {
             @DisplayName("@Any Instance")
             class AnyInstance {
 
+                /**
+                 * Instance.get() throws an exception since we can't return any implementation.
+                 */
                 @Test
                 @DisplayName("Instance.get() should fail")
                 void instanceGetShouldFail() throws Exception {
@@ -363,6 +579,9 @@ class InjectorImplUnitTest {
                     assertThrows(RuntimeException.class, () -> instance.getInstance().get());
                 }
 
+                /**
+                 * Instance.iterator().hasNext() returns false since the list of all possible implementations is empty.
+                 */
                 @Test
                 @DisplayName("Instance.iterator().hasNext() should return false")
                 void instanceIteratorHasNextShouldReturnFalse() throws Exception {
@@ -378,6 +597,9 @@ class InjectorImplUnitTest {
             @DisplayName("Instance (not @Any)")
             class Instance {
 
+                /**
+                 * Instance.get() throws an exception since we can't return any implementation.
+                 */
                 @Test
                 @DisplayName("Instance.get() should fail")
                 void instanceGetShouldFail() throws Exception {
@@ -388,6 +610,10 @@ class InjectorImplUnitTest {
                     assertThrows(RuntimeException.class, () -> instance.getInstance().get());
                 }
 
+                /**
+                 * Instance.iterator().hasNext() throws an exception since we should have a valid implementation,
+                 * but we don't have one, and we did not request a complete list of all possible implementations.
+                 */
                 @Test
                 @DisplayName("Instance.iterator().hasNext() should throw exception")
                 void instanceIteratorNextShouldThrowException() throws Exception {
@@ -401,9 +627,21 @@ class InjectorImplUnitTest {
         }
     }
 
+    // Test classes used above.
+
+    // Valid classes
     interface TestInterface{}
 
+    static class TestClass implements TestInterface { }
+
+    static abstract class AbstractClass { }
+
+    static class ConcreteClass extends AbstractClass { }
+
+    // Invalid classes
     enum TestEnum{}
+
+    // Constructor tests
 
     static class TestClassWithAnnotatedNoArgsConstructor {
         @Inject
@@ -411,36 +649,62 @@ class InjectorImplUnitTest {
     }
 
     static class TestClassWithNoArgsConstructor {
-        @Inject
         public TestClassWithNoArgsConstructor() { }
     }
 
-    static class TestClassWithAnnotatedConstructor {
+    static class TestClassWithAnnotatedConstructorAndConcreteDependency {
         private final TestClass testClass;
         @Inject
-        public TestClassWithAnnotatedConstructor(TestClass testClass) {
+        public TestClassWithAnnotatedConstructorAndConcreteDependency(TestClass testClass) {
             this.testClass = testClass;
         }
         public TestClass getTestClass() {
             return testClass;
         }
     }
-    static class TestClass implements TestInterface {
-        public TestClass() { }
+
+    static class TestClassWithAnnotatedConstructorAndAbstractDependency {
+        private final TestInterface testInterface;
+        @Inject
+        public TestClassWithAnnotatedConstructorAndAbstractDependency(TestInterface testInterface) {
+            this.testInterface = testInterface;
+        }
+        public TestInterface getTestInterface() {
+            return testInterface;
+        }
+    }
+
+    static class TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault {
+        private final MultipleAnnotatedImplementationsInterface testInterface;
+        @Inject
+        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault(MultipleAnnotatedImplementationsInterface testInterface) {
+            this.testInterface = testInterface;
+        }
+        public MultipleAnnotatedImplementationsInterface getMultipleAnnotatedImplementationsInterface() {
+            return testInterface;
+        }
+    }
+
+    static class TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative {
+        private final MultipleAnnotatedImplementationsInterface testInterface;
+        @Inject
+        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative(@Alternative("alternative2") MultipleAnnotatedImplementationsInterface testInterface) {
+            this.testInterface = testInterface;
+        }
+        public MultipleAnnotatedImplementationsInterface getMultipleAnnotatedImplementationsInterface() {
+            return testInterface;
+        }
     }
 
     // MUST NOT be static for its test!
     class NonStaticInnerClass { }
 
-    static abstract class AbstractClass { }
-    static class ConcreteClass extends AbstractClass { }
-
     @Singleton static class SingletonClass { }
 
-    static class ClassWithInstance {
+    static class ClassWithInstanceOfTestInterface {
         private final Instance<TestInterface> testInterfaceInstance;
         @Inject
-        public ClassWithInstance(Instance<TestInterface> testInterfaceInstance) {
+        public ClassWithInstanceOfTestInterface(Instance<TestInterface> testInterfaceInstance) {
             this.testInterfaceInstance = testInterfaceInstance;
         }
         public Instance<TestInterface> getTestInterfaceInstance() {
@@ -470,6 +734,29 @@ class InjectorImplUnitTest {
         }
     }
 
+    static class ClassWithInstanceAndMultipleImplementationsDefault{
+        private final Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance;
+        @Inject
+        public ClassWithInstanceAndMultipleImplementationsDefault(Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance) {
+            this.instance = instance;
+        }
+        public Instance<MultipleAnnotatedConcreteClassesAbstractClass> getInstance() {
+            return instance;
+        }
+    }
+
+    static class ClassWithInstanceAndMultipleImplementationsAlternative {
+        private final Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance;
+        @Inject
+        public ClassWithInstanceAndMultipleImplementationsAlternative(@Alternative(value = "alternative2") Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance) {
+            this.instance = instance;
+        }
+        public Instance<MultipleAnnotatedConcreteClassesAbstractClass> getInstance() {
+            return instance;
+        }
+    }
+
+
     static class ClassWithAnyInstanceButNoImplementation {
         private final Instance<NoConcreteClassesAbstractClass> instance;
         @Inject
@@ -492,14 +779,20 @@ class InjectorImplUnitTest {
         }
     }
 
+    static class ClassWithPrivateConstructorWithDependencies {
+        private final AbstractClass abstractClass;
+        @Inject
+        private ClassWithPrivateConstructorWithDependencies(AbstractClass abstractClass) {
+            this.abstractClass = abstractClass;
+        }
+        public AbstractClass getAbstractClass() {
+            return abstractClass;
+        }
+    }
+
     static class ClassWithPrivateConstructor {
         @Inject
         private ClassWithPrivateConstructor() { }
-    }
-
-    static class ClassWithInvalidConstructorParameters {
-        @Inject
-        public ClassWithInvalidConstructorParameters(int i) { }
     }
 
 }
