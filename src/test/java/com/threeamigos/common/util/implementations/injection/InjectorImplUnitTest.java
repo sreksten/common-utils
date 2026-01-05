@@ -117,6 +117,10 @@ class InjectorImplUnitTest {
             @DisplayName("Anonymous classes")
             void shouldThrowExceptionIfInjectingAnAnonymousClass() {
                 // Given
+                /*
+                 * Warning: Anonymous new Runnable() can be replaced with lambda. But if we do,
+                 * that becomes a synthetic class, not an anonymous class. LEAVE IT AS IS!
+                 */
                 Runnable anonymousRunnable = new Runnable() {
                     @Override
                     public void run() {
@@ -688,7 +692,11 @@ class InjectorImplUnitTest {
         }
     }
 
-    // MUST NOT be static for its test!
+    /*
+     * Warning: Inner class "NonStaticInnerClass" bay be static.
+     * But if we do, that would not be any longer a NON-STATIC inner class, and we need one for our tests.
+     * LEAVE IT AS IS!
+     */
     class NonStaticInnerClass { }
 
     @Singleton static class SingletonClass { }
