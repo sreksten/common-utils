@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.annotations.injection.Alternative;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative1;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative2;
@@ -34,6 +33,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -44,6 +44,8 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
+
+import javax.inject.Named;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -215,7 +217,7 @@ class ClassResolverUnitTest {
         }
 
         /**
-         * When we have multiple implementations, the only one of them not annotated with {@link Alternative} is
+         * When we have multiple implementations, the only one of them not annotated with {@link javax.inject.Named} is
          * considered the standard implementation.
          */
         @Test
@@ -239,7 +241,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), "alternative1");
+            Class<?> resolved = sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), new NamedLiteral("alternative1"));
             // Then
             assertEquals(MultipleAnnotatedImplementationsAlternativeImplementation1.class, resolved);
         }
@@ -267,13 +269,13 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(AlternativeImplementationsOnlyInterface.class, getPackageName(AlternativeImplementationsOnlyInterface.class), "alternative1");
+            Class<?> resolved = sut.resolveImplementation(AlternativeImplementationsOnlyInterface.class, getPackageName(AlternativeImplementationsOnlyInterface.class), new NamedLiteral("alternative1"));
             // Then
             assertEquals(AlternativeImplementationsOnlyImplementation1.class, resolved);
         }
 
         /**
-         * We can have multiple implementations, but only one can be missing the {@link Alternative} annotation,
+         * We can have multiple implementations, but only one can be missing the {@link Named} annotation,
          * or we will get an exception.
          */
         @Test
@@ -286,7 +288,7 @@ class ClassResolverUnitTest {
         }
 
         /**
-         * If we specify a wrong qualifier (no class exists that is marked with that value for {@link Alternative}),
+         * If we specify a wrong qualifier (no class exists that is marked with that value for {@link Named}),
          * we will get an exception.
          */
         @Test
@@ -295,7 +297,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(AlternativeNotFoundException.class, () -> sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), "not-found"));
+            assertThrows(AlternativeNotFoundException.class, () -> sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), new NamedLiteral("not-found")));
         }
 
         /**
@@ -381,7 +383,7 @@ class ClassResolverUnitTest {
         }
 
         /**
-         * When we have multiple concrete classes, the only one of them not annotated with {@link Alternative} is
+         * When we have multiple concrete classes, the only one of them not annotated with {@link Named} is
          * considered the standard implementation.
          */        @Test
         @DisplayName("Should resolve an abstract class with multiple implementations with standard implementation")
@@ -404,13 +406,13 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), "alternative1");
+            Class<?> resolved = sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), new NamedLiteral("alternative1"));
             // Then
             assertEquals(MultipleAnnotatedConcreteClassesAlternative1.class, resolved);
         }
 
         /**
-         * We can have multiple implementations, but only one can be missing the {@link Alternative} annotation,
+         * We can have multiple implementations, but only one can be missing the {@link Named} annotation,
          * or we will get an exception.
          */
         @Test
@@ -423,7 +425,7 @@ class ClassResolverUnitTest {
         }
 
         /**
-         * If we specify a wrong qualifier (no class exists that is marked with that value for {@link Alternative}),
+         * If we specify a wrong qualifier (no class exists that is marked with that value for {@link Named}),
          * we will get an exception.
          */
         @Test
@@ -432,7 +434,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(AlternativeNotFoundException.class, () -> sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), "not-found"));
+            assertThrows(AlternativeNotFoundException.class, () -> sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), new NamedLiteral("not-found")));
         }
 
         /**
@@ -589,6 +591,39 @@ class ClassResolverUnitTest {
                 return super.getResources(name);
             }
         };
+    }
+
+    /**
+     * Helper class to create instances of @Named for testing.
+     */
+    private static class NamedLiteral implements Named {
+        private final String value;
+
+        public NamedLiteral(String value) {
+            this.value = value;
+        }
+
+        @Override
+        public String value() {
+            return value;
+        }
+
+        @Override
+        public Class<? extends Annotation> annotationType() {
+            return Named.class;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof Named)) return false;
+            Named other = (Named) o;
+            return value.equals(other.value());
+        }
+
+        @Override
+        public int hashCode() {
+            return (127 * "value".hashCode()) ^ value.hashCode();
+        }
     }
 
 }

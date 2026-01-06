@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.interfaces.alternativeimplementationsonly;
 
-import com.threeamigos.common.util.annotations.injection.Alternative;
+import javax.inject.Named;
 
-@Alternative("alternative2")
+@Named("alternative2")
 public class AlternativeImplementationOnlyImplementation2 {
 }

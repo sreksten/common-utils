@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations;
 
-import com.threeamigos.common.util.annotations.injection.Alternative;
+import javax.inject.Named;
 
-@Alternative(value = "alternative2")
+@Named(value = "alternative2")
 public class MultipleAnnotatedImplementationsAlternativeImplementation2 implements MultipleAnnotatedImplementationsInterface {
 }

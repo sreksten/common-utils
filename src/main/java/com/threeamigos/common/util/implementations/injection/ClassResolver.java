@@ -1,15 +1,17 @@
 package com.threeamigos.common.util.implementations.injection;
-import com.threeamigos.common.util.annotations.injection.Alternative;
 import com.threeamigos.common.util.implementations.injection.exceptions.AlternativeNotFoundException;
 import com.threeamigos.common.util.implementations.injection.exceptions.AmbiguousImplementationFoundException;
 import com.threeamigos.common.util.implementations.injection.exceptions.ConcreteClassNotFoundException;
 import com.threeamigos.common.util.implementations.injection.exceptions.ImplementationNotFoundException;
-import com.threeamigos.common.util.interfaces.injection.Instance;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+import javax.inject.Named;
+import javax.inject.Qualifier;
+import javax.enterprise.inject.Instance;
 import java.io.File;
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.util.*;
@@ -40,20 +42,20 @@ class ClassResolver {
     /**
      * Resolves an abstract class or an interface returning the concrete class that implements the interface or
      * that extends the abstract class. When more implementations are present, the default implementation should not
-     * be annotated, while alternative implementations should be marked with {@link Alternative @Alternative}.<br/>
+     * be annotated, while alternative implementations should be marked with {@link Named @Named}.<br/>
      * If the identifier is specified, it will look for that particular alternative; otherwise the main implementation
      * will be returned.
      *
      * @param abstractClass the class to resolve
      * @param packageName package name used to reduce scanning
-     * @param identifier an @Alternative annotation value
+     * @param qualifier a @Named annotation value
      * @return the resolved class
      * @param <T> type of the class to resolve
      */
     <T> Class<? extends T> resolveImplementation(@NonNull Class<T> abstractClass,
                                                         @Nullable String packageName,
-                                                        @Nullable String identifier) throws Exception {
-        return resolveImplementation(Thread.currentThread().getContextClassLoader(), abstractClass, packageName, identifier);
+                                                        @Nullable Annotation qualifier) throws Exception {
+        return resolveImplementation(Thread.currentThread().getContextClassLoader(), abstractClass, packageName, qualifier);
     }
 
     /**
@@ -73,7 +75,7 @@ class ClassResolver {
     /*
      * package-private to run the tests
      */
-    <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Class<T> abstractClass, String packageName, String identifier) throws Exception {
+    <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Class<T> abstractClass, String packageName, Annotation qualifier) throws Exception {
         /*
          * If we have a concrete class, return that class.
          */
@@ -84,22 +86,25 @@ class ClassResolver {
         Collection<Class<?extends T>> resolvedClasses = resolveImplementations(classLoader, abstractClass, packageName);
         List<Class<? extends T>> candidates = new ArrayList<>();
         for (Class<? extends T> clazz : resolvedClasses) {
-            Alternative alternative = clazz.getAnnotation(Alternative.class);
-            if (identifier != null) {
-                // If we have an identifier, only look for matching Alternatives
-                if (alternative != null && alternative.value().equals(identifier)) {
+            Named named = clazz.getAnnotation(Named.class);
+            if (qualifier != null) {
+                // Check if the class has the exact same qualifier
+                Annotation found = clazz.getAnnotation(qualifier.annotationType());
+                if (found != null && found.equals(qualifier)) {
                     return clazz;
                 }
             } else {
-                // If no identifier, skip all Alternatives
-                if (alternative == null) {
+                // If no qualifier requested, look for classes WITHOUT any @Qualifier annotations
+                boolean hasQualifier = Arrays.stream(clazz.getAnnotations())
+                        .anyMatch(a -> a.annotationType().isAnnotationPresent(Qualifier.class));
+                if (!hasQualifier) {
                     candidates.add(clazz);
                 }
             }
         }
 
-        if (identifier != null) {
-            throw new AlternativeNotFoundException("No @Alternative found with value " + identifier + " for " + abstractClass.getName());
+        if (qualifier != null) {
+            throw new AlternativeNotFoundException("No implementation found with qualifier " + qualifier + " for " + abstractClass.getName());
         }
 
         if (candidates.isEmpty()) {

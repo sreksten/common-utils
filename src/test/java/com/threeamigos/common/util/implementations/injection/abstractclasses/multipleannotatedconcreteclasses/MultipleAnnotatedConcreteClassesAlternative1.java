@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses;
 
-import com.threeamigos.common.util.annotations.injection.Alternative;
+import javax.inject.Named;
 
-@Alternative("alternative1")
+@Named("alternative1")
 public class MultipleAnnotatedConcreteClassesAlternative1 extends MultipleAnnotatedConcreteClassesAbstractClass {
 }

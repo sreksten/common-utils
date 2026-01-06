@@ -1,9 +1,5 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.annotations.injection.Alternative;
-import com.threeamigos.common.util.annotations.injection.Any;
-import com.threeamigos.common.util.annotations.injection.Inject;
-import com.threeamigos.common.util.annotations.injection.Singleton;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative1;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative2;
@@ -16,13 +12,19 @@ import com.threeamigos.common.util.implementations.injection.interfaces.multiple
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsStandardImplementation;
 import com.threeamigos.common.util.interfaces.injection.Injector;
-import com.threeamigos.common.util.interfaces.injection.Instance;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.util.*;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.inject.Singleton;
+import javax.enterprise.inject.Instance;
+import javax.enterprise.inject.Any;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -329,7 +331,7 @@ class InjectorImplUnitTest {
         /**
          * If we have a dependency on an interface or abstract class that has more than one implementation, the Injector
          * will resolve the implementation based on the annotations on the class and its dependencies. Normally it uses
-         * the default implementation (not annotated with {@link Alternative}.
+         * the default implementation (not annotated with {@link Named}).
          */
         @Test
         @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency with more implementations (get default)")
@@ -434,7 +436,7 @@ class InjectorImplUnitTest {
      * Instance.get() returns the resolved instance of the interface or abstract class.
      * Instance.iterator(), if annotated with {@link Any}, returns an iterator over all the concrete implementations of
      * the interface or abstract class. Otherwise, the iterator will contain only one element (the default one, or
-     * an {@link com.threeamigos.common.util.annotations.injection.Alternative} if that option was specified).
+     * an {@link Named} if that option was specified).
      */
     @Nested
     @DisplayName("Instance Wrapper Tests")
@@ -684,7 +686,7 @@ class InjectorImplUnitTest {
     static class TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative {
         private final MultipleAnnotatedImplementationsInterface testInterface;
         @Inject
-        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative(@Alternative("alternative2") MultipleAnnotatedImplementationsInterface testInterface) {
+        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative(@Named("alternative2") MultipleAnnotatedImplementationsInterface testInterface) {
             this.testInterface = testInterface;
         }
         public MultipleAnnotatedImplementationsInterface getMultipleAnnotatedImplementationsInterface() {
@@ -749,7 +751,7 @@ class InjectorImplUnitTest {
     static class ClassWithInstanceAndMultipleImplementationsAlternative {
         private final Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance;
         @Inject
-        public ClassWithInstanceAndMultipleImplementationsAlternative(@Alternative(value = "alternative2") Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance) {
+        public ClassWithInstanceAndMultipleImplementationsAlternative(@Named(value = "alternative2") Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance) {
             this.instance = instance;
         }
         public Instance<MultipleAnnotatedConcreteClassesAbstractClass> getInstance() {
@@ -796,4 +798,38 @@ class InjectorImplUnitTest {
         private ClassWithPrivateConstructor() { }
     }
 
+    /**
+     * Helper class to create instances of @Named for testing.
+     */
+    private static class NamedLiteral implements Named {
+        private final String value;
+
+        public NamedLiteral(String value) {
+            this.value = value;
+        }
+
+        @Override
+        public String value() {
+            return value;
+        }
+
+        @Override
+        public Class<? extends Annotation> annotationType() {
+            return Named.class;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof Named)) return false;
+            Named other = (Named) o;
+            return value.equals(other.value());
+        }
+
+        @Override
+        public int hashCode() {
+            return (127 * "value".hashCode()) ^ value.hashCode();
+        }
+    }
+
 }
+

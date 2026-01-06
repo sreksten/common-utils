@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.abstractclasses.alternativeimplementationsonly;
 
-import com.threeamigos.common.util.annotations.injection.Alternative;
+import javax.inject.Named;
 
-@Alternative("alternative1")
+@Named("alternative1")
 public class AlternativeImplementationsOnlyConcreteClass1 extends AlternativeImplementationsOnlyAbstractClass {
 }

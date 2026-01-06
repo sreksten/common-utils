@@ -1,13 +1,18 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.annotations.injection.Alternative;
-import com.threeamigos.common.util.annotations.injection.Any;
-import com.threeamigos.common.util.annotations.injection.Inject;
-import com.threeamigos.common.util.annotations.injection.Singleton;
 import com.threeamigos.common.util.interfaces.injection.Injector;
-import com.threeamigos.common.util.interfaces.injection.Instance;
 import org.jspecify.annotations.NonNull;
 
+import javax.enterprise.inject.Instance;
+import javax.enterprise.util.TypeLiteral;
+import javax.inject.Provider;
+import javax.inject.Inject;
+import javax.inject.Qualifier;
+import javax.inject.Scope;
+import javax.inject.Singleton;
+import javax.enterprise.inject.Any;
+
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
@@ -46,10 +51,10 @@ public class InjectorImpl implements Injector {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> T inject(@NonNull Class<T> classToInject, String identifier) throws Exception {
+    public <T> T inject(@NonNull Class<T> classToInject, Annotation qualifier) throws Exception {
         checkClassValidity(classToInject);
 
-        Class<? extends T> resolvedClass = classResolver.resolveImplementation(classToInject, packageName, identifier);
+        Class<? extends T> resolvedClass = classResolver.resolveImplementation(classToInject, packageName, qualifier);
 
         boolean singleton = isSingleton(resolvedClass);
         if (singleton && singletonCache.containsKey(resolvedClass)) {
@@ -63,12 +68,12 @@ public class InjectorImpl implements Injector {
 
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
-            if (Instance.class.isAssignableFrom(param.getType())) {
+            if (Provider.class.isAssignableFrom(param.getType())) {
                 args[i] = createInstanceWrapper(param);
             } else {
                 checkClassValidity(param.getType());
-                Alternative alternative = param.getAnnotation(Alternative.class);
-                args[i] = inject(param.getType(), alternative != null ? alternative.value() : null);
+                Annotation paramQualifier = getQualifier(param);
+                args[i] = inject(param.getType(), paramQualifier);
             }
         }
 
@@ -108,7 +113,11 @@ public class InjectorImpl implements Injector {
     }
 
     private boolean isSingleton(Class<?> clazz) {
-        return clazz.isAnnotationPresent(Singleton.class);
+        // Check for the standard @Singleton or any custom annotation marked with @Scope
+        return clazz.isAnnotationPresent(Singleton.class) ||
+                // In this implementation, for standalone applications, every scoped bean is managed as a Singleton.
+                Arrays.stream(clazz.getAnnotations())
+                        .anyMatch(a -> a.annotationType().isAnnotationPresent(Scope.class));
     }
 
     @SuppressWarnings("unchecked")
@@ -131,34 +140,87 @@ public class InjectorImpl implements Injector {
         return constructors.get(0);
     }
 
+    private Annotation getQualifier(Parameter param) {
+        return Arrays.stream(param.getAnnotations())
+                .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
+                .findFirst()
+                .orElse(null);
+    }
+
     private Instance<?> createInstanceWrapper(java.lang.reflect.Parameter param) {
-        // Extract the generic type T from Instance<T>
         ParameterizedType type = (ParameterizedType) param.getParameterizedType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
         boolean isAny = param.isAnnotationPresent(Any.class);
-        Alternative alternative = param.getAnnotation(Alternative.class);
-        String identifier = alternative != null ? alternative.value() : null;
+        Annotation qualifier = getQualifier(param);
 
-        return new Instance<Object>() {
+        return createInstance(genericType, qualifier, isAny);
+    }
+
+    private <T> Instance<T> createInstance(Class<T> type, Annotation qualifier, boolean isAny) {
+        return new Instance<T>() {
             @Override
-            public Object get() throws Exception {
-                return inject(genericType, identifier);
+            public T get() {
+                try {
+                    return inject(type, qualifier);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to inject " + type.getName(), e);
+                }
             }
 
             @Override
-            public @NonNull Iterator<Object> iterator() {
-                try {
-                    Collection<? extends Class<?>> classes = isAny
-                            ? classResolver.resolveImplementations(genericType, packageName)
-                            : Collections.singletonList(classResolver.resolveImplementation(genericType, packageName, identifier));
+            public Instance<T> select(Annotation... annotations) {
+                Annotation newQualifier = annotations.length > 0 ? annotations[0] : qualifier;
+                return createInstance(type, newQualifier, isAny);
+            }
 
-                    List<Object> instances = new ArrayList<>();
-                    for (Class<?> clazz : classes) {
+            @Override
+            public <U extends T> Instance<U> select(Class<U> subtype, Annotation... annotations) {
+                Annotation newQualifier = annotations.length > 0 ? annotations[0] : qualifier;
+                return createInstance(subtype, newQualifier, isAny);
+            }
+
+            @Override
+            public <U extends T> Instance<U> select(TypeLiteral<U> subtype, Annotation... annotations) {
+                throw new UnsupportedOperationException("TypeLiteral selection not supported");
+            }
+
+            @Override
+            public boolean isUnsatisfied() {
+                try {
+                    return classResolver.resolveImplementations(type, packageName).isEmpty();
+                } catch (Exception e) {
+                    return true;
+                }
+            }
+
+            @Override
+            public boolean isAmbiguous() {
+                try {
+                    return classResolver.resolveImplementations(type, packageName).size() > 1;
+                } catch (Exception e) {
+                    return false;
+                }
+            }
+
+            @Override
+            public void destroy(T instance) {
+                // No-op
+            }
+
+            @Override
+            public @NonNull Iterator<T> iterator() {
+                try {
+                    Collection<? extends Class<? extends T>> classes = isAny
+                            ? classResolver.resolveImplementations(type, packageName)
+                            : Collections.singletonList(classResolver.resolveImplementation(type, packageName, qualifier));
+
+                    List<T> instances = new ArrayList<>();
+                    for (Class<? extends T> clazz : classes) {
                         instances.add(inject(clazz));
                     }
                     return instances.iterator();
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to resolve implementations for @Any", e);
+                    throw new RuntimeException("Failed to resolve implementations", e);
                 }
             }
         };
