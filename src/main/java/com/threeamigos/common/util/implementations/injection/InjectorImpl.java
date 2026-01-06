@@ -75,7 +75,6 @@ public class InjectorImpl implements Injector {
         return inject(classToInject, null);
     }
 
-    @SuppressWarnings("unchecked")
     public <T> T inject(@NonNull Class<T> classToInject, Annotation qualifier) {
         try {
             checkClassValidity(classToInject);
@@ -162,14 +161,6 @@ public class InjectorImpl implements Injector {
         if (clazz.isMemberClass() && !Modifier.isStatic(clazz.getModifiers())) {
             throw new IllegalArgumentException("Cannot inject a non-static inner class");
         }
-    }
-
-    private boolean isSingleton(Class<?> clazz) {
-        // Check for the standard @Singleton or any custom annotation marked with @Scope
-        return clazz.isAnnotationPresent(Singleton.class) ||
-                // In this implementation, for standalone applications, every scoped bean is managed as a Singleton.
-                Arrays.stream(clazz.getAnnotations())
-                        .anyMatch(a -> a.annotationType().isAnnotationPresent(Scope.class));
     }
 
     @SuppressWarnings("unchecked")

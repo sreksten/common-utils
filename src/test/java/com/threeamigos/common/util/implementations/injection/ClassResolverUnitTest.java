@@ -86,8 +86,8 @@ class ClassResolverUnitTest {
     class WrongPaths {
 
         @Test
-        @DisplayName("Should throw ImplementationNotFoundException if package to search is a file")
-        void shouldThrowImplementationNotFoundExceptionIfPackageToSearchIsAFile() {
+        @DisplayName("Should throw UnsatisfiedResolutionException if package to search is a file")
+        void shouldThrowUnsatisfiedResolutionExceptionIfPackageToSearchIsAFile() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
@@ -96,8 +96,8 @@ class ClassResolverUnitTest {
         }
 
         @Test
-        @DisplayName("Should throw ImplementationNotFoundException if package to search does not exist")
-        void shouldThrowImplementationNotFoundExceptionIfPackageToSearchDoesNotExist() {
+        @DisplayName("Should throw UnsatisfiedResolutionException if package to search does not exist")
+        void shouldThrowUnsatisfiedResolutionExceptionIfPackageToSearchDoesNotExist() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
@@ -167,33 +167,13 @@ class ClassResolverUnitTest {
         verify(mockLoader, times(1)).getResources(expectedPath);
     }
 
-    @Test
-    @DisplayName("Should remember already resolved classes")
-    void shouldRememberAlreadyResolvedClasses() throws Exception {
-        // Given
-        ClassResolver sut = new ClassResolver();
-        ClassLoader mockLoader = mock(ClassLoader.class);
-        String packageName = "com.threeamigos";
-        String expectedPath = "com/threeamigos";
-
-        // Stub getResources to return an empty enumeration so the loop finishes
-        when(mockLoader.getResources(expectedPath)).thenReturn(Collections.emptyEnumeration());
-
-        // When - calling the public method that internally calls getClasses
-        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class, packageName);
-        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class, packageName);
-
-        // Then - Verify the ClassLoader was queried exactly once
-        verify(mockLoader, times(1)).getResources(expectedPath);
-    }
-
     @Nested
     @DisplayName("Interface tests")
     class InterfaceTests {
 
         @Test
-        @DisplayName("Should throw ImplementationNotFoundException if no implementations found")
-        void shouldThrowExceptionIfNoImplementationsFound() {
+        @DisplayName("Should throw UnsatisfiedResolutionException if no implementations found")
+        void shouldThrowUnsatisfiedResolutionExceptionIfNoImplementationsFound() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
@@ -215,7 +195,7 @@ class ClassResolverUnitTest {
         }
 
         /**
-         * When we have multiple implementations, the only one of them not annotated with {@link javax.inject.Named} is
+         * When we have multiple implementations, the only one of them not annotated with {@link Named} is
          * considered the standard implementation.
          */
         @Test
@@ -230,7 +210,7 @@ class ClassResolverUnitTest {
         }
 
         /**
-         * When we have multiple implementations, we can specify one of the alternate implementations to be used
+         * When we have multiple implementations, we can specify one of the alternative implementations to be used
          * by specifying the qualifier.
          */
         @Test
@@ -249,8 +229,8 @@ class ClassResolverUnitTest {
          * always specify the qualifier, or we will get an exception.
          */
         @Test
-        @DisplayName("Should throw ImplementationNotFoundException if only alternative implementations found and no qualifier specified")
-        void shouldThrowExceptionIfOnlyAlternativeImplementationsFoundAndNoQualifierSpecified() {
+        @DisplayName("Should throw UnsatisfiedResolutionException if only alternative implementations found and no qualifier specified")
+        void shouldThrowUnsatisfiedResolutionExceptionIfOnlyAlternativeImplementationsFoundAndNoQualifierSpecified() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
@@ -277,8 +257,8 @@ class ClassResolverUnitTest {
          * or we will get an exception.
          */
         @Test
-        @DisplayName("Should throw AmbiguousImplementationFoundException with an interface with more than one standard implementations")
-        void shouldThrowExceptionWithInterfaceWithMoreThanOneStandardImplementations() {
+        @DisplayName("Should throw AmbiguousResolutionException with an interface with more than one standard implementations")
+        void shouldThrowAmbiguousResolutionExceptionWithInterfaceWithMoreThanOneStandardImplementations() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
@@ -287,11 +267,11 @@ class ClassResolverUnitTest {
 
         /**
          * If we specify a wrong qualifier (no class exists that is marked with that value for {@link Named}),
-         * we will get an exception.
+         * we will get an UnsatisfiedResolutionException.
          */
         @Test
-        @DisplayName("Should throw AlternativeNotFoundException if specified alternative implementation is not found")
-        void shouldThrowExceptionIfAlternateImplementationNotFound() {
+        @DisplayName("Should throw UnsatisfiedResolutionException if specified alternative implementation is not found")
+        void shouldThrowUnsatisfiedResolutionExceptionIfAlternateImplementationNotFound() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
@@ -355,11 +335,12 @@ class ClassResolverUnitTest {
         }
 
         /**
-         * If we try to inject an abstract class that has no concrete implementations, we will get an exception.
+         * If we try to inject an abstract class that has no concrete implementations, we will get an
+         * UnsatisfiedResolutionException.
          */
         @Test
-        @DisplayName("Should throw ConcreteClassNotFoundException if no concrete classes found")
-        void shouldThrowConcreteClassNotFoundExceptionIfNoConcreteClassesFound() {
+        @DisplayName("Should throw UnsatisfiedResolutionException if no concrete classes found")
+        void shouldThrowUnsatisfiedResolutionExceptionIfNoConcreteClassesFound() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
@@ -414,8 +395,8 @@ class ClassResolverUnitTest {
          * or we will get an exception.
          */
         @Test
-        @DisplayName("Should throw AmbiguousImplementationFoundException with more than one standard concrete classes")
-        void shouldThrowAmbiguousImplementationFoundExceptionWithMoreThanOneStandardConcreteClasses() {
+        @DisplayName("Should throw AmbiguousResolutionException with more than one standard concrete classes")
+        void shouldThrowAmbiguousResolutionExceptionWithMoreThanOneStandardConcreteClasses() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
@@ -424,11 +405,11 @@ class ClassResolverUnitTest {
 
         /**
          * If we specify a wrong qualifier (no class exists that is marked with that value for {@link Named}),
-         * we will get an exception.
+         * we will get an UnsatisfiedResolutionException.
          */
         @Test
-        @DisplayName("Should throw AlternativeNotFoundException if specified alternative implementation is not found")
-        void shouldThrowAlternativeNotFoundExceptionIfSpecifiedAlternateImplementationNotFound() {
+        @DisplayName("Should throw UnsatisfiedResolutionException if specified alternative implementation is not found")
+        void shouldThrowUnsatisfiedResolutionExceptionIfSpecifiedAlternateImplementationNotFound() {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then

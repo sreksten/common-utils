@@ -21,7 +21,7 @@ import java.util.jar.JarFile;
  * ClassResolver is responsible for resolving concrete implementations of abstract classes or interfaces.<br/>
  * Given an abstract class, a package name, and an optional identifier, it returns the concrete
  * implementation(s) of the abstract class. If no concrete implementation is found, it throws an
- * ImplementationNotFoundException. IF the class is a concrete class, it just returns the class itself.<br/>
+ * UnsatisfiedResolutionException. If the class is a concrete class, it just returns the class itself.<br/>
  * The Unit Test for this class gives information about the expected behavior and edge cases.<br/>
  * This class, however, is to be used by the Injector class.
  *
@@ -80,7 +80,8 @@ class ClassResolver {
     /*
      * package-private to run the tests
      */
-    <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Class<T> abstractClass, String packageName, Annotation qualifier) throws Exception {
+    <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Class<T> abstractClass,
+                                                 String packageName, Annotation qualifier) throws Exception {
         /*
          * If we have a concrete class, return that class.
          */
@@ -90,19 +91,18 @@ class ClassResolver {
 
         Collection<Class<?extends T>> resolvedClasses = resolveImplementations(classLoader, abstractClass, packageName);
 
-        // 1. Check for enabled @Alternatives first (Global Override)
+        // Check for enabled @Alternatives first (Global Override)
         for (Class<? extends T> clazz : resolvedClasses) {
             if (enabledAlternatives.contains(clazz)) {
                 return clazz;
             }
         }
 
-        // 2. Filter out INACTIVE alternatives before looking for standard candidates
+        // Filter out INACTIVE alternatives before looking for standard candidates
         List<Class<? extends T>> activeClasses = new ArrayList<>();
         for (Class<? extends T> clazz : resolvedClasses) {
             boolean isAlternative = clazz.isAnnotationPresent(Alternative.class);
-            // Include if it's NOT an alternative, OR if it's an alternative that we've already checked (but wasn't enabled)
-            // Actually, simply: if it's an alternative and NOT in enabledAlternatives, skip it.
+            // If it's an alternative and NOT in enabledAlternatives, skip it.
             if (isAlternative && !enabledAlternatives.contains(clazz)) {
                 continue;
             }
@@ -112,7 +112,6 @@ class ClassResolver {
         // 3. Check for @Qualifier / @Named annotations (Local Override)
         List<Class<? extends T>> candidates = new ArrayList<>();
         for (Class<? extends T> clazz : activeClasses) {
-            Named named = clazz.getAnnotation(Named.class);
             if (qualifier != null) {
                 // Check if the class has the exact same qualifier
                 Annotation found = clazz.getAnnotation(qualifier.annotationType());
@@ -130,7 +129,8 @@ class ClassResolver {
         }
 
         if (qualifier != null) {
-            throw new UnsatisfiedResolutionException("No implementation found with qualifier " + qualifier + " for " + abstractClass.getName());
+            throw new UnsatisfiedResolutionException("No implementation found with qualifier " + qualifier +
+                    " for " + abstractClass.getName());
         }
 
         // 3. Return the standard implementation (if any)
@@ -138,7 +138,8 @@ class ClassResolver {
             throw new UnsatisfiedResolutionException("No implementation found for " + abstractClass.getName());
         } else if (candidates.size() > 1) {
             String candidatesAsList = candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get();
-            throw new AmbiguousResolutionException("More than one implementation found for " + abstractClass.getName() + ": " + candidatesAsList);
+            throw new AmbiguousResolutionException("More than one implementation found for " + abstractClass.getName() +
+                    ": " + candidatesAsList);
         }
         return candidates.get(0);
     }
@@ -147,7 +148,8 @@ class ClassResolver {
      * package-private to run the tests
      */
     @SuppressWarnings("unchecked")
-    <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Class<T> abstractClass, String packageName) throws Exception {
+    <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Class<T> abstractClass,
+                                                              String packageName) throws Exception {
         /*
          * If we have a concrete class, return that class.
          */
