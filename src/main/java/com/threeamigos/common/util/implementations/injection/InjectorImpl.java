@@ -1,16 +1,15 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.interfaces.injection.Injector;
+import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 import org.jspecify.annotations.NonNull;
 
-import javax.enterprise.inject.Instance;
+import javax.enterprise.inject.*;
 import javax.enterprise.util.TypeLiteral;
-import javax.inject.Provider;
 import javax.inject.Inject;
 import javax.inject.Qualifier;
 import javax.inject.Scope;
 import javax.inject.Singleton;
-import javax.enterprise.inject.Any;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
@@ -18,6 +17,8 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -32,18 +33,42 @@ import java.util.stream.Collectors;
  */
 public class InjectorImpl implements Injector {
 
-    private final Map<Class<?>, Object> singletonCache = new HashMap<>();
+    private final Map<Class<? extends Annotation>, ScopeHandler> scopeRegistry = new HashMap<>();
     private final ClassResolver classResolver;
     private final String packageName;
 
     public InjectorImpl() {
         this.classResolver = new ClassResolver();
         this.packageName = "";
+        registerDefaultScopes();
     }
 
     public InjectorImpl(final String packageName) {
         this.classResolver = new ClassResolver();
         this.packageName = packageName;
+        registerDefaultScopes();
+    }
+
+    private void registerDefaultScopes() {
+        // Standard Singleton scope implementation
+        scopeRegistry.put(Singleton.class, new ScopeHandler() {
+            private final Map<Class<?>, Object> instances = new ConcurrentHashMap<>();
+            @Override
+            @SuppressWarnings("unchecked")
+            public <T> T get(Class<T> clazz, Supplier<T> provider) {
+                return (T) instances.computeIfAbsent(clazz, c -> provider.get());
+            }
+        });
+    }
+
+    @Override
+    public void registerScope(Class<? extends Annotation> scopeAnnotation, ScopeHandler handler) {
+        scopeRegistry.put(scopeAnnotation, handler);
+    }
+
+    @Override
+    public void enableAlternative(Class<?> alternativeClass) {
+        classResolver.enableAlternative(alternativeClass);
     }
 
     public <T> T inject(@NonNull Class<T> classToInject) throws Exception {
@@ -51,41 +76,68 @@ public class InjectorImpl implements Injector {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> T inject(@NonNull Class<T> classToInject, Annotation qualifier) throws Exception {
-        checkClassValidity(classToInject);
+    public <T> T inject(@NonNull Class<T> classToInject, Annotation qualifier) {
+        try {
+            checkClassValidity(classToInject);
+            Class<? extends T> resolvedClass = classResolver.resolveImplementation(classToInject, packageName, qualifier);
 
-        Class<? extends T> resolvedClass = classResolver.resolveImplementation(classToInject, packageName, qualifier);
+            // Find the scope annotation on the resolved class
+            Class<? extends Annotation> scopeType = getScopeType(resolvedClass);
 
-        boolean singleton = isSingleton(resolvedClass);
-        if (singleton && singletonCache.containsKey(resolvedClass)) {
-            return (T) singletonCache.get(resolvedClass);
-        }
-
-        Constructor<? extends T> constructor = getConstructor(resolvedClass);
-
-        Parameter[] parameters = constructor.getParameters();
-        Object[] args = new Object[parameters.length];
-
-        for (int i = 0; i < parameters.length; i++) {
-            Parameter param = parameters[i];
-            if (Provider.class.isAssignableFrom(param.getType())) {
-                args[i] = createInstanceWrapper(param);
-            } else {
-                checkClassValidity(param.getType());
-                Annotation paramQualifier = getQualifier(param);
-                args[i] = inject(param.getType(), paramQualifier);
+            if (scopeType != null && scopeRegistry.containsKey(scopeType)) {
+                ScopeHandler handler = scopeRegistry.get(scopeType);
+                // Use a helper method to handle the wildcard capture safely
+                return handleScopedInjection(handler, resolvedClass);
             }
+
+            return performInjection(resolvedClass);
+        } catch (UnsatisfiedResolutionException | AmbiguousResolutionException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new InjectionException("Failed to inject " + classToInject.getName(), e);
         }
-
-        T t = buildInstance(constructor, args);
-
-        if (singleton) {
-            singletonCache.put(resolvedClass, t);
-        }
-
-        return t;
     }
 
+    /**
+     * Helper method to bridge the generic gap between Class<? extends T> and ScopeHandler
+     */
+    @SuppressWarnings("unchecked")
+    private <T> T handleScopedInjection(ScopeHandler handler, Class<? extends T> clazz) {
+        return (T) handler.get((Class<Object>) clazz, () -> performInjection(clazz));
+    }
+
+    /**
+     * The actual instantiation logic (moved out of inject to be used by ScopeHandlers)
+     */
+    private <T> T performInjection(Class<? extends T> resolvedClass) {
+        try {
+            Constructor<? extends T> constructor = getConstructor(resolvedClass);
+            Parameter[] parameters = constructor.getParameters();
+            Object[] args = new Object[parameters.length];
+
+            for (int i = 0; i < parameters.length; i++) {
+                Parameter param = parameters[i];
+                if (javax.inject.Provider.class.isAssignableFrom(param.getType())) {
+                    args[i] = createInstanceWrapper(param);
+                } else {
+                    checkClassValidity(param.getType());
+                    Annotation paramQualifier = getQualifier(param);
+                    args[i] = inject(param.getType(), paramQualifier);
+                }
+            }
+            return buildInstance(constructor, args);
+        } catch (Exception e) {
+            throw new InjectionException("Instantiation failed for " + resolvedClass.getName(), e);
+        }
+    }
+
+    private Class<? extends Annotation> getScopeType(Class<?> clazz) {
+        return Arrays.stream(clazz.getAnnotations())
+                .map(Annotation::annotationType)
+                .filter(at -> at.isAnnotationPresent(Scope.class) || at.equals(Singleton.class))
+                .findFirst()
+                .orElse(null);
+    }
     /**
      * Checks that the class is valid for injection.
      * @param clazz the class to check

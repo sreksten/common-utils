@@ -4,6 +4,7 @@ import javax.inject.Named;
 import javax.inject.Inject;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Any;
+import java.lang.annotation.Annotation;
 
 /**
  * A dependency injector. Given a class, it provides an instance of that class
@@ -24,6 +25,9 @@ import javax.enterprise.inject.Any;
  */
 public interface Injector {
 
-    <T> T inject(Class<T> clazz) throws Exception;
+    void registerScope(Class<? extends Annotation> scopeAnnotation, ScopeHandler handler);
 
+    void enableAlternative(Class<?> alternativeClass);
+
+    <T> T inject(Class<T> clazz) throws Exception;
 }

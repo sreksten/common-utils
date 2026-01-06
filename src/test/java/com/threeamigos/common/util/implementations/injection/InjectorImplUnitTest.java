@@ -20,6 +20,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.util.*;
 
+import javax.enterprise.inject.InjectionException;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -86,13 +87,13 @@ class InjectorImplUnitTest {
             @Test
             @DisplayName("Enums")
             void shouldThrowExceptionIfInjectingAnEnum() {
-                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(TestEnum.class));
+                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(TestEnum.class));
             }
 
             @Test
             @DisplayName("Primitives")
             void shouldThrowExceptionIfInjectingAPrimitive() {
-                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(int.class));
+                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(int.class));
             }
 
             @Test
@@ -102,7 +103,7 @@ class InjectorImplUnitTest {
                 final Class<?> syntheticClass = ((Runnable)() -> {}).getClass();
                 // Then
                 assertTrue(syntheticClass.isSynthetic());
-                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(syntheticClass));
+                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(syntheticClass));
             }
 
             @Test
@@ -112,7 +113,7 @@ class InjectorImplUnitTest {
                 class MyLocalClass {}
                 // Then
                 assertTrue(MyLocalClass.class.isLocalClass());
-                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(MyLocalClass.class));
+                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(MyLocalClass.class));
             }
 
             @Test
@@ -131,13 +132,13 @@ class InjectorImplUnitTest {
                 };
                 // Then
                 assertTrue(anonymousRunnable.getClass().isAnonymousClass());
-                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(anonymousRunnable.getClass()));
+                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(anonymousRunnable.getClass()));
             }
 
             @Test
             @DisplayName("Non-static inner classes")
             void shouldThrowExceptionIfInjectingNonStaticInnerClass() {
-                assertThrows(IllegalArgumentException.class, () -> new InjectorImpl().inject(NonStaticInnerClass.class));
+                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(NonStaticInnerClass.class));
             }
         }
     }
@@ -240,10 +241,10 @@ class InjectorImplUnitTest {
 
         /**
          * Once the constructor was identified, the parameters will be checked, and if any of them is not an interface,
-         * an abstract class, or a concrete class, an IllegalArgumentException will be thrown.
+         * an abstract class, or a concrete class, an InjectionException will be thrown.
          */
         @Test
-        @DisplayName("Should throw IllegalArgumentException if any parameter is not an interface, an abstract or a concrete class")
+        @DisplayName("Should throw InjectionException if any parameter is not an interface, an abstract or a concrete class")
         void shouldThrowIllegalArgumentExceptionIfInvalidParameter() {
             // Given
             @SuppressWarnings("unused")
@@ -253,7 +254,7 @@ class InjectorImplUnitTest {
             }
             InjectorImpl sut = new InjectorImpl();
             // When, Then
-            assertThrows(IllegalArgumentException.class, () -> sut.inject(TestClass.class));
+            assertThrows(InjectionException.class, () -> sut.inject(TestClass.class));
         }
     }
 

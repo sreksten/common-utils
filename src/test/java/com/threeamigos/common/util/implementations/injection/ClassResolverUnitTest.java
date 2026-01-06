@@ -6,10 +6,6 @@ import com.threeamigos.common.util.implementations.injection.abstractclasses.mul
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesStandardClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.subpackage.MultipleAnnotatedConcreteClassesAlternative3;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
-import com.threeamigos.common.util.implementations.injection.exceptions.AlternativeNotFoundException;
-import com.threeamigos.common.util.implementations.injection.exceptions.AmbiguousImplementationFoundException;
-import com.threeamigos.common.util.implementations.injection.exceptions.ConcreteClassNotFoundException;
-import com.threeamigos.common.util.implementations.injection.exceptions.ImplementationNotFoundException;
 import com.threeamigos.common.util.implementations.injection.interfaces.alternativeimplementationsonly.AlternativeImplementationsOnlyImplementation1;
 import com.threeamigos.common.util.implementations.injection.interfaces.alternativeimplementationsonly.AlternativeImplementationsOnlyInterface;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
@@ -45,6 +41,8 @@ import java.util.Enumeration;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
+import javax.enterprise.inject.AmbiguousResolutionException;
+import javax.enterprise.inject.UnsatisfiedResolutionException;
 import javax.inject.Named;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -93,7 +91,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(ImplementationNotFoundException .class, () ->sut.resolveImplementation(NoImplementationsInterface.class,
+            assertThrows(UnsatisfiedResolutionException.class, () ->sut.resolveImplementation(NoImplementationsInterface.class,
                     "com.threeamigos.common.util.implementations.injection.wrongdirectory.fakeFileToSkip", null));
         }
 
@@ -103,7 +101,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(ImplementationNotFoundException .class, () ->sut.resolveImplementation(NoImplementationsInterface.class,
+            assertThrows(UnsatisfiedResolutionException.class, () ->sut.resolveImplementation(NoImplementationsInterface.class,
                     "com.threeamigos.common.util.implementations.injection.notexistingpackage", null));
         }
 
@@ -199,7 +197,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(ImplementationNotFoundException.class, () -> sut.resolveImplementation(NoImplementationsInterface.class, getPackageName(NoImplementationsInterface.class), null));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NoImplementationsInterface.class, getPackageName(NoImplementationsInterface.class), null));
         }
 
         /**
@@ -256,7 +254,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(ImplementationNotFoundException.class, () -> sut.resolveImplementation(AlternativeImplementationsOnlyInterface.class, getPackageName(AlternativeImplementationsOnlyInterface.class), null));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(AlternativeImplementationsOnlyInterface.class, getPackageName(AlternativeImplementationsOnlyInterface.class), null));
         }
 
         /**
@@ -284,7 +282,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(AmbiguousImplementationFoundException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedImplementationsInterface.class, getPackageName(MultipleNotAnnotatedImplementationsInterface.class), null));
+            assertThrows(AmbiguousResolutionException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedImplementationsInterface.class, getPackageName(MultipleNotAnnotatedImplementationsInterface.class), null));
         }
 
         /**
@@ -297,7 +295,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(AlternativeNotFoundException.class, () -> sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), new NamedLiteral("not-found")));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), new NamedLiteral("not-found")));
         }
 
         /**
@@ -365,7 +363,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(ConcreteClassNotFoundException.class, () -> sut.resolveImplementation(NoConcreteClassesAbstractClass.class, getPackageName(NoConcreteClassesAbstractClass.class), null));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NoConcreteClassesAbstractClass.class, getPackageName(NoConcreteClassesAbstractClass.class), null));
         }
 
         /**
@@ -421,7 +419,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(AmbiguousImplementationFoundException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedAbstractClass.class, getPackageName(MultipleNotAnnotatedAbstractClass.class), null));
+            assertThrows(AmbiguousResolutionException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedAbstractClass.class, getPackageName(MultipleNotAnnotatedAbstractClass.class), null));
         }
 
         /**
@@ -434,7 +432,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(AlternativeNotFoundException.class, () -> sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), new NamedLiteral("not-found")));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), new NamedLiteral("not-found")));
         }
 
         /**

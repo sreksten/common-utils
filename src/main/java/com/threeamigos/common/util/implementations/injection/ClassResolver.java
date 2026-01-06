@@ -1,11 +1,10 @@
 package com.threeamigos.common.util.implementations.injection;
-import com.threeamigos.common.util.implementations.injection.exceptions.AlternativeNotFoundException;
-import com.threeamigos.common.util.implementations.injection.exceptions.AmbiguousImplementationFoundException;
-import com.threeamigos.common.util.implementations.injection.exceptions.ConcreteClassNotFoundException;
-import com.threeamigos.common.util.implementations.injection.exceptions.ImplementationNotFoundException;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+import javax.enterprise.inject.Alternative;
+import javax.enterprise.inject.AmbiguousResolutionException;
+import javax.enterprise.inject.UnsatisfiedResolutionException;
 import javax.inject.Named;
 import javax.inject.Qualifier;
 import javax.enterprise.inject.Instance;
@@ -38,6 +37,12 @@ class ClassResolver {
      * Second cache - to avoid scanning the classes multiple times for the same interface or class
      */
     private final Map<Class<?>, Collection<Class<?>>> resolvedClasses = new HashMap<>();
+
+    private final Set<Class<?>> enabledAlternatives = new HashSet<>();
+
+    void enableAlternative(Class<?> alternativeClass) {
+        enabledAlternatives.add(alternativeClass);
+    }
 
     /**
      * Resolves an abstract class or an interface returning the concrete class that implements the interface or
@@ -84,8 +89,29 @@ class ClassResolver {
         }
 
         Collection<Class<?extends T>> resolvedClasses = resolveImplementations(classLoader, abstractClass, packageName);
-        List<Class<? extends T>> candidates = new ArrayList<>();
+
+        // 1. Check for enabled @Alternatives first (Global Override)
         for (Class<? extends T> clazz : resolvedClasses) {
+            if (enabledAlternatives.contains(clazz)) {
+                return clazz;
+            }
+        }
+
+        // 2. Filter out INACTIVE alternatives before looking for standard candidates
+        List<Class<? extends T>> activeClasses = new ArrayList<>();
+        for (Class<? extends T> clazz : resolvedClasses) {
+            boolean isAlternative = clazz.isAnnotationPresent(Alternative.class);
+            // Include if it's NOT an alternative, OR if it's an alternative that we've already checked (but wasn't enabled)
+            // Actually, simply: if it's an alternative and NOT in enabledAlternatives, skip it.
+            if (isAlternative && !enabledAlternatives.contains(clazz)) {
+                continue;
+            }
+            activeClasses.add(clazz);
+        }
+
+        // 3. Check for @Qualifier / @Named annotations (Local Override)
+        List<Class<? extends T>> candidates = new ArrayList<>();
+        for (Class<? extends T> clazz : activeClasses) {
             Named named = clazz.getAnnotation(Named.class);
             if (qualifier != null) {
                 // Check if the class has the exact same qualifier
@@ -104,22 +130,15 @@ class ClassResolver {
         }
 
         if (qualifier != null) {
-            throw new AlternativeNotFoundException("No implementation found with qualifier " + qualifier + " for " + abstractClass.getName());
+            throw new UnsatisfiedResolutionException("No implementation found with qualifier " + qualifier + " for " + abstractClass.getName());
         }
 
+        // 3. Return the standard implementation (if any)
         if (candidates.isEmpty()) {
-            if (abstractClass.isInterface()) {
-                throw new ImplementationNotFoundException("No implementation found for " + abstractClass.getName());
-            } else {
-                throw new ConcreteClassNotFoundException("No concrete class found for " + abstractClass.getName());
-            }
+            throw new UnsatisfiedResolutionException("No implementation found for " + abstractClass.getName());
         } else if (candidates.size() > 1) {
             String candidatesAsList = candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get();
-            if (abstractClass.isInterface()) {
-                throw new AmbiguousImplementationFoundException("More than one implementation found for " + abstractClass.getName() + ": " + candidatesAsList);
-            } else {
-                throw new AmbiguousImplementationFoundException("More than one concrete class found for " + abstractClass.getName() + ": " + candidatesAsList);
-            }
+            throw new AmbiguousResolutionException("More than one implementation found for " + abstractClass.getName() + ": " + candidatesAsList);
         }
         return candidates.get(0);
     }
