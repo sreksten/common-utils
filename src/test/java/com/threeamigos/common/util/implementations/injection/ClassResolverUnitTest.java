@@ -1,18 +1,21 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAbstractClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative1;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative2;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesStandardClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.subpackage.MultipleAnnotatedConcreteClassesAlternative3;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesAbstractClass;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed1;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed2;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesStandardClass;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.subpackage.MultipleConcreteClassesNamed3;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
-import com.threeamigos.common.util.implementations.injection.interfaces.alternativeimplementationsonly.AlternativeImplementationsOnlyImplementation1;
-import com.threeamigos.common.util.implementations.injection.interfaces.alternativeimplementationsonly.AlternativeImplementationsOnlyInterface;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestAlternativeImplementation1;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestInterface;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.interfaces.namedimplementationsonly.NamedImplementationsOnlyImplementation1;
+import com.threeamigos.common.util.implementations.injection.interfaces.namedimplementationsonly.NamedImplementationsOnlyInterface;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsAlternativeImplementation1;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsAlternativeImplementation2;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsInterface;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed1;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.noconcreteclasses.NoConcreteClassesAbstractClass;
 import com.threeamigos.common.util.implementations.injection.interfaces.noimplementations.NoImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multiplenotannotatedconcreteclasses.MultipleNotAnnotatedAbstractClass;
@@ -161,7 +164,27 @@ class ClassResolverUnitTest {
 
         // When - calling the public method that internally calls getClasses
         sut.resolveImplementations(mockLoader, SingleImplementationInterface.class, packageName);
-        sut.resolveImplementations(mockLoader, MultipleAnnotatedImplementationsInterface.class, packageName);
+        sut.resolveImplementations(mockLoader, MultipleImplementationsInterface.class, packageName);
+
+        // Then - Verify the ClassLoader was queried exactly once
+        verify(mockLoader, times(1)).getResources(expectedPath);
+    }
+
+    @Test
+    @DisplayName("Should remember already resolved classes")
+    void shouldRememberAlreadyResolvedClasses() throws Exception {
+        // Given
+        ClassResolver sut = new ClassResolver();
+        ClassLoader mockLoader = mock(ClassLoader.class);
+        String packageName = "com.threeamigos";
+        String expectedPath = "com/threeamigos";
+
+        // Stub getResources to return an empty enumeration so the loop finishes
+        when(mockLoader.getResources(expectedPath)).thenReturn(Collections.emptyEnumeration());
+
+        // When - calling the public method that internally calls getClasses
+        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class, packageName);
+        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class, packageName);
 
         // Then - Verify the ClassLoader was queried exactly once
         verify(mockLoader, times(1)).getResources(expectedPath);
@@ -204,9 +227,9 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), null);
+            Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), null);
             // Then
-            assertEquals(MultipleAnnotatedImplementationsStandardImplementation.class, resolved);
+            assertEquals(MultipleImplementationsStandardImplementation.class, resolved);
         }
 
         /**
@@ -219,9 +242,9 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), new NamedLiteral("alternative1"));
+            Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), new NamedLiteral("name1"));
             // Then
-            assertEquals(MultipleAnnotatedImplementationsAlternativeImplementation1.class, resolved);
+            assertEquals(MultipleImplementationsNamed1.class, resolved);
         }
 
         /**
@@ -234,7 +257,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(AlternativeImplementationsOnlyInterface.class, getPackageName(AlternativeImplementationsOnlyInterface.class), null));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NamedImplementationsOnlyInterface.class, getPackageName(NamedImplementationsOnlyInterface.class), null));
         }
 
         /**
@@ -247,9 +270,9 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(AlternativeImplementationsOnlyInterface.class, getPackageName(AlternativeImplementationsOnlyInterface.class), new NamedLiteral("alternative1"));
+            Class<?> resolved = sut.resolveImplementation(NamedImplementationsOnlyInterface.class, getPackageName(NamedImplementationsOnlyInterface.class), new NamedLiteral("name1"));
             // Then
-            assertEquals(AlternativeImplementationsOnlyImplementation1.class, resolved);
+            assertEquals(NamedImplementationsOnlyImplementation1.class, resolved);
         }
 
         /**
@@ -275,7 +298,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class), new NamedLiteral("not-found")));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), new NamedLiteral("not-found")));
         }
 
         /**
@@ -286,12 +309,12 @@ class ClassResolverUnitTest {
         void shouldReturnAllImplementationsForAGivenInterface() throws Exception {
             // Given
             ClassResolver sut = new ClassResolver();
-            Collection<Class<? extends MultipleAnnotatedImplementationsInterface>> expected = new ArrayList<>();
-            expected.add(MultipleAnnotatedImplementationsStandardImplementation.class);
-            expected.add(MultipleAnnotatedImplementationsAlternativeImplementation1.class);
-            expected.add(MultipleAnnotatedImplementationsAlternativeImplementation2.class);
+            Collection<Class<? extends MultipleImplementationsInterface>> expected = new ArrayList<>();
+            expected.add(MultipleImplementationsStandardImplementation.class);
+            expected.add(MultipleImplementationsNamed1.class);
+            expected.add(MultipleImplementationsNamed2.class);
             // When
-            Collection<Class<? extends MultipleAnnotatedImplementationsInterface>> classes = sut.resolveImplementations(MultipleAnnotatedImplementationsInterface.class, getPackageName(MultipleAnnotatedImplementationsInterface.class));
+            Collection<Class<? extends MultipleImplementationsInterface>> classes = sut.resolveImplementations(MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class));
             // Then
             assertEquals(3, classes.size());
             assertTrue(classes.containsAll(expected));
@@ -370,9 +393,9 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), null);
+            Class<?> resolved = sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, getPackageName(MultipleConcreteClassesAbstractClass.class), null);
             // Then
-            assertEquals(MultipleAnnotatedConcreteClassesStandardClass.class, resolved);
+            assertEquals(MultipleConcreteClassesStandardClass.class, resolved);
         }
 
         /**
@@ -385,9 +408,9 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), new NamedLiteral("alternative1"));
+            Class<?> resolved = sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, getPackageName(MultipleConcreteClassesAbstractClass.class), new NamedLiteral("name1"));
             // Then
-            assertEquals(MultipleAnnotatedConcreteClassesAlternative1.class, resolved);
+            assertEquals(MultipleConcreteClassesNamed1.class, resolved);
         }
 
         /**
@@ -413,7 +436,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class), new NamedLiteral("not-found")));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, getPackageName(MultipleConcreteClassesAbstractClass.class), new NamedLiteral("not-found")));
         }
 
         /**
@@ -424,16 +447,44 @@ class ClassResolverUnitTest {
         void shouldReturnAllConcreteClassesForAGivenAbstractClass() throws Exception {
             // Given
             ClassResolver sut = new ClassResolver();
-            Collection<Class<? extends MultipleAnnotatedConcreteClassesAbstractClass>> expected = new ArrayList<>();
-            expected.add(MultipleAnnotatedConcreteClassesStandardClass.class);
-            expected.add(MultipleAnnotatedConcreteClassesAlternative1.class);
-            expected.add(MultipleAnnotatedConcreteClassesAlternative2.class);
-            expected.add(MultipleAnnotatedConcreteClassesAlternative3.class);
+            Collection<Class<? extends MultipleConcreteClassesAbstractClass>> expected = new ArrayList<>();
+            expected.add(MultipleConcreteClassesStandardClass.class);
+            expected.add(MultipleConcreteClassesNamed1.class);
+            expected.add(MultipleConcreteClassesNamed2.class);
+            expected.add(MultipleConcreteClassesNamed3.class);
             // When
-            Collection<Class<? extends MultipleAnnotatedConcreteClassesAbstractClass>> classes = sut.resolveImplementations(MultipleAnnotatedConcreteClassesAbstractClass.class, getPackageName(MultipleAnnotatedConcreteClassesAbstractClass.class));
+            Collection<Class<? extends MultipleConcreteClassesAbstractClass>> classes = sut.resolveImplementations(MultipleConcreteClassesAbstractClass.class, getPackageName(MultipleConcreteClassesAbstractClass.class));
             // Then
             assertEquals(4, classes.size());
             assertTrue(classes.containsAll(expected));
+        }
+    }
+
+    @Nested
+    @DisplayName("Alternatives")
+    class Alternatives {
+
+        @Test
+        @DisplayName("Should skip inactive alternatives")
+        void shouldSkipInactiveAlternatives() throws Exception {
+            // Given
+            ClassResolver sut = new ClassResolver();
+            // When
+            Class<?> resolved = sut.resolveImplementation(AlternativesTestInterface.class, getPackageName(AlternativesTestInterface.class), null);
+            // Then
+            assertEquals(AlternativesTestStandardImplementation.class, resolved);
+        }
+
+        @Test
+        @DisplayName("Should return enabled alternative")
+        void shouldReturnEnabledAlternative() throws Exception {
+            // Given
+            ClassResolver sut = new ClassResolver();
+            sut.enableAlternative(AlternativesTestAlternativeImplementation1.class);
+            // When
+            Class<?> resolved = sut.resolveImplementation(AlternativesTestInterface.class, getPackageName(AlternativesTestInterface.class), null);
+            // Then
+            assertEquals(AlternativesTestAlternativeImplementation1.class, resolved);
         }
     }
 
@@ -462,13 +513,13 @@ class ClassResolverUnitTest {
             ClassResolver sut = new ClassResolver();
 
             // 4. Resolve using the custom loader
-            Class<?> abstractClass = testLoader.loadClass(MultipleAnnotatedConcreteClassesAbstractClass.class.getName());
+            Class<?> abstractClass = testLoader.loadClass(MultipleConcreteClassesAbstractClass.class.getName());
 
             Class<?> result = sut.resolveImplementation(testLoader, abstractClass, packageNameToFilter,null);
 
             // 5. Verification
             assertNotNull(result);
-            assertEquals("MultipleAnnotatedConcreteClassesStandardClass", result.getSimpleName());
+            assertEquals(MultipleConcreteClassesStandardClass.class.getSimpleName(), result.getSimpleName());
 
             // This should now pass because we are explicitly using the loader that knows about the JAR
             String location = result.getProtectionDomain().getCodeSource().getLocation().toString();

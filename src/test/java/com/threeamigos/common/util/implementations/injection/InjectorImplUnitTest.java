@@ -1,22 +1,21 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAbstractClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative1;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesAlternative2;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.MultipleAnnotatedConcreteClassesStandardClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleannotatedconcreteclasses.subpackage.MultipleAnnotatedConcreteClassesAlternative3;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesAbstractClass;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed1;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed2;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesStandardClass;
+import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.subpackage.MultipleConcreteClassesNamed3;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.noconcreteclasses.NoConcreteClassesAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsAlternativeImplementation2;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsInterface;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations.MultipleAnnotatedImplementationsStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.util.*;
 
@@ -345,7 +344,7 @@ class InjectorImplUnitTest {
             // Then
             assertNotNull(instance);
             assertNotNull(instance.getMultipleAnnotatedImplementationsInterface());
-            assertEquals(MultipleAnnotatedImplementationsStandardImplementation .class, instance.getMultipleAnnotatedImplementationsInterface().getClass());
+            assertEquals(MultipleImplementationsStandardImplementation.class, instance.getMultipleAnnotatedImplementationsInterface().getClass());
         }
 
         /**
@@ -364,7 +363,7 @@ class InjectorImplUnitTest {
             // Then
             assertNotNull(instance);
             assertNotNull(instance.getMultipleAnnotatedImplementationsInterface());
-            assertEquals(MultipleAnnotatedImplementationsAlternativeImplementation2.class, instance.getMultipleAnnotatedImplementationsInterface().getClass());
+            assertEquals(MultipleImplementationsNamed2.class, instance.getMultipleAnnotatedImplementationsInterface().getClass());
         }
 
         /**
@@ -498,21 +497,21 @@ class InjectorImplUnitTest {
         @DisplayName("@Any Instance and multiple implementations")
         void anyInstanceAndMultipleImplementations() throws Exception {
             // Given
-            List<Class<? extends MultipleAnnotatedConcreteClassesAbstractClass>> expectedImplementations = new ArrayList<>();
-            expectedImplementations.add(MultipleAnnotatedConcreteClassesStandardClass.class);
-            expectedImplementations.add(MultipleAnnotatedConcreteClassesAlternative1.class);
-            expectedImplementations.add(MultipleAnnotatedConcreteClassesAlternative2.class);
-            expectedImplementations.add(MultipleAnnotatedConcreteClassesAlternative3.class);
+            List<Class<? extends MultipleConcreteClassesAbstractClass>> expectedImplementations = new ArrayList<>();
+            expectedImplementations.add(MultipleConcreteClassesStandardClass.class);
+            expectedImplementations.add(MultipleConcreteClassesNamed1.class);
+            expectedImplementations.add(MultipleConcreteClassesNamed2.class);
+            expectedImplementations.add(MultipleConcreteClassesNamed3.class);
 
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ClassWithAnyInstanceAndMultipleImplementations classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithAnyInstanceAndMultipleImplementations.class);
             // When
-            Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
+            Instance<MultipleConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
             // Then
             assertNotNull(instance);
-            List<Class<? extends MultipleAnnotatedConcreteClassesAbstractClass>> implementations = new ArrayList<>();
-            for (MultipleAnnotatedConcreteClassesAbstractClass multipleAnnotatedConcreteClassesAbstractClass : instance) {
-                implementations.add(multipleAnnotatedConcreteClassesAbstractClass.getClass());
+            List<Class<? extends MultipleConcreteClassesAbstractClass>> implementations = new ArrayList<>();
+            for (MultipleConcreteClassesAbstractClass multipleConcreteClassesAbstractClass : instance) {
+                implementations.add(multipleConcreteClassesAbstractClass.getClass());
             }
             expectedImplementations.sort(Comparator.comparing(Class::getName));
             implementations.sort(Comparator.comparing(Class::getName));
@@ -532,10 +531,10 @@ class InjectorImplUnitTest {
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ClassWithInstanceAndMultipleImplementationsDefault classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
             // When
-            Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
+            Instance<MultipleConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
             // Then
             assertNotNull(instance);
-            assertEquals(MultipleAnnotatedConcreteClassesStandardClass.class, instance.get().getClass());
+            assertEquals(MultipleConcreteClassesStandardClass.class, instance.get().getClass());
         }
 
         /**
@@ -548,10 +547,10 @@ class InjectorImplUnitTest {
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ClassWithInstanceAndMultipleImplementationsAlternative classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithInstanceAndMultipleImplementationsAlternative.class);
             // When
-            Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
+            Instance<MultipleConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
             // Then
             assertNotNull(instance);
-            assertEquals(MultipleAnnotatedConcreteClassesAlternative2.class, instance.get().getClass());
+            assertEquals(MultipleConcreteClassesNamed2.class, instance.get().getClass());
         }
 
         /**
@@ -674,23 +673,23 @@ class InjectorImplUnitTest {
     }
 
     static class TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault {
-        private final MultipleAnnotatedImplementationsInterface testInterface;
+        private final MultipleImplementationsInterface testInterface;
         @Inject
-        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault(MultipleAnnotatedImplementationsInterface testInterface) {
+        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault(MultipleImplementationsInterface testInterface) {
             this.testInterface = testInterface;
         }
-        public MultipleAnnotatedImplementationsInterface getMultipleAnnotatedImplementationsInterface() {
+        public MultipleImplementationsInterface getMultipleAnnotatedImplementationsInterface() {
             return testInterface;
         }
     }
 
     static class TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative {
-        private final MultipleAnnotatedImplementationsInterface testInterface;
+        private final MultipleImplementationsInterface testInterface;
         @Inject
-        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative(@Named("alternative2") MultipleAnnotatedImplementationsInterface testInterface) {
+        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative(@Named("alternative2") MultipleImplementationsInterface testInterface) {
             this.testInterface = testInterface;
         }
-        public MultipleAnnotatedImplementationsInterface getMultipleAnnotatedImplementationsInterface() {
+        public MultipleImplementationsInterface getMultipleAnnotatedImplementationsInterface() {
             return testInterface;
         }
     }
@@ -728,34 +727,34 @@ class InjectorImplUnitTest {
     }
 
     static class ClassWithAnyInstanceAndMultipleImplementations {
-        private final Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance;
+        private final Instance<MultipleConcreteClassesAbstractClass> instance;
         @Inject
-        public ClassWithAnyInstanceAndMultipleImplementations(@Any Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance) {
+        public ClassWithAnyInstanceAndMultipleImplementations(@Any Instance<MultipleConcreteClassesAbstractClass> instance) {
             this.instance = instance;
         }
-        public Instance<MultipleAnnotatedConcreteClassesAbstractClass> getInstance() {
+        public Instance<MultipleConcreteClassesAbstractClass> getInstance() {
             return instance;
         }
     }
 
     static class ClassWithInstanceAndMultipleImplementationsDefault{
-        private final Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance;
+        private final Instance<MultipleConcreteClassesAbstractClass> instance;
         @Inject
-        public ClassWithInstanceAndMultipleImplementationsDefault(Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance) {
+        public ClassWithInstanceAndMultipleImplementationsDefault(Instance<MultipleConcreteClassesAbstractClass> instance) {
             this.instance = instance;
         }
-        public Instance<MultipleAnnotatedConcreteClassesAbstractClass> getInstance() {
+        public Instance<MultipleConcreteClassesAbstractClass> getInstance() {
             return instance;
         }
     }
 
     static class ClassWithInstanceAndMultipleImplementationsAlternative {
-        private final Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance;
+        private final Instance<MultipleConcreteClassesAbstractClass> instance;
         @Inject
-        public ClassWithInstanceAndMultipleImplementationsAlternative(@Named(value = "alternative2") Instance<MultipleAnnotatedConcreteClassesAbstractClass> instance) {
+        public ClassWithInstanceAndMultipleImplementationsAlternative(@Named(value = "alternative2") Instance<MultipleConcreteClassesAbstractClass> instance) {
             this.instance = instance;
         }
-        public Instance<MultipleAnnotatedConcreteClassesAbstractClass> getInstance() {
+        public Instance<MultipleConcreteClassesAbstractClass> getInstance() {
             return instance;
         }
     }

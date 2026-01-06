@@ -29,5 +29,5 @@ public interface Injector {
 
     void enableAlternative(Class<?> alternativeClass);
 
-    <T> T inject(Class<T> clazz) throws Exception;
+    <T> T inject(Class<T> clazz);
 }

@@ -102,8 +102,8 @@ class ClassResolver {
         List<Class<? extends T>> activeClasses = new ArrayList<>();
         for (Class<? extends T> clazz : resolvedClasses) {
             boolean isAlternative = clazz.isAnnotationPresent(Alternative.class);
-            // If it's an alternative and NOT in enabledAlternatives, skip it.
-            if (isAlternative && !enabledAlternatives.contains(clazz)) {
+            // If it's an alternative, skip it.
+            if (isAlternative) {
                 continue;
             }
             activeClasses.add(clazz);

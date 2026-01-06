@@ -1,4 +1,0 @@
-package com.threeamigos.common.util.implementations.injection.interfaces.multipleannotatedimplementations;
-
-public class MultipleAnnotatedImplementationsStandardImplementation implements MultipleAnnotatedImplementationsInterface {
-}

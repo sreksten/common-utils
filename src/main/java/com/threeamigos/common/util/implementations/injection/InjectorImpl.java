@@ -71,7 +71,7 @@ public class InjectorImpl implements Injector {
         classResolver.enableAlternative(alternativeClass);
     }
 
-    public <T> T inject(@NonNull Class<T> classToInject) throws Exception {
+    public <T> T inject(@NonNull Class<T> classToInject) {
         return inject(classToInject, null);
     }
 
