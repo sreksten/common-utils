@@ -1285,6 +1285,7 @@ class InjectorImplUnitTest {
     static class TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault {
         private final MultipleImplementationsInterface testInterface;
         @Inject
+        @SuppressWarnings("all")
         public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault(MultipleImplementationsInterface testInterface) {
             this.testInterface = testInterface;
         }

@@ -8,6 +8,7 @@ public class ClassWithMethodWithInvalidParameter {
     private int field;
 
     @Inject
+    @SuppressWarnings("all")
     private void methodWithInvalidParameter(int field) {
         this.field = field;
     }

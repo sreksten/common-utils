@@ -5,6 +5,7 @@ import javax.inject.Inject;
 public class ClassWithPrimitiveType {
 
     @Inject
+    @SuppressWarnings("all")
     private int primitiveField;
 
 }
