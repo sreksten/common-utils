@@ -80,16 +80,16 @@ class ClassResolver {
     /*
      * package-private to run the tests
      */
-    <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Class<T> abstractClass,
+    <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Class<T> classToResolve,
                                                  String packageName, Annotation qualifier) throws Exception {
         /*
          * If we have a concrete class, return that class.
          */
-        if (!abstractClass.isInterface() && !Modifier.isAbstract(abstractClass.getModifiers())) {
-            return abstractClass;
+        if (!classToResolve.isInterface() && !Modifier.isAbstract(classToResolve.getModifiers())) {
+            return classToResolve;
         }
 
-        Collection<Class<?extends T>> resolvedClasses = resolveImplementations(classLoader, abstractClass, packageName);
+        Collection<Class<?extends T>> resolvedClasses = resolveImplementations(classLoader, classToResolve, packageName);
 
         // Check for enabled @Alternatives first (Global Override)
         for (Class<? extends T> clazz : resolvedClasses) {
@@ -130,15 +130,15 @@ class ClassResolver {
 
         if (qualifier != null) {
             throw new UnsatisfiedResolutionException("No implementation found with qualifier " + qualifier +
-                    " for " + abstractClass.getName());
+                    " for " + classToResolve.getName());
         }
 
         // 3. Return the standard implementation (if any)
         if (candidates.isEmpty()) {
-            throw new UnsatisfiedResolutionException("No implementation found for " + abstractClass.getName());
+            throw new UnsatisfiedResolutionException("No implementation found for " + classToResolve.getName());
         } else if (candidates.size() > 1) {
             String candidatesAsList = candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get();
-            throw new AmbiguousResolutionException("More than one implementation found for " + abstractClass.getName() +
+            throw new AmbiguousResolutionException("More than one implementation found for " + classToResolve.getName() +
                     ": " + candidatesAsList);
         }
         return candidates.get(0);

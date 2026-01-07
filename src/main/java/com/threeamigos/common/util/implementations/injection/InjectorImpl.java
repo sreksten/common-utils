@@ -12,10 +12,7 @@ import javax.inject.Scope;
 import javax.inject.Singleton;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.Parameter;
-import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -26,30 +23,48 @@ import java.util.stream.Collectors;
  * with {@link Inject}.<br/> Only one constructor is allowed to be annotated with @Inject. If such a constructor
  * is not found, the Injector will try to instantiate the class using the no-args constructor. This is done to
  * instantiate dependencies needed by the class.<br/>
- * It uses the ClassResolver to find concrete implementations of abstract classes and interfaces.<br/>
  * The Unit Test for this class gives information about the expected behavior and edge cases.
  *
  * @author Stefano Reksten
  */
 public class InjectorImpl implements Injector {
 
+    /**
+     * Internal registry for scope handlers. By default, it contains only the SingletonScopeHandler.
+     */
     private final Map<Class<? extends Annotation>, ScopeHandler> scopeRegistry = new HashMap<>();
+
+    /**
+     * The class resolver used in this injector to find concrete implementations of abstract classes and interfaces.
+     */
     private final ClassResolver classResolver;
+
+    /**
+     * Package name is used to restrict classes search to a particular package. If you don't want to
+     * scan the whole classpath, you can use your package name here. Beware - all your interfaces and
+     * implementations should reside in that package or subpackages!
+     */
     private final String packageName;
 
     public InjectorImpl() {
         this.classResolver = new ClassResolver();
         this.packageName = "";
-        registerDefaultScopes();
+        registerDefaultScope();
     }
 
     public InjectorImpl(final String packageName) {
         this.classResolver = new ClassResolver();
         this.packageName = packageName;
-        registerDefaultScopes();
+        registerDefaultScope();
     }
 
-    private void registerDefaultScopes() {
+    InjectorImpl(final ClassResolver classResolver, final String packageName) {
+        this.classResolver = classResolver;
+        this.packageName = packageName;
+        registerDefaultScope();
+    }
+
+    private void registerDefaultScope() {
         // Standard Singleton scope implementation
         scopeRegistry.put(Singleton.class, new ScopeHandler() {
             private final Map<Class<?>, Object> instances = new ConcurrentHashMap<>();
@@ -71,11 +86,12 @@ public class InjectorImpl implements Injector {
         classResolver.enableAlternative(alternativeClass);
     }
 
+    @Override
     public <T> T inject(@NonNull Class<T> classToInject) {
         return inject(classToInject, null);
     }
 
-    public <T> T inject(@NonNull Class<T> classToInject, Annotation qualifier) {
+    private <T> T inject(@NonNull Class<T> classToInject, Annotation qualifier) {
         try {
             checkClassValidity(classToInject);
             Class<? extends T> resolvedClass = classResolver.resolveImplementation(classToInject, packageName, qualifier);
@@ -85,7 +101,7 @@ public class InjectorImpl implements Injector {
 
             if (scopeType != null && scopeRegistry.containsKey(scopeType)) {
                 ScopeHandler handler = scopeRegistry.get(scopeType);
-                // Use a helper method to handle the wildcard capture safely
+                // We use a helper method to handle the wildcard capture safely
                 return handleScopedInjection(handler, resolvedClass);
             }
 
@@ -98,6 +114,18 @@ public class InjectorImpl implements Injector {
     }
 
     /**
+     * NOTE: this method supports one annotation only at a time.
+     * @param clazz class to check
+     */
+    private Class<? extends Annotation> getScopeType(Class<?> clazz) {
+        return Arrays.stream(clazz.getAnnotations())
+                .map(Annotation::annotationType)
+                .filter(at -> at.isAnnotationPresent(Scope.class) || at.equals(Singleton.class))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
      * Helper method to bridge the generic gap between Class<? extends T> and ScopeHandler
      */
     @SuppressWarnings("unchecked")
@@ -106,37 +134,93 @@ public class InjectorImpl implements Injector {
     }
 
     /**
-     * The actual instantiation logic (moved out of inject to be used by ScopeHandlers)
+     * The actual instantiation logic
      */
     private <T> T performInjection(Class<? extends T> resolvedClass) {
         try {
             Constructor<? extends T> constructor = getConstructor(resolvedClass);
-            Parameter[] parameters = constructor.getParameters();
-            Object[] args = new Object[parameters.length];
-
-            for (int i = 0; i < parameters.length; i++) {
-                Parameter param = parameters[i];
-                if (javax.inject.Provider.class.isAssignableFrom(param.getType())) {
-                    args[i] = createInstanceWrapper(param);
-                } else {
-                    checkClassValidity(param.getType());
-                    Annotation paramQualifier = getQualifier(param);
-                    args[i] = inject(param.getType(), paramQualifier);
-                }
-            }
-            return buildInstance(constructor, args);
+            Object[] args = resolveParameters(constructor.getParameters());
+            T t = buildInstance(constructor, args);
+            injectFields(t);
+            injectMethods(t);
+            return t;
         } catch (Exception e) {
             throw new InjectionException("Instantiation failed for " + resolvedClass.getName(), e);
         }
     }
 
-    private Class<? extends Annotation> getScopeType(Class<?> clazz) {
-        return Arrays.stream(clazz.getAnnotations())
-                .map(Annotation::annotationType)
-                .filter(at -> at.isAnnotationPresent(Scope.class) || at.equals(Singleton.class))
-                .findFirst()
-                .orElse(null);
+    @SuppressWarnings("unchecked")
+    <T> Constructor<T> getConstructor(@NonNull Class<T> clazz) throws NoSuchMethodException {
+        List<Constructor<T>> constructors = Arrays.stream((Constructor<T>[])clazz.getDeclaredConstructors())
+                .filter(c -> c.isAnnotationPresent(Inject.class))
+                .collect(Collectors.toList());
+        if (constructors.size() > 1) {
+            throw new IllegalStateException("More than one constructor annotated with @Inject in class " + clazz.getName());
+        } else if (constructors.size() == 1) {
+            return constructors.get(0);
+        }
+        // No @Inject constructor found, let's try to find a no-argument constructor
+        constructors = Arrays.stream((Constructor<T>[])clazz.getDeclaredConstructors())
+                .filter(c -> c.getParameterCount() == 0)
+                .collect(Collectors.toList());
+        if (constructors.isEmpty()) {
+            throw new NoSuchMethodException("No empty constructor or a constructor annotated with @Inject in class " + clazz.getName());
+        }
+        return constructors.get(0);
     }
+
+    private Object[] resolveParameters(Parameter[] parameters) {
+        Object[] args = new Object[parameters.length];
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter param = parameters[i];
+            if (javax.inject.Provider.class.isAssignableFrom(param.getType())) {
+                args[i] = createInstanceWrapper(param);
+            } else {
+                checkClassValidity(param.getType());
+                Annotation paramQualifier = getQualifier(param);
+                args[i] = inject(param.getType(), paramQualifier);
+            }
+        }
+        return args;
+    }
+
+    <T> T buildInstance(Constructor<? extends T> constructor, Object... args) throws Exception {
+        if (!Modifier.isPublic(constructor.getModifiers())) {
+            constructor.setAccessible(true);
+        }
+        return constructor.newInstance(args);
+    }
+
+    private <T> void injectFields(T t) throws Exception {
+        Field[] fields = t.getClass().getDeclaredFields();
+        for (Field field : fields) {
+            if (field.isAnnotationPresent(Inject.class)) {
+                if (Modifier.isFinal(field.getModifiers())) {
+                    throw new IllegalStateException("Cannot inject into final field " + field.getName() + " of class " +
+                            field.getClass().getName());
+                }
+                if (Modifier.isStatic(field.getModifiers())) {
+                    throw new IllegalStateException("Cannot inject into static field " + field.getName() + " of class " +
+                            field.getClass().getName());
+                }
+                Annotation fieldQualifier = getQualifier(field);
+                field.setAccessible(true);
+                field.set(t, inject(field.getType(), fieldQualifier));
+            }
+        }
+    }
+
+    private<T> void injectMethods(T t) throws Exception {
+        Method[] methods = t.getClass().getDeclaredMethods();
+        for (Method method : methods) {
+            if (method.isAnnotationPresent(Inject.class)) {
+                method.setAccessible(true);
+                Object[] params = resolveParameters(method.getParameters());
+                method.invoke(t, params);
+            }
+        }
+    }
+
     /**
      * Checks that the class is valid for injection.
      * @param clazz the class to check
@@ -163,26 +247,6 @@ public class InjectorImpl implements Injector {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    <T> Constructor<T> getConstructor(@NonNull Class<T> clazz) throws NoSuchMethodException {
-        List<Constructor<T>> constructors = Arrays.stream((Constructor<T>[])clazz.getDeclaredConstructors())
-                .filter(c -> c.isAnnotationPresent(Inject.class))
-                .collect(Collectors.toList());
-        if (constructors.size() > 1) {
-            throw new IllegalStateException("More than one constructor annotated with @Inject");
-        } else if (constructors.size() == 1) {
-            return constructors.get(0);
-        }
-        // No @Inject constructor found, let's try to find a no-argument constructor
-        constructors = Arrays.stream((Constructor<T>[])clazz.getDeclaredConstructors())
-                .filter(c -> c.getParameterCount() == 0)
-                .collect(Collectors.toList());
-        if (constructors.isEmpty()) {
-            throw new NoSuchMethodException("No empty constructor or a constructor annotated with @Inject in class " + clazz.getName());
-        }
-        return constructors.get(0);
-    }
-
     private Annotation getQualifier(Parameter param) {
         return Arrays.stream(param.getAnnotations())
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
@@ -190,7 +254,14 @@ public class InjectorImpl implements Injector {
                 .orElse(null);
     }
 
-    private Instance<?> createInstanceWrapper(java.lang.reflect.Parameter param) {
+    private Annotation getQualifier(Field field) {
+        return Arrays.stream(field.getAnnotations())
+                .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Instance<?> createInstanceWrapper(Parameter param) {
         ParameterizedType type = (ParameterizedType) param.getParameterizedType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
         boolean isAny = param.isAnnotationPresent(Any.class);
@@ -232,7 +303,7 @@ public class InjectorImpl implements Injector {
                 try {
                     return classResolver.resolveImplementations(type, packageName).isEmpty();
                 } catch (Exception e) {
-                    return true;
+                    return true; // treating an Exception as unsatisfied
                 }
             }
 
@@ -241,7 +312,7 @@ public class InjectorImpl implements Injector {
                 try {
                     return classResolver.resolveImplementations(type, packageName).size() > 1;
                 } catch (Exception e) {
-                    return false;
+                    return false; // If we can't resolve the class, it's not ambiguous (it's unsatisfied)
                 }
             }
 
@@ -267,13 +338,6 @@ public class InjectorImpl implements Injector {
                 }
             }
         };
-    }
-
-    <T> T buildInstance(Constructor<? extends T> constructor, Object... args) throws Exception {
-        if (!Modifier.isPublic(constructor.getModifiers())) {
-            constructor.setAccessible(true);
-        }
-        return constructor.newInstance(args);
     }
 
 }

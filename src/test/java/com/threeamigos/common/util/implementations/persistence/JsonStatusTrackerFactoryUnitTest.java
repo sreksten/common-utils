@@ -33,6 +33,8 @@ class JsonStatusTrackerFactoryUnitTest {
         StatusTrackerFactory<TestClass> sut = new JsonStatusTrackerFactory<>(json);
         // Then
         assertThrows(IllegalArgumentException.class, () -> sut.buildStatusTracker(null));
+        // Repeated twice just to cover the bundle condition
+        assertThrows(IllegalArgumentException.class, () -> sut.buildStatusTracker(null));
     }
 
     @Test

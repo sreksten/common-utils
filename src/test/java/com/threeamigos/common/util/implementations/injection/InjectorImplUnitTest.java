@@ -8,18 +8,32 @@ import com.threeamigos.common.util.implementations.injection.abstractclasses.mul
 import com.threeamigos.common.util.implementations.injection.abstractclasses.noconcreteclasses.NoConcreteClassesAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestAlternativeImplementation1;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestInterface;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.fields.*;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithInvalidParameter;
+import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithValidParameters;
+import com.threeamigos.common.util.implementations.injection.methods.FirstMethodParameter;
+import com.threeamigos.common.util.implementations.injection.methods.SecondMethodParameter;
+import com.threeamigos.common.util.implementations.injection.parameters.TestClassWithInvalidParametersInConstructor;
+import com.threeamigos.common.util.implementations.injection.scopes.*;
 import com.threeamigos.common.util.interfaces.injection.Injector;
+import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Constructor;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import javax.enterprise.inject.InjectionException;
+import javax.enterprise.util.TypeLiteral;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -27,6 +41,9 @@ import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Any;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 @DisplayName("InjectorImpl unit tests")
 class InjectorImplUnitTest {
@@ -246,14 +263,9 @@ class InjectorImplUnitTest {
         @DisplayName("Should throw InjectionException if any parameter is not an interface, an abstract or a concrete class")
         void shouldThrowIllegalArgumentExceptionIfInvalidParameter() {
             // Given
-            @SuppressWarnings("unused")
-            class TestClass {
-                @Inject
-                public TestClass(int i) { }
-            }
             InjectorImpl sut = new InjectorImpl();
             // When, Then
-            assertThrows(InjectionException.class, () -> sut.inject(TestClass.class));
+            assertThrows(InjectionException.class, () -> sut.inject(TestClassWithInvalidParametersInConstructor.class));
         }
     }
 
@@ -266,7 +278,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should instantiate an object with a no-args constructor if no other annotated constructors are present")
-        void shouldInstantiateAnObjectWithNoArgsConstructorIfNoOtherAnnotatedConstructorsArePresent() throws Exception {
+        void shouldInstantiateAnObjectWithNoArgsConstructorIfNoOtherAnnotatedConstructorsArePresent() {
             // Given
             InjectorImpl sut = new InjectorImpl();
             // When
@@ -281,7 +293,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should instantiate an object with annotated no-args constructor")
-        void shouldInstantiateAnObjectWithAnnotatedNoArgsConstructor() throws Exception {
+        void shouldInstantiateAnObjectWithAnnotatedNoArgsConstructor() {
             // Given
             InjectorImpl sut = new InjectorImpl();
             // When
@@ -297,7 +309,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should instantiate an object with an annotated constructor and a concrete dependency")
-        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndConcreteDependency() throws Exception {
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndConcreteDependency() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When
@@ -316,7 +328,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency with a single implementation")
-        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependency() throws Exception {
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependency() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When
@@ -335,7 +347,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency with more implementations (get default)")
-        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault() throws Exception {
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When
@@ -354,7 +366,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency (get alternative implementation)")
-        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative() throws Exception {
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When
@@ -372,7 +384,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should instantiate a singleton class only once")
-        void shouldInstantiateASingletonClass() throws Exception {
+        void shouldInstantiateASingletonClass() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             SingletonClass instance1 = sut.inject(SingletonClass.class);
@@ -386,7 +398,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should instantiate a non-singleton class as much as needed")
-        void shouldInstantiateANonSingletonClassAsMuchAsNeeded() throws Exception {
+        void shouldInstantiateANonSingletonClassAsMuchAsNeeded() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When
@@ -427,20 +439,259 @@ class InjectorImplUnitTest {
                 assertNotNull(instance.getAbstractClass());
                 assertEquals(ConcreteClass.class, instance.getAbstractClass().getClass());
             }
+
+        }
+    }
+
+    @Nested
+    @DisplayName("Field injection")
+    class FieldInjectionTests {
+
+        @Test
+        @DisplayName("Should throw InjectionException if trying to inject an invalid field")
+        void shouldThrowExceptionIfInjectingAnInvalidField() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // Then
+            assertThrows(InjectionException.class, () -> sut.inject(ClassWithPrimitiveType.class));
+        }
+
+        @Test
+        @DisplayName("Should throw InjectionException if trying to inject a final field")
+        void shouldThrowInjectionExceptionIfInjectingAFinalField() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // Then
+            assertThrows(InjectionException.class, () -> sut.inject(ClassWithFinalField.class));
+        }
+
+        @Test
+        @DisplayName("Should throw InjectionException if trying to inject a static field")
+        void shouldThrowInjectionExceptionIfInjectingAStaticField() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // Then
+            assertThrows(InjectionException.class, () -> sut.inject(ClassWithStaticField.class));
+        }
+
+        @Test
+        @DisplayName("Should inject fields")
+        void shouldInjectFields() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            ClassWithCorrectDependencies instance = sut.inject(ClassWithCorrectDependencies.class);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getFirstDependency());
+            assertInstanceOf(ClassFirstDependency.class, instance.getFirstDependency());
+            assertNotNull(instance.getSecondDependency());
+            assertInstanceOf(ClassSecondDependency.class, instance.getSecondDependency());
+        }
+    }
+
+    @Nested
+    @DisplayName("Method injection")
+    class MethodInjectionTests {
+
+        @Test
+        @DisplayName("Should throw InjectionException if trying to inject an invalid parameter")
+        void shouldThrowExceptionIfInjectingAnInvalidField() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // Then
+            assertThrows(InjectionException.class, () -> sut.inject(ClassWithMethodWithInvalidParameter.class));
+        }
+
+        @Test
+        @DisplayName("Should inect a method")
+        void shouldInjectAMethod() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            ClassWithMethodWithValidParameters instance = sut.inject(ClassWithMethodWithValidParameters.class);
+            FirstMethodParameter firstMethodParameter = instance.getFirstMethodParameter();
+            SecondMethodParameter secondMethodParameter = instance.getSecondMethodParameter();
+            // Then
+            assertNotNull(instance);
+            assertNotNull(firstMethodParameter);
+            assertNotNull(secondMethodParameter);
         }
     }
 
     /**
-     * Tests for the Instance Wrapper functionality.
-     * The Instance allows resolving instances of interfaces or abstract classes.
+     * Alternatives
+     */
+    @Nested
+    @DisplayName("Alternative Tests")
+    class AlternativeTests {
+
+        @Test
+        @DisplayName("Should instantiate an object with standard implementation when alternatives are disabled")
+        void shouldInstantiateAnObjectWithStandardImplementationWhenAlternativesAreDisabled() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            TestClassWithAnnotatedConstructorAndAlternativeDependency instance =
+                    sut.inject(TestClassWithAnnotatedConstructorAndAlternativeDependency.class);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getAlternativesTestInterface());
+            assertEquals(AlternativesTestStandardImplementation.class, instance.getAlternativesTestInterface().getClass());
+        }
+
+        @Test
+        @DisplayName("Should instantiate an object with alternative implementation when alternatives are enabled")
+        void shouldInstantiateAnObjectWithAlternativeImplementationWhenAlternativesAreEnabled() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            sut.enableAlternative(AlternativesTestAlternativeImplementation1.class);
+            // When
+            TestClassWithAnnotatedConstructorAndAlternativeDependency instance =
+                    sut.inject(TestClassWithAnnotatedConstructorAndAlternativeDependency.class);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getAlternativesTestInterface());
+            assertEquals(AlternativesTestAlternativeImplementation1.class, instance.getAlternativesTestInterface().getClass());
+        }
+    }
+
+    /**
+     * Scopes
+     */
+    @Nested
+    @DisplayName("Scope Tests")
+    class ScopeTests {
+
+        /**
+         * Custom scope registration and usage - Verifies scope handlers are called and manage instances correctly.
+         */
+        @Test
+        @DisplayName("Should register and use a custom scope")
+        void shouldRegisterAndUseCustomScope() {
+            // Given
+            Map<Class<?>, Object> scopeStorage = new HashMap<>();
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            sut.registerScope(RequestScoped.class, new ScopeHandler() {
+                @Override
+                @SuppressWarnings("unchecked")
+                public <T> T get(Class<T> clazz, Supplier<T> provider) {
+                    return (T) scopeStorage.computeIfAbsent(clazz, c -> provider.get());
+                }
+            });
+            RequestScopedClass instance1 = sut.inject(RequestScopedClass.class);
+            RequestScopedClass instance2 = sut.inject(RequestScopedClass.class);
+            // Then
+            assertSame(instance1, instance2, "Should return same instance within scope");
+            // Simulate scope end
+            scopeStorage.clear();
+            RequestScopedClass instance3 = sut.inject(RequestScopedClass.class);
+            assertNotSame(instance1, instance3, "Should create new instance after scope cleared");
+        }
+
+        /**
+         * Singleton precedence - Ensures the built-in Singleton scope works correctly
+         */
+        @Test
+        @DisplayName("Should respect Singleton scope over custom scope")
+        void shouldRespectSingletonScopeOverCustomScope() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            AtomicInteger callCount = new AtomicInteger(0);
+            sut.registerScope(CustomScope.class, new ScopeHandler() {
+                @Override
+                public <T> T get(Class<T> clazz, Supplier<T> provider) {
+                    callCount.incrementAndGet();
+                    return provider.get();
+                }
+            });
+            // When
+            SingletonScopedClass instance1 = sut.inject(SingletonScopedClass.class);
+            SingletonScopedClass instance2 = sut.inject(SingletonScopedClass.class);
+            // Then
+            assertSame(instance1, instance2);
+            assertEquals(0, callCount.get(), "Custom scope should not be called for Singleton");
+        }
+
+        /**
+         * Transitive scoped dependencies - Scoped dependencies maintain their scope even when injected into
+         * non-scoped classes.
+         */
+        @Test
+        @DisplayName("Should handle scoped dependencies transitively")
+        void shouldHandleScopedDependenciesTransitively() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            NonScopedClass instance1 = sut.inject(NonScopedClass.class);
+            NonScopedClass instance2 = sut.inject(NonScopedClass.class);
+            // Then
+            assertNotSame(instance1, instance2, "Non-scoped classes should be different");
+            assertSame(instance1.getDependency(), instance2.getDependency(),
+                    "Singleton dependencies should be same");
+        }
+
+        /**
+         * Unregistered scope behavior - Falls back to creating new instances.
+         */
+        @Test
+        @DisplayName("Should create new instances when no scope is registered")
+        void shouldCreateNewInstancesWhenNoScopeRegistered() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            UnregisteredScopedClass instance1 = sut.inject(UnregisteredScopedClass.class);
+            UnregisteredScopedClass instance2 = sut.inject(UnregisteredScopedClass.class);
+            // Then
+            assertNotSame(instance1, instance2,
+                    "Should create new instances when scope handler not registered");
+        }
+
+        /**
+         * Scope handler override - Allows re-registering scope handlers
+         */
+        @Test
+        @DisplayName("Should allow overriding scope handlers")
+        void shouldAllowOverridingScopeHandlers() {
+            // Given
+            AtomicInteger handler1Calls = new AtomicInteger(0);
+            AtomicInteger handler2Calls = new AtomicInteger(0);
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            sut.registerScope(TestScope.class, new ScopeHandler() {
+                @Override
+                public <T> T get(Class<T> clazz, Supplier<T> provider) {
+                    handler1Calls.incrementAndGet();
+                    return provider.get();
+                }
+            });
+            sut.inject(TestScopedClass.class);
+            // When - override handler
+            sut.registerScope(TestScope.class, new ScopeHandler() {
+                @Override
+                public <T> T get(Class<T> clazz, Supplier<T> provider) {
+                    handler2Calls.incrementAndGet();
+                    return provider.get();
+                }
+            });
+            sut.inject(TestScopedClass.class);
+            // Then
+            assertEquals(1, handler1Calls.get());
+            assertEquals(1, handler2Calls.get());
+        }
+    }
+
+    /**
+     * Tests for the Instance functionality.
+     * The Instance allows resolving interfaces or abstract classes.
      * Instance.get() returns the resolved instance of the interface or abstract class.
      * Instance.iterator(), if annotated with {@link Any}, returns an iterator over all the concrete implementations of
      * the interface or abstract class. Otherwise, the iterator will contain only one element (the default one, or
-     * an {@link Named} if that option was specified).
+     * a {@link Named} if that option was specified).
      */
     @Nested
-    @DisplayName("Instance Wrapper Tests")
-    class InstanceWrapperTests {
+    @DisplayName("Instance Tests")
+    class InstanceTests {
 
         /**
          * ClassWithInstance has a dependency that is an Instance of TestInterface. The only implementation of
@@ -448,7 +699,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Instance with single implementation")
-        void instanceWithSingleImplementation() throws Exception {
+        void instanceWithSingleImplementation() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ClassWithInstanceOfTestInterface classWithInstanceOFTestInterface =
@@ -470,7 +721,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("@Any Instance with single implementation")
-        void anyInstanceWithSingleImplementation() throws Exception {
+        void anyInstanceWithSingleImplementation() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ClassWithAnyInstanceAndSingleImplementation classWithAnyInstance = sut.inject(ClassWithAnyInstanceAndSingleImplementation.class);
@@ -495,7 +746,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("@Any Instance and multiple implementations")
-        void anyInstanceAndMultipleImplementations() throws Exception {
+        void anyInstanceAndMultipleImplementations() {
             // Given
             List<Class<? extends MultipleConcreteClassesAbstractClass>> expectedImplementations = new ArrayList<>();
             expectedImplementations.add(MultipleConcreteClassesStandardClass.class);
@@ -521,12 +772,12 @@ class InjectorImplUnitTest {
 
         /**
          * When a dependency has multiple possible implementations, we can use the default one or an alternative one
-         * annotated with @Alternative. This test checks that the default implementation is returned when no @Alternative
+         * annotated with {@link Named}. This test checks that the default implementation is returned when no @Named
          * is specified.
          */
         @Test
-        @DisplayName("Default implementation should be returned when no @Alternative is specified")
-        void defaultImplementationShouldBeReturnedWhenNoAlternativeIsSpecified() throws Exception {
+        @DisplayName("Default implementation should be returned when no @Named is specified")
+        void defaultImplementationShouldBeReturnedWhenNoNamedIsSpecified() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ClassWithInstanceAndMultipleImplementationsDefault classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
@@ -538,11 +789,11 @@ class InjectorImplUnitTest {
         }
 
         /**
-         * If, however, we specify an @Alternative annotation, the alternative implementation should be returned.
+         * If, however, we specify a {@link Named} annotation, the alternative implementation should be returned.
          */
         @Test
-        @DisplayName("Alternative implementation should be returned when @Alternative is specified")
-        void alternativeImplementationShouldBeReturnedWhenAlternativeIsSpecified() throws Exception {
+        @DisplayName("Named implementation should be returned when @Named is specified")
+        void alternativeImplementationShouldBeReturnedWhenNamedIsSpecified() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ClassWithInstanceAndMultipleImplementationsAlternative classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithInstanceAndMultipleImplementationsAlternative.class);
@@ -551,6 +802,366 @@ class InjectorImplUnitTest {
             // Then
             assertNotNull(instance);
             assertEquals(MultipleConcreteClassesNamed2.class, instance.get().getClass());
+        }
+
+        @Test
+        @DisplayName("If resolved, Instance.isUnresolved() is false")
+        void isUnresolvedIsFalse() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ClassWithInstanceOfTestInterface classWithInstanceOFTestInterface =
+                    sut.inject(ClassWithInstanceOfTestInterface.class);
+            // When
+            Instance<TestInterface> instance = classWithInstanceOFTestInterface.getTestInterfaceInstance();
+            // Then
+            assertNotNull(instance);
+            assertFalse(instance.isUnsatisfied());
+        }
+
+        @Nested
+        @DisplayName("isUnresolved()")
+        class IsUnresolvedTests {
+
+            @Test
+            @DisplayName("If resolved, Instance.isUnresolved() is false")
+            void isUnresolvedIsFalse() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface classWithInstanceOFTestInterface =
+                        sut.inject(ClassWithInstanceOfTestInterface.class);
+                // When
+                Instance<TestInterface> instance = classWithInstanceOFTestInterface.getTestInterfaceInstance();
+                // Then
+                assertNotNull(instance);
+                assertFalse(instance.isUnsatisfied());
+            }
+
+            /**
+             * Instance.isUnresolved() is true.
+             */
+            @Test
+            @DisplayName("If not resolved, Instance.isUnresolved() is true")
+            void isUnresolvedIsTrue() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithAnyInstanceButNoImplementation instance = sut.inject(ClassWithAnyInstanceButNoImplementation.class);
+                // Then
+                assertTrue(instance.getInstance().isUnsatisfied());
+            }
+
+            @Test
+            @DisplayName("If an exception is thrown, isUnsatisfied() is true")
+            @SuppressWarnings("unchecked")
+            void ifExceptionThrownIsUnsatisfiedIsTrue() throws Exception {
+                // Given
+                ClassResolver mockResolver = spy(new ClassResolver());
+                // resolveImplementations throws an exception
+                doThrow(new Exception("Test exception"))
+                        .when(mockResolver).resolveImplementations(any(Class.class), any(String.class));
+                // resolveImplementation calls the real method
+                doCallRealMethod()
+                        .when(mockResolver).resolveImplementation(any(Class.class), any(String.class), any());
+                doCallRealMethod()
+                        .when(mockResolver).resolveImplementation(any(ClassLoader.class), any(Class.class), any(String.class), any());
+                Injector sut = new InjectorImpl(mockResolver, TEST_PACKAGE_NAME);
+                // When
+                ClassWithAnyInstanceAndMultipleImplementations instance = sut.inject(ClassWithAnyInstanceAndMultipleImplementations.class);
+                // Then
+                assertTrue(instance.getInstance().isUnsatisfied());            }
+        }
+
+        @Nested
+        @DisplayName("isAmbiguous()")
+        class IsAmbiguousTests {
+
+            @Test
+            @DisplayName("If resolved to a single class, isAmbiguous() is false")
+            void ifResolvedToASingleClassIsFalse() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface classWithInstanceOFTestInterface =
+                        sut.inject(ClassWithInstanceOfTestInterface.class);
+                // When
+                Instance<TestInterface> instance = classWithInstanceOFTestInterface.getTestInterfaceInstance();
+                // Then
+                assertNotNull(instance);
+                assertFalse(instance.isAmbiguous());
+            }
+
+            @Test
+            @DisplayName("If resolved to multiple classes, isAmbiguous() is true")
+            void ifResolvedToMultipleClassesISAmbiguousIsTrue() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithAnyInstanceAndMultipleImplementations classWithAnyInstanceAndMultipleImplementations = sut.inject(ClassWithAnyInstanceAndMultipleImplementations.class);
+                // When
+                Instance<MultipleConcreteClassesAbstractClass> instance = classWithAnyInstanceAndMultipleImplementations.getInstance();
+                // Then
+                assertNotNull(instance);
+                assertTrue(instance.isAmbiguous());
+            }
+
+            @Test
+            @DisplayName("If an exception is thrown, isAmbiguous() is false")
+            @SuppressWarnings("unchecked")
+            void ifExceptionThrownIsAmbiguousIsFalse() throws Exception{
+                // Given
+                ClassResolver mockResolver = spy(new ClassResolver());
+                // resolveImplementations throws an exception
+                doThrow(new Exception("Test exception"))
+                        .when(mockResolver).resolveImplementations(any(Class.class), any(String.class));
+                // resolveImplementation calls the real method
+                doCallRealMethod()
+                        .when(mockResolver).resolveImplementation(any(Class.class), any(String.class), any());
+                doCallRealMethod()
+                        .when(mockResolver).resolveImplementation(any(ClassLoader.class), any(Class.class), any(String.class), any());
+                Injector sut = new InjectorImpl(mockResolver, TEST_PACKAGE_NAME);
+                // When
+                ClassWithAnyInstanceAndMultipleImplementations instance = sut.inject(ClassWithAnyInstanceAndMultipleImplementations.class);
+                // Then
+                assertFalse(instance.getInstance().isAmbiguous());
+            }
+        }
+
+        @Nested
+        @DisplayName("Instance.select() Tests")
+        class InstanceSelectTests {
+
+            @Test
+            @DisplayName("Should select with annotation qualifier")
+            void shouldSelectWithAnnotationQualifier() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceAndMultipleImplementationsDefault classWithInstance =
+                        sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
+                Instance<MultipleConcreteClassesAbstractClass> instance = classWithInstance.getInstance();
+                // When - select with Named annotation
+                Instance<MultipleConcreteClassesAbstractClass> selected =
+                        instance.select(new NamedLiteral("name2"));
+                // Then
+                assertNotNull(selected);
+                assertEquals(MultipleConcreteClassesNamed2.class, selected.get().getClass());
+            }
+
+            @Test
+            @DisplayName("Should select without annotation (keep current qualifier)")
+            void shouldSelectWithoutAnnotation() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceAndMultipleImplementationsAlternative classWithInstance =
+                        sut.inject(ClassWithInstanceAndMultipleImplementationsAlternative.class);
+                Instance<MultipleConcreteClassesAbstractClass> instance = classWithInstance.getInstance();
+                // When - select without annotation (should keep @Named("name2"))
+                Instance<MultipleConcreteClassesAbstractClass> selected = instance.select();
+                // Then
+                assertNotNull(selected);
+                assertEquals(MultipleConcreteClassesNamed2.class, selected.get().getClass());
+            }
+
+            @Test
+            @DisplayName("Should select with subtype and no annotation")
+            void shouldSelectWithSubtypeNoAnnotation() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface classWithInstance =
+                        sut.inject(ClassWithInstanceOfTestInterface.class);
+                Instance<TestInterface> instance = classWithInstance.getTestInterfaceInstance();
+                // When - select concrete subtype
+                Instance<TestClass> selected = instance.select(TestClass.class);
+                // Then
+                assertNotNull(selected);
+                assertInstanceOf(TestClass.class, selected.get());
+            }
+
+            @Test
+            @DisplayName("Should select with subtype and annotation")
+            void shouldSelectWithSubtypeAndAnnotation() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceAndMultipleImplementationsDefault classWithInstance =
+                        sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
+                Instance<MultipleConcreteClassesAbstractClass> instance = classWithInstance.getInstance();
+                // When - select a specific subtype with annotation
+                Instance<MultipleConcreteClassesNamed2> selected =
+                        instance.select(MultipleConcreteClassesNamed2.class, new NamedLiteral("name2"));
+                // Then
+                assertNotNull(selected);
+                assertEquals(MultipleConcreteClassesNamed2.class, selected.get().getClass());
+            }
+
+            @Test
+            @DisplayName("Should chain multiple select calls")
+            void shouldChainMultipleSelectCalls() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceAndMultipleImplementationsDefault classWithInstance =
+                        sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
+                Instance<MultipleConcreteClassesAbstractClass> instance = classWithInstance.getInstance();
+                // When - chain select calls
+                Instance<MultipleConcreteClassesAbstractClass> selected = instance
+                        .select(new NamedLiteral("name1"))
+                        .select();  // Keep the qualifier from previous select
+                // Then
+                assertNotNull(selected);
+                assertEquals(MultipleConcreteClassesNamed1.class, selected.get().getClass());
+            }
+
+            @Test
+            @DisplayName("Should override qualifier in chained select")
+            void shouldOverrideQualifierInChainedSelect() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceAndMultipleImplementationsDefault classWithInstance =
+                        sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
+                Instance<MultipleConcreteClassesAbstractClass> instance = classWithInstance.getInstance();
+                // When - chain select with different qualifiers
+                Instance<MultipleConcreteClassesAbstractClass> selected = instance
+                        .select(new NamedLiteral("name1"))
+                        .select(new NamedLiteral("name2"));  // Override previous qualifier
+                // Then
+                assertNotNull(selected);
+                assertEquals(MultipleConcreteClassesNamed2.class, selected.get().getClass());
+            }
+
+            @Test
+            @DisplayName("Should throw UnsupportedOperationException for TypeLiteral select")
+            void shouldThrowUnsupportedOperationForTypeLiteral() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface classWithInstance =
+                        sut.inject(ClassWithInstanceOfTestInterface.class);
+                Instance<TestInterface> instance = classWithInstance.getTestInterfaceInstance();
+                // When/Then
+                TypeLiteral<TestClass> typeLiteral = new TypeLiteral<TestClass>() {};
+                assertThrows(UnsupportedOperationException.class,
+                        () -> instance.select(typeLiteral));
+            }
+
+            @Test
+            @DisplayName("Should fail when selecting non-existent implementation")
+            void shouldFailWhenSelectingNonExistentImplementation() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceAndMultipleImplementationsDefault classWithInstance =
+                        sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
+                Instance<MultipleConcreteClassesAbstractClass> instance = classWithInstance.getInstance();
+                // When - select with non-existent qualifier
+                Instance<MultipleConcreteClassesAbstractClass> selected =
+                        instance.select(new NamedLiteral("nonExistent"));
+                // Then
+                assertThrows(RuntimeException.class, selected::get);
+            }
+
+            @Test
+            @DisplayName("Should maintain @Any behavior after select")
+            void shouldMaintainAnyBehaviorAfterSelect() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithAnyInstanceAndMultipleImplementations classWithInstance =
+                        sut.inject(ClassWithAnyInstanceAndMultipleImplementations.class);
+                Instance<MultipleConcreteClassesAbstractClass> instance = classWithInstance.getInstance();
+                // When - select on @Any instance
+                Instance<MultipleConcreteClassesAbstractClass> selected =
+                        instance.select(new NamedLiteral("name1"));
+                // Then
+                assertNotNull(selected);
+                assertEquals(MultipleConcreteClassesNamed1.class, selected.get().getClass());
+            }
+        }
+
+        @Nested
+        @DisplayName("Instance.destroy() Tests")
+        class InstanceDestroyTests {
+
+            @Test
+            @DisplayName("Should not throw exception when destroying instance")
+            void shouldNotThrowExceptionWhenDestroyingInstance() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface classWithInstance =
+                        sut.inject(ClassWithInstanceOfTestInterface.class);
+                Instance<TestInterface> instance = classWithInstance.getTestInterfaceInstance();
+                TestInterface obj = instance.get();
+                // When/Then
+                assertDoesNotThrow(() -> instance.destroy(obj));
+            }
+
+            @Test
+            @DisplayName("Should accept null in destroy method")
+            void shouldAcceptNullInDestroyMethod() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface classWithInstance =
+                        sut.inject(ClassWithInstanceOfTestInterface.class);
+                Instance<TestInterface> instance = classWithInstance.getTestInterfaceInstance();
+                // Then
+                assertDoesNotThrow(() -> instance.destroy(null));
+            }
+
+            @Test
+            @DisplayName("Should not affect instance after destroy is called")
+            void shouldNotAffectInstanceAfterDestroyIsCalled() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface classWithInstance =
+                        sut.inject(ClassWithInstanceOfTestInterface.class);
+                Instance<TestInterface> instance = classWithInstance.getTestInterfaceInstance();
+                TestInterface obj1 = instance.get();
+                // When
+                instance.destroy(obj1);
+                // Then - can still get new instances after destruction
+                TestInterface obj2 = instance.get();
+                assertNotNull(obj2);
+                assertNotSame(obj1, obj2, "Should create new instance after destroy");
+            }
+
+            @Test
+            @DisplayName("Should allow destroying same instance multiple times")
+            void shouldAllowDestroyingSameInstanceMultipleTimes() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface classWithInstance =
+                        sut.inject(ClassWithInstanceOfTestInterface.class);
+                Instance<TestInterface> instance = classWithInstance.getTestInterfaceInstance();
+                TestInterface obj = instance.get();
+                // When/Then - multiple destroy calls should not throw
+                assertDoesNotThrow(() -> {
+                    instance.destroy(obj);
+                    instance.destroy(obj);
+                    instance.destroy(obj);
+                });
+            }
+
+            @Test
+            @DisplayName("Should not affect singleton instances after destroy")
+            void shouldNotAffectSingletonInstancesAfterDestroy() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                SingletonDependency obj1 = sut.inject(SingletonDependency.class);
+                // Create instance wrapper manually for testing
+                ClassWithInstanceOfSingleton classWithInstance =
+                        sut.inject(ClassWithInstanceOfSingleton.class);
+                Instance<SingletonDependency> instance = classWithInstance.getInstance();
+                // When
+                instance.destroy(obj1);
+                // Then - singleton should still return the same instance
+                SingletonDependency obj2 = sut.inject(SingletonDependency.class);
+                assertSame(obj1, obj2, "Singleton should remain same after destroy");
+            }
+
+            @Test
+            @DisplayName("Should allow destroying instance from different implementation")
+            void shouldAllowDestroyingInstanceFromDifferentImplementation() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceAndMultipleImplementationsDefault classWithInstance =
+                        sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
+                Instance<MultipleConcreteClassesAbstractClass> instance = classWithInstance.getInstance();
+                // Create different implementation directly
+                MultipleConcreteClassesNamed1 differentImpl = new MultipleConcreteClassesNamed1();
+                // When/Then - should not throw even if the instance wasn't created by this Instance
+                assertDoesNotThrow(() -> instance.destroy(differentImpl));
+            }
         }
 
         /**
@@ -569,7 +1180,7 @@ class InjectorImplUnitTest {
                  */
                 @Test
                 @DisplayName("Instance.get() should fail")
-                void instanceGetShouldFail() throws Exception {
+                void instanceGetShouldFail() {
                     // Given
                     Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
                     ClassWithAnyInstanceButNoImplementation instance = sut.inject(ClassWithAnyInstanceButNoImplementation.class);
@@ -582,7 +1193,7 @@ class InjectorImplUnitTest {
                  */
                 @Test
                 @DisplayName("Instance.iterator().hasNext() should return false")
-                void instanceIteratorHasNextShouldReturnFalse() throws Exception {
+                void instanceIteratorHasNextShouldReturnFalse() {
                     // Given
                     Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
                     ClassWithAnyInstanceButNoImplementation instance = sut.inject(ClassWithAnyInstanceButNoImplementation.class);
@@ -600,7 +1211,7 @@ class InjectorImplUnitTest {
                  */
                 @Test
                 @DisplayName("Instance.get() should fail")
-                void instanceGetShouldFail() throws Exception {
+                void instanceGetShouldFail() {
                     // Given
                     Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
                     ClassWithInstanceButNoImplementation instance = sut.inject(ClassWithInstanceButNoImplementation.class);
@@ -614,7 +1225,7 @@ class InjectorImplUnitTest {
                  */
                 @Test
                 @DisplayName("Instance.iterator().hasNext() should throw exception")
-                void instanceIteratorNextShouldThrowException() throws Exception {
+                void instanceIteratorNextShouldThrowException() {
                     // Given
                     Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
                     ClassWithInstanceButNoImplementation instance = sut.inject(ClassWithInstanceButNoImplementation.class);
@@ -686,7 +1297,7 @@ class InjectorImplUnitTest {
     static class TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative {
         private final MultipleImplementationsInterface testInterface;
         @Inject
-        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative(@Named("alternative2") MultipleImplementationsInterface testInterface) {
+        public TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative(@Named("name2") MultipleImplementationsInterface testInterface) {
             this.testInterface = testInterface;
         }
         public MultipleImplementationsInterface getMultipleAnnotatedImplementationsInterface() {
@@ -751,7 +1362,7 @@ class InjectorImplUnitTest {
     static class ClassWithInstanceAndMultipleImplementationsAlternative {
         private final Instance<MultipleConcreteClassesAbstractClass> instance;
         @Inject
-        public ClassWithInstanceAndMultipleImplementationsAlternative(@Named(value = "alternative2") Instance<MultipleConcreteClassesAbstractClass> instance) {
+        public ClassWithInstanceAndMultipleImplementationsAlternative(@Named(value = "name2") Instance<MultipleConcreteClassesAbstractClass> instance) {
             this.instance = instance;
         }
         public Instance<MultipleConcreteClassesAbstractClass> getInstance() {
@@ -793,9 +1404,19 @@ class InjectorImplUnitTest {
         }
     }
 
+    static class TestClassWithAnnotatedConstructorAndAlternativeDependency {
+        private final AlternativesTestInterface testInterface;
+        @Inject
+        public TestClassWithAnnotatedConstructorAndAlternativeDependency(AlternativesTestInterface testInterface) {
+            this.testInterface = testInterface;
+        }
+        public AlternativesTestInterface getAlternativesTestInterface() {
+            return testInterface;
+        }
+    }
+
     static class ClassWithPrivateConstructor {
         @Inject
         private ClassWithPrivateConstructor() { }
     }
 }
-
