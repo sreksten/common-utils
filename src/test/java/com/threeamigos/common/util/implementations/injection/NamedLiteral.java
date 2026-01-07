@@ -6,6 +6,7 @@ import java.lang.annotation.Annotation;
 /**
  * Helper class to create instances of @Named for testing.
  */
+@SuppressWarnings("all")
 class NamedLiteral implements Named {
     private final String value;
 

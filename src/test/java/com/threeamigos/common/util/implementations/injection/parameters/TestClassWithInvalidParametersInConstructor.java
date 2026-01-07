@@ -10,8 +10,4 @@ public class TestClassWithInvalidParametersInConstructor {
     public TestClassWithInvalidParametersInConstructor(int count) {
         this.count = count;
     }
-
-    public int getCount() {
-        return count;
-    }
 }

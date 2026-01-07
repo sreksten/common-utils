@@ -4,6 +4,7 @@ import javax.inject.Inject;
 
 public class ClassWithMethodWithInvalidParameter {
 
+    @SuppressWarnings("unused")
     private int field;
 
     @Inject
@@ -11,7 +12,4 @@ public class ClassWithMethodWithInvalidParameter {
         this.field = field;
     }
 
-    public int getField() {
-        return field;
-    }
 }

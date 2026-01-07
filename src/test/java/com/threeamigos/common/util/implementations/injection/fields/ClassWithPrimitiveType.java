@@ -7,7 +7,4 @@ public class ClassWithPrimitiveType {
     @Inject
     private int primitiveField;
 
-    public int getPrimitiveField() {
-        return primitiveField;
-    }
 }
