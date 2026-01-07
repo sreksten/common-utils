@@ -4,7 +4,7 @@ import javax.inject.Inject;
 
 public class ClassWithMethodWithInvalidParameter {
 
-    @SuppressWarnings("unused")
+    @SuppressWarnings("all")
     private int field;
 
     @Inject

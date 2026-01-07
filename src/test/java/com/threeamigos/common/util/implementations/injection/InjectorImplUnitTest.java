@@ -43,7 +43,6 @@ import javax.enterprise.inject.Any;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 
 @DisplayName("InjectorImpl unit tests")
 class InjectorImplUnitTest {
@@ -417,7 +416,7 @@ class InjectorImplUnitTest {
 
             @Test
             @DisplayName("Should instantiate an object with private constructor and no dependencies")
-            void shouldInstantiateObjectWithPrivateConstructorAndNoDependencies() throws Exception {
+            void shouldInstantiateObjectWithPrivateConstructorAndNoDependencies() {
                 // Given
                 Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
                 // When
@@ -429,7 +428,7 @@ class InjectorImplUnitTest {
 
             @Test
             @DisplayName("Should instantiate an object with private constructor and dependencies")
-            void shouldInstantiateObjectWithPrivateConstructorAndDependencies() throws Exception {
+            void shouldInstantiateObjectWithPrivateConstructorAndDependencies() {
                 // Given
                 Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
                 // When

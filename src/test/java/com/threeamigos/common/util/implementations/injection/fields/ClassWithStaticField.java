@@ -5,6 +5,7 @@ import javax.inject.Inject;
 public class ClassWithStaticField {
 
     @Inject
+    @SuppressWarnings("all")
     private static int staticField = 1;
 
 }

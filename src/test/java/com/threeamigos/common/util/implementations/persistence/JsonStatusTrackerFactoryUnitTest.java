@@ -21,12 +21,14 @@ class JsonStatusTrackerFactoryUnitTest {
 
     @Test
     @DisplayName("Constructor should throw an exception when a null Json is passed")
+    @SuppressWarnings("all")
     void constructorShouldThrowExceptionWhenANullJsonIsPassed() {
         assertThrows(IllegalArgumentException.class, () -> new JsonStatusTrackerFactory<>(null));
     }
 
     @Test
     @DisplayName("buildStatusTracker should throw an exception when a null entity is passed")
+    @SuppressWarnings("all")
     void buildStatusTrackerShouldThrowExceptionWhenANullEntityIsPassed() {
         // Given
         Json<TestClass> json = JsonBuilderFactory.builder().build(TestClass.class);
