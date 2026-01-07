@@ -88,10 +88,14 @@ public class InjectorImpl implements Injector {
 
     @Override
     public <T> T inject(@NonNull Class<T> classToInject) {
-        return inject(classToInject, null);
+        return inject(classToInject, new Stack<Class<?>>(), null);
     }
 
-    private <T> T inject(@NonNull Class<T> classToInject, Annotation qualifier) {
+    private <T> T inject(@NonNull Class<T> classToInject, Stack<Class<?>> stack, Annotation qualifier) {
+        if (stack.contains(classToInject)) {
+            throw new InjectionException("Circular dependency detected for class " + classToInject.getName() + ": " + stack);
+        }
+        stack.push(classToInject);
         try {
             checkClassValidity(classToInject);
             Class<? extends T> resolvedClass = classResolver.resolveImplementation(classToInject, packageName, qualifier);
@@ -102,10 +106,14 @@ public class InjectorImpl implements Injector {
             if (scopeType != null && scopeRegistry.containsKey(scopeType)) {
                 ScopeHandler handler = scopeRegistry.get(scopeType);
                 // We use a helper method to handle the wildcard capture safely
-                return handleScopedInjection(handler, resolvedClass);
+                T t = handleScopedInjection(handler, resolvedClass, stack);
+                stack.pop();
+                return t;
             }
 
-            return performInjection(resolvedClass);
+            T t = performInjection(resolvedClass, stack);
+            stack.pop();
+            return t;
         } catch (UnsatisfiedResolutionException | AmbiguousResolutionException e) {
             throw e;
         } catch (Exception e) {
@@ -129,20 +137,20 @@ public class InjectorImpl implements Injector {
      * Helper method to bridge the generic gap between Class<? extends T> and ScopeHandler
      */
     @SuppressWarnings("unchecked")
-    private <T> T handleScopedInjection(ScopeHandler handler, Class<? extends T> clazz) {
-        return (T) handler.get((Class<Object>) clazz, () -> performInjection(clazz));
+    private <T> T handleScopedInjection(ScopeHandler handler, Class<? extends T> clazz, Stack<Class<?>> stack) {
+        return (T) handler.get((Class<Object>) clazz, () -> performInjection(clazz, stack));
     }
 
     /**
      * The actual instantiation logic
      */
-    private <T> T performInjection(Class<? extends T> resolvedClass) {
+    private <T> T performInjection(Class<? extends T> resolvedClass, Stack<Class<?>> stack) {
         try {
             Constructor<? extends T> constructor = getConstructor(resolvedClass);
-            Object[] args = resolveParameters(constructor.getParameters());
+            Object[] args = resolveParameters(constructor.getParameters(), stack);
             T t = buildInstance(constructor, args);
-            injectFields(t);
-            injectMethods(t);
+            injectFields(t, stack);
+            injectMethods(t, stack);
             return t;
         } catch (Exception e) {
             throw new InjectionException("Instantiation failed for " + resolvedClass.getName(), e);
@@ -169,7 +177,7 @@ public class InjectorImpl implements Injector {
         return constructors.get(0);
     }
 
-    private Object[] resolveParameters(Parameter[] parameters) {
+    private Object[] resolveParameters(Parameter[] parameters, Stack<Class<?>> stack) {
         Object[] args = new Object[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
@@ -178,7 +186,7 @@ public class InjectorImpl implements Injector {
             } else {
                 checkClassValidity(param.getType());
                 Annotation paramQualifier = getQualifier(param);
-                args[i] = inject(param.getType(), paramQualifier);
+                args[i] = inject(param.getType(), stack, paramQualifier);
             }
         }
         return args;
@@ -191,7 +199,7 @@ public class InjectorImpl implements Injector {
         return constructor.newInstance(args);
     }
 
-    private <T> void injectFields(T t) throws Exception {
+    private <T> void injectFields(T t, Stack<Class<?>> stack) throws Exception {
         Field[] fields = t.getClass().getDeclaredFields();
         for (Field field : fields) {
             if (field.isAnnotationPresent(Inject.class)) {
@@ -205,17 +213,17 @@ public class InjectorImpl implements Injector {
                 }
                 Annotation fieldQualifier = getQualifier(field);
                 field.setAccessible(true);
-                field.set(t, inject(field.getType(), fieldQualifier));
+                field.set(t, inject(field.getType(), stack, fieldQualifier));
             }
         }
     }
 
-    private<T> void injectMethods(T t) throws Exception {
+    private<T> void injectMethods(T t, Stack<Class<?>> stack) throws Exception {
         Method[] methods = t.getClass().getDeclaredMethods();
         for (Method method : methods) {
             if (method.isAnnotationPresent(Inject.class)) {
                 method.setAccessible(true);
-                Object[] params = resolveParameters(method.getParameters());
+                Object[] params = resolveParameters(method.getParameters(), stack);
                 method.invoke(t, params);
             }
         }
@@ -275,7 +283,7 @@ public class InjectorImpl implements Injector {
             @Override
             public T get() {
                 try {
-                    return inject(type, qualifier);
+                    return inject(type, new Stack<Class<?>>(), qualifier);
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to inject " + type.getName(), e);
                 }

@@ -11,6 +11,7 @@ import com.threeamigos.common.util.implementations.injection.abstractclasses.sin
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestAlternativeImplementation1;
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestInterface;
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.circulardependency.A;
 import com.threeamigos.common.util.implementations.injection.fields.*;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
@@ -677,6 +678,23 @@ class InjectorImplUnitTest {
             // Then
             assertEquals(1, handler1Calls.get());
             assertEquals(1, handler2Calls.get());
+        }
+    }
+
+    /**
+     * Tests for circular dependency detection.
+     */
+    @Nested
+    @DisplayName("Circular Dependency Tests")
+    class CircularDependencyTests {
+
+        @Test
+        @DisplayName("Should detect a circular dependency")
+        void shouldDetectCircularDependency() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When/Then
+            assertThrows(InjectionException.class, () -> sut.inject(A.class));
         }
     }
 
