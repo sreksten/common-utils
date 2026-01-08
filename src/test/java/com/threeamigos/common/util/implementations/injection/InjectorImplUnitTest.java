@@ -11,9 +11,9 @@ import com.threeamigos.common.util.implementations.injection.abstractclasses.sin
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestAlternativeImplementation1;
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestInterface;
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestStandardImplementation;
-import com.threeamigos.common.util.implementations.injection.circulardependency.A;
-import com.threeamigos.common.util.implementations.injection.circulardependency.AWithBProvider;
-import com.threeamigos.common.util.implementations.injection.circulardependency.BWithAProvider;
+import com.threeamigos.common.util.implementations.injection.circulardependencies.A;
+import com.threeamigos.common.util.implementations.injection.circulardependencies.AWithBProvider;
+import com.threeamigos.common.util.implementations.injection.circulardependencies.BWithAProvider;
 import com.threeamigos.common.util.implementations.injection.fields.*;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
@@ -24,6 +24,7 @@ import com.threeamigos.common.util.implementations.injection.methods.FirstMethod
 import com.threeamigos.common.util.implementations.injection.methods.SecondMethodParameter;
 import com.threeamigos.common.util.implementations.injection.parameters.TestClassWithInvalidParametersInConstructor;
 import com.threeamigos.common.util.implementations.injection.scopes.*;
+import com.threeamigos.common.util.implementations.injection.superclasses.MyClass;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 import org.junit.jupiter.api.DisplayName;
@@ -532,6 +533,38 @@ class InjectorImplUnitTest {
             // Then
             assertNotNull(ClassWithStaticMethod.getStaticField());
         }
+    }
+
+    @Nested
+    @DisplayName("Inheritance Scanning Tests")
+    class InheritanceScanningTests {
+
+        @Test
+        @DisplayName("Should scan for and inject methods from parent classes")
+        void shouldScanForAndInjectMethodsFromParentClasses() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            MyClass instance = sut.inject(MyClass.class);
+            // Then
+            assertNotNull(instance.getGrandparentFieldClassInjectedByMethod());
+            assertNotNull(instance.getParentFieldClassInjectedByMethod());
+            assertNotNull(instance.getFieldClassInjectedByMethod());
+        }
+
+        @Test
+        @DisplayName("Should scan for and inject fields from parent classes")
+        void shouldScanForAndInjectFieldsFromParentClasses() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            MyClass instance = sut.inject(MyClass.class);
+            // Then
+            assertNotNull(instance.getGrandparentFieldClass());
+            assertNotNull(instance.getParentFieldClass());
+            assertNotNull(instance.getFieldClass());
+        }
+
     }
 
     /**

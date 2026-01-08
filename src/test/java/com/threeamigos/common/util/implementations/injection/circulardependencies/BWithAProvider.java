@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection.circulardependency;
+package com.threeamigos.common.util.implementations.injection.circulardependencies;
 
 import javax.inject.Inject;
 import javax.inject.Provider;

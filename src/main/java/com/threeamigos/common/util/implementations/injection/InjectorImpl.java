@@ -85,7 +85,7 @@ public class InjectorImpl implements Injector {
 
     @Override
     public <T> T inject(@NonNull Class<T> classToInject) {
-        return inject(classToInject, new Stack<Class<?>>(), null);
+        return inject(classToInject, new Stack<>(), null);
     }
 
     private <T> T inject(@NonNull Class<T> classToInject, Stack<Class<?>> stack, Annotation qualifier) {
@@ -146,8 +146,8 @@ public class InjectorImpl implements Injector {
             Constructor<? extends T> constructor = getConstructor(resolvedClass);
             Object[] args = resolveParameters(constructor.getParameters(), stack);
             T t = buildInstance(constructor, args);
-            injectFields(t, stack);
-            injectMethods(t, stack);
+            injectFields(t, stack, t.getClass());
+            injectMethods(t, stack, t.getClass());
             return t;
         } catch (Exception e) {
             throw new InjectionException("Instantiation failed for " + resolvedClass.getName(), e);
@@ -196,8 +196,11 @@ public class InjectorImpl implements Injector {
         return constructor.newInstance(args);
     }
 
-    private <T> void injectFields(T t, Stack<Class<?>> stack) throws Exception {
-        Field[] fields = t.getClass().getDeclaredFields();
+    private <T> void injectFields(T t, Stack<Class<?>> stack, Class<?> clazz) throws Exception {
+        if (clazz.getSuperclass() != null) {
+            injectFields(t, stack, clazz.getSuperclass());
+        }
+        Field[] fields = clazz.getDeclaredFields();
         for (Field field : fields) {
             if (field.isAnnotationPresent(Inject.class)) {
                 if (Modifier.isFinal(field.getModifiers())) {
@@ -216,8 +219,11 @@ public class InjectorImpl implements Injector {
         }
     }
 
-    private<T> void injectMethods(T t, Stack<Class<?>> stack) throws Exception {
-        Method[] methods = t.getClass().getDeclaredMethods();
+    private<T> void injectMethods(T t, Stack<Class<?>> stack, Class<?> clazz) throws Exception {
+        if (clazz.getSuperclass() != null) {
+            injectMethods(t, stack, clazz.getSuperclass());
+        }
+        Method[] methods = clazz.getDeclaredMethods();
         for (Method method : methods) {
             if (method.isAnnotationPresent(Inject.class)) {
                 method.setAccessible(true);
@@ -290,7 +296,7 @@ public class InjectorImpl implements Injector {
             @Override
             public T get() {
                 try {
-                    return inject(type, new Stack<Class<?>>(), qualifier);
+                    return inject(type, new Stack<>(), qualifier);
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to inject " + type.getName(), e);
                 }
