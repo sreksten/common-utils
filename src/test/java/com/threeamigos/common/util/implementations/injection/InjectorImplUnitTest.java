@@ -12,6 +12,8 @@ import com.threeamigos.common.util.implementations.injection.alternatives.Altern
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestInterface;
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestStandardImplementation;
 import com.threeamigos.common.util.implementations.injection.circulardependency.A;
+import com.threeamigos.common.util.implementations.injection.circulardependency.AWithBProvider;
+import com.threeamigos.common.util.implementations.injection.circulardependency.BWithAProvider;
 import com.threeamigos.common.util.implementations.injection.fields.*;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
@@ -466,12 +468,14 @@ class InjectorImplUnitTest {
         }
 
         @Test
-        @DisplayName("Should throw InjectionException if trying to inject a static field")
-        void shouldThrowInjectionExceptionIfInjectingAStaticField() {
+        @DisplayName("Should inject a static field (discouraged)")
+        void shouldInjectAStaticField() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            ClassWithStaticField instance = sut.inject(ClassWithStaticField.class);
             // Then
-            assertThrows(InjectionException.class, () -> sut.inject(ClassWithStaticField.class));
+            assertNotNull(instance.getStaticField());
         }
 
         @Test
@@ -504,7 +508,7 @@ class InjectorImplUnitTest {
         }
 
         @Test
-        @DisplayName("Should inect a method")
+        @DisplayName("Should inject a method")
         void shouldInjectAMethod() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
@@ -516,6 +520,17 @@ class InjectorImplUnitTest {
             assertNotNull(instance);
             assertNotNull(firstMethodParameter);
             assertNotNull(secondMethodParameter);
+        }
+
+        @Test
+        @DisplayName("Should inject a static method (discouraged)")
+        void shouldInjectAStaticMethod() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            sut.inject(ClassWithStaticMethod.class);
+            // Then
+            assertNotNull(ClassWithStaticMethod.getStaticField());
         }
     }
 
@@ -695,6 +710,19 @@ class InjectorImplUnitTest {
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When/Then
             assertThrows(InjectionException.class, () -> sut.inject(A.class));
+        }
+
+        @Test
+        @DisplayName("Should bypass a circular dependency with Providers")
+        void shouldBypassCircularDependencyWithProviders() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            AWithBProvider a = sut.inject(AWithBProvider.class);
+            BWithAProvider b = a.getB();
+            // Then
+            assertNotNull(a);
+            assertNotNull(b);
         }
     }
 

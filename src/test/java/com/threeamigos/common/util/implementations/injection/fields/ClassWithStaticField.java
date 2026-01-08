@@ -6,6 +6,9 @@ public class ClassWithStaticField {
 
     @Inject
     @SuppressWarnings("all")
-    private static int staticField = 1;
+    private static ClassFirstDependency staticField;
 
+    public ClassFirstDependency getStaticField() {
+        return staticField;
+    }
 }

@@ -6,10 +6,7 @@ import org.jspecify.annotations.NonNull;
 
 import javax.enterprise.inject.*;
 import javax.enterprise.util.TypeLiteral;
-import javax.inject.Inject;
-import javax.inject.Qualifier;
-import javax.inject.Scope;
-import javax.inject.Singleton;
+import javax.inject.*;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
@@ -207,9 +204,14 @@ public class InjectorImpl implements Injector {
                     throw new IllegalStateException("Cannot inject into final field " + field.getName() + " of class " +
                             field.getClass().getName());
                 }
-                Annotation fieldQualifier = getQualifier(field);
                 field.setAccessible(true);
-                field.set(t, inject(field.getType(), stack, fieldQualifier));
+                if (Provider.class.isAssignableFrom(field.getType())) {
+                    field.set(t, createInstanceWrapper(field));
+                } else {
+                    checkClassValidity(field.getType());
+                    Annotation fieldQualifier = getQualifier(field);
+                    field.set(t, inject(field.getType(), stack, fieldQualifier));
+                }
             }
         }
     }
@@ -263,6 +265,15 @@ public class InjectorImpl implements Injector {
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private Instance<?> createInstanceWrapper(Field field) {
+        ParameterizedType type = (ParameterizedType) field.getGenericType();
+        Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
+        boolean isAny = field.isAnnotationPresent(Any.class);
+        Annotation qualifier = getQualifier(field);
+
+        return createInstance(genericType, qualifier, isAny);
     }
 
     private Instance<?> createInstanceWrapper(Parameter param) {
