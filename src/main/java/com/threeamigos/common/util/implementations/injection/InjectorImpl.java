@@ -146,8 +146,19 @@ public class InjectorImpl implements Injector {
             Constructor<? extends T> constructor = getConstructor(resolvedClass);
             Object[] args = resolveParameters(constructor.getParameters(), stack);
             T t = buildInstance(constructor, args);
-            injectFields(t, stack, t.getClass());
-            injectMethods(t, stack, t.getClass());
+
+            // Collect all classes in the hierarchy, from top to bottom
+            List<Class<?>> hierarchy = new ArrayList<>();
+            Class<?> current = t.getClass();
+            while (current != null && current != Object.class) {
+                hierarchy.add(0, current); // Add to front so we process parent first
+                current = current.getSuperclass();
+            }
+
+            for (Class<?> clazz : hierarchy) {
+                injectFields(t, stack, clazz);
+                injectMethods(t, stack, clazz);
+            }
             return t;
         } catch (Exception e) {
             throw new InjectionException("Instantiation failed for " + resolvedClass.getName(), e);
@@ -197,9 +208,6 @@ public class InjectorImpl implements Injector {
     }
 
     private <T> void injectFields(T t, Stack<Class<?>> stack, Class<?> clazz) throws Exception {
-        if (clazz.getSuperclass() != null) {
-            injectFields(t, stack, clazz.getSuperclass());
-        }
         Field[] fields = clazz.getDeclaredFields();
         for (Field field : fields) {
             if (field.isAnnotationPresent(Inject.class)) {
@@ -220,9 +228,6 @@ public class InjectorImpl implements Injector {
     }
 
     private<T> void injectMethods(T t, Stack<Class<?>> stack, Class<?> clazz) throws Exception {
-        if (clazz.getSuperclass() != null) {
-            injectMethods(t, stack, clazz.getSuperclass());
-        }
         Method[] methods = clazz.getDeclaredMethods();
         for (Method method : methods) {
             if (method.isAnnotationPresent(Inject.class)) {
