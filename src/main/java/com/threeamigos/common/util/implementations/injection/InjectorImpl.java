@@ -207,10 +207,6 @@ public class InjectorImpl implements Injector {
                     throw new IllegalStateException("Cannot inject into final field " + field.getName() + " of class " +
                             field.getClass().getName());
                 }
-                if (Modifier.isStatic(field.getModifiers())) {
-                    throw new IllegalStateException("Cannot inject into static field " + field.getName() + " of class " +
-                            field.getClass().getName());
-                }
                 Annotation fieldQualifier = getQualifier(field);
                 field.setAccessible(true);
                 field.set(t, inject(field.getType(), stack, fieldQualifier));
