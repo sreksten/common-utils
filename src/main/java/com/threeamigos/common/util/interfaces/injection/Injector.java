@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.interfaces.injection;
 
+import javax.enterprise.util.TypeLiteral;
 import javax.inject.Named;
 import javax.inject.Inject;
 import javax.enterprise.inject.Instance;
@@ -30,4 +31,6 @@ public interface Injector {
     void enableAlternative(Class<?> alternativeClass);
 
     <T> T inject(Class<T> clazz);
+
+    <T> T inject(TypeLiteral<T> clazz);
 }

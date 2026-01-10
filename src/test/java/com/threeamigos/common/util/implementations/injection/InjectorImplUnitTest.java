@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.Holder;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed1;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed2;
@@ -13,8 +14,12 @@ import com.threeamigos.common.util.implementations.injection.alternatives.Altern
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestStandardImplementation;
 import com.threeamigos.common.util.implementations.injection.circulardependencies.A;
 import com.threeamigos.common.util.implementations.injection.circulardependencies.AWithBProvider;
+import com.threeamigos.common.util.implementations.injection.circulardependencies.B;
 import com.threeamigos.common.util.implementations.injection.circulardependencies.BWithAProvider;
 import com.threeamigos.common.util.implementations.injection.fields.*;
+import com.threeamigos.common.util.implementations.injection.generics.GenericsClass;
+import com.threeamigos.common.util.implementations.injection.generics.Object1;
+import com.threeamigos.common.util.implementations.injection.generics.Object2;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
@@ -31,6 +36,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -43,6 +49,7 @@ import javax.inject.Named;
 import javax.inject.Singleton;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Any;
+import java.lang.reflect.ParameterizedType;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -106,39 +113,57 @@ class InjectorImplUnitTest {
             @Test
             @DisplayName("Enums")
             void shouldThrowExceptionIfInjectingAnEnum() {
-                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(TestEnum.class));
+                // Given
+                Injector sut = new InjectorImpl();
+                Class<?> enumClass = TestEnum.class;
+                assertTrue(enumClass.isEnum());
+                // When / Then
+                InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(enumClass));
+                assertTrue(thrown.getMessage().endsWith("Cannot inject an enum"), "Should end with 'Cannot inject an enum': " + thrown.getMessage());
             }
 
             @Test
             @DisplayName("Primitives")
             void shouldThrowExceptionIfInjectingAPrimitive() {
-                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(int.class));
+                // Given
+                Injector sut = new InjectorImpl();
+                Class<?> intClass = int.class;
+                assertTrue(intClass.isPrimitive());
+                // When / Then
+                InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(intClass));
+                assertTrue(thrown.getMessage().endsWith("Cannot inject a primitive"), "Should end with 'Cannot inject a primitive': " + thrown.getMessage());
             }
 
             @Test
             @DisplayName("Synthetic classes")
             void shouldThrowExceptionIfInjectingASyntheticClass() {
                 // Given
-                final Class<?> syntheticClass = ((Runnable)() -> {}).getClass();
-                // Then
+                Injector sut = new InjectorImpl();
+                Class<?> syntheticClass = ((Runnable)() -> {}).getClass();
                 assertTrue(syntheticClass.isSynthetic());
-                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(syntheticClass));
+                // When / Then
+                InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(syntheticClass));
+                assertTrue(thrown.getMessage().endsWith("Cannot inject a synthetic class"), "Should end with 'Cannot inject a synthetic class': " + thrown.getMessage());
             }
 
             @Test
             @DisplayName("Local classes")
             void shouldThrowExceptionIfInjectingALocalClass() {
                 // Given
+                Injector sut = new InjectorImpl();
                 class MyLocalClass {}
+                Class<?> localClass = MyLocalClass.class;
+                assertTrue(localClass.isLocalClass());
                 // Then
-                assertTrue(MyLocalClass.class.isLocalClass());
-                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(MyLocalClass.class));
+                InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(localClass));
+                assertTrue(thrown.getMessage().endsWith("Cannot inject a local class"), "Should end with 'Cannot inject a local class': " + thrown.getMessage());
             }
 
             @Test
             @DisplayName("Anonymous classes")
             void shouldThrowExceptionIfInjectingAnAnonymousClass() {
                 // Given
+                Injector sut = new InjectorImpl();
                 /*
                  * Warning: Anonymous new Runnable() can be replaced with lambda. But if we do,
                  * that becomes a synthetic class, not an anonymous class. LEAVE IT AS IS!
@@ -149,15 +174,77 @@ class InjectorImplUnitTest {
                         System.out.println("Hello from anonymous class!");
                     }
                 };
-                // Then
+                Class<?> anonymousClass = anonymousRunnable.getClass();
                 assertTrue(anonymousRunnable.getClass().isAnonymousClass());
-                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(anonymousRunnable.getClass()));
+                // When / Then
+                InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(anonymousClass));
+                assertTrue(thrown.getMessage().endsWith("Cannot inject an anonymous class"), "Should end with 'Cannot inject an anonymous class': " + thrown.getMessage());
             }
 
             @Test
             @DisplayName("Non-static inner classes")
             void shouldThrowExceptionIfInjectingNonStaticInnerClass() {
-                assertThrows(InjectionException.class, () -> new InjectorImpl().inject(NonStaticInnerClass.class));
+                // Given
+                Injector sut = new InjectorImpl();
+                Class<?> nonStaticInnerClass = NonStaticInnerClass.class;
+                assertTrue(nonStaticInnerClass.isMemberClass());
+                // When / Then
+                InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(nonStaticInnerClass));
+                assertTrue(thrown.getMessage().endsWith("Cannot inject a non-static inner class"), "Should end with 'Cannot inject a non-static inner class': " + thrown.getMessage());
+            }
+
+            @Nested
+            @DisplayName("Recursive validation for Parameterized Types")
+            class ParameterizedTypeValidityTests {
+
+                @Test
+                @DisplayName("Should throw exception if generic argument is an enum")
+                void shouldThrowExceptionIfGenericArgumentIsInvalid() {
+                    // Given
+                    Injector sut = new InjectorImpl();
+                    TypeLiteral<Holder<TestEnum>> typeLiteral = new TypeLiteral<Holder<TestEnum>>() {};
+
+                    // When / Then
+                    InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(typeLiteral));
+                    assertTrue(thrown.getMessage().contains("Cannot inject an enum"), "Should contain 'Cannot inject an enum': " + thrown.getMessage());
+                }
+
+                @Test
+                @DisplayName("Should pass if generic argument is a nested ParameterizedType")
+                void shouldPassIfGenericArgumentIsNestedParameterizedType() {
+                    // Given
+                    Injector sut = new InjectorImpl();
+                    TypeLiteral<Holder<Holder<String>>> typeLiteral = new TypeLiteral<Holder<Holder<String>>>() {};
+
+                    // When / Then
+                    assertDoesNotThrow(() -> sut.inject(typeLiteral));
+                }
+
+                @Test
+                @DisplayName("Should pass if generic argument is a WildcardType (ignored by validation)")
+                void shouldPassIfGenericArgumentIsWildcardType() {
+                    // Given
+                    Injector sut = new InjectorImpl();
+                    // Holder<?>
+                    ParameterizedType wildcardType = (ParameterizedType) new TypeLiteral<Holder<?>>() {}.getType();
+
+                    // When / Then
+                    // We can't use sut.inject(wildcardType) directly because it expects TypeLiteral or Class
+                    // but sut.inject(TypeLiteral) calls checkClassValidity(type)
+                    assertDoesNotThrow(() -> sut.inject(new TypeLiteral<Holder<?>>() {}));
+                }
+
+                @Test
+                @DisplayName("Should pass if generic argument is a GenericArrayType (ignored by validation)")
+                void shouldPassIfGenericArgumentIsGenericArrayType() {
+                    // Given
+                    Injector sut = new InjectorImpl();
+                    // Holder<String[]> - actually String[] is a Class, not GenericArrayType.
+                    // We need something like Holder<List<String>[]> to get a GenericArrayType arg
+                    
+                    // When / Then
+                    assertDoesNotThrow(() -> sut.inject(new TypeLiteral<Holder<List<String>[]>>() {}));
+                }
             }
         }
     }
@@ -171,7 +258,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should return the only constructor annotated with @Inject")
-        void shouldReturnConstructorAnnotatedWithInject() throws NoSuchMethodException {
+        void shouldReturnConstructorAnnotatedWithInject() {
             // Given
             class TestClass {
                 @Inject
@@ -200,7 +287,8 @@ class InjectorImplUnitTest {
             }
             InjectorImpl sut = new InjectorImpl();
             // When, Then
-            assertThrows(IllegalStateException.class, () -> sut.getConstructor(TestClass.class));
+            InjectionException thrown = assertThrows(InjectionException.class, () -> sut.getConstructor(TestClass.class));
+            assertTrue(thrown.getMessage().startsWith("More than one constructor annotated with @Inject in class"), "Should start with 'More than one constructor annotated with @Inject in class': " + thrown.getMessage());
         }
 
         /**
@@ -208,7 +296,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should return constructor marked with @Inject when available, preferring it to the no-arguments constructor")
-        void shouldReturnConstructorAnnotatedWithInjectPreferringItToTheNoArgsConstructor() throws NoSuchMethodException {
+        void shouldReturnConstructorAnnotatedWithInjectPreferringItToTheNoArgsConstructor() {
             // Given
             @SuppressWarnings("unused")
             class TestClass {
@@ -231,7 +319,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should use no-args constructor if no constructor annotated with @Inject is found")
-        void shouldUseNoArgsConstructorIfNoCompatibleConstructorFound() throws NoSuchMethodException {
+        void shouldUseNoArgsConstructorIfNoCompatibleConstructorFound() {
             // Given
             InjectorImpl sut = new InjectorImpl();
             Constructor<TestClass> constructor = sut.getConstructor(TestClass.class);
@@ -246,8 +334,8 @@ class InjectorImplUnitTest {
          * NoSuchMethodException will be thrown.
          */
         @Test
-        @DisplayName("Should throw NoSuchMethodException if no constructor annotated with @Inject is found and no-arguments constructor is not available")
-        void shouldThrowNoSuchMethodExceptionIFNoCompatibleConstructorFound() {
+        @DisplayName("Should throw InjectionException if no constructor annotated with @Inject is found and no-arguments constructor is not available")
+        void shouldThrowInjectionExceptionIfNoCompatibleConstructorFound() {
             // Given
             @SuppressWarnings("unused")
             class TestClass {
@@ -255,7 +343,8 @@ class InjectorImplUnitTest {
             }
             InjectorImpl sut = new InjectorImpl();
             // When, Then
-            assertThrows(NoSuchMethodException.class, () -> sut.getConstructor(TestClass.class));
+            InjectionException thrown = assertThrows(InjectionException.class, () -> sut.getConstructor(TestClass.class));
+            assertTrue(thrown.getMessage().startsWith("No empty constructor or a constructor annotated with @Inject in class"), "No empty constructor or a constructor annotated with @Inject in class': " + thrown.getMessage());
         }
 
         /**
@@ -268,7 +357,8 @@ class InjectorImplUnitTest {
             // Given
             InjectorImpl sut = new InjectorImpl();
             // When, Then
-            assertThrows(InjectionException.class, () -> sut.inject(TestClassWithInvalidParametersInConstructor.class));
+            InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(TestClassWithInvalidParametersInConstructor.class));
+            assertTrue(thrown.getMessage().endsWith("Cannot inject a primitive"), "Should end with 'Cannot inject a primitive': " + thrown.getMessage());
         }
     }
 
@@ -452,11 +542,12 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("Should throw InjectionException if trying to inject an invalid field")
-        void shouldThrowExceptionIfInjectingAnInvalidField() {
+        void shouldThrowInjectionExceptionIfInjectingAnInvalidField() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // Then
-            assertThrows(InjectionException.class, () -> sut.inject(ClassWithPrimitiveType.class));
+            InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(ClassWithPrimitiveType.class));
+            assertTrue(thrown.getMessage().endsWith("Cannot inject a primitive"), "Should end with 'Cannot inject a primitive': " + thrown.getMessage());
         }
 
         @Test
@@ -465,7 +556,8 @@ class InjectorImplUnitTest {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // Then
-            assertThrows(InjectionException.class, () -> sut.inject(ClassWithFinalField.class));
+            InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(ClassWithFinalField.class));
+            assertTrue(thrown.getMessage().contains("Cannot inject into final field"), "Should contain 'Cannot inject into final field': " + thrown.getMessage());
         }
 
         @Test
@@ -477,6 +569,19 @@ class InjectorImplUnitTest {
             ClassWithStaticField instance = sut.inject(ClassWithStaticField.class);
             // Then
             assertNotNull(instance.getStaticField());
+        }
+
+        @Test
+        @DisplayName("Should inject static fields only once")
+        void shouldInjectStaticFieldOnlyOnce() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ClassWithStaticField instance = sut.inject(ClassWithStaticField.class);
+            instance.setStaticField(null);
+            // When
+            sut.inject(ClassWithStaticField.class);
+            // Then
+            assertNull(instance.getStaticField());
         }
 
         @Test
@@ -505,7 +610,8 @@ class InjectorImplUnitTest {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // Then
-            assertThrows(InjectionException.class, () -> sut.inject(ClassWithMethodWithInvalidParameter.class));
+            InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(ClassWithMethodWithInvalidParameter.class));
+            assertTrue(thrown.getMessage().endsWith("Cannot inject a primitive"), "Should end with 'Cannot inject a primitive': " + thrown.getMessage());
         }
 
         @Test
@@ -533,6 +639,21 @@ class InjectorImplUnitTest {
             // Then
             assertNotNull(ClassWithStaticMethod.getStaticField());
         }
+
+        @Test
+        @DisplayName("Should inject static methods only once")
+        @SuppressWarnings("all")
+        void shouldInjectStaticMethodsOnlyOnce() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ClassWithStaticMethod instance = sut.inject(ClassWithStaticMethod.class);
+            instance.setStaticField(null);
+            // When
+            sut.inject(ClassWithStaticMethod.class);
+            // Then
+            assertNull(instance.getStaticField());
+        }
+
     }
 
     @Nested
@@ -565,6 +686,44 @@ class InjectorImplUnitTest {
             assertNotNull(instance.getFieldClass());
         }
 
+    }
+
+    @Nested
+    @DisplayName("Generics Tests")
+    class GenericsTests {
+
+        @Test
+        @DisplayName("Should inject generics")
+        void shouldInjectGenerics() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Object1 object1 = new Object1();
+            Object2 object2 = new Object2();
+            // When
+            GenericsClass instance = sut.inject(GenericsClass.class);
+            assertNotNull(instance);
+            assertNotNull(instance.getHolder1());
+            assertNotNull(instance.getHolder2());
+            instance.getHolder1().set(object1);
+            instance.getHolder2().set(object2);
+            assertEquals(object1, instance.getHolder1().get());
+            assertEquals(object2, instance.getHolder2().get());
+        }
+
+        @Test
+        @DisplayName("Should inject generics using TypeLiteral")
+        void shouldInjectGenericsUsingTypeLiteral() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            TypeLiteral<Holder<Object1>> typeLiteral = new TypeLiteral<Holder<Object1>>() {};
+            Object1 obj = new Object1();
+            // When
+            Holder<Object1> holder = sut.inject(typeLiteral);
+            // Then
+            assertNotNull(holder);
+            holder.set(obj);
+            assertEquals(obj, holder.get());
+        }
     }
 
     /**
@@ -742,7 +901,9 @@ class InjectorImplUnitTest {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When/Then
-            assertThrows(InjectionException.class, () -> sut.inject(A.class));
+            InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(A.class));
+            String containedMessage = A.class.getName() + " -> " + B.class.getName() + " -> " + A.class.getName();
+            assertTrue(thrown.getMessage().contains(containedMessage), "Should contain message: " + containedMessage);
         }
 
         @Test
@@ -929,7 +1090,6 @@ class InjectorImplUnitTest {
 
             @Test
             @DisplayName("If an exception is thrown, isUnsatisfied() is true")
-            @SuppressWarnings("unchecked")
             void ifExceptionThrownIsUnsatisfiedIsTrue() throws Exception {
                 // Given
                 ClassResolver mockResolver = spy(new ClassResolver());
@@ -981,7 +1141,6 @@ class InjectorImplUnitTest {
 
             @Test
             @DisplayName("If an exception is thrown, isAmbiguous() is false")
-            @SuppressWarnings("unchecked")
             void ifExceptionThrownIsAmbiguousIsFalse() throws Exception{
                 // Given
                 ClassResolver mockResolver = spy(new ClassResolver());
@@ -1102,17 +1261,33 @@ class InjectorImplUnitTest {
             }
 
             @Test
-            @DisplayName("Should throw UnsupportedOperationException for TypeLiteral select")
-            void shouldThrowUnsupportedOperationForTypeLiteral() {
+            @DisplayName("Should select with TypeLiteral")
+            void shouldSelectWithTypeLiteral() {
                 // Given
                 Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
                 ClassWithInstanceOfTestInterface classWithInstance =
                         sut.inject(ClassWithInstanceOfTestInterface.class);
                 Instance<TestInterface> instance = classWithInstance.getTestInterfaceInstance();
-                // When/Then
                 TypeLiteral<TestClass> typeLiteral = new TypeLiteral<TestClass>() {};
-                assertThrows(UnsupportedOperationException.class,
-                        () -> instance.select(typeLiteral));
+                // When
+                Instance<TestClass> testClassInstance = instance.select(typeLiteral);
+                // Then
+                assertNotNull(testClassInstance);
+            }
+
+            @Test
+            @DisplayName("Should find no matches with TypeLiteral")
+            void shouldFindNoMatchesWithTypeLiteral() {
+                // Given
+                Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface classWithInstance =
+                        sut.inject(ClassWithInstanceOfTestInterface.class);
+                Instance<TestInterface> instance = classWithInstance.getTestInterfaceInstance();
+                TypeLiteral<TestClass> typeLiteral = new TypeLiteral<TestClass>() {};
+                // When
+                Instance<TestClass> testClassInstance = instance.select(typeLiteral, new NamedLiteral("name1"), new NamedLiteral("name2"));
+                // Then
+                assertNotNull(testClassInstance);
             }
 
             @Test
@@ -1123,7 +1298,7 @@ class InjectorImplUnitTest {
                 ClassWithInstanceAndMultipleImplementationsDefault classWithInstance =
                         sut.inject(ClassWithInstanceAndMultipleImplementationsDefault.class);
                 Instance<MultipleConcreteClassesAbstractClass> instance = classWithInstance.getInstance();
-                // When - select with non-existent qualifier
+                // When
                 Instance<MultipleConcreteClassesAbstractClass> selected =
                         instance.select(new NamedLiteral("nonExistent"));
                 // Then
@@ -1249,6 +1424,37 @@ class InjectorImplUnitTest {
         @DisplayName("Instance with no concrete implementations")
         class InstancesWithNoConcreteImplementations {
 
+            @Test
+            @DisplayName("Instance.iterator() should throw RuntimeException if resolution fails")
+            @SuppressWarnings("unchecked")
+            void iteratorShouldThrowRuntimeExceptionIfResolutionFails() throws Exception {
+                // Given
+                ClassResolver mockResolver = mock(ClassResolver.class);
+
+                // Ensure the initial injection of the test class succeeds.
+                // resolveImplementation(Type, String, Collection)
+                when(mockResolver.resolveImplementation(
+                        any(java.lang.reflect.Type.class),
+                        any(String.class),
+                        nullable(Collection.class)
+                )).thenAnswer(invocation -> invocation.getArgument(0));
+
+                // Force failure on resolveImplementations(Type, String, Collection)
+                // We use explicit types to avoid ambiguity with resolveImplementations(ClassLoader, Type, String)
+                when(mockResolver.resolveImplementations(
+                        any(java.lang.reflect.Type.class),
+                        any(String.class),
+                        nullable(Collection.class)
+                )).thenThrow(new Exception("Resolution failed"));
+
+                InjectorImpl sut = new InjectorImpl(mockResolver, TEST_PACKAGE_NAME);
+                ClassWithInstanceOfTestInterface instanceWrapper = sut.inject(ClassWithInstanceOfTestInterface.class);
+                javax.enterprise.inject.Instance<TestInterface> instance = instanceWrapper.getTestInterfaceInstance();
+
+                // When / Then
+                assertThrows(RuntimeException.class, instance::iterator);
+            }
+
             @Nested
             @DisplayName("@Any Instance")
             class AnyInstance {
@@ -1298,20 +1504,136 @@ class InjectorImplUnitTest {
                 }
 
                 /**
-                 * Instance.iterator().hasNext() throws an exception since we should have a valid implementation,
-                 * but we don't have one, and we did not request a complete list of all possible implementations.
+                 * Instance.iterator().hasNext() returns false since we don't have a valid implementation.
                  */
                 @Test
-                @DisplayName("Instance.iterator().hasNext() should throw exception")
+                @DisplayName("Instance.iterator().hasNext() should return false")
                 void instanceIteratorNextShouldThrowException() {
                     // Given
                     Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
                     ClassWithInstanceButNoImplementation instance = sut.inject(ClassWithInstanceButNoImplementation.class);
+                    Iterator<NoConcreteClassesAbstractClass> iterator = instance.getInstance().iterator();
                     // Then
-                    assertThrows(RuntimeException.class, () -> instance.getInstance().iterator());
+                    assertFalse(iterator.hasNext());
                 }
             }
         }
+    }
+
+    @Nested
+    @DisplayName("Inner workings tests")
+    class InnerWorkingsTests {
+
+        @Nested
+        @DisplayName("getQualifiers")
+        class GetQualifiersTests {
+
+            @Test
+            @DisplayName("Should return DefaultLiteral if field has no qualifiers")
+            @SuppressWarnings("unchecked")
+            void shouldReturnDefaultLiteralIfFieldHasNoQualifiers() throws Exception {
+                class Test { @Inject ClassFirstDependency s; }
+                InjectorImpl sut = new InjectorImpl();
+                java.lang.reflect.Field field = Test.class.getDeclaredField("s");
+
+                java.lang.reflect.Method getQualifiers = InjectorImpl.class.getDeclaredMethod("getQualifiers", java.lang.reflect.Field.class);
+                getQualifiers.setAccessible(true);
+
+                Collection<Annotation> qualifiers = (Collection<Annotation>) getQualifiers.invoke(sut, field);
+                assertEquals(1, qualifiers.size());
+                assertInstanceOf(DefaultLiteral.class, qualifiers.iterator().next());
+            }
+
+            @Test
+            @DisplayName("Should return specific qualifier if field is annotated")
+            @SuppressWarnings("unchecked")
+            void shouldReturnSpecificQualifierIfFieldIsAnnotated() throws Exception {
+                class Test { @Inject @Named("test") ClassFirstDependency s; }
+                InjectorImpl sut = new InjectorImpl();
+                java.lang.reflect.Field field = Test.class.getDeclaredField("s");
+
+                java.lang.reflect.Method getQualifiers = InjectorImpl.class.getDeclaredMethod("getQualifiers", java.lang.reflect.Field.class);
+                getQualifiers.setAccessible(true);
+
+                Collection<Annotation> qualifiers = (Collection<Annotation>) getQualifiers.invoke(sut, field);
+                assertEquals(1, qualifiers.size());
+                assertEquals("test", ((Named) qualifiers.iterator().next()).value());
+            }
+
+            @Test
+            @DisplayName("Should return DefaultLiteral if parameter has no qualifiers")
+            @SuppressWarnings("unchecked")
+            void shouldReturnDefaultLiteralIfParameterHasNoQualifiers() throws Exception {
+                class Test { @Inject Test(ClassFirstDependency s) {} }
+                InjectorImpl sut = new InjectorImpl();
+                java.lang.reflect.Parameter param = Test.class.getDeclaredConstructors()[0].getParameters()[0];
+
+                java.lang.reflect.Method getQualifiers = InjectorImpl.class.getDeclaredMethod("getQualifiers", java.lang.reflect.Parameter.class);
+                getQualifiers.setAccessible(true);
+
+                Collection<Annotation> qualifiers = (Collection<Annotation>) getQualifiers.invoke(sut, param);
+                assertEquals(1, qualifiers.size());
+                assertInstanceOf(DefaultLiteral.class, qualifiers.iterator().next());
+            }
+        }
+        @Nested
+        @DisplayName("mergeQualifiers")
+        class MergeQualifiersTests {
+
+            @Test
+            @DisplayName("mergeQualifiers should return existing if newAnnotations is null")
+            void mergeQualifiersShouldReturnExistingIfNewAnnotationsIsNull() {
+                // Given
+                Collection<Annotation> existing = Collections.singletonList(new NamedLiteral("test"));
+                Annotation[] newAnnotations = null;
+                // When
+                Collection<Annotation> merged = new InjectorImpl(TEST_PACKAGE_NAME).mergeQualifiers(existing, newAnnotations);
+                // Then
+                assertSame(existing, merged);
+            }
+
+            @Test
+            @DisplayName("mergeQualifiers should return existing if newAnnotations is empty")
+            void mergeQualifiersShouldReturnExistingIfNewAnnotationsIsEmpty() {
+                // Given
+                Collection<Annotation> existing = Collections.singletonList(new NamedLiteral("test"));
+                Annotation[] newAnnotations = {};
+                // When
+                Collection<Annotation> merged = new InjectorImpl(TEST_PACKAGE_NAME).mergeQualifiers(existing, newAnnotations);
+                // Then
+                assertSame(existing, merged);
+            }
+
+            @Test
+            @DisplayName("mergeQualifiers should merge existing qualifiers with new ones")
+            void mergeQualifiersShouldMergeExistingQualifiersWithNewOnes() {
+                // Given
+                Collection<Annotation> existing = Collections.singletonList(new NamedLiteral("test"));
+                Annotation[] newAnnotations = {new NamedLiteral("test2")};
+                // When
+                Collection<Annotation> merged = new InjectorImpl(TEST_PACKAGE_NAME).mergeQualifiers(existing, newAnnotations);
+                // Then
+                assertEquals(1, merged.size());
+                assertFalse(merged.contains(new NamedLiteral("test")));
+                assertTrue(merged.contains(new NamedLiteral("test2")));
+            }
+
+            @Test
+            @DisplayName("mergeQualifiers should remove Default")
+            void mergeQualifiersShouldRemoveDefault() {
+                // Given
+                Collection<Annotation> existing = Collections.singletonList(new DefaultLiteral());
+                Annotation[] newAnnotations = {new NamedLiteral("test2")};
+                // When
+                Collection<Annotation> merged = new InjectorImpl(TEST_PACKAGE_NAME).mergeQualifiers(existing, newAnnotations);
+                // Then
+                assertEquals(1, merged.size());
+                assertFalse(merged.contains(new DefaultLiteral()));
+                assertTrue(merged.contains(new NamedLiteral("test2")));
+            }
+
+        }
+
     }
 
     // Test classes used above.

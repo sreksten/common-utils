@@ -8,6 +8,10 @@ public class ClassWithStaticMethod {
 
     @Inject
     @SuppressWarnings("all")
+    public static void initStaticField(ClassFirstDependency staticField) {
+        ClassWithStaticMethod.staticField = staticField;
+    }
+
     public static void setStaticField(ClassFirstDependency staticField) {
         ClassWithStaticMethod.staticField = staticField;
     }

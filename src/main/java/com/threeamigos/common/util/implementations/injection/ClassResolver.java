@@ -2,28 +2,26 @@ package com.threeamigos.common.util.implementations.injection;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-import javax.enterprise.inject.Alternative;
-import javax.enterprise.inject.AmbiguousResolutionException;
-import javax.enterprise.inject.UnsatisfiedResolutionException;
+import javax.enterprise.inject.*;
 import javax.inject.Named;
 import javax.inject.Qualifier;
-import javax.enterprise.inject.Instance;
 import java.io.File;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Modifier;
+import java.lang.reflect.*;
 import java.net.URL;
 import java.util.*;
+import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.stream.Collectors;
 
 /**
  * ClassResolver is responsible for resolving concrete implementations of abstract classes or interfaces.<br/>
  * Given an abstract class, a package name, and an optional identifier, it returns the concrete
- * implementation(s) of the abstract class. If no concrete implementation is found, it throws an
- * UnsatisfiedResolutionException. If the class is a concrete class, it just returns the class itself.<br/>
+ * implementation(s) of the abstract class.<br/>
  * The Unit Test for this class gives information about the expected behavior and edge cases.<br/>
- * This class, however, is to be used by the Injector class.
+ * This class, however, is to be used by the implementation of the Injector class.
  *
  * @author Stefano Reksten
  */
@@ -36,8 +34,10 @@ class ClassResolver {
     /**
      * Second cache - to avoid scanning the classes multiple times for the same interface or class
      */
-    private final Map<Class<?>, Collection<Class<?>>> resolvedClasses = new HashMap<>();
-
+    private final Map<Type, Collection<Class<?>>> resolvedClasses = new HashMap<>();
+    /**
+     * A collection of Alternatives that can be used instead of the actual implementations.
+     */
     private final Set<Class<?>> enabledAlternatives = new HashSet<>();
 
     void enableAlternative(Class<?> alternativeClass) {
@@ -48,113 +48,138 @@ class ClassResolver {
      * Resolves an abstract class or an interface returning the concrete class that implements the interface or
      * that extends the abstract class. When more implementations are present, the default implementation should not
      * be annotated, while alternative implementations should be marked with {@link Named @Named}.<br/>
-     * If the identifier is specified, it will look for that particular alternative; otherwise the main implementation
-     * will be returned.
+     * If the identifier is specified, it will look for that particular Named class; otherwise the standard
+     * implementation will be returned.
      *
-     * @param abstractClass the class to resolve
+     * @param typeToResolve the class to resolve
      * @param packageName package name used to reduce scanning
-     * @param qualifier a @Named annotation value
+     * @param qualifiers a @Named annotation value
      * @return the resolved class
      * @param <T> type of the class to resolve
      */
-    <T> Class<? extends T> resolveImplementation(@NonNull Class<T> abstractClass,
-                                                        @Nullable String packageName,
-                                                        @Nullable Annotation qualifier) throws Exception {
-        return resolveImplementation(Thread.currentThread().getContextClassLoader(), abstractClass, packageName, qualifier);
+    <T> Class<? extends T> resolveImplementation(@NonNull Type typeToResolve,
+                                                 @Nullable String packageName,
+                                                 @Nullable Collection<Annotation> qualifiers) throws Exception {
+        return resolveImplementation(Thread.currentThread().getContextClassLoader(), typeToResolve,
+                packageName, qualifiers);
     }
 
     /**
      * Resolves an abstract class or an interface returning all concrete classes that implement the interface or
      * extend the abstract class. Used for the {@link Instance} interface.
      *
-     * @param abstractClass the class to resolve
+     * @param typeToResolve the class to resolve
      * @param packageName package name used to reduce scanning
      * @return the resolved classes
      * @param <T> type of the class to resolve
      */
-    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Class<T> abstractClass,
-                                                                     @Nullable String packageName) throws Exception {
-        return resolveImplementations(Thread.currentThread().getContextClassLoader(), abstractClass, packageName);
+    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve,
+                                                              @Nullable String packageName) throws Exception {
+        return resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve, packageName);
     }
 
-    /*
-     * package-private to run the tests
+    /**
+     * Resolves an abstract class or an interface returning all concrete classes that implement the interface or
+     * extend the abstract class and that match the provided qualifiers.
+     *
+     * @param typeToResolve the class to resolve
+     * @param packageName package name used to reduce scanning
+     * @param qualifiers the qualifiers to match
+     * @return the resolved classes
+     * @param <T> type of the class to resolve
      */
-    <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Class<T> classToResolve,
-                                                 String packageName, Annotation qualifier) throws Exception {
-        /*
-         * If we have a concrete class, return that class.
-         */
-        if (!classToResolve.isInterface() && !Modifier.isAbstract(classToResolve.getModifiers())) {
-            return classToResolve;
+    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve,
+                                                              @Nullable String packageName,
+                                                              @Nullable Collection<Annotation> qualifiers) throws Exception {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        Collection<Class<? extends T>> resolvedClasses = resolveImplementations(classLoader, typeToResolve, packageName);
+
+        List<Class<? extends T>> activeClasses = resolvedClasses.stream()
+                .filter(clazz -> enabledAlternatives.contains(clazz) || !clazz.isAnnotationPresent(Alternative.class))
+                .collect(Collectors.toList());
+
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            return activeClasses;
         }
 
-        Collection<Class<?extends T>> resolvedClasses = resolveImplementations(classLoader, classToResolve, packageName);
-
-        // Check for enabled @Alternatives first (Global Override)
-        for (Class<? extends T> clazz : resolvedClasses) {
-            if (enabledAlternatives.contains(clazz)) {
-                return clazz;
-            }
-        }
-
-        // Filter out INACTIVE alternatives before looking for standard candidates
-        List<Class<? extends T>> activeClasses = new ArrayList<>();
-        for (Class<? extends T> clazz : resolvedClasses) {
-            boolean isAlternative = clazz.isAnnotationPresent(Alternative.class);
-            // If it's an alternative, skip it.
-            if (isAlternative) {
-                continue;
-            }
-            activeClasses.add(clazz);
-        }
-
-        // 3. Check for @Qualifier / @Named annotations (Local Override)
-        List<Class<? extends T>> candidates = new ArrayList<>();
-        for (Class<? extends T> clazz : activeClasses) {
-            if (qualifier != null) {
-                // Check if the class has the exact same qualifier
-                Annotation found = clazz.getAnnotation(qualifier.annotationType());
-                if (found != null && found.equals(qualifier)) {
-                    return clazz;
-                }
-            } else {
-                // If no qualifier requested, look for classes WITHOUT any @Qualifier annotations
-                boolean hasQualifier = Arrays.stream(clazz.getAnnotations())
-                        .anyMatch(a -> a.annotationType().isAnnotationPresent(Qualifier.class));
-                if (!hasQualifier) {
-                    candidates.add(clazz);
-                }
-            }
-        }
-
-        if (qualifier != null) {
-            throw new UnsatisfiedResolutionException("No implementation found with qualifier " + qualifier +
-                    " for " + classToResolve.getName());
-        }
-
-        // 3. Return the standard implementation (if any)
-        if (candidates.isEmpty()) {
-            throw new UnsatisfiedResolutionException("No implementation found for " + classToResolve.getName());
-        } else if (candidates.size() > 1) {
-            String candidatesAsList = candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get();
-            throw new AmbiguousResolutionException("More than one implementation found for " + classToResolve.getName() +
-                    ": " + candidatesAsList);
-        }
-        return candidates.get(0);
+        return activeClasses.stream()
+                .filter(clazz -> matchesQualifiers(clazz, qualifiers))
+                .collect(Collectors.toList());
     }
 
     /*
      * package-private to run the tests
      */
     @SuppressWarnings("unchecked")
-    <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Class<T> abstractClass,
+    <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Type typeToResolve,
+                                                 String packageName, Collection<Annotation> qualifiers) throws Exception {
+
+        Class<?> rawType = RawTypeHelper.getRawType(typeToResolve);
+
+        // If we have a concrete class, return that class.
+        if (isNotInterfaceOrAbstract(rawType)) {
+            return (Class<? extends T>)rawType;
+        }
+
+        // Search for all possible implementations
+        Collection<Class<? extends T>> resolvedClasses = resolveImplementations(classLoader, typeToResolve, packageName);
+
+        // If one of the implementations is an enabled Alternative, return that class
+        for (Class<? extends T> clazz : resolvedClasses) {
+            if (enabledAlternatives.contains(clazz)) {
+                return clazz;
+            }
+        }
+
+        // Filter out alternatives before looking for standard candidates
+        List<Class<? extends T>> activeClasses = resolvedClasses
+                .stream()
+                .filter(clazz -> !clazz.isAnnotationPresent(Alternative.class))
+                .collect(Collectors.toList());
+
+        // Check for @Qualifier / @Named annotations
+        if (qualifiers != null && !qualifiers.isEmpty()) {
+            for (Class<? extends T> clazz : activeClasses) {
+                if (matchesQualifiers(clazz, qualifiers)) {
+                    return clazz;
+                }
+            }
+            throw new UnsatisfiedResolutionException("No implementation found with qualifiers " +
+                    qualifiers.stream().map(Annotation::toString).collect(Collectors.joining(", ")) +
+                    " for " + typeToResolve.getClass().getName());
+        }
+
+        // Filter out @Qualifier / @Named classes
+        Function<Class<? extends T>, Boolean> noQualifierFilteringFunction =
+                clazz -> Arrays.stream(clazz.getAnnotations())
+                .noneMatch(a -> a.annotationType().isAnnotationPresent(Qualifier.class));
+
+        List<Class<? extends T>> candidates = activeClasses
+                .stream()
+                .filter(noQualifierFilteringFunction::apply)
+                .collect(Collectors.toList());
+
+        // Return the standard implementation (if any)
+        if (candidates.isEmpty()) {
+            throw new UnsatisfiedResolutionException("No implementation found for " + typeToResolve.getClass().getName());
+        } else if (candidates.size() > 1) {
+            String candidatesAsList = candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get();
+            throw new AmbiguousResolutionException("More than one implementation found for " + typeToResolve.getClass().getName() +
+                    ": " + candidatesAsList);
+        }
+        return candidates.get(0);
+    }
+
+    // package-private to run the tests
+    @SuppressWarnings("unchecked")
+    <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Type abstractClass,
                                                               String packageName) throws Exception {
-        /*
-         * If we have a concrete class, return that class.
-         */
-        if (!abstractClass.isInterface() && !Modifier.isAbstract(abstractClass.getModifiers())) {
-            return Collections.singletonList(abstractClass);
+
+        Class<?> rawType = RawTypeHelper.getRawType(abstractClass);
+
+        // If we have a concrete class, return that class.
+        if (isNotInterfaceOrAbstract(rawType)) {
+            return Collections.singletonList((Class<? extends T>)rawType);
         }
 
         List<Class<? extends T>> candidates = new ArrayList<>();
@@ -167,15 +192,71 @@ class ClassResolver {
         } else {
             List<Class<?>> allPackageClasses = getAllPackageClasses(classLoader, packageName);
 
-            for (Class<?> clazz : allPackageClasses) {
-                if (abstractClass.isAssignableFrom(clazz) && !clazz.isInterface() && !Modifier.isAbstract(clazz.getModifiers())) {
-                    candidates.add((Class<? extends T>) clazz);
+            for (Class<?> candidate : allPackageClasses) {
+                if (isNotInterfaceOrAbstract(candidate) && isAssignable(abstractClass, candidate)) {
+                    candidates.add((Class<? extends T>) candidate);
                 }
             }
-            List<Class<?>> mapValue = new ArrayList<>(candidates);
-            resolvedClasses.put(abstractClass, mapValue);
+            resolvedClasses.put(abstractClass, new ArrayList<>(candidates));
         }
         return candidates;
+    }
+
+    private boolean isNotInterfaceOrAbstract(Class<?> clazz) {
+        return !clazz.isInterface() && !Modifier.isAbstract(clazz.getModifiers());
+    }
+
+    private boolean matchesQualifiers(Class<?> clazz, Collection<Annotation> qualifiers) {
+        return qualifiers.stream().allMatch(qualifier -> {
+            Annotation actual = clazz.getAnnotation(qualifier.annotationType());
+            if (actual != null) {
+                return qualifier.equals(actual);
+            }
+            if (qualifier instanceof Default) {
+                return Arrays.stream(clazz.getAnnotations())
+                        .noneMatch(a -> a.annotationType().isAnnotationPresent(Qualifier.class));
+            }
+            // @Any matches everything
+            return qualifier instanceof Any;
+        });
+    }
+
+    // package-private to run the tests
+    boolean isAssignable(Type targetType, Class<?> candidate) {
+        if (targetType instanceof Class<?>) {
+            return ((Class<?>) targetType).isAssignableFrom(candidate);
+        }
+
+        if (targetType instanceof ParameterizedType) {
+            // 1. Check interfaces declared directly on this class
+            for (Type type : candidate.getGenericInterfaces()) {
+                if (type.equals(targetType)) {
+                    return true;
+                }
+
+                // Recursive check for the interface hierarchy
+                Class<?> rawType = (Class<?>) ((type instanceof ParameterizedType)
+                        ? ((ParameterizedType) type).getRawType() : type);
+                if (isAssignable(targetType, rawType)) {
+                    return true;
+                }
+            }
+
+            // 2. Check superclass
+            Type superType = candidate.getGenericSuperclass();
+            if (superType == null || superType == Object.class) {
+                return false;
+            }
+
+            if (superType.equals(targetType)) {
+                return true;
+            }
+
+            // Recursive check for the superclass hierarchy
+            return isAssignable(targetType, candidate.getSuperclass());
+        }
+
+        return false;
     }
 
     private List<Class<?>> getAllPackageClasses(ClassLoader classLoader, String packageName) throws ClassNotFoundException, IOException {
@@ -267,7 +348,8 @@ class ClassResolver {
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
                 String name = entry.getName();
-                if (!name.startsWith("META-INF") && name.startsWith(packagePath) && name.endsWith(".class") && !name.endsWith("module-info.class")) {
+                if (!name.startsWith("META-INF") && name.startsWith(packagePath) &&
+                        name.endsWith(".class") && !name.endsWith("module-info.class")) {
                     String className = name.replace('/', '.').substring(0, name.length() - 6);
                     try {
                         classes.add(Class.forName(className, false, classLoader));

@@ -43,6 +43,11 @@ public class InjectorImpl implements Injector {
      */
     private final String packageName;
 
+    /**
+     * Tracks classes that have already had their static members injected to prevent redundant injections.
+     */
+    private final Set<Class<?>> injectedStaticClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
     public InjectorImpl() {
         this.classResolver = new ClassResolver();
         this.packageName = "";
@@ -88,21 +93,29 @@ public class InjectorImpl implements Injector {
         return inject(classToInject, new Stack<>(), null);
     }
 
-    private <T> T inject(@NonNull Class<T> classToInject, Stack<Class<?>> stack, Annotation qualifier) {
-        if (stack.contains(classToInject)) {
-            throw new InjectionException("Circular dependency detected for class " + classToInject.getName() + ": " + stack);
+    @Override
+    public <T> T inject(TypeLiteral<T> typeLiteral) {
+        return inject(typeLiteral.getType(), new Stack<>(), null);
+    }
+
+    private <T> T inject(@NonNull Type typeToInject, Stack<Type> stack, Collection<Annotation> qualifiers) {
+        if (stack.contains(typeToInject)) {
+            stack.add(typeToInject);
+            throw new InjectionException("Circular dependency detected for class " +
+                    typeToInject.getClass().getName() + ": " +
+                    stack.stream().map(Type::getTypeName).collect(Collectors.joining(" -> ")));
         }
-        stack.push(classToInject);
+        stack.push(typeToInject);
         try {
-            checkClassValidity(classToInject);
-            Class<? extends T> resolvedClass = classResolver.resolveImplementation(classToInject, packageName, qualifier);
+            checkClassValidity(typeToInject);
+            Class<? extends T> resolvedClass = classResolver.resolveImplementation(typeToInject, packageName, qualifiers);
 
             // Find the scope annotation on the resolved class
             Class<? extends Annotation> scopeType = getScopeType(resolvedClass);
 
             if (scopeType != null && scopeRegistry.containsKey(scopeType)) {
                 ScopeHandler handler = scopeRegistry.get(scopeType);
-                // We use a helper method to handle the wildcard capture safely
+                // A helper method to handle the wildcard capture safely
                 T t = handleScopedInjection(handler, resolvedClass, stack);
                 stack.pop();
                 return t;
@@ -111,10 +124,11 @@ public class InjectorImpl implements Injector {
             T t = performInjection(resolvedClass, stack);
             stack.pop();
             return t;
-        } catch (UnsatisfiedResolutionException | AmbiguousResolutionException e) {
+        } catch (InjectionException e) {
             throw e;
         } catch (Exception e) {
-            throw new InjectionException("Failed to inject " + classToInject.getName(), e);
+            throw new InjectionException("Failed to inject " + RawTypeHelper.getRawType(typeToInject).getName() +
+                    ": " + e.getMessage(), e);
         }
     }
 
@@ -134,44 +148,49 @@ public class InjectorImpl implements Injector {
      * Helper method to bridge the generic gap between Class<? extends T> and ScopeHandler
      */
     @SuppressWarnings("unchecked")
-    private <T> T handleScopedInjection(ScopeHandler handler, Class<? extends T> clazz, Stack<Class<?>> stack) {
+    private <T> T handleScopedInjection(ScopeHandler handler, Class<? extends T> clazz, Stack<Type> stack) {
         return (T) handler.get((Class<Object>) clazz, () -> performInjection(clazz, stack));
     }
 
     /**
      * The actual instantiation logic
      */
-    private <T> T performInjection(Class<? extends T> resolvedClass, Stack<Class<?>> stack) {
+    private <T> T performInjection(Class<? extends T> resolvedClass, Stack<Type> stack) {
         try {
             Constructor<? extends T> constructor = getConstructor(resolvedClass);
-            Object[] args = resolveParameters(constructor.getParameters(), stack);
+            Parameter[] parameters = constructor.getParameters();
+            validateConstructorParameters(parameters, resolvedClass);
+            Object[] args = resolveParameters(parameters, stack);
             T t = buildInstance(constructor, args);
 
             // Collect all classes in the hierarchy, from top to bottom
             List<Class<?>> hierarchy = new ArrayList<>();
             Class<?> current = t.getClass();
-            while (current != null && current != Object.class) {
-                hierarchy.add(0, current); // Add to front so we process parent first
+            while (current != Object.class) {
+                hierarchy.add(0, current); // Add as first, so we start processing from parent classes
                 current = current.getSuperclass();
             }
 
             for (Class<?> clazz : hierarchy) {
-                injectFields(t, stack, clazz);
-                injectMethods(t, stack, clazz);
+                injectFields(t, stack, clazz, resolvedClass);
+                injectMethods(t, stack, clazz, resolvedClass);
+                // After processing fields and methods for this specific class in the hierarchy,
+                // mark it as static-injected.
+                injectedStaticClasses.add(clazz);
             }
             return t;
         } catch (Exception e) {
-            throw new InjectionException("Instantiation failed for " + resolvedClass.getName(), e);
+            throw new InjectionException("Injection failed for " + resolvedClass.getName() + ": " + e.getMessage(), e);
         }
     }
 
     @SuppressWarnings("unchecked")
-    <T> Constructor<T> getConstructor(@NonNull Class<T> clazz) throws NoSuchMethodException {
+    <T> Constructor<T> getConstructor(@NonNull Class<T> clazz) {
         List<Constructor<T>> constructors = Arrays.stream((Constructor<T>[])clazz.getDeclaredConstructors())
                 .filter(c -> c.isAnnotationPresent(Inject.class))
                 .collect(Collectors.toList());
         if (constructors.size() > 1) {
-            throw new IllegalStateException("More than one constructor annotated with @Inject in class " + clazz.getName());
+            throw new InjectionException("More than one constructor annotated with @Inject in class " + clazz.getName());
         } else if (constructors.size() == 1) {
             return constructors.get(0);
         }
@@ -180,21 +199,43 @@ public class InjectorImpl implements Injector {
                 .filter(c -> c.getParameterCount() == 0)
                 .collect(Collectors.toList());
         if (constructors.isEmpty()) {
-            throw new NoSuchMethodException("No empty constructor or a constructor annotated with @Inject in class " + clazz.getName());
+            throw new InjectionException("No empty constructor or a constructor annotated with @Inject in class " + clazz.getName());
         }
         return constructors.get(0);
     }
 
-    private Object[] resolveParameters(Parameter[] parameters, Stack<Class<?>> stack) {
+    private void validateConstructorParameters(Parameter[] parameters, Class<?> clazz) {
+        for (Parameter param : parameters) {
+            try {
+                checkClassValidity(param.getType());
+            } catch (IllegalArgumentException e) {
+                throw new InjectionException("Cannot inject into constructor parameter " + param.getName() + " of class " +
+                        clazz.getName() + ": " + e.getMessage());
+            }
+        }
+    }
+
+    private void validateMethodParameters(Parameter[] parameters, String methodName, Class<?> clazz) {
+        for (Parameter param : parameters) {
+            try {
+                checkClassValidity(param.getType());
+            } catch (IllegalArgumentException e) {
+                throw new InjectionException("Cannot inject into parameter " + param.getName() + " of method " +
+                        clazz.getName() + "::" + methodName + ": " + e.getMessage());
+            }
+        }
+    }
+
+    private Object[] resolveParameters(Parameter[] parameters, Stack<Type> stack) {
         Object[] args = new Object[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
-            if (javax.inject.Provider.class.isAssignableFrom(param.getType())) {
+            if (Provider.class.isAssignableFrom(param.getType())) {
                 args[i] = createInstanceWrapper(param);
             } else {
-                checkClassValidity(param.getType());
-                Annotation paramQualifier = getQualifier(param);
-                args[i] = inject(param.getType(), stack, paramQualifier);
+                checkClassValidity(param.getParameterizedType());
+                Collection<Annotation> paramQualifiers = getQualifiers(param);
+                args[i] = inject(param.getType(), stack, paramQualifiers);
             }
         }
         return args;
@@ -207,32 +248,48 @@ public class InjectorImpl implements Injector {
         return constructor.newInstance(args);
     }
 
-    private <T> void injectFields(T t, Stack<Class<?>> stack, Class<?> clazz) throws Exception {
+    private <T> void injectFields(T t, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass) throws Exception {
         Field[] fields = clazz.getDeclaredFields();
+        boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
+
         for (Field field : fields) {
             if (field.isAnnotationPresent(Inject.class)) {
+                boolean isStatic = Modifier.isStatic(field.getModifiers());
+                if (isStatic && isStaticAlreadyInjected) {
+                    continue;
+                }
+
                 if (Modifier.isFinal(field.getModifiers())) {
                     throw new IllegalStateException("Cannot inject into final field " + field.getName() + " of class " +
-                            field.getClass().getName());
+                            resolvedClass.getName());
                 }
                 field.setAccessible(true);
                 if (Provider.class.isAssignableFrom(field.getType())) {
                     field.set(t, createInstanceWrapper(field));
                 } else {
-                    checkClassValidity(field.getType());
-                    Annotation fieldQualifier = getQualifier(field);
-                    field.set(t, inject(field.getType(), stack, fieldQualifier));
+                    checkClassValidity(field.getGenericType());
+                    Collection<Annotation> fieldQualifiers = getQualifiers(field);
+                    field.set(t, inject(field.getType(), stack, fieldQualifiers));
                 }
             }
         }
     }
 
-    private<T> void injectMethods(T t, Stack<Class<?>> stack, Class<?> clazz) throws Exception {
+    private<T> void injectMethods(T t, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass) throws Exception {
         Method[] methods = clazz.getDeclaredMethods();
+        boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
+
         for (Method method : methods) {
             if (method.isAnnotationPresent(Inject.class)) {
+                boolean isStatic = Modifier.isStatic(method.getModifiers());
+                if (isStatic && isStaticAlreadyInjected) {
+                    continue;
+                }
+
                 method.setAccessible(true);
-                Object[] params = resolveParameters(method.getParameters(), stack);
+                Parameter[] parameters = method.getParameters();
+                validateMethodParameters(parameters, method.getName(), resolvedClass);
+                Object[] params = resolveParameters(parameters, stack);
                 method.invoke(t, params);
             }
         }
@@ -240,9 +297,12 @@ public class InjectorImpl implements Injector {
 
     /**
      * Checks that the class is valid for injection.
-     * @param clazz the class to check
+     * @param type the type to check
      */
-    private void checkClassValidity(Class<?> clazz) {
+    private void checkClassValidity(Type type) {
+        Class<?> clazz = RawTypeHelper.getRawType(type);
+
+        // 1. Basic JSR 330 / Java constraints
         if (clazz.isEnum()) {
             throw new IllegalArgumentException("Cannot inject an enum");
         }
@@ -262,46 +322,65 @@ public class InjectorImpl implements Injector {
         if (clazz.isMemberClass() && !Modifier.isStatic(clazz.getModifiers())) {
             throw new IllegalArgumentException("Cannot inject a non-static inner class");
         }
+
+        // 2. Recursive validation for Parameterized Types (Generics)
+        // This ensures Holder<MyEnum> is rejected if MyEnum is not injectable
+        if (type instanceof ParameterizedType) {
+            for (Type arg : ((ParameterizedType) type).getActualTypeArguments()) {
+                // We only validate classes/types that the injector would actually try to resolve
+                if (arg instanceof Class<?> || arg instanceof ParameterizedType) {
+                    checkClassValidity(arg);
+                }
+            }
+        }
     }
 
-    private Annotation getQualifier(Parameter param) {
-        return Arrays.stream(param.getAnnotations())
+    private Collection<Annotation> getQualifiers(Parameter param) {
+        Collection<Annotation> qualifiers = Arrays.stream(param.getAnnotations())
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
-                .findFirst()
-                .orElse(null);
+                .collect(Collectors.toList());
+
+        if (qualifiers.isEmpty()) {
+            qualifiers.add(new DefaultLiteral());
+        }
+        return qualifiers;
     }
 
-    private Annotation getQualifier(Field field) {
-        return Arrays.stream(field.getAnnotations())
+    private Collection<Annotation> getQualifiers(Field field) {
+        Collection<Annotation> qualifiers = Arrays.stream(field.getAnnotations())
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
-                .findFirst()
-                .orElse(null);
+                .collect(Collectors.toList());
+
+        if (qualifiers.isEmpty()) {
+            qualifiers.add(new DefaultLiteral());
+        }
+        return qualifiers;
     }
 
     private Instance<?> createInstanceWrapper(Field field) {
         ParameterizedType type = (ParameterizedType) field.getGenericType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
         boolean isAny = field.isAnnotationPresent(Any.class);
-        Annotation qualifier = getQualifier(field);
+        Collection<Annotation> qualifiers = getQualifiers(field);
 
-        return createInstance(genericType, qualifier, isAny);
+        return createInstance(genericType, qualifiers, isAny);
     }
 
     private Instance<?> createInstanceWrapper(Parameter param) {
         ParameterizedType type = (ParameterizedType) param.getParameterizedType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
         boolean isAny = param.isAnnotationPresent(Any.class);
-        Annotation qualifier = getQualifier(param);
+        Collection<Annotation> qualifiers = getQualifiers(param);
 
-        return createInstance(genericType, qualifier, isAny);
+        return createInstance(genericType, qualifiers, isAny);
     }
 
-    private <T> Instance<T> createInstance(Class<T> type, Annotation qualifier, boolean isAny) {
+    private <T> Instance<T> createInstance(Class<T> type, Collection<Annotation> qualifiers, boolean isAny) {
         return new Instance<T>() {
             @Override
             public T get() {
                 try {
-                    return inject(type, new Stack<>(), qualifier);
+                    return inject(type, new Stack<>(), qualifiers);
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to inject " + type.getName(), e);
                 }
@@ -309,19 +388,20 @@ public class InjectorImpl implements Injector {
 
             @Override
             public Instance<T> select(Annotation... annotations) {
-                Annotation newQualifier = annotations.length > 0 ? annotations[0] : qualifier;
-                return createInstance(type, newQualifier, isAny);
+                return createInstance(type, mergeQualifiers(qualifiers, annotations), isAny);
             }
 
             @Override
             public <U extends T> Instance<U> select(Class<U> subtype, Annotation... annotations) {
-                Annotation newQualifier = annotations.length > 0 ? annotations[0] : qualifier;
-                return createInstance(subtype, newQualifier, isAny);
+                return createInstance(subtype, mergeQualifiers(qualifiers, annotations), isAny);
             }
 
             @Override
             public <U extends T> Instance<U> select(TypeLiteral<U> subtype, Annotation... annotations) {
-                throw new UnsupportedOperationException("TypeLiteral selection not supported");
+                // We extract the raw class from the TypeLiteral to maintain compatibility with createInstance
+                @SuppressWarnings("unchecked")
+                Class<U> rawType = (Class<U>) RawTypeHelper.getRawType(subtype.getType());
+                return createInstance(rawType, mergeQualifiers(qualifiers, annotations), isAny);
             }
 
             @Override
@@ -350,9 +430,7 @@ public class InjectorImpl implements Injector {
             @Override
             public @NonNull Iterator<T> iterator() {
                 try {
-                    Collection<? extends Class<? extends T>> classes = isAny
-                            ? classResolver.resolveImplementations(type, packageName)
-                            : Collections.singletonList(classResolver.resolveImplementation(type, packageName, qualifier));
+                    Collection<Class<? extends T>> classes = classResolver.resolveImplementations(type, packageName, qualifiers);
 
                     List<T> instances = new ArrayList<>();
                     for (Class<? extends T> clazz : classes) {
@@ -366,4 +444,26 @@ public class InjectorImpl implements Injector {
         };
     }
 
+    Collection<Annotation> mergeQualifiers(Collection<Annotation> existing, Annotation... newAnnotations) {
+        if (newAnnotations == null || newAnnotations.length == 0) {
+            return existing;
+        }
+
+        Map<Class<? extends Annotation>, Annotation> merged = new HashMap<>();
+        // Start with existing
+        for (Annotation a : existing) {
+            merged.put(a.annotationType(), a);
+        }
+        // Overwrite/Add new ones
+        for (Annotation a : newAnnotations) {
+            merged.put(a.annotationType(), a);
+        }
+
+        // If we now have specific qualifiers, remove the @Default literal if it exists
+        if (merged.size() > 1) {
+            merged.remove(Default.class);
+        }
+
+        return new ArrayList<>(merged.values());
+    }
 }

@@ -8,6 +8,10 @@ public class ClassWithStaticField {
     @SuppressWarnings("all")
     private static ClassFirstDependency staticField;
 
+    public void setStaticField(ClassFirstDependency staticField) {
+        ClassWithStaticField.staticField = staticField;
+    }
+
     public ClassFirstDependency getStaticField() {
         return staticField;
     }
