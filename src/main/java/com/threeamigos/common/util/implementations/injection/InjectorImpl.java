@@ -339,7 +339,6 @@ public class InjectorImpl implements Injector {
         Collection<Annotation> qualifiers = Arrays.stream(param.getAnnotations())
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
                 .collect(Collectors.toList());
-
         if (qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());
         }
@@ -350,7 +349,6 @@ public class InjectorImpl implements Injector {
         Collection<Annotation> qualifiers = Arrays.stream(field.getAnnotations())
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
                 .collect(Collectors.toList());
-
         if (qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());
         }
@@ -360,22 +358,18 @@ public class InjectorImpl implements Injector {
     private Instance<?> createInstanceWrapper(Field field) {
         ParameterizedType type = (ParameterizedType) field.getGenericType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
-        boolean isAny = field.isAnnotationPresent(Any.class);
         Collection<Annotation> qualifiers = getQualifiers(field);
-
-        return createInstance(genericType, qualifiers, isAny);
+        return createInstance(genericType, qualifiers);
     }
 
     private Instance<?> createInstanceWrapper(Parameter param) {
         ParameterizedType type = (ParameterizedType) param.getParameterizedType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
-        boolean isAny = param.isAnnotationPresent(Any.class);
         Collection<Annotation> qualifiers = getQualifiers(param);
-
-        return createInstance(genericType, qualifiers, isAny);
+        return createInstance(genericType, qualifiers);
     }
 
-    private <T> Instance<T> createInstance(Class<T> type, Collection<Annotation> qualifiers, boolean isAny) {
+    private <T> Instance<T> createInstance(Class<T> type, Collection<Annotation> qualifiers) {
         return new Instance<T>() {
             @Override
             public T get() {
@@ -388,12 +382,12 @@ public class InjectorImpl implements Injector {
 
             @Override
             public Instance<T> select(Annotation... annotations) {
-                return createInstance(type, mergeQualifiers(qualifiers, annotations), isAny);
+                return createInstance(type, mergeQualifiers(qualifiers, annotations));
             }
 
             @Override
             public <U extends T> Instance<U> select(Class<U> subtype, Annotation... annotations) {
-                return createInstance(subtype, mergeQualifiers(qualifiers, annotations), isAny);
+                return createInstance(subtype, mergeQualifiers(qualifiers, annotations));
             }
 
             @Override
@@ -401,7 +395,7 @@ public class InjectorImpl implements Injector {
                 // We extract the raw class from the TypeLiteral to maintain compatibility with createInstance
                 @SuppressWarnings("unchecked")
                 Class<U> rawType = (Class<U>) RawTypeHelper.getRawType(subtype.getType());
-                return createInstance(rawType, mergeQualifiers(qualifiers, annotations), isAny);
+                return createInstance(rawType, mergeQualifiers(qualifiers, annotations));
             }
 
             @Override
