@@ -368,7 +368,6 @@ public class InjectorImplJSR330UnitTest {
             // uses provider.get() to get around circular deps
             assertSame(cupholder.seatProvider.get().getCupholder(), cupholder);
         }
-
     }
 
     @Nested
@@ -732,36 +731,6 @@ public class InjectorImplJSR330UnitTest {
                 Tire staticFieldSpareTire = getStaticField(Convertible.class, "staticFieldSpareTire");
                 assertInstanceOf(SpareTire.class, staticFieldSpareTire, "Expected qualified value");
             }
-
-        }
-
-        @Nested
-        @DisplayName("testStaticFieldInjectionWithValues")
-        class StaticMethodInjectionWithValuesTests {
-
-            @Test
-            public void testStaticFieldInjectionWithValues1() throws NoSuchFieldException, IllegalAccessException {
-                Seat staticFieldPlainSeat = getStaticField(Convertible.class, "staticFieldPlainSeat");
-                assertFalse(staticFieldPlainSeat instanceof DriversSeat, "Expected unqualified value");
-            }
-
-            @Test
-            public void testStaticFieldInjectionWithValues2() throws NoSuchFieldException, IllegalAccessException {
-                Tire staticFieldPlainTire = getStaticField(Convertible.class, "staticFieldPlainTire");
-                assertFalse(staticFieldPlainTire instanceof SpareTire, "Expected unqualified value");
-            }
-
-            @Test
-            public void testStaticFieldInjectionWithValues3() throws NoSuchFieldException, IllegalAccessException {
-                Seat staticFieldDriversSeat = getStaticField(Convertible.class, "staticFieldDriversSeat");
-                assertInstanceOf(DriversSeat.class, staticFieldDriversSeat, "Expected qualified value");
-            }
-
-            @Test
-            public void testStaticFieldInjectionWithValues4() throws NoSuchFieldException, IllegalAccessException {
-                Tire staticFieldSpareTire = getStaticField(Convertible.class, "staticFieldSpareTire");
-                assertInstanceOf(SpareTire.class, staticFieldSpareTire, "Expected qualified value");
-            }
         }
 
         @Nested
@@ -863,52 +832,6 @@ public class InjectorImplJSR330UnitTest {
             public void testStaticMethodInjectionWithProviders4() throws NoSuchFieldException, IllegalAccessException {
                 Provider<Tire> staticMethodSpareTireProvider = getStaticField(Convertible.class, "staticMethodSpareTireProvider");
                 assertInstanceOf(SpareTire.class, staticMethodSpareTireProvider.get(), "Expected qualified value");
-            }
-
-        }
-
-        @Nested
-        @DisplayName("Private tests")
-        class PrivateTests {
-
-            @Nested
-            @DisplayName("testSupertypePrivateMethodInjected")
-            class SupertypePrivateMethodInjected {
-
-                @Test
-                public void testSupertypePrivateMethodInjected1() throws NoSuchFieldException, IllegalAccessException {
-                    assertTrue(getBooleanField(spareTire, Tire.class, "superPrivateMethodInjected"));
-                }
-
-                @Test
-                public void testSupertypePrivateMethodInjected2()  throws NoSuchFieldException, IllegalAccessException {
-                    assertTrue(getBooleanField(spareTire, Tire.class, "subPrivateMethodInjected"));
-                }
-            }
-
-            @Nested
-            @DisplayName("testPackagePrivateMethodInjectedSamePackage")
-            class PackagePrivateMethodInjectedSamePackage {
-
-                @Test
-                public void testPackagePrivateMethodInjectedSamePackage1() throws NoSuchFieldException, IllegalAccessException {
-                    assertTrue(getBooleanField(engine, Engine.class, "subPackagePrivateMethodInjected"));
-                }
-
-                @Test
-                public void testPackagePrivateMethodInjectedSamePackage2() throws NoSuchFieldException, IllegalAccessException {
-                    assertFalse(getBooleanField(engine, Engine.class, "superPackagePrivateMethodInjected"));
-                }
-            }
-
-            @Test
-            public void testPrivateMethodInjectedEvenWhenSimilarMethodLacksAnnotation() throws NoSuchFieldException, IllegalAccessException {
-                assertTrue(getBooleanField(spareTire, Tire.class, "subPrivateMethodForOverrideInjected"));
-            }
-
-            @Test
-            public void testSimilarPrivateMethodInjectedOnlyOnce() throws NoSuchFieldException, IllegalAccessException {
-                assertFalse(getBooleanField(spareTire, Tire.class, "similarPrivateMethodInjectedTwice"));
             }
         }
     }

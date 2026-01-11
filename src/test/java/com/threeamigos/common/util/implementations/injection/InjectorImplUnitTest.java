@@ -62,7 +62,6 @@ class InjectorImplUnitTest {
 
     private static final String TEST_PACKAGE_NAME = "com.threeamigos";
 
-
     private static FuelTank NEVER_INJECTED;
 
     @BeforeAll
