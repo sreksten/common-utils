@@ -39,9 +39,17 @@ class ClassResolver {
      * A collection of Alternatives that can be used instead of the actual implementations.
      */
     private final Set<Class<?>> enabledAlternatives = new HashSet<>();
+    /**
+     * Custom mappings to bind a type and qualifiers to a specific implementation.
+     */
+    private final Map<MappingKey, Class<?>> customMappings = new HashMap<>();
 
     void enableAlternative(Class<?> alternativeClass) {
         enabledAlternatives.add(alternativeClass);
+    }
+
+    void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation) {
+        customMappings.put(new MappingKey(type, qualifiers), implementation);
     }
 
     /**
@@ -114,10 +122,19 @@ class ClassResolver {
     <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Type typeToResolve,
                                                  String packageName, Collection<Annotation> qualifiers) throws Exception {
 
+        // Check custom mappings first
+        MappingKey key = new MappingKey(typeToResolve, qualifiers);
+        if (customMappings.containsKey(key)) {
+            return (Class<? extends T>) customMappings.get(key);
+        }
+
         Class<?> rawType = RawTypeHelper.getRawType(typeToResolve);
 
-        // If we have a concrete class, return that class.
-        if (isNotInterfaceOrAbstract(rawType)) {
+        // If we have a concrete class and the qualifier is Default, return that class.
+        boolean isDefault = qualifiers == null || qualifiers.isEmpty() ||
+                qualifiers.stream().anyMatch(q -> q instanceof DefaultLiteral);
+
+        if (isNotInterfaceOrAbstract(rawType) && isDefault) {
             return (Class<? extends T>)rawType;
         }
 
@@ -178,9 +195,9 @@ class ClassResolver {
         Class<?> rawType = RawTypeHelper.getRawType(abstractClass);
 
         // If we have a concrete class, return that class.
-        if (isNotInterfaceOrAbstract(rawType)) {
-            return Collections.singletonList((Class<? extends T>)rawType);
-        }
+//        if (isNotInterfaceOrAbstract(rawType)) {
+//            return Collections.singletonList((Class<? extends T>)rawType);
+//        }
 
         List<Class<? extends T>> candidates = new ArrayList<>();
 
@@ -360,5 +377,28 @@ class ClassResolver {
             }
         }
         return classes;
+    }
+
+    private static class MappingKey {
+        private final Type type;
+        private final Set<Annotation> qualifiers;
+
+        MappingKey(Type type, Collection<Annotation> qualifiers) {
+            this.type = type;
+            this.qualifiers = qualifiers == null ? Collections.emptySet() : new HashSet<>(qualifiers);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof MappingKey)) return false;
+            MappingKey that = (MappingKey) o;
+            return Objects.equals(type, that.type) && Objects.equals(qualifiers, that.qualifiers);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(type, qualifiers);
+        }
     }
 }

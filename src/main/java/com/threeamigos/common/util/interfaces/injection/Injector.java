@@ -6,6 +6,8 @@ import javax.inject.Inject;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Any;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Type;
+import java.util.Collection;
 
 /**
  * A dependency injector. Given a class, it provides an instance of that class
@@ -29,6 +31,15 @@ public interface Injector {
     void registerScope(Class<? extends Annotation> scopeAnnotation, ScopeHandler handler);
 
     void enableAlternative(Class<?> alternativeClass);
+
+    /**
+     * To dynamically bind a type to a specific implementation given a set of qualifiers.
+     * Useful if the target class cannot be annotated.
+     * @param type type to resolve
+     * @param qualifiers annotations to qualify the type
+     * @param implementation the target class that should be used
+     */
+    void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation);
 
     <T> T inject(Class<T> clazz);
 

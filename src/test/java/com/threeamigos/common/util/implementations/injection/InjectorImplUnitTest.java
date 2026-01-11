@@ -32,9 +32,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.*;
 import com.threeamigos.common.util.implementations.injection.superclasses.MyClass;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
@@ -50,6 +48,7 @@ import javax.inject.Singleton;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Any;
 import java.lang.reflect.ParameterizedType;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -59,6 +58,47 @@ import static org.mockito.ArgumentMatchers.any;
 class InjectorImplUnitTest {
 
     private static final String TEST_PACKAGE_NAME = "com.threeamigos";
+
+    @TestFactory
+    @DisplayName("TCK")
+    Stream<DynamicTest> tck() {
+        // Given
+        Injector sut = new InjectorImpl("org.atinject.tck.auto");
+        sut.enableAlternative(org.atinject.tck.auto.Convertible.class);
+        sut.enableAlternative(org.atinject.tck.auto.V8Engine.class);
+        sut.enableAlternative(org.atinject.tck.auto.DriversSeat.class);
+        sut.enableAlternative(org.atinject.tck.auto.accessories.SpareTire.class);
+
+        // When
+        org.atinject.tck.auto.Car car = sut.inject(org.atinject.tck.auto.Car.class);
+        junit.framework.Test junit3Suite = org.atinject.tck.Tck.testsFor(car, true, true);
+
+        // Then - Bridge JUnit 3 to Dynamic Tests
+        return flattenTestSuite(junit3Suite);
+    }
+
+    private Stream flattenTestSuite(junit.framework.Test test) {
+        if (test instanceof junit.framework.TestSuite) {
+            junit.framework.TestSuite suite = (junit.framework.TestSuite) test;
+            return Collections.list(suite.tests()).stream()
+                    .flatMap(t -> flattenTestSuite((junit.framework.Test) t));
+        } else if (test instanceof junit.framework.TestCase) {
+            junit.framework.TestCase testCase = (junit.framework.TestCase) test;
+            return Stream.of(DynamicTest.dynamicTest(testCase.getName(), () -> {
+                junit.framework.TestResult result = new junit.framework.TestResult();
+                testCase.run(result);
+                if (!result.wasSuccessful()) {
+                    // Throw the first failure found
+                    junit.framework.TestFailure failure = (junit.framework.TestFailure) (result.failures().hasMoreElements()
+                                                ? result.failures().nextElement()
+                                                : result.errors().nextElement());
+                    throw failure.thrownException();
+                }
+            }));
+        }
+        return Stream.empty();
+    }
+
 
     /**
      * The Injector can work on Interfaces, Abstract Classes, and Concrete Classes.

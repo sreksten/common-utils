@@ -73,7 +73,19 @@ public class InjectorImpl implements Injector {
             @Override
             @SuppressWarnings("unchecked")
             public <T> T get(Class<T> clazz, Supplier<T> provider) {
-                return (T) instances.computeIfAbsent(clazz, c -> provider.get());
+                // We don't use computeIfAbsent to handle concurrency issues, when A depends on B and
+                // both are Singletons
+                Object instance = instances.get(clazz);
+                if (instance == null) {
+                    synchronized (instances) {
+                        instance = instances.get(clazz);
+                        if (instance == null) {
+                            instance = provider.get();
+                            instances.put(clazz, instance);
+                        }
+                    }
+                }
+                return (T) instance;
             }
         });
     }
@@ -86,6 +98,11 @@ public class InjectorImpl implements Injector {
     @Override
     public void enableAlternative(Class<?> alternativeClass) {
         classResolver.enableAlternative(alternativeClass);
+    }
+
+    @Override
+    public void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation) {
+        classResolver.bind(type, qualifiers, implementation);
     }
 
     @Override
@@ -286,6 +303,23 @@ public class InjectorImpl implements Injector {
                     continue;
                 }
 
+                if (Modifier.isAbstract(method.getModifiers())) {
+                    throw new InjectionException("Cannot inject into abstract method " + method.getName() + " of class " +
+                            resolvedClass.getName());
+                }
+
+                if (method.getTypeParameters().length > 0) {
+                    throw new InjectionException("Cannot inject into generic method " + method.getName() + " of class " +
+                            resolvedClass.getName());
+                }
+
+                // JSR-330: Only inject the most specific override.
+                // If this method is overridden by a subclass, skip it here.
+                // It will be handled when the loop reaches that subclass.
+                if (isOverridden(method, t.getClass())) {
+                    continue;
+                }
+
                 method.setAccessible(true);
                 Parameter[] parameters = method.getParameters();
                 validateMethodParameters(parameters, method.getName(), resolvedClass);
@@ -293,6 +327,52 @@ public class InjectorImpl implements Injector {
                 method.invoke(t, params);
             }
         }
+    }
+
+    private boolean isOverridden(Method superMethod, Class<?> leafClass) {
+        if (Modifier.isPrivate(superMethod.getModifiers())) {
+            return false;
+        }
+        if (superMethod.getDeclaringClass().equals(leafClass)) {
+            return false;
+        }
+
+        Method subMethod = findMethod(leafClass, superMethod.getName(), superMethod.getParameterTypes());
+        if (subMethod == null || subMethod.equals(superMethod)) {
+            return false;
+        }
+
+        // Check JSR-330 package-private rules:
+        // Package-private methods can only override if they're in the same package
+        boolean isSuperPackagePrivate = !Modifier.isPublic(superMethod.getModifiers()) &&
+                !Modifier.isProtected(superMethod.getModifiers()) &&
+                !Modifier.isPrivate(superMethod.getModifiers());
+
+        if (isSuperPackagePrivate) {
+            // Package-private method is only overridden if subclass method is in the same package
+            return getPackageName(superMethod.getDeclaringClass())
+                    .equals(getPackageName(subMethod.getDeclaringClass()));
+        }
+
+        return true;
+    }
+
+    private String getPackageName(Class<?> clazz) {
+        String name = clazz.getName();
+        int lastDot = name.lastIndexOf('.');
+        return (lastDot == -1) ? "" : name.substring(0, lastDot);
+    }
+
+    private Method findMethod(Class<?> clazz, String name, Class<?>[] parameterTypes) {
+        Class<?> current = clazz;
+        while (current != null && current != Object.class) {
+            try {
+                return current.getDeclaredMethod(name, parameterTypes);
+            } catch (NoSuchMethodException e) {
+                current = current.getSuperclass();
+            }
+        }
+        return null;
     }
 
     /**
@@ -459,5 +539,46 @@ public class InjectorImpl implements Injector {
         }
 
         return new ArrayList<>(merged.values());
+    }
+
+    private static class MethodSignature {
+        private final String name;
+        private final Class<?>[] parameterTypes;
+        private final String packageName; // Track package for package-private methods
+
+        MethodSignature(Method method) {
+            this.name = method.getName();
+            this.parameterTypes = method.getParameterTypes();
+
+            // If it's package-private, we must scope the signature to the package
+            boolean isPackagePrivate = !Modifier.isPublic(method.getModifiers()) &&
+                    !Modifier.isProtected(method.getModifiers()) &&
+                    !Modifier.isPrivate(method.getModifiers());
+
+            if (isPackagePrivate) {
+                String fullName = method.getDeclaringClass().getName();
+                int lastDot = fullName.lastIndexOf('.');
+                this.packageName = (lastDot == -1) ? "" : fullName.substring(0, lastDot);
+            } else {
+                this.packageName = null;
+            }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof MethodSignature)) return false;
+            MethodSignature that = (MethodSignature) o;
+            return Objects.equals(name, that.name) &&
+                    Arrays.equals(parameterTypes, that.parameterTypes) &&
+                    Objects.equals(packageName, that.packageName);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = Objects.hash(name, packageName);
+            result = 31 * result + Arrays.hashCode(parameterTypes);
+            return result;
+        }
     }
 }
