@@ -36,20 +36,20 @@ class ClassResolver {
      */
     private final Map<Type, Collection<Class<?>>> resolvedClasses = new HashMap<>();
     /**
+     * Custom mappings to bind a type and qualifiers to a specific implementation.
+     */
+    private final Map<MappingKey, Class<?>> bindings = new HashMap<>();
+    /**
      * A collection of Alternatives that can be used instead of the actual implementations.
      */
     private final Set<Class<?>> enabledAlternatives = new HashSet<>();
-    /**
-     * Custom mappings to bind a type and qualifiers to a specific implementation.
-     */
-    private final Map<MappingKey, Class<?>> customMappings = new HashMap<>();
+
+    void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation) {
+        bindings.put(new MappingKey(type, qualifiers), implementation);
+    }
 
     void enableAlternative(Class<?> alternativeClass) {
         enabledAlternatives.add(alternativeClass);
-    }
-
-    void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation) {
-        customMappings.put(new MappingKey(type, qualifiers), implementation);
     }
 
     /**
@@ -124,8 +124,8 @@ class ClassResolver {
 
         // Check custom mappings first
         MappingKey key = new MappingKey(typeToResolve, qualifiers);
-        if (customMappings.containsKey(key)) {
-            return (Class<? extends T>) customMappings.get(key);
+        if (bindings.containsKey(key)) {
+            return (Class<? extends T>) bindings.get(key);
         }
 
         Class<?> rawType = RawTypeHelper.getRawType(typeToResolve);

@@ -5,21 +5,26 @@ import org.atinject.tck.auto.*;
 import org.atinject.tck.auto.accessories.Cupholder;
 import org.atinject.tck.auto.accessories.RoundThing;
 import org.atinject.tck.auto.accessories.SpareTire;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import javax.inject.Provider;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("JSR 330 unit tests")
 public class InjectorImplJSR330UnitTest {
+
+    private static FuelTank NEVER_INJECTED;
+
+    @BeforeAll
+    static void setUpClass() throws NoSuchFieldException, IllegalAccessException {
+        NEVER_INJECTED = getStaticField(Tire.class, "NEVER_INJECTED");
+    }
 
     private Convertible car;
     private Cupholder cupholder;
@@ -30,26 +35,54 @@ public class InjectorImplJSR330UnitTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() throws NoSuchFieldException , IllegalAccessException {
+        resetStaticState();
         // Given
         Injector injector = new InjectorImpl("org.atinject.tck.auto");
+
         injector.bind(Seat.class, Collections.singleton(AnnotationLiteral.of(Drivers.class)), DriversSeat.class);
         injector.bind(Tire.class, Collections.singleton(new NamedLiteral("spare")), SpareTire.class);
+
+        Field injectedStaticClassesField = injector.getClass().getDeclaredField("injectedStaticClasses");
+        injectedStaticClassesField.setAccessible(true);
+        Set<Class<?>> injectedStaticClasses = (Set<Class<?>>) injectedStaticClassesField.get(injector);
+        injectedStaticClasses.clear();
+
         // When
         car = (Convertible) injector.inject(Car.class);
         // All Convertible fields are private, so we have to access them
-        Field cupHolderField = Convertible.class.getDeclaredField("cupholder");
-        cupHolderField.setAccessible(true);
-        cupholder = (Cupholder) cupHolderField.get(car);
-        Field spareTireField = Convertible.class.getDeclaredField("spareTire");
-        spareTireField.setAccessible(true);
-        spareTire = (SpareTire) spareTireField.get(car);
-        Field plainTireField = Convertible.class.getDeclaredField("fieldPlainTire");
-        plainTireField.setAccessible(true);
-        plainTire = (Tire) plainTireField.get(car);
-        Field engineField = Convertible.class.getDeclaredField("engineProvider");
-        engineField.setAccessible(true);
-        Provider<Engine> engineProvider = (Provider<Engine>) engineField.get(car);
+        cupholder = getField(car, "cupholder");
+        spareTire = getField(car, "spareTire");
+        plainTire = getField(car, "fieldPlainTire");
+        Provider<Engine> engineProvider = getField(car, "engineProvider");
         engine = engineProvider.get();
+    }
+
+    private void resetStaticState() throws NoSuchFieldException, IllegalAccessException {
+        // Reset TCK static fields if they exist.
+        // The JSR-330 TCK classes often need their static state cleared between injector runs
+        // because they use static booleans to track if injection happened.
+
+        Tire.staticMethodInjectedBeforeStaticFields = false;
+        Tire.subtypeStaticFieldInjectedBeforeSupertypeStaticMethods = false;
+        Tire.subtypeStaticMethodInjectedBeforeSupertypeStaticMethods = false;
+
+        Field field;
+
+        field = Tire.class.getDeclaredField("staticFieldInjection");
+        field.setAccessible(true);
+        field.set(null, NEVER_INJECTED);
+
+        field = Tire.class.getDeclaredField("staticMethodInjection");
+        field.setAccessible(true);
+        field.set(null, NEVER_INJECTED);
+
+        field = SpareTire.class.getDeclaredField("staticFieldInjection");
+        field.setAccessible(true);
+        field.set(null, NEVER_INJECTED);
+
+        field = SpareTire.class.getDeclaredField("staticMethodInjection");
+        field.setAccessible(true);
+        field.set(null, NEVER_INJECTED);
     }
 
     @Nested
@@ -891,7 +924,7 @@ public class InjectorImplJSR330UnitTest {
     }
 
     @SuppressWarnings({"SameParameterValue", "unchecked"})
-    private <T> T getStaticField(Class<?> clazz, String fieldName) throws NoSuchFieldException, IllegalAccessException {
+    private static <T> T getStaticField(Class<?> clazz, String fieldName) throws NoSuchFieldException, IllegalAccessException {
         Field field = clazz.getDeclaredField(fieldName);
         field.setAccessible(true);
         return (T) field.get(null);

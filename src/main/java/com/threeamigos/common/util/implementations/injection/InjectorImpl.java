@@ -189,11 +189,17 @@ public class InjectorImpl implements Injector {
             }
 
             for (Class<?> clazz : hierarchy) {
-                injectFields(t, stack, clazz, resolvedClass);
-                injectMethods(t, stack, clazz, resolvedClass);
+                injectFields(t, stack, clazz, resolvedClass, true);
+            }
+            for (Class<?> clazz : hierarchy) {
+                injectMethods(t, stack, clazz, resolvedClass, true);
                 // After processing fields and methods for this specific class in the hierarchy,
                 // mark it as static-injected.
                 injectedStaticClasses.add(clazz);
+            }
+            for (Class<?> clazz : hierarchy) {
+                injectFields(t, stack, clazz, resolvedClass, false);
+                injectMethods(t, stack, clazz, resolvedClass, false);
             }
             return t;
         } catch (Exception e) {
@@ -265,13 +271,18 @@ public class InjectorImpl implements Injector {
         return constructor.newInstance(args);
     }
 
-    private <T> void injectFields(T t, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass) throws Exception {
+    private <T> void injectFields(T t, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
         Field[] fields = clazz.getDeclaredFields();
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
 
         for (Field field : fields) {
             if (field.isAnnotationPresent(Inject.class)) {
                 boolean isStatic = Modifier.isStatic(field.getModifiers());
+
+                if (onlyStatic != isStatic) {
+                    continue;
+                }
+
                 if (isStatic && isStaticAlreadyInjected) {
                     continue;
                 }
@@ -292,13 +303,18 @@ public class InjectorImpl implements Injector {
         }
     }
 
-    private<T> void injectMethods(T t, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass) throws Exception {
+    private<T> void injectMethods(T t, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
         Method[] methods = clazz.getDeclaredMethods();
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
 
         for (Method method : methods) {
             if (method.isAnnotationPresent(Inject.class)) {
                 boolean isStatic = Modifier.isStatic(method.getModifiers());
+
+                if (onlyStatic != isStatic) {
+                    continue;
+                }
+
                 if (isStatic && isStaticAlreadyInjected) {
                     continue;
                 }

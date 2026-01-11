@@ -32,10 +32,13 @@ import com.threeamigos.common.util.implementations.injection.scopes.*;
 import com.threeamigos.common.util.implementations.injection.superclasses.MyClass;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
+import org.atinject.tck.auto.*;
+import org.atinject.tck.auto.accessories.SpareTire;
 import org.junit.jupiter.api.*;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -59,16 +62,56 @@ class InjectorImplUnitTest {
 
     private static final String TEST_PACKAGE_NAME = "com.threeamigos";
 
+
+    private static FuelTank NEVER_INJECTED;
+
+    @BeforeAll
+    static void setUpClass() throws NoSuchFieldException, IllegalAccessException {
+        Field field = Tire.class.getDeclaredField("NEVER_INJECTED");
+        field.setAccessible(true);
+        NEVER_INJECTED = (FuelTank) field.get(null);
+    }
+
+    @BeforeEach
+    void setUp() throws NoSuchFieldException, IllegalAccessException {
+        resetStaticState();
+    }
+
+    private void resetStaticState() throws NoSuchFieldException, IllegalAccessException {
+        // Reset TCK static fields if they exist.
+        // The JSR-330 TCK classes often need their static state cleared between injector runs
+        // because they use static booleans to track if injection happened.
+
+        Field field = Tire.class.getDeclaredField("staticMethodInjectedBeforeStaticFields");
+        field.setAccessible(true);
+        field.set(null, false);
+
+        field = Tire.class.getDeclaredField("subtypeStaticFieldInjectedBeforeSupertypeStaticMethods");
+        field.setAccessible(true);
+        field.set(null, false);
+
+        field = Tire.class.getDeclaredField("subtypeStaticMethodInjectedBeforeSupertypeStaticMethods");
+        field.setAccessible(true);
+        field.set(null, false);
+
+        field = SpareTire.class.getDeclaredField("staticFieldInjection");
+        field.setAccessible(true);
+        field.set(null, NEVER_INJECTED);
+
+        field = SpareTire.class.getDeclaredField("staticMethodInjection");
+        field.setAccessible(true);
+        field.set(null, NEVER_INJECTED);
+    }
+
+
     @TestFactory
     @DisplayName("TCK")
-    Stream<DynamicTest> tck() {
+    Stream<DynamicTest> tck() throws NoSuchFieldException, IllegalAccessException {
         // Given
         Injector sut = new InjectorImpl("org.atinject.tck.auto");
-        sut.enableAlternative(org.atinject.tck.auto.Convertible.class);
-        sut.enableAlternative(org.atinject.tck.auto.V8Engine.class);
-        sut.enableAlternative(org.atinject.tck.auto.DriversSeat.class);
-        sut.enableAlternative(org.atinject.tck.auto.accessories.SpareTire.class);
-
+        sut.bind(Seat.class, Collections.singleton(AnnotationLiteral.of(Drivers.class)), DriversSeat.class);
+        sut.bind(Tire.class, Collections.singleton(new NamedLiteral("spare")), SpareTire.class);
+        resetStaticState();
         // When
         org.atinject.tck.auto.Car car = sut.inject(org.atinject.tck.auto.Car.class);
         junit.framework.Test junit3Suite = org.atinject.tck.Tck.testsFor(car, true, true);
@@ -77,7 +120,7 @@ class InjectorImplUnitTest {
         return flattenTestSuite(junit3Suite);
     }
 
-    private Stream flattenTestSuite(junit.framework.Test test) {
+    private Stream<DynamicTest> flattenTestSuite(junit.framework.Test test) {
         if (test instanceof junit.framework.TestSuite) {
             junit.framework.TestSuite suite = (junit.framework.TestSuite) test;
             return Collections.list(suite.tests()).stream()

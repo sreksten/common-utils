@@ -30,8 +30,6 @@ public interface Injector {
 
     void registerScope(Class<? extends Annotation> scopeAnnotation, ScopeHandler handler);
 
-    void enableAlternative(Class<?> alternativeClass);
-
     /**
      * To dynamically bind a type to a specific implementation given a set of qualifiers.
      * Useful if the target class cannot be annotated.
@@ -40,6 +38,12 @@ public interface Injector {
      * @param implementation the target class that should be used
      */
     void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation);
+
+    /**
+     * Enable alternative implementation for a class.
+     * @param alternativeClass the class to enable alternative implementation for
+     */
+    void enableAlternative(Class<?> alternativeClass);
 
     <T> T inject(Class<T> clazz);
 
