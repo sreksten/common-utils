@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.interfaces.injection.Injector;
+import junit.framework.TestCase;
 import org.atinject.tck.auto.*;
 import org.atinject.tck.auto.accessories.Cupholder;
 import org.atinject.tck.auto.accessories.RoundThing;
@@ -45,7 +46,6 @@ public class InjectorImplJSR330UnitTest {
         Field injectedStaticClassesField = injector.getClass().getDeclaredField("injectedStaticClasses");
         injectedStaticClassesField.setAccessible(true);
         Set<Class<?>> injectedStaticClasses = (Set<Class<?>>) injectedStaticClassesField.get(injector);
-        injectedStaticClasses.clear();
 
         // When
         car = (Convertible) injector.inject(Car.class);
@@ -55,6 +55,7 @@ public class InjectorImplJSR330UnitTest {
         plainTire = getField(car, "fieldPlainTire");
         Provider<Engine> engineProvider = getField(car, "engineProvider");
         engine = engineProvider.get();
+        injectedStaticClasses.clear();
     }
 
     private void resetStaticState() throws NoSuchFieldException, IllegalAccessException {
@@ -908,6 +909,51 @@ public class InjectorImplJSR330UnitTest {
             public void testSimilarPrivateMethodInjectedOnlyOnce() throws NoSuchFieldException, IllegalAccessException {
                 assertFalse(getBooleanField(spareTire, Tire.class, "similarPrivateMethodInjectedTwice"));
             }
+        }
+    }
+
+    @Nested
+    @DisplayName("Private tests")
+    class PrivateTests {
+
+        @Nested
+        @DisplayName("testSupertypePrivateMethodInjected")
+        class SupertypePrivateMethodInjected {
+
+            @Test
+            public void testSupertypePrivateMethodInjected1() throws NoSuchFieldException, IllegalAccessException {
+                assertTrue(getBooleanField(spareTire, Tire.class, "superPrivateMethodInjected"));
+            }
+
+            @Test
+            public void testSupertypePrivateMethodInjected2() throws NoSuchFieldException, IllegalAccessException {
+                assertTrue(getBooleanField(spareTire, Tire.class, "subPrivateMethodInjected"));
+            }
+        }
+
+        @Nested
+        @DisplayName("testPackagePrivateMethodInjectedSamePackage")
+        class PackagePrivateMethodInjectedSamePackage {
+
+            @Test
+            public void testPackagePrivateMethodInjectedSamePackage1() throws NoSuchFieldException, IllegalAccessException {
+                assertTrue(getBooleanField(engine, Engine.class, "subPackagePrivateMethodInjected"));
+            }
+
+            @Test
+            public void testPackagePrivateMethodInjectedSamePackage2() throws NoSuchFieldException, IllegalAccessException {
+                assertFalse(getBooleanField(engine, Engine.class, "superPackagePrivateMethodInjected"));
+            }
+        }
+
+        @Test
+        public void testPrivateMethodInjectedEvenWhenSimilarMethodLacksAnnotation() throws NoSuchFieldException, IllegalAccessException {
+            assertTrue(getBooleanField(spareTire, Tire.class, "subPrivateMethodForOverrideInjected"));
+        }
+
+        @Test
+        public void testSimilarPrivateMethodInjectedOnlyOnce() {
+            assertFalse(spareTire.similarPrivateMethodInjectedTwice);
         }
     }
 
