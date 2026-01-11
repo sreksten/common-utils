@@ -38,7 +38,8 @@ public class InjectorImplJSR330UnitTest {
     void setUp() throws NoSuchFieldException , IllegalAccessException {
         resetStaticState();
         // Given
-        Injector injector = new InjectorImpl("org.atinject.tck.auto");
+        InjectorImpl injector = new InjectorImpl("org.atinject.tck.auto");
+        injector.clearState();
 
         injector.bind(Seat.class, Collections.singleton(AnnotationLiteral.of(Drivers.class)), DriversSeat.class);
         injector.bind(Tire.class, Collections.singleton(new NamedLiteral("spare")), SpareTire.class);

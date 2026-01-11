@@ -32,6 +32,15 @@ public class InjectorImpl implements Injector {
     private final Map<Class<? extends Annotation>, ScopeHandler> scopeRegistry = new HashMap<>();
 
     /**
+     * Clears all internal state, including scope handlers and injected static classes.
+     */
+    void clearState() {
+        scopeRegistry.clear();
+        registerDefaultScope();
+        injectedStaticClasses.clear();
+    }
+
+    /**
      * The class resolver used in this injector to find concrete implementations of abstract classes and interfaces.
      */
     private final ClassResolver classResolver;
