@@ -35,6 +35,8 @@ import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 import org.atinject.tck.auto.*;
 import org.atinject.tck.auto.accessories.SpareTire;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
@@ -58,6 +60,7 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.any;
 
 @DisplayName("InjectorImpl unit tests")
+@Execution(ExecutionMode.SAME_THREAD)
 class InjectorImplUnitTest {
 
     private static final String TEST_PACKAGE_NAME = "com.threeamigos";
@@ -102,12 +105,12 @@ class InjectorImplUnitTest {
         field.set(null, NEVER_INJECTED);
     }
 
-
     @TestFactory
-    @DisplayName("TCK")
+    @DisplayName("JSR 330 Technology Compatibility Kit")
     Stream<DynamicTest> tck() throws NoSuchFieldException, IllegalAccessException {
         // Given
-        Injector sut = new InjectorImpl("org.atinject.tck.auto");
+        InjectorImpl sut = new InjectorImpl("org.atinject.tck.auto");
+        sut.clearState();
         sut.bind(Seat.class, Collections.singleton(AnnotationLiteral.of(Drivers.class)), DriversSeat.class);
         sut.bind(Tire.class, Collections.singleton(new NamedLiteral("spare")), SpareTire.class);
         resetStaticState();
@@ -119,6 +122,7 @@ class InjectorImplUnitTest {
         return flattenTestSuite(junit3Suite);
     }
 
+    @SuppressWarnings("unchecked")
     private Stream<DynamicTest> flattenTestSuite(junit.framework.Test test) {
         if (test instanceof junit.framework.TestSuite) {
             junit.framework.TestSuite suite = (junit.framework.TestSuite) test;

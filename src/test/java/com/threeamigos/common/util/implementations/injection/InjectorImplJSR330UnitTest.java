@@ -1,23 +1,23 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.interfaces.injection.Injector;
-import junit.framework.TestCase;
 import org.atinject.tck.auto.*;
 import org.atinject.tck.auto.accessories.Cupholder;
 import org.atinject.tck.auto.accessories.RoundThing;
 import org.atinject.tck.auto.accessories.SpareTire;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import javax.inject.Provider;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collections;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("JSR 330 unit tests")
+@DisplayName("JSR 330 Technology Compatibility Kit unit tests")
+@Execution(ExecutionMode.SAME_THREAD)
 public class InjectorImplJSR330UnitTest {
 
     private static FuelTank NEVER_INJECTED;
@@ -34,19 +34,13 @@ public class InjectorImplJSR330UnitTest {
     private Engine engine;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     void setUp() throws NoSuchFieldException , IllegalAccessException {
-        resetStaticState();
         // Given
         InjectorImpl injector = new InjectorImpl("org.atinject.tck.auto");
         injector.clearState();
-
         injector.bind(Seat.class, Collections.singleton(AnnotationLiteral.of(Drivers.class)), DriversSeat.class);
         injector.bind(Tire.class, Collections.singleton(new NamedLiteral("spare")), SpareTire.class);
-
-        Field injectedStaticClassesField = injector.getClass().getDeclaredField("injectedStaticClasses");
-        injectedStaticClassesField.setAccessible(true);
-        Set<Class<?>> injectedStaticClasses = (Set<Class<?>>) injectedStaticClassesField.get(injector);
+        resetStaticState();
 
         // When
         car = (Convertible) injector.inject(Car.class);
@@ -56,7 +50,6 @@ public class InjectorImplJSR330UnitTest {
         plainTire = getField(car, "fieldPlainTire");
         Provider<Engine> engineProvider = getField(car, "engineProvider");
         engine = engineProvider.get();
-        injectedStaticClasses.clear();
     }
 
     private void resetStaticState() throws NoSuchFieldException, IllegalAccessException {
@@ -679,6 +672,7 @@ public class InjectorImplJSR330UnitTest {
 
     @Nested
     @DisplayName("Static tests")
+    //@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class StaticTests {
 
         @Test
