@@ -450,8 +450,6 @@ public class InjectorImplJSR330UnitTest {
                 assertNotSame(methodSpareTireProvider.get(), methodSpareTireProvider.get(), "Expected distinct values");
             }
         }
-
-
     }
 
     @Nested
@@ -636,7 +634,6 @@ public class InjectorImplJSR330UnitTest {
             public void testOverridingMixedWithPackagePrivate35() {
                 assertTrue(((RoundThing) plainTire).packagePrivateMethod3Injected);
             }
-
         }
 
         @Nested
