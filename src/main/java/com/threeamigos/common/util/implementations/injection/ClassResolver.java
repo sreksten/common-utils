@@ -192,13 +192,6 @@ class ClassResolver {
     <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Type abstractClass,
                                                               String packageName) throws Exception {
 
-        Class<?> rawType = RawTypeHelper.getRawType(abstractClass);
-
-        // If we have a concrete class, return that class.
-//        if (isNotInterfaceOrAbstract(rawType)) {
-//            return Collections.singletonList((Class<? extends T>)rawType);
-//        }
-
         List<Class<? extends T>> candidates = new ArrayList<>();
 
         /*

@@ -16,7 +16,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collections;
 
-import static org.atinject.tck.auto.Convertible.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("JSR 330 unit tests")
@@ -29,6 +28,7 @@ public class InjectorImplJSR330UnitTest {
     private Engine engine;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() throws NoSuchFieldException , IllegalAccessException {
         // Given
         Injector injector = new InjectorImpl("org.atinject.tck.auto");
@@ -555,8 +555,7 @@ public class InjectorImplJSR330UnitTest {
 
             @Test
             public void testOverridingMixedWithPackagePrivate22() throws NoSuchFieldException, IllegalAccessException {
-                Tire tire = (Tire) spareTire;
-                assertTrue(getBooleanField(tire, "packagePrivateMethod2Injected"));
+                assertTrue(getBooleanField(spareTire, "packagePrivateMethod2Injected"));
             }
 
             @Test
@@ -891,18 +890,21 @@ public class InjectorImplJSR330UnitTest {
         return (boolean) field.get(object);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"SameParameterValue", "unchecked"})
     private <T> T getStaticField(Class<?> clazz, String fieldName) throws NoSuchFieldException, IllegalAccessException {
         Field field = clazz.getDeclaredField(fieldName);
         field.setAccessible(true);
         return (T) field.get(null);
     }
+
+    @SuppressWarnings("SameParameterValue")
     private boolean getStaticBooleanMethod(Class<?> clazz, String methodName) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException {
         Method method = clazz.getDeclaredMethod(methodName);
         method.setAccessible(true);
         return (boolean) method.invoke(null);
     }
 
+    @SuppressWarnings("SameParameterValue")
     private boolean getBooleanMethod(Object object, Class<?> clazz, String methodName) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException {
         Method method = clazz.getDeclaredMethod(methodName);
         method.setAccessible(true);
@@ -914,12 +916,5 @@ public class InjectorImplJSR330UnitTest {
         Field field = object.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         return (T) field.get(object);
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> T getMethod(Object object, String methodName) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
-        Method method = object.getClass().getDeclaredMethod(methodName);
-        method.setAccessible(true);
-        return (T) method.invoke(object);
     }
 }

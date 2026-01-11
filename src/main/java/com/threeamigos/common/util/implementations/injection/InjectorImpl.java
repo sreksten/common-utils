@@ -540,45 +540,4 @@ public class InjectorImpl implements Injector {
 
         return new ArrayList<>(merged.values());
     }
-
-    private static class MethodSignature {
-        private final String name;
-        private final Class<?>[] parameterTypes;
-        private final String packageName; // Track package for package-private methods
-
-        MethodSignature(Method method) {
-            this.name = method.getName();
-            this.parameterTypes = method.getParameterTypes();
-
-            // If it's package-private, we must scope the signature to the package
-            boolean isPackagePrivate = !Modifier.isPublic(method.getModifiers()) &&
-                    !Modifier.isProtected(method.getModifiers()) &&
-                    !Modifier.isPrivate(method.getModifiers());
-
-            if (isPackagePrivate) {
-                String fullName = method.getDeclaringClass().getName();
-                int lastDot = fullName.lastIndexOf('.');
-                this.packageName = (lastDot == -1) ? "" : fullName.substring(0, lastDot);
-            } else {
-                this.packageName = null;
-            }
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof MethodSignature)) return false;
-            MethodSignature that = (MethodSignature) o;
-            return Objects.equals(name, that.name) &&
-                    Arrays.equals(parameterTypes, that.parameterTypes) &&
-                    Objects.equals(packageName, that.packageName);
-        }
-
-        @Override
-        public int hashCode() {
-            int result = Objects.hash(name, packageName);
-            result = 31 * result + Arrays.hashCode(parameterTypes);
-            return result;
-        }
-    }
 }
