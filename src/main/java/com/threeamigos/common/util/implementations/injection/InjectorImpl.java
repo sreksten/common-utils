@@ -100,17 +100,17 @@ public class InjectorImpl implements Injector {
     }
 
     @Override
-    public void registerScope(Class<? extends Annotation> scopeAnnotation, ScopeHandler handler) {
+    public void registerScope(@NonNull Class<? extends Annotation> scopeAnnotation, @NonNull ScopeHandler handler) {
         scopeRegistry.put(scopeAnnotation, handler);
     }
 
     @Override
-    public void enableAlternative(Class<?> alternativeClass) {
+    public void enableAlternative(@NonNull Class<?> alternativeClass) {
         classResolver.enableAlternative(alternativeClass);
     }
 
     @Override
-    public void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation) {
+    public void bind(@NonNull Type type, @NonNull Collection<Annotation> qualifiers, @NonNull Class<?> implementation) {
         classResolver.bind(type, qualifiers, implementation);
     }
 
@@ -120,7 +120,7 @@ public class InjectorImpl implements Injector {
     }
 
     @Override
-    public <T> T inject(TypeLiteral<T> typeLiteral) {
+    public <T> T inject(@NonNull TypeLiteral<T> typeLiteral) {
         return inject(typeLiteral.getType(), new Stack<>(), null);
     }
 

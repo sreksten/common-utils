@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.interfaces.injection;
 
+import org.jspecify.annotations.NonNull;
+
 import javax.enterprise.util.TypeLiteral;
 import javax.inject.Named;
 import javax.inject.Inject;
@@ -13,7 +15,7 @@ import java.util.Collection;
  * A dependency injector. Given a class, it provides an instance of that class
  * with all dependencies injected.<br/>
  * The constructor for that class must be marked with {@link Inject} and should
- * list all dependencies needed (no method or instance injection at the moment).<br/>
+ * list all dependencies needed.<br/>
  * If the class is an interface or an abstract class, an implementation is provided
  * chosen from those that are available in the classpath.<br/>
  * If more than one implementation is available, all but one should be marked as
@@ -28,7 +30,14 @@ import java.util.Collection;
  */
 public interface Injector {
 
-    void registerScope(Class<? extends Annotation> scopeAnnotation, ScopeHandler handler);
+    // Setup methods
+
+    /**
+     * Register a custom scope handler.
+     * @param scopeAnnotation an Annotation for the scope
+     * @param handler a ScopeHandler implementation
+     */
+    void registerScope(@NonNull Class<? extends Annotation> scopeAnnotation, @NonNull ScopeHandler handler);
 
     /**
      * To dynamically bind a type to a specific implementation given a set of qualifiers.
@@ -37,15 +46,17 @@ public interface Injector {
      * @param qualifiers annotations to qualify the type
      * @param implementation the target class that should be used
      */
-    void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation);
+    void bind(@NonNull Type type, @NonNull Collection<Annotation> qualifiers, @NonNull Class<?> implementation);
 
     /**
      * Enable alternative implementation for a class.
      * @param alternativeClass the class to enable alternative implementation for
      */
-    void enableAlternative(Class<?> alternativeClass);
+    void enableAlternative(@NonNull Class<?> alternativeClass);
 
-    <T> T inject(Class<T> clazz);
+    // Injection methods
 
-    <T> T inject(TypeLiteral<T> clazz);
+    <T> T inject(@NonNull Class<T> clazz);
+
+    <T> T inject(@NonNull TypeLiteral<T> clazz);
 }

@@ -8,6 +8,7 @@ import java.lang.annotation.Annotation;
  */
 @SuppressWarnings("all")
 class DefaultLiteral implements Default {
+
     @Override
     public Class<? extends Annotation> annotationType() {
         return Default.class;
