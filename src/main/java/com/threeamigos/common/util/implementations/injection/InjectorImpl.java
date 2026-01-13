@@ -123,12 +123,12 @@ public class InjectorImpl implements Injector {
             if (scopeType != null && scopeRegistry.containsKey(scopeType)) {
                 ScopeHandler handler = scopeRegistry.get(scopeType);
                 // A helper method to handle the wildcard capture safely
-                T t = handleScopedInjection(handler, resolvedClass, stack);
+                T t = handleScopedInjection(handler, typeToInject, resolvedClass, stack);
                 stack.pop();
                 return t;
             }
 
-            T t = performInjection(resolvedClass, stack);
+            T t = performInjection(typeToInject, resolvedClass, stack);
             stack.pop();
             return t;
         } catch (InjectionException e) {
@@ -155,19 +155,22 @@ public class InjectorImpl implements Injector {
      * Helper method to bridge the generic gap between Class<? extends T> and ScopeHandler
      */
     @SuppressWarnings("unchecked")
-    private <T> T handleScopedInjection(ScopeHandler handler, Class<? extends T> clazz, Stack<Type> stack) {
-        return (T) handler.get((Class<Object>) clazz, () -> performInjection(clazz, stack));
+    private <T> T handleScopedInjection(ScopeHandler handler, Type typeContext, Class<? extends T> clazz, Stack<Type> stack) {
+        return (T) handler.get((Class<Object>) clazz, () -> performInjection(typeContext, clazz, stack));
     }
 
     /**
      * The actual instantiation logic
      */
-    private <T> T performInjection(Class<? extends T> resolvedClass, Stack<Type> stack) {
+    private <T> T performInjection(Type typeContext, Class<? extends T> resolvedClass, Stack<Type> stack) {
         try {
+            if (resolvedClass.isArray()) {
+                return (T) Array.newInstance(resolvedClass.getComponentType(), 0);
+            }
             Constructor<? extends T> constructor = getConstructor(resolvedClass);
             Parameter[] parameters = constructor.getParameters();
             validateConstructorParameters(parameters, resolvedClass);
-            Object[] args = resolveParameters(parameters, stack);
+            Object[] args = resolveParameters(typeContext, parameters, stack);
             T t = buildInstance(constructor, args);
 
             // Collect all classes in the hierarchy, from top to bottom
@@ -179,17 +182,17 @@ public class InjectorImpl implements Injector {
             }
 
             for (Class<?> clazz : hierarchy) {
-                injectFields(t, stack, clazz, resolvedClass, true);
+                injectFields(t, typeContext, stack, clazz, resolvedClass, true);
             }
             for (Class<?> clazz : hierarchy) {
-                injectMethods(t, stack, clazz, resolvedClass, true);
+                injectMethods(t, typeContext, stack, clazz, resolvedClass, true);
                 // After processing fields and methods for this specific class in the hierarchy,
                 // mark it as static-injected.
                 injectedStaticClasses.add(clazz);
             }
             for (Class<?> clazz : hierarchy) {
-                injectFields(t, stack, clazz, resolvedClass, false);
-                injectMethods(t, stack, clazz, resolvedClass, false);
+                injectFields(t, typeContext, stack, clazz, resolvedClass, false);
+                injectMethods(t, typeContext, stack, clazz, resolvedClass, false);
             }
             return t;
         } catch (Exception e) {
@@ -239,19 +242,38 @@ public class InjectorImpl implements Injector {
         }
     }
 
-    private Object[] resolveParameters(Parameter[] parameters, Stack<Type> stack) {
+    private Object[] resolveParameters(Type typeContext, Parameter[] parameters, Stack<Type> stack) {
         Object[] args = new Object[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
             if (Provider.class.isAssignableFrom(param.getType())) {
                 args[i] = createInstanceWrapper(param);
             } else {
-                checkClassValidity(param.getParameterizedType());
+                Type paramType = resolveType(param.getParameterizedType(), typeContext);
+                checkClassValidity(paramType);
                 Collection<Annotation> paramQualifiers = getQualifiers(param);
-                args[i] = inject(param.getType(), stack, paramQualifiers);
+                args[i] = inject(paramType, stack, paramQualifiers);
             }
         }
         return args;
+    }
+
+    private Type resolveType(Type toResolve, Type context) {
+        if (!(toResolve instanceof TypeVariable)) {
+            return toResolve;
+        }
+        TypeVariable<?> tv = (TypeVariable<?>) toResolve;
+        if (context instanceof ParameterizedType) {
+            ParameterizedType pt = (ParameterizedType) context;
+            Class<?> raw = (Class<?>) pt.getRawType();
+            TypeVariable<?>[] vars = raw.getTypeParameters();
+            for (int i = 0; i < vars.length; i++) {
+                if (vars[i].getName().equals(tv.getName())) {
+                    return pt.getActualTypeArguments()[i];
+                }
+            }
+        }
+        return toResolve;
     }
 
     <T> T buildInstance(Constructor<? extends T> constructor, Object... args) throws Exception {
@@ -261,7 +283,7 @@ public class InjectorImpl implements Injector {
         return constructor.newInstance(args);
     }
 
-    private <T> void injectFields(T t, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
+    private <T> void injectFields(T t, Type typeContext, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
         Field[] fields = clazz.getDeclaredFields();
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
 
@@ -285,15 +307,16 @@ public class InjectorImpl implements Injector {
                 if (Provider.class.isAssignableFrom(field.getType())) {
                     field.set(t, createInstanceWrapper(field));
                 } else {
-                    checkClassValidity(field.getGenericType());
+                    Type fieldType = resolveType(field.getGenericType(), typeContext);
+                    checkClassValidity(fieldType);
                     Collection<Annotation> fieldQualifiers = getQualifiers(field);
-                    field.set(t, inject(field.getType(), stack, fieldQualifiers));
+                    field.set(t, inject(fieldType, stack, fieldQualifiers));
                 }
             }
         }
     }
 
-    private<T> void injectMethods(T t, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
+    private<T> void injectMethods(T t, Type typeContext, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
         Method[] methods = clazz.getDeclaredMethods();
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
 
@@ -329,7 +352,7 @@ public class InjectorImpl implements Injector {
                 method.setAccessible(true);
                 Parameter[] parameters = method.getParameters();
                 validateMethodParameters(parameters, method.getName(), resolvedClass);
-                Object[] params = resolveParameters(parameters, stack);
+                Object[] params = resolveParameters(typeContext, parameters, stack);
                 method.invoke(t, params);
             }
         }

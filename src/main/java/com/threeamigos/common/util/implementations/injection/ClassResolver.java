@@ -96,7 +96,7 @@ class ClassResolver {
         boolean isDefault = qualifiers == null || qualifiers.isEmpty() ||
                 qualifiers.stream().anyMatch(q -> q instanceof DefaultLiteral);
 
-        if (isDefault && isNotInterfaceOrAbstract(rawType)) {
+        if (isDefault && (isNotInterfaceOrAbstract(rawType) || rawType.isArray())) {
             return (Class<? extends T>)rawType;
         }
 
@@ -238,32 +238,31 @@ class ClassResolver {
         }
 
         if (targetType instanceof ParameterizedType) {
-            // 1. Check interfaces declared directly on this class
-            for (Type type : candidate.getGenericInterfaces()) {
-                if (type.equals(targetType)) {
-                    return true;
-                }
+            ParameterizedType pt = (ParameterizedType) targetType;
+            Class<?> rawTarget = (Class<?>) pt.getRawType();
 
-                // Recursive check for the interface hierarchy
-                Class<?> rawType = (Class<?>) ((type instanceof ParameterizedType)
-                        ? ((ParameterizedType) type).getRawType() : type);
-                if (isAssignable(targetType, rawType)) {
-                    return true;
-                }
-            }
-
-            // 2. Check superclass
-            Type superType = candidate.getGenericSuperclass();
-            if (superType == null || superType == Object.class) {
+            if (!rawTarget.isAssignableFrom(candidate)) {
                 return false;
             }
 
-            if (superType.equals(targetType)) {
-                return true;
+            // 1. Check all interfaces of the candidate
+            for (Type itf : candidate.getGenericInterfaces()) {
+                if (typesMatch(targetType, itf)) {
+                    return true;
+                }
             }
 
-            // Recursive check for the superclass hierarchy
-            return isAssignable(targetType, candidate.getSuperclass());
+            // 2. Check superclass hierarchy
+            Type superType = candidate.getGenericSuperclass();
+            if (superType != null && superType != Object.class) {
+                if (typesMatch(targetType, superType)) {
+                    return true;
+                }
+                return isAssignable(targetType, candidate.getSuperclass());
+            }
+
+            // Fallback: if we match the raw type and it's a simple match, consider it assignable
+            return typesMatch(targetType, candidate);
         }
 
         if (targetType instanceof GenericArrayType || targetType instanceof TypeVariable || targetType instanceof WildcardType) {
@@ -272,6 +271,48 @@ class ClassResolver {
         }
 
         return false;
+    }
+
+    private boolean typesMatch(Type target, Type candidate) {
+        if (target.equals(candidate)) {
+            return true;
+        }
+
+        // If target is a TypeVariable (like T), it matches its bound (usually Object)
+        if (target instanceof TypeVariable) {
+            return true;
+        }
+
+        if (target instanceof ParameterizedType && candidate instanceof ParameterizedType) {
+            ParameterizedType pt1 = (ParameterizedType) target;
+            ParameterizedType pt2 = (ParameterizedType) candidate;
+
+            if (!pt1.getRawType().equals(pt2.getRawType())) {
+                return false;
+            }
+
+            Type[] args1 = pt1.getActualTypeArguments();
+            Type[] args2 = pt2.getActualTypeArguments();
+
+            if (args1.length != args2.length) {
+                return false;
+            }
+
+            for (int i = 0; i < args1.length; i++) {
+                if (!typeArgsMatch(args1[i], args2[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private boolean typeArgsMatch(Type t1, Type t2) {
+        if (t1.equals(t2)) return true;
+        if (t1 instanceof WildcardType || t2 instanceof WildcardType) return true;
+        if (t1 instanceof TypeVariable || t2 instanceof TypeVariable) return true;
+        return RawTypeExtractor.getRawType(t1).isAssignableFrom(RawTypeExtractor.getRawType(t2));
     }
 
     // From now on, package scans to search for classes.

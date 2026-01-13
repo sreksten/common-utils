@@ -27,6 +27,7 @@ import com.threeamigos.common.util.implementations.injection.methods.ClassWithMe
 import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithValidParameters;
 import com.threeamigos.common.util.implementations.injection.methods.FirstMethodParameter;
 import com.threeamigos.common.util.implementations.injection.methods.SecondMethodParameter;
+import com.threeamigos.common.util.implementations.injection.misc.GenericService;
 import com.threeamigos.common.util.implementations.injection.parameters.TestClassWithInvalidParametersInConstructor;
 import com.threeamigos.common.util.implementations.injection.scopes.*;
 import com.threeamigos.common.util.implementations.injection.superclasses.MyClass;
@@ -1716,6 +1717,34 @@ class InjectorImplUnitTest {
                 assertTrue(merged.contains(new NamedLiteral("test2")));
             }
 
+        }
+
+    }
+
+    @Nested
+    @DisplayName("Misc")
+    class MiscTests {
+
+        @Test
+        @DisplayName("Miscellaneous")
+        void miscellaneousTests() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // List is an interface, so we must bind it to a concrete implementation
+            sut.bind(new TypeLiteral<List<? extends Number>>() {}.getType(),
+                    Collections.singleton(new DefaultLiteral()),
+                    ArrayList.class);
+
+            // GenericService<String> is what we want
+            TypeLiteral<GenericService<String>> typeLiteral = new TypeLiteral<GenericService<String>>() {};
+
+            // When
+            GenericService<String> service = sut.inject(typeLiteral);
+
+            // Then
+            assertNotNull(service);
+            assertDoesNotThrow(service::run);
         }
 
     }
