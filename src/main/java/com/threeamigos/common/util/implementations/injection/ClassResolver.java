@@ -77,9 +77,6 @@ class ClassResolver {
         return resolveImplementation(Thread.currentThread().getContextClassLoader(), typeToResolve, qualifiers);
     }
 
-    /*
-     * package-private to run the tests
-     */
     @SuppressWarnings("unchecked")
     <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Type typeToResolve,
                                                  @Nullable Collection<Annotation> qualifiers) throws Exception {
@@ -93,7 +90,8 @@ class ClassResolver {
         Class<?> rawType = RawTypeExtractor.getRawType(typeToResolve);
 
         // If we have a concrete class and the qualifier is Default, return that class.
-        boolean isDefault = qualifiers == null || qualifiers.isEmpty() ||
+        boolean isDefault = qualifiers == null ||
+                qualifiers.isEmpty() ||
                 qualifiers.stream().anyMatch(q -> q instanceof DefaultLiteral);
 
         if (isDefault && (isNotInterfaceOrAbstract(rawType) || rawType.isArray())) {
@@ -110,14 +108,14 @@ class ClassResolver {
             }
         }
 
-        // Filter out alternatives before looking for standard candidates
+        // Filter out alternatives
         List<Class<? extends T>> activeClasses = resolvedClasses
                 .stream()
                 .filter(clazz -> !clazz.isAnnotationPresent(Alternative.class))
                 .collect(Collectors.toList());
 
         // Check for @Qualifier / @Named annotations
-        if (qualifiers != null &&!qualifiers.isEmpty()) {
+        if (qualifiers != null && !qualifiers.isEmpty()) {
             for (Class<? extends T> clazz : activeClasses) {
                 if (matchesQualifiers(clazz, qualifiers)) {
                     return clazz;
@@ -188,7 +186,6 @@ class ClassResolver {
                 .collect(Collectors.toList());
     }
 
-    // package-private to run the tests
     @SuppressWarnings("unchecked")
     <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Type abstractClass) throws Exception {
 
@@ -200,9 +197,9 @@ class ClassResolver {
         if (resolvedClasses.containsKey(abstractClass)) {
             resolvedClasses.get(abstractClass).forEach(c -> candidates.add((Class<? extends T>)c));
         } else {
-            List<Class<?>> allPackageClasses = getAllPackageClasses(classLoader);
+            List<Class<?>> allClasses = getAllClasses(classLoader);
 
-            for (Class<?> candidate : allPackageClasses) {
+            for (Class<?> candidate : allClasses) {
                 if (isNotInterfaceOrAbstract(candidate) && isAssignable(abstractClass, candidate)) {
                     candidates.add((Class<? extends T>) candidate);
                 }
@@ -231,7 +228,6 @@ class ClassResolver {
         });
     }
 
-    // package-private to run the tests
     boolean isAssignable(Type targetType, Class<?> candidate) {
         if (targetType instanceof Class<?>) {
             return ((Class<?>) targetType).isAssignableFrom(candidate);
@@ -261,11 +257,13 @@ class ClassResolver {
                 return isAssignable(targetType, candidate.getSuperclass());
             }
 
-            // Fallback: if we match the raw type and it's a simple match, consider it assignable
+            // Fallback: if we match the raw type, and it's a simple match, consider it assignable
             return typesMatch(targetType, candidate);
         }
 
-        if (targetType instanceof GenericArrayType || targetType instanceof TypeVariable || targetType instanceof WildcardType) {
+        if (targetType instanceof GenericArrayType ||
+                targetType instanceof TypeVariable ||
+                targetType instanceof WildcardType) {
             Class<?> rawTargetType = RawTypeExtractor.getRawType(targetType);
             return rawTargetType.isAssignableFrom(candidate);
         }
@@ -273,12 +271,12 @@ class ClassResolver {
         return false;
     }
 
-    private boolean typesMatch(Type target, Type candidate) {
+    boolean typesMatch(Type target, Type candidate) {
         if (target.equals(candidate)) {
             return true;
         }
 
-        // If target is a TypeVariable (like T), it matches its bound (usually Object)
+        // If the target is a TypeVariable (like T), it matches its bound (usually Object)
         if (target instanceof TypeVariable) {
             return true;
         }
@@ -308,16 +306,20 @@ class ClassResolver {
         return false;
     }
 
-    private boolean typeArgsMatch(Type t1, Type t2) {
-        if (t1.equals(t2)) return true;
-        if (t1 instanceof WildcardType || t2 instanceof WildcardType) return true;
-        if (t1 instanceof TypeVariable || t2 instanceof TypeVariable) return true;
+    boolean typeArgsMatch(Type t1, Type t2) {
+        if (t1.equals(t2) ||
+                t1 instanceof WildcardType ||
+                t2 instanceof WildcardType ||
+                t1 instanceof TypeVariable ||
+                t2 instanceof TypeVariable) {
+            return true;
+        }
         return RawTypeExtractor.getRawType(t1).isAssignableFrom(RawTypeExtractor.getRawType(t2));
     }
 
     // From now on, package scans to search for classes.
 
-    private List<Class<?>> getAllPackageClasses(ClassLoader classLoader) throws ClassNotFoundException, IOException {
+    private List<Class<?>> getAllClasses(ClassLoader classLoader) throws ClassNotFoundException, IOException {
         if (classesCache == null) {
             classesCache = new ArrayList<>();
             getClasses(classLoader);
@@ -339,9 +341,6 @@ class ClassResolver {
         }
     }
 
-    /*
-     * package-private to run the tests
-     */
     List<Class<?>> getClassesFromResource(ClassLoader classLoader, URL resource, String packageName) throws ClassNotFoundException, IOException{
         if (resource.getProtocol().equals("file")) {
             return findClassesInDirectory(classLoader, new File(resource.getFile()), packageName);
@@ -352,9 +351,6 @@ class ClassResolver {
         }
     }
 
-    /*
-     * package-private to run the tests
-     */
     List<Class<?>> findClassesInDirectory(ClassLoader classLoader, File directory, String packageName) throws ClassNotFoundException {
         if (!directory.exists()) {
             return Collections.emptyList();
@@ -380,9 +376,6 @@ class ClassResolver {
         return classes;
     }
 
-    /*
-     * package-private to run the tests
-     */
     List<Class<?>> findClassesInJar(ClassLoader classLoader, URL jarUrl, String packageName) throws IOException {
         List<Class<?>> classes = new ArrayList<>();
         // Extract the file path properly handling 'jar:file': and '!'
