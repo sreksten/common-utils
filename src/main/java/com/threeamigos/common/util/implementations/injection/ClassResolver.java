@@ -28,9 +28,13 @@ import java.util.stream.Collectors;
 class ClassResolver {
 
     /**
+     * All packages to scan for concrete implementations. If empty, will scan all packages.
+     */
+    private final Collection<String> packagesToScan = new ArrayList<>();
+    /**
      * First cache - to avoid browsing the classpath multiple times for the same package
      */
-    private final Map<String, List<Class<?>>> classesCache = new HashMap<>();
+    private List<Class<?>> classesCache = null;
     /**
      * Second cache - to avoid scanning the classes multiple times for the same interface or class
      */
@@ -43,6 +47,10 @@ class ClassResolver {
      * A collection of Alternatives that can be used instead of the actual implementations.
      */
     private final Set<Class<?>> enabledAlternatives = new HashSet<>();
+
+    ClassResolver(String ... packageNames) {
+        packagesToScan.addAll(Arrays.asList(packageNames));
+    }
 
     void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation) {
         bindings.put(new MappingKey(type, qualifiers), implementation);
@@ -60,59 +68,13 @@ class ClassResolver {
      * implementation will be returned.
      *
      * @param typeToResolve the class to resolve
-     * @param packageName package name used to reduce scanning
      * @param qualifiers a @Named annotation value
      * @return the resolved class
      * @param <T> type of the class to resolve
      */
     <T> Class<? extends T> resolveImplementation(@NonNull Type typeToResolve,
-                                                 @Nullable String packageName,
                                                  @Nullable Collection<Annotation> qualifiers) throws Exception {
-        return resolveImplementation(Thread.currentThread().getContextClassLoader(), typeToResolve,
-                packageName, qualifiers);
-    }
-
-    /**
-     * Resolves an abstract class or an interface returning all concrete classes that implement the interface or
-     * extend the abstract class. Used for the {@link Instance} interface.
-     *
-     * @param typeToResolve the class to resolve
-     * @param packageName package name used to reduce scanning
-     * @return the resolved classes
-     * @param <T> type of the class to resolve
-     */
-    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve,
-                                                              @Nullable String packageName) throws Exception {
-        return resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve, packageName);
-    }
-
-    /**
-     * Resolves an abstract class or an interface returning all concrete classes that implement the interface or
-     * extend the abstract class and that match the provided qualifiers.
-     *
-     * @param typeToResolve the class to resolve
-     * @param packageName package name used to reduce scanning
-     * @param qualifiers the qualifiers to match
-     * @return the resolved classes
-     * @param <T> type of the class to resolve
-     */
-    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve,
-                                                              @Nullable String packageName,
-                                                              @Nullable Collection<Annotation> qualifiers) throws Exception {
-        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-        Collection<Class<? extends T>> resolvedClasses = resolveImplementations(classLoader, typeToResolve, packageName);
-
-        List<Class<? extends T>> activeClasses = resolvedClasses.stream()
-                .filter(clazz -> enabledAlternatives.contains(clazz) || !clazz.isAnnotationPresent(Alternative.class))
-                .collect(Collectors.toList());
-
-        if (qualifiers == null || qualifiers.isEmpty()) {
-            return activeClasses;
-        }
-
-        return activeClasses.stream()
-                .filter(clazz -> matchesQualifiers(clazz, qualifiers))
-                .collect(Collectors.toList());
+        return resolveImplementation(Thread.currentThread().getContextClassLoader(), typeToResolve, qualifiers);
     }
 
     /*
@@ -120,7 +82,7 @@ class ClassResolver {
      */
     @SuppressWarnings("unchecked")
     <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Type typeToResolve,
-                                                 String packageName, Collection<Annotation> qualifiers) throws Exception {
+                                                 @Nullable Collection<Annotation> qualifiers) throws Exception {
 
         // Check custom mappings first
         MappingKey key = new MappingKey(typeToResolve, qualifiers);
@@ -128,18 +90,22 @@ class ClassResolver {
             return (Class<? extends T>) bindings.get(key);
         }
 
-        Class<?> rawType = RawTypeHelper.getRawType(typeToResolve);
+        Class<?> rawType = RawTypeExtractor.getRawType(typeToResolve);
 
         // If we have a concrete class and the qualifier is Default, return that class.
         boolean isDefault = qualifiers == null || qualifiers.isEmpty() ||
                 qualifiers.stream().anyMatch(q -> q instanceof DefaultLiteral);
 
-        if (isNotInterfaceOrAbstract(rawType) && isDefault) {
-            return (Class<? extends T>)rawType;
+        if (isDefault) {
+            if (isNotInterfaceOrAbstract(rawType)) {
+                return (Class<? extends T>)rawType;
+            } else {
+                throw new InjectionException(rawType.getName() + " marked as @Default but is an interface or abstract class.");
+            }
         }
 
         // Search for all possible implementations
-        Collection<Class<? extends T>> resolvedClasses = resolveImplementations(classLoader, typeToResolve, packageName);
+        Collection<Class<? extends T>> resolvedClasses = resolveImplementations(classLoader, typeToResolve);
 
         // If one of the implementations is an enabled Alternative, return that class
         for (Class<? extends T> clazz : resolvedClasses) {
@@ -155,7 +121,7 @@ class ClassResolver {
                 .collect(Collectors.toList());
 
         // Check for @Qualifier / @Named annotations
-        if (qualifiers != null && !qualifiers.isEmpty()) {
+        if (!qualifiers.isEmpty()) {
             for (Class<? extends T> clazz : activeClasses) {
                 if (matchesQualifiers(clazz, qualifiers)) {
                     return clazz;
@@ -169,7 +135,7 @@ class ClassResolver {
         // Filter out @Qualifier / @Named classes
         Function<Class<? extends T>, Boolean> noQualifierFilteringFunction =
                 clazz -> Arrays.stream(clazz.getAnnotations())
-                .noneMatch(a -> a.annotationType().isAnnotationPresent(Qualifier.class));
+                        .noneMatch(a -> a.annotationType().isAnnotationPresent(Qualifier.class));
 
         List<Class<? extends T>> candidates = activeClasses
                 .stream()
@@ -187,10 +153,48 @@ class ClassResolver {
         return candidates.get(0);
     }
 
+    /**
+     * Resolves an abstract class or an interface returning all concrete classes that implement the interface or
+     * extend the abstract class. Used for the {@link Instance} interface.
+     *
+     * @param typeToResolve the class to resolve
+     * @return the resolved classes
+     * @param <T> type of the class to resolve
+     */
+    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve) throws Exception {
+        return resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve);
+    }
+
+    /**
+     * Resolves an abstract class or an interface returning all concrete classes that implement the interface or
+     * extend the abstract class and that match the provided qualifiers.
+     *
+     * @param typeToResolve the class to resolve
+     * @param qualifiers the qualifiers to match
+     * @return the resolved classes
+     * @param <T> type of the class to resolve
+     */
+    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve,
+                                                              @Nullable Collection<Annotation> qualifiers) throws Exception {
+        Collection<Class<? extends T>> resolvedClasses =
+                resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve);
+
+        List<Class<? extends T>> activeClasses = resolvedClasses.stream()
+                .filter(clazz -> enabledAlternatives.contains(clazz) || !clazz.isAnnotationPresent(Alternative.class))
+                .collect(Collectors.toList());
+
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            return activeClasses;
+        }
+
+        return activeClasses.stream()
+                .filter(clazz -> matchesQualifiers(clazz, qualifiers))
+                .collect(Collectors.toList());
+    }
+
     // package-private to run the tests
     @SuppressWarnings("unchecked")
-    <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Type abstractClass,
-                                                              String packageName) throws Exception {
+    <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Type abstractClass) throws Exception {
 
         List<Class<? extends T>> candidates = new ArrayList<>();
 
@@ -200,7 +204,7 @@ class ClassResolver {
         if (resolvedClasses.containsKey(abstractClass)) {
             resolvedClasses.get(abstractClass).forEach(c -> candidates.add((Class<? extends T>)c));
         } else {
-            List<Class<?>> allPackageClasses = getAllPackageClasses(classLoader, packageName);
+            List<Class<?>> allPackageClasses = getAllPackageClasses(classLoader);
 
             for (Class<?> candidate : allPackageClasses) {
                 if (isNotInterfaceOrAbstract(candidate) && isAssignable(abstractClass, candidate)) {
@@ -269,29 +273,27 @@ class ClassResolver {
         return false;
     }
 
-    private List<Class<?>> getAllPackageClasses(ClassLoader classLoader, String packageName) throws ClassNotFoundException, IOException {
-        /*
-         * Look for a cache-hit
-         */
-        List<Class<?>> allPackageClasses = classesCache.get(packageName);
-        if (allPackageClasses == null) {
-            allPackageClasses = getClasses(classLoader, packageName);
-            classesCache.put(packageName, allPackageClasses);
+    // From now on, package scans to search for classes.
+
+    private List<Class<?>> getAllPackageClasses(ClassLoader classLoader) throws ClassNotFoundException, IOException {
+        if (classesCache == null) {
+            classesCache = new ArrayList<>();
+            getClasses(classLoader);
         }
-        return allPackageClasses;
+        return classesCache;
     }
 
-    private List<Class<?>> getClasses(ClassLoader classLoader, String packageName) throws ClassNotFoundException, IOException {
-        if (packageName == null) {
-            packageName = "";
+    private void getClasses(ClassLoader classLoader) throws ClassNotFoundException, IOException {
+        if (packagesToScan.isEmpty()) {
+            packagesToScan.add("");
         }
-        String path = packageName.replace('.', '/');
-        Enumeration<URL> resources = classLoader.getResources(path);
-        List<Class<?>> classes = new ArrayList<>();
-        while (resources.hasMoreElements()) {
-            classes.addAll(getClassesFromResource(classLoader, resources.nextElement(), packageName));
+        for (String packageName : packagesToScan) {
+            String path = packageName.replace('.', '/');
+            Enumeration<URL> resources = classLoader.getResources(path);
+            while (resources.hasMoreElements()) {
+                classesCache.addAll(getClassesFromResource(classLoader, resources.nextElement(), packageName));
+            }
         }
-        return classes;
     }
 
     /*
@@ -370,28 +372,5 @@ class ClassResolver {
             }
         }
         return classes;
-    }
-
-    private static class MappingKey {
-        private final Type type;
-        private final Set<Annotation> qualifiers;
-
-        MappingKey(Type type, Collection<Annotation> qualifiers) {
-            this.type = type;
-            this.qualifiers = qualifiers == null ? Collections.emptySet() : new HashSet<>(qualifiers);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof MappingKey)) return false;
-            MappingKey that = (MappingKey) o;
-            return Objects.equals(type, that.type) && Objects.equals(qualifiers, that.qualifiers);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(type, qualifiers);
-        }
     }
 }

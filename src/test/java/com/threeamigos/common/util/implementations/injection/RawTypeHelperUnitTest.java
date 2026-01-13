@@ -15,15 +15,15 @@ class RawTypeHelperUnitTest {
     @Test
     @DisplayName("getRawType should return the class when input is a Class")
     void shouldReturnClassWhenInputIsClass() {
-        assertEquals(String.class, RawTypeHelper.getRawType(String.class));
-        assertEquals(Integer.class, RawTypeHelper.getRawType(Integer.class));
+        assertEquals(String.class, RawTypeExtractor.getRawType(String.class));
+        assertEquals(Integer.class, RawTypeExtractor.getRawType(Integer.class));
     }
 
     @Test
     @DisplayName("getRawType should return the raw type when input is a ParameterizedType")
     void shouldReturnRawTypeWhenInputIsParameterizedType() {
         Type type = new TypeLiteral<List<String>>() {}.getType();
-        assertEquals(List.class, RawTypeHelper.getRawType(type));
+        assertEquals(List.class, RawTypeExtractor.getRawType(type));
     }
 
     @Test
@@ -33,7 +33,7 @@ class RawTypeHelperUnitTest {
         Type componentType = new TypeLiteral<List<String>>() {}.getType();
         GenericArrayType genericArrayType = () -> componentType;
 
-        Class<?> rawType = RawTypeHelper.getRawType(genericArrayType);
+        Class<?> rawType = RawTypeExtractor.getRawType(genericArrayType);
         assertTrue(rawType.isArray());
         assertEquals(List.class, rawType.getComponentType());
     }
@@ -45,7 +45,7 @@ class RawTypeHelperUnitTest {
         Method method = RawTypeHelperUnitTest.class.getDeclaredMethod("shouldReturnBoundWhenInputIsTypeVariable");
         TypeVariable<?> typeVariable = method.getTypeParameters()[0];
 
-        assertEquals(Number.class, RawTypeHelper.getRawType(typeVariable));
+        assertEquals(Number.class, RawTypeExtractor.getRawType(typeVariable));
     }
 
     @Test
@@ -55,7 +55,7 @@ class RawTypeHelperUnitTest {
         ParameterizedType listType = (ParameterizedType) new TypeLiteral<List<? extends Number>>() {}.getType();
         WildcardType wildcardType = (WildcardType) listType.getActualTypeArguments()[0];
 
-        assertEquals(Number.class, RawTypeHelper.getRawType(wildcardType));
+        assertEquals(Number.class, RawTypeExtractor.getRawType(wildcardType));
     }
 
     @Test
@@ -69,7 +69,7 @@ class RawTypeHelperUnitTest {
         };
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-            RawTypeHelper.getRawType(unsupportedType)
+            RawTypeExtractor.getRawType(unsupportedType)
         );
 
         assertTrue(exception.getMessage().contains("Unsupported type"));

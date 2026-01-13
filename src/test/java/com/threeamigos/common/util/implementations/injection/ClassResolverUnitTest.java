@@ -65,7 +65,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, null, null);
+            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class,  null);
             // Then
             assertEquals(SingleImplementationClass.class, resolved);
         }
@@ -76,7 +76,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, "", null);
+            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, null);
             // Then
             assertEquals(SingleImplementationClass.class, resolved);
         }
@@ -90,9 +90,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should work if qualifiers collection is null")
         void shouldFindALotOfClassesIfPackageIsNull() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(SingleImplementationInterface.class));
             // When
-            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, null, null);
+            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, null);
             // Then
             assertEquals(SingleImplementationClass.class, resolved);
         }
@@ -103,7 +103,7 @@ class ClassResolverUnitTest {
             // Given
             ClassResolver sut = new ClassResolver();
             // When
-            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, null, Collections.emptyList());
+            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, Collections.emptyList());
             // Then
             assertEquals(SingleImplementationClass.class, resolved);
         }
@@ -118,10 +118,10 @@ class ClassResolverUnitTest {
         @DisplayName("Should return all active classes if qualifiers are null")
         void shouldReturnAllActiveClassesIfQualifiersAreNull() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleImplementationsInterface.class));
             // When
             Collection<Class<? extends MultipleImplementationsInterface>> resolved = sut.resolveImplementations(
-                    MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), null);
+                    MultipleImplementationsInterface.class, null);
             // Then
             // Expects 4: Standard, Named1, Named2, NamedAndAnnotated. Alternatives are filtered out by default if not enabled.
             assertEquals(4, resolved.size());
@@ -131,11 +131,11 @@ class ClassResolverUnitTest {
         @DisplayName("Should return only matching classes for specific qualifier")
         void shouldReturnOnlyMatchingClassesForSpecificQualifier() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleImplementationsInterface.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("name1"));
             // When
             Collection<Class<? extends MultipleImplementationsInterface>> resolved = sut.resolveImplementations(
-                    MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), qualifiers);
+                    MultipleImplementationsInterface.class, qualifiers);
             // Then
             assertEquals(1, resolved.size());
             assertTrue(resolved.contains(MultipleImplementationsNamed1.class));
@@ -145,7 +145,7 @@ class ClassResolverUnitTest {
         @DisplayName("Should return all classes when @Any qualifier is used")
         void shouldReturnAllClassesWhenAnyQualifierIsUsed() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleImplementationsInterface.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new Any() {
                 @Override
                 public Class<? extends Annotation> annotationType() {
@@ -154,7 +154,7 @@ class ClassResolverUnitTest {
             });
             // When
             Collection<Class<? extends MultipleImplementationsInterface>> resolved = sut.resolveImplementations(
-                    MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), qualifiers);
+                    MultipleImplementationsInterface.class, qualifiers);
             // Then
             assertEquals(4, resolved.size());
         }
@@ -168,20 +168,18 @@ class ClassResolverUnitTest {
         @DisplayName("Should throw UnsatisfiedResolutionException if package to search is a file")
         void shouldThrowUnsatisfiedResolutionExceptionIfPackageToSearchIsAFile() {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver("com.threeamigos.common.util.implementations.injection.wrongdirectory.fakeFileToSkip");
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () ->sut.resolveImplementation(NoImplementationsInterface.class,
-                    "com.threeamigos.common.util.implementations.injection.wrongdirectory.fakeFileToSkip", null));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NoImplementationsInterface.class, null));
         }
 
         @Test
         @DisplayName("Should throw UnsatisfiedResolutionException if package to search does not exist")
         void shouldThrowUnsatisfiedResolutionExceptionIfPackageToSearchDoesNotExist() {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver("com.threeamigos.common.util.implementations.injection.notexistingpackage");
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () ->sut.resolveImplementation(NoImplementationsInterface.class,
-                    "com.threeamigos.common.util.implementations.injection.notexistingpackage", null));
+            assertThrows(UnsatisfiedResolutionException.class, () ->sut.resolveImplementation(NoImplementationsInterface.class, null));
         }
 
         @Test
@@ -230,17 +228,17 @@ class ClassResolverUnitTest {
     @DisplayName("Should use the cache to avoid redundant class loading")
     void shouldUseTheCache() throws Exception {
         // Given
-        ClassResolver sut = new ClassResolver();
-        ClassLoader mockLoader = mock(ClassLoader.class);
         String packageName = "com.threeamigos";
+        ClassResolver sut = new ClassResolver(packageName);
+        ClassLoader mockLoader = mock(ClassLoader.class);
         String expectedPath = "com/threeamigos";
 
         // Stub getResources to return an empty enumeration so the loop finishes
         when(mockLoader.getResources(expectedPath)).thenReturn(Collections.emptyEnumeration());
 
         // When - calling the public method that internally calls getClasses
-        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class, packageName);
-        sut.resolveImplementations(mockLoader, MultipleImplementationsInterface.class, packageName);
+        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class);
+        sut.resolveImplementations(mockLoader, MultipleImplementationsInterface.class);
 
         // Then - Verify the ClassLoader was queried exactly once
         verify(mockLoader, times(1)).getResources(expectedPath);
@@ -250,17 +248,17 @@ class ClassResolverUnitTest {
     @DisplayName("Should remember already resolved classes")
     void shouldRememberAlreadyResolvedClasses() throws Exception {
         // Given
-        ClassResolver sut = new ClassResolver();
-        ClassLoader mockLoader = mock(ClassLoader.class);
         String packageName = "com.threeamigos";
+        ClassResolver sut = new ClassResolver(packageName);
+        ClassLoader mockLoader = mock(ClassLoader.class);
         String expectedPath = "com/threeamigos";
 
         // Stub getResources to return an empty enumeration so the loop finishes
         when(mockLoader.getResources(expectedPath)).thenReturn(Collections.emptyEnumeration());
 
         // When - calling the public method that internally calls getClasses
-        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class, packageName);
-        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class, packageName);
+        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class);
+        sut.resolveImplementations(mockLoader, SingleImplementationInterface.class);
 
         // Then - Verify the ClassLoader was queried exactly once
         verify(mockLoader, times(1)).getResources(expectedPath);
@@ -274,9 +272,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should throw UnsatisfiedResolutionException if no implementations found")
         void shouldThrowUnsatisfiedResolutionExceptionIfNoImplementationsFound() {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(NoImplementationsInterface.class));
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NoImplementationsInterface.class, getPackageName(NoImplementationsInterface.class), null));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NoImplementationsInterface.class, null));
         }
 
         /**
@@ -286,9 +284,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should resolve an interface with a single standard implementation")
         void shouldResolveInterfaceWithSingleStandardImplementation() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(SingleImplementationInterface.class));
             // When
-            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, getPackageName(SingleImplementationInterface.class), null);
+            Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, null);
             // Then
             assertEquals(SingleImplementationClass.class, resolved);
         }
@@ -301,9 +299,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should resolve an interface with multiple implementations with standard implementation")
         void shouldResolveInterfaceWithStandardImplementation() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleImplementationsInterface.class));
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), null);
+            Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, null);
             // Then
             assertEquals(MultipleImplementationsStandardImplementation.class, resolved);
         }
@@ -316,10 +314,10 @@ class ClassResolverUnitTest {
         @DisplayName("Should resolve an interface with named-annotated implementation")
         void shouldResolveInterfaceWithSpecifiedNamedImplementation() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleImplementationsInterface.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("name1"));
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), qualifiers);
+            Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, qualifiers);
             // Then
             assertEquals(MultipleImplementationsNamed1.class, resolved);
         }
@@ -333,7 +331,7 @@ class ClassResolverUnitTest {
         void shouldResolveInterfaceWithSpecifiedQualifierImplementation() throws Exception {
             // Given
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleImplementationsInterface.class));
             Collection<Annotation> qualifiers = Arrays.asList(
                     new NamedLiteral("name"),
                     new MyQualifier() {
@@ -352,7 +350,7 @@ class ClassResolverUnitTest {
                     }
             );
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), qualifiers);
+            Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, qualifiers);
             // Then
             assertEquals(MultipleImplementationsNamedAndAnnotated.class, resolved);
         }
@@ -361,16 +359,10 @@ class ClassResolverUnitTest {
         @DisplayName("Should resolve an interface with Default qualifier to standard implementation")
         void shouldResolveInterfaceWithDefaultQualifier() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleImplementationsInterface.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-
             // When
-            Class<?> resolved = sut.resolveImplementation(
-                    MultipleImplementationsInterface.class,
-                    getPackageName(MultipleImplementationsInterface.class),
-                    qualifiers
-            );
-
+            Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, qualifiers);
             // Then
             // MultipleImplementationsStandardImplementation has NO qualifiers, so it matches @Default
             assertEquals(MultipleImplementationsStandardImplementation.class, resolved);
@@ -384,9 +376,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should throw UnsatisfiedResolutionException if only alternative implementations found and no qualifier specified")
         void shouldThrowUnsatisfiedResolutionExceptionIfOnlyAlternativeImplementationsFoundAndNoQualifierSpecified() {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(NamedImplementationsOnlyInterface.class));
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NamedImplementationsOnlyInterface.class, getPackageName(NamedImplementationsOnlyInterface.class), null));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NamedImplementationsOnlyInterface.class, null));
         }
 
         /**
@@ -397,10 +389,10 @@ class ClassResolverUnitTest {
         @DisplayName("Should resolve an interface if only alternative implementations found but qualifier specified")
         void shouldResolveInterfaceIfOnlyAlternativeImplementationsFoundButQualifierSpecified() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(NamedImplementationsOnlyInterface.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("name1"));
             // When
-            Class<?> resolved = sut.resolveImplementation(NamedImplementationsOnlyInterface.class, getPackageName(NamedImplementationsOnlyInterface.class), qualifiers);
+            Class<?> resolved = sut.resolveImplementation(NamedImplementationsOnlyInterface.class, qualifiers);
             // Then
             assertEquals(NamedImplementationsOnlyImplementation1.class, resolved);
         }
@@ -413,9 +405,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should throw AmbiguousResolutionException with an interface with more than one standard implementations")
         void shouldThrowAmbiguousResolutionExceptionWithInterfaceWithMoreThanOneStandardImplementations() {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleNotAnnotatedImplementationsInterface.class));
             // Then
-            assertThrows(AmbiguousResolutionException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedImplementationsInterface.class, getPackageName(MultipleNotAnnotatedImplementationsInterface.class), null));
+            assertThrows(AmbiguousResolutionException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedImplementationsInterface.class, null));
         }
 
         /**
@@ -426,10 +418,10 @@ class ClassResolverUnitTest {
         @DisplayName("Should throw UnsatisfiedResolutionException if specified alternative implementation is not found")
         void shouldThrowUnsatisfiedResolutionExceptionIfAlternateImplementationNotFound() {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleImplementationsInterface.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("not-found"));
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class), qualifiers));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleImplementationsInterface.class, qualifiers));
         }
 
         /**
@@ -439,13 +431,13 @@ class ClassResolverUnitTest {
         @DisplayName("Should return all implementations for a given interface")
         void shouldReturnAllImplementationsForAGivenInterface() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleImplementationsInterface.class));
             Collection<Class<? extends MultipleImplementationsInterface>> expected = new ArrayList<>();
             expected.add(MultipleImplementationsStandardImplementation.class);
             expected.add(MultipleImplementationsNamed1.class);
             expected.add(MultipleImplementationsNamed2.class);
             // When
-            Collection<Class<? extends MultipleImplementationsInterface>> classes = sut.resolveImplementations(MultipleImplementationsInterface.class, getPackageName(MultipleImplementationsInterface.class));
+            Collection<Class<? extends MultipleImplementationsInterface>> classes = sut.resolveImplementations(MultipleImplementationsInterface.class);
             // Then
             assertEquals(4, classes.size());
             assertTrue(classes.containsAll(expected));
@@ -468,9 +460,9 @@ class ClassResolverUnitTest {
             @DisplayName("resolveImplementation should return the concrete class itself")
             void resolveImplementation() throws Exception {
                 // Given
-                ClassResolver sut = new ClassResolver();
+                ClassResolver sut = new ClassResolver(getPackageName(SingleImplementationConcreteClass.class));
                 // When
-                Class<? extends SingleImplementationConcreteClass> resolved = sut.resolveImplementation(SingleImplementationConcreteClass.class, getPackageName(SingleImplementationConcreteClass.class), null);
+                Class<? extends SingleImplementationConcreteClass> resolved = sut.resolveImplementation(SingleImplementationConcreteClass.class, null);
                 // Then
                 assertEquals(SingleImplementationConcreteClass.class, resolved);
             }
@@ -479,9 +471,9 @@ class ClassResolverUnitTest {
             @DisplayName("resolveImplementations should return the concrete class itself")
             void resolveImplementations() throws Exception {
                 // Given
-                ClassResolver sut = new ClassResolver();
+                ClassResolver sut = new ClassResolver(getPackageName(SingleImplementationConcreteClass.class));
                 // When
-                Collection<Class<? extends SingleImplementationConcreteClass>> resolved = sut.resolveImplementations(SingleImplementationConcreteClass.class, getPackageName(SingleImplementationConcreteClass.class));
+                Collection<Class<? extends SingleImplementationConcreteClass>> resolved = sut.resolveImplementations(SingleImplementationConcreteClass.class);
                 // Then
                 assertEquals(1, resolved.size());
                 assertEquals(SingleImplementationConcreteClass.class, resolved.iterator().next());
@@ -496,9 +488,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should throw UnsatisfiedResolutionException if no concrete classes found")
         void shouldThrowUnsatisfiedResolutionExceptionIfNoConcreteClassesFound() {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(NoConcreteClassesAbstractClass.class));
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NoConcreteClassesAbstractClass.class, getPackageName(NoConcreteClassesAbstractClass.class), null));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(NoConcreteClassesAbstractClass.class, null));
         }
 
         /**
@@ -508,9 +500,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should resolve an abstract class with a single standard implementation")
         void shouldResolveAnAbstractClassWithStandardImplementation() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(SingleImplementationAbstractClass.class));
             // When
-            Class<?> resolved = sut.resolveImplementation(SingleImplementationAbstractClass.class, getPackageName(SingleImplementationAbstractClass.class), null);
+            Class<?> resolved = sut.resolveImplementation(SingleImplementationAbstractClass.class, null);
             // Then
             assertEquals(SingleImplementationConcreteClass.class, resolved);
         }
@@ -522,9 +514,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should resolve an abstract class with multiple implementations with standard implementation")
         void shouldResolveInterfaceWithStandardImplementation() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleConcreteClassesAbstractClass.class));
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, getPackageName(MultipleConcreteClassesAbstractClass.class), null);
+            Class<?> resolved = sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, null);
             // Then
             assertEquals(MultipleConcreteClassesStandardClass.class, resolved);
         }
@@ -537,10 +529,10 @@ class ClassResolverUnitTest {
         @DisplayName("Should resolve a class with specified alternate implementation")
         void shouldResolveClassWithSpecifiedAlternateImplementation() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleConcreteClassesAbstractClass.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("name1"));
             // When
-            Class<?> resolved = sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, getPackageName(MultipleConcreteClassesAbstractClass.class), qualifiers);
+            Class<?> resolved = sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, qualifiers);
             // Then
             assertEquals(MultipleConcreteClassesNamed1.class, resolved);
         }
@@ -553,9 +545,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should throw AmbiguousResolutionException with more than one standard concrete classes")
         void shouldThrowAmbiguousResolutionExceptionWithMoreThanOneStandardConcreteClasses() {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleNotAnnotatedAbstractClass.class));
             // Then
-            assertThrows(AmbiguousResolutionException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedAbstractClass.class, getPackageName(MultipleNotAnnotatedAbstractClass.class), null));
+            assertThrows(AmbiguousResolutionException.class, () -> sut.resolveImplementation(MultipleNotAnnotatedAbstractClass.class, null));
         }
 
         /**
@@ -566,10 +558,10 @@ class ClassResolverUnitTest {
         @DisplayName("Should throw UnsatisfiedResolutionException if specified alternative implementation is not found")
         void shouldThrowUnsatisfiedResolutionExceptionIfSpecifiedAlternateImplementationNotFound() {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleConcreteClassesAbstractClass.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("not-found"));
             // Then
-            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, getPackageName(MultipleConcreteClassesAbstractClass.class), qualifiers));
+            assertThrows(UnsatisfiedResolutionException.class, () -> sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, qualifiers));
         }
 
         /**
@@ -579,14 +571,14 @@ class ClassResolverUnitTest {
         @DisplayName("Should return all concrete classes for a given abstract class")
         void shouldReturnAllConcreteClassesForAGivenAbstractClass() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(MultipleConcreteClassesAbstractClass.class));
             Collection<Class<? extends MultipleConcreteClassesAbstractClass>> expected = new ArrayList<>();
             expected.add(MultipleConcreteClassesStandardClass.class);
             expected.add(MultipleConcreteClassesNamed1.class);
             expected.add(MultipleConcreteClassesNamed2.class);
             expected.add(MultipleConcreteClassesNamed3.class);
             // When
-            Collection<Class<? extends MultipleConcreteClassesAbstractClass>> classes = sut.resolveImplementations(MultipleConcreteClassesAbstractClass.class, getPackageName(MultipleConcreteClassesAbstractClass.class));
+            Collection<Class<? extends MultipleConcreteClassesAbstractClass>> classes = sut.resolveImplementations(MultipleConcreteClassesAbstractClass.class);
             // Then
             assertEquals(4, classes.size());
             assertTrue(classes.containsAll(expected));
@@ -601,9 +593,9 @@ class ClassResolverUnitTest {
         @DisplayName("Should skip inactive alternatives")
         void shouldSkipInactiveAlternatives() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(AlternativesTestInterface.class));
             // When
-            Class<?> resolved = sut.resolveImplementation(AlternativesTestInterface.class, getPackageName(AlternativesTestInterface.class), null);
+            Class<?> resolved = sut.resolveImplementation(AlternativesTestInterface.class, null);
             // Then
             assertEquals(AlternativesTestStandardImplementation.class, resolved);
         }
@@ -612,10 +604,10 @@ class ClassResolverUnitTest {
         @DisplayName("Should return enabled alternative")
         void shouldReturnEnabledAlternative() throws Exception {
             // Given
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(AlternativesTestInterface.class));
             sut.enableAlternative(AlternativesTestAlternativeImplementation1.class);
             // When
-            Class<?> resolved = sut.resolveImplementation(AlternativesTestInterface.class, getPackageName(AlternativesTestInterface.class), null);
+            Class<?> resolved = sut.resolveImplementation(AlternativesTestInterface.class, null);
             // Then
             assertEquals(AlternativesTestAlternativeImplementation1.class, resolved);
         }
@@ -628,14 +620,12 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Branch 1: Should match implementation of a plain Class (non-generic)")
         void shouldMatchPlainClass() throws Exception {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(SingleImplementationClass.class));
             // targetType is a Class, not a ParameterizedType
             Type targetType = SingleImplementationInterface.class;
 
-            Collection<Class<?>> resolved = sut.resolveImplementations(
-                    Thread.currentThread().getContextClassLoader(),
-                    targetType,
-                    getPackageName(SingleImplementationClass.class));
+            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(),
+                    targetType);
 
             assertTrue(resolved.contains(SingleImplementationClass.class));
         }
@@ -643,10 +633,10 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Branch 2a: Should match implementation of a specific generic interface")
         void shouldMatchGenericInterface() throws Exception {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(StringGenericImpl.class));
             Type targetType = new TypeLiteral<GenericInterface<String>>() {}.getType();
 
-            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType, getPackageName(StringGenericImpl.class));
+            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType);
 
             assertTrue(resolved.contains(StringGenericImpl.class));
             assertFalse(resolved.contains(IntegerGenericImpl.class));
@@ -655,10 +645,10 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Branch 2b: Should match via deep interface hierarchy (recursive)")
         void shouldMatchDeepInterfaceHierarchy() throws Exception {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(DeepStringGenericImpl.class));
             Type targetType = new TypeLiteral<GenericInterface<String>>() {}.getType();
 
-            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType, getPackageName(DeepStringGenericImpl.class));
+            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType);
 
             assertTrue(resolved.contains(DeepStringGenericImpl.class), "Should find implementation through sub-interface");
         }
@@ -666,10 +656,10 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Branch 2c: Should match implementation of a specific generic superclass")
         void shouldMatchGenericSuperclass() throws Exception {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(DoubleBaseImpl.class));
             Type targetType = new TypeLiteral<GenericBase<Double>>() {}.getType();
 
-            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType, getPackageName(DoubleBaseImpl.class));
+            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType);
 
             assertTrue(resolved.contains(DoubleBaseImpl.class));
         }
@@ -677,10 +667,10 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Branch 2d: Should match via deep superclass hierarchy (recursive)")
         void shouldMatchDeepSuperclassHierarchy() throws Exception {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(DeepDoubleBaseImpl.class));
             Type targetType = new TypeLiteral<GenericBase<Double>>() {}.getType();
 
-            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType, getPackageName(DeepDoubleBaseImpl.class));
+            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType);
 
             assertTrue(resolved.contains(DeepDoubleBaseImpl.class), "Should find implementation through parent's superclass");
         }
@@ -688,10 +678,10 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Branch 2 (fail): Should return false if arguments mismatch in hierarchy")
         void shouldFailIfArgumentsMismatch() throws Exception {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(DeepStringGenericImpl.class));
             Type targetType = new TypeLiteral<GenericInterface<Integer>>() {}.getType();
 
-            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType, getPackageName(DeepStringGenericImpl.class));
+            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), targetType);
 
             assertFalse(resolved.contains(DeepStringGenericImpl.class));
         }
@@ -699,13 +689,11 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Should match via non-parameterized sub-interface in recursive check")
         void shouldMatchViaRawInterfaceTypeRecursive() throws Exception {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(ImplementsSubInterfaceViaNonParameterized.class));
             Type targetType = new TypeLiteral<GenericInterface<String>>() {}.getType();
 
-            Collection<Class<?>> resolved = sut.resolveImplementations(
-                    Thread.currentThread().getContextClassLoader(),
-                    targetType,
-                    getPackageName(ImplementsSubInterfaceViaNonParameterized.class));
+            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(),
+                    targetType);
 
             assertTrue(resolved.contains(ImplementsSubInterfaceViaNonParameterized.class),
                     "Should find implementation through non-parameterized intermediate interface");
@@ -714,13 +702,11 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Should return false when superclass is Object")
         void shouldReturnFalseWhenSuperclassIsObject() throws Exception {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(NoMatchingClass.class));
             Type targetType = new TypeLiteral<GenericInterface<String>>() {}.getType();
 
-            Collection<Class<?>> resolved = sut.resolveImplementations(
-                    Thread.currentThread().getContextClassLoader(),
-                    targetType,
-                    getPackageName(NoMatchingClass.class));
+            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(),
+                    targetType);
 
             assertFalse(resolved.contains(NoMatchingClass.class),
                     "Should not match class that doesn't implement the interface");
@@ -729,13 +715,11 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Should not match raw implementation without type parameters")
         void shouldNotMatchRawImplementation() throws Exception {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(getPackageName(NonGenericImpl.class));
             Type targetType = new TypeLiteral<GenericInterface<String>>() {}.getType();
 
-            Collection<Class<?>> resolved = sut.resolveImplementations(
-                    Thread.currentThread().getContextClassLoader(),
-                    targetType,
-                    getPackageName(NonGenericImpl.class));
+            Collection<Class<?>> resolved = sut.resolveImplementations(Thread.currentThread().getContextClassLoader(),
+                    targetType);
 
             assertFalse(resolved.contains(NonGenericImpl.class),
                     "Raw implementation should not match parameterized type");
@@ -929,7 +913,7 @@ class ClassResolverUnitTest {
             // 4. Resolve using the custom loader
             Class<?> abstractClass = testLoader.loadClass(MultipleConcreteClassesAbstractClass.class.getName());
 
-            Class<?> result = sut.resolveImplementation(testLoader, abstractClass, packageNameToFilter,null);
+            Class<?> result = sut.resolveImplementation(testLoader, abstractClass, null);
 
             // 5. Verification
             assertNotNull(result);

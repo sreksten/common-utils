@@ -32,46 +32,27 @@ public class InjectorImpl implements Injector {
     private final Map<Class<? extends Annotation>, ScopeHandler> scopeRegistry = new HashMap<>();
 
     /**
-     * Clears all internal state, including scope handlers and injected static classes.
-     */
-    void clearState() {
-        scopeRegistry.clear();
-        registerDefaultScope();
-        injectedStaticClasses.clear();
-    }
-
-    /**
      * The class resolver used in this injector to find concrete implementations of abstract classes and interfaces.
      */
     private final ClassResolver classResolver;
-
-    /**
-     * Package name is used to restrict classes search to a particular package. If you don't want to
-     * scan the whole classpath, you can use your package name here. Beware - all your interfaces and
-     * implementations should reside in that package or subpackages!
-     */
-    private final String packageName;
 
     /**
      * Tracks classes that have already had their static members injected to prevent redundant injections.
      */
     private final Set<Class<?>> injectedStaticClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    public InjectorImpl() {
-        this.classResolver = new ClassResolver();
-        this.packageName = "";
+    /**
+     * Package names are used to restrict classes search to a particular package(s). If you don't want to
+     * scan the whole classpath, you can use your package name here. Beware - all your interfaces and
+     * implementations should reside in that package or subpackages!
+     */
+    public InjectorImpl(final String ... packageNames) {
+        this.classResolver = new ClassResolver(packageNames);
         registerDefaultScope();
     }
 
-    public InjectorImpl(final String packageName) {
-        this.classResolver = new ClassResolver();
-        this.packageName = packageName;
-        registerDefaultScope();
-    }
-
-    InjectorImpl(final ClassResolver classResolver, final String packageName) {
+    InjectorImpl(final ClassResolver classResolver) {
         this.classResolver = classResolver;
-        this.packageName = packageName;
         registerDefaultScope();
     }
 
@@ -134,7 +115,7 @@ public class InjectorImpl implements Injector {
         stack.push(typeToInject);
         try {
             checkClassValidity(typeToInject);
-            Class<? extends T> resolvedClass = classResolver.resolveImplementation(typeToInject, packageName, qualifiers);
+            Class<? extends T> resolvedClass = classResolver.resolveImplementation(typeToInject, qualifiers);
 
             // Find the scope annotation on the resolved class
             Class<? extends Annotation> scopeType = getScopeType(resolvedClass);
@@ -153,7 +134,7 @@ public class InjectorImpl implements Injector {
         } catch (InjectionException e) {
             throw e;
         } catch (Exception e) {
-            throw new InjectionException("Failed to inject " + RawTypeHelper.getRawType(typeToInject).getName() +
+            throw new InjectionException("Failed to inject " + RawTypeExtractor.getRawType(typeToInject).getName() +
                     ": " + e.getMessage(), e);
         }
     }
@@ -405,7 +386,7 @@ public class InjectorImpl implements Injector {
      * @param type the type to check
      */
     private void checkClassValidity(Type type) {
-        Class<?> clazz = RawTypeHelper.getRawType(type);
+        Class<?> clazz = RawTypeExtractor.getRawType(type);
 
         // 1. Basic JSR 330 / Java constraints
         if (clazz.isEnum()) {
@@ -499,14 +480,14 @@ public class InjectorImpl implements Injector {
             public <U extends T> Instance<U> select(TypeLiteral<U> subtype, Annotation... annotations) {
                 // We extract the raw class from the TypeLiteral to maintain compatibility with createInstance
                 @SuppressWarnings("unchecked")
-                Class<U> rawType = (Class<U>) RawTypeHelper.getRawType(subtype.getType());
+                Class<U> rawType = (Class<U>) RawTypeExtractor.getRawType(subtype.getType());
                 return createInstance(rawType, mergeQualifiers(qualifiers, annotations));
             }
 
             @Override
             public boolean isUnsatisfied() {
                 try {
-                    return classResolver.resolveImplementations(type, packageName).isEmpty();
+                    return classResolver.resolveImplementations(type).isEmpty();
                 } catch (Exception e) {
                     return true; // treating an Exception as unsatisfied
                 }
@@ -515,7 +496,7 @@ public class InjectorImpl implements Injector {
             @Override
             public boolean isAmbiguous() {
                 try {
-                    return classResolver.resolveImplementations(type, packageName).size() > 1;
+                    return classResolver.resolveImplementations(type).size() > 1;
                 } catch (Exception e) {
                     return false; // If we can't resolve the class, it's not ambiguous (it's unsatisfied)
                 }
@@ -529,7 +510,7 @@ public class InjectorImpl implements Injector {
             @Override
             public @NonNull Iterator<T> iterator() {
                 try {
-                    Collection<Class<? extends T>> classes = classResolver.resolveImplementations(type, packageName, qualifiers);
+                    Collection<Class<? extends T>> classes = classResolver.resolveImplementations(type, qualifiers);
 
                     List<T> instances = new ArrayList<>();
                     for (Class<? extends T> clazz : classes) {
@@ -564,5 +545,14 @@ public class InjectorImpl implements Injector {
         }
 
         return new ArrayList<>(merged.values());
+    }
+
+    /**
+     * Clears all internal state, including scope handlers and injected static classes.
+     */
+    void clearState() {
+        scopeRegistry.clear();
+        registerDefaultScope();
+        injectedStaticClasses.clear();
     }
 }

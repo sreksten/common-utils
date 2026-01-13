@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.injection;
 
 import java.lang.reflect.*;
 
-class RawTypeHelper {
+class RawTypeExtractor {
 
     static Class<?> getRawType(Type type) {
         if (type instanceof Class<?>) {

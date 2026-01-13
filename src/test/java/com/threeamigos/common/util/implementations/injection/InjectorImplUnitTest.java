@@ -1181,13 +1181,13 @@ class InjectorImplUnitTest {
                 ClassResolver mockResolver = spy(new ClassResolver());
                 // resolveImplementations throws an exception
                 doThrow(new Exception("Test exception"))
-                        .when(mockResolver).resolveImplementations(any(Class.class), any(String.class));
+                        .when(mockResolver).resolveImplementations(any(Class.class));
                 // resolveImplementation calls the real method
                 doCallRealMethod()
-                        .when(mockResolver).resolveImplementation(any(Class.class), any(String.class), any());
+                        .when(mockResolver).resolveImplementation(any(Class.class), any());
                 doCallRealMethod()
-                        .when(mockResolver).resolveImplementation(any(ClassLoader.class), any(Class.class), any(String.class), any());
-                Injector sut = new InjectorImpl(mockResolver, TEST_PACKAGE_NAME);
+                        .when(mockResolver).resolveImplementations(any(ClassLoader.class), any());
+                Injector sut = new InjectorImpl(mockResolver);
                 // When
                 ClassWithAnyInstanceAndMultipleImplementations instance = sut.inject(ClassWithAnyInstanceAndMultipleImplementations.class);
                 // Then
@@ -1232,13 +1232,13 @@ class InjectorImplUnitTest {
                 ClassResolver mockResolver = spy(new ClassResolver());
                 // resolveImplementations throws an exception
                 doThrow(new Exception("Test exception"))
-                        .when(mockResolver).resolveImplementations(any(Class.class), any(String.class));
+                        .when(mockResolver).resolveImplementations(any(Class.class));
                 // resolveImplementation calls the real method
                 doCallRealMethod()
-                        .when(mockResolver).resolveImplementation(any(Class.class), any(String.class), any());
+                        .when(mockResolver).resolveImplementation(any(Class.class), any());
                 doCallRealMethod()
-                        .when(mockResolver).resolveImplementation(any(ClassLoader.class), any(Class.class), any(String.class), any());
-                Injector sut = new InjectorImpl(mockResolver, TEST_PACKAGE_NAME);
+                        .when(mockResolver).resolveImplementation(any(ClassLoader.class), any(Class.class), any());
+                Injector sut = new InjectorImpl(mockResolver);
                 // When
                 ClassWithAnyInstanceAndMultipleImplementations instance = sut.inject(ClassWithAnyInstanceAndMultipleImplementations.class);
                 // Then
@@ -1521,7 +1521,6 @@ class InjectorImplUnitTest {
                 // resolveImplementation(Type, String, Collection)
                 when(mockResolver.resolveImplementation(
                         any(java.lang.reflect.Type.class),
-                        any(String.class),
                         nullable(Collection.class)
                 )).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -1529,11 +1528,10 @@ class InjectorImplUnitTest {
                 // We use explicit types to avoid ambiguity with resolveImplementations(ClassLoader, Type, String)
                 when(mockResolver.resolveImplementations(
                         any(java.lang.reflect.Type.class),
-                        any(String.class),
                         nullable(Collection.class)
                 )).thenThrow(new Exception("Resolution failed"));
 
-                InjectorImpl sut = new InjectorImpl(mockResolver, TEST_PACKAGE_NAME);
+                InjectorImpl sut = new InjectorImpl(mockResolver);
                 ClassWithInstanceOfTestInterface instanceWrapper = sut.inject(ClassWithInstanceOfTestInterface.class);
                 javax.enterprise.inject.Instance<TestInterface> instance = instanceWrapper.getTestInterfaceInstance();
 

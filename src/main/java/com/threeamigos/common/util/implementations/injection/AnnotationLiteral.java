@@ -3,6 +3,10 @@ package com.threeamigos.common.util.implementations.injection;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Proxy;
 
+/**
+ * A class representing a dynamic annotation proxy.
+ * Use to bind specific annotations to types in the dependency injection system.
+ */
 public class AnnotationLiteral {
 
     @SuppressWarnings("unchecked")
