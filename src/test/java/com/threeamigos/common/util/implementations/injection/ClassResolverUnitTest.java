@@ -838,8 +838,8 @@ class ClassResolverUnitTest {
             }
 
             @Test
-            @DisplayName("isAssignable should return false for unsupported Type implementations")
-            void isAssignableShouldReturnFalseForUnsupportedTypes() {
+            @DisplayName("isAssignable should return true for GenericArrayType")
+            void isAssignableShouldReturnTrueForGenericArrayType() {
                 ClassResolver sut = new ClassResolver();
                 Type targetType = new java.lang.reflect.GenericArrayType() {
                     @Override
@@ -851,7 +851,42 @@ class ClassResolverUnitTest {
 
                 boolean result = sut.isAssignable(targetType, candidate);
 
-                assertFalse(result, "isAssignable should return false for GenericArrayType as it only supports Class and ParameterizedType");
+                assertTrue(result, "isAssignable should return true for GenericArrayType when components match");
+            }
+
+            @Test
+            @DisplayName("isAssignable should return true for TypeVariable")
+            void isAssignableShouldReturnTrueForTypeVariable() {
+                ClassResolver sut = new ClassResolver();
+                Type targetType = GenericInterface.class.getTypeParameters()[0]; // T
+                // RawTypeExtractor handles TypeVariable by taking the first bound, which is Object if none specified
+                Class<?> candidate = String.class;
+
+                boolean result = sut.isAssignable(targetType, candidate);
+
+                assertTrue(result, "isAssignable should return true for TypeVariable (Object bound)");
+            }
+
+            @Test
+            @DisplayName("isAssignable should return true for WildcardType")
+            void isAssignableShouldReturnTrueForWildcardType() {
+                ClassResolver sut = new ClassResolver();
+                Type targetType = new java.lang.reflect.WildcardType() {
+                    @Override
+                    public Type[] getUpperBounds() {
+                        return new Type[]{String.class};
+                    }
+
+                    @Override
+                    public Type[] getLowerBounds() {
+                        return new Type[0];
+                    }
+                };
+                Class<?> candidate = String.class;
+
+                boolean result = sut.isAssignable(targetType, candidate);
+
+                assertTrue(result, "isAssignable should return true for WildcardType matching upper bound");
             }
         }
     }
@@ -908,7 +943,7 @@ class ClassResolverUnitTest {
         // Passing getClass().getClassLoader() as parent is necessary so the loader
         // can find the annotation classes and abstract classes during Class.forName()
         try (URLClassLoader testLoader = createURLClassLoader(urls, packageName, baseEntryName)) {
-            ClassResolver sut = new ClassResolver();
+            ClassResolver sut = new ClassResolver(packageNameToFilter);
 
             // 4. Resolve using the custom loader
             Class<?> abstractClass = testLoader.loadClass(MultipleConcreteClassesAbstractClass.class.getName());

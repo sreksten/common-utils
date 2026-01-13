@@ -96,12 +96,8 @@ class ClassResolver {
         boolean isDefault = qualifiers == null || qualifiers.isEmpty() ||
                 qualifiers.stream().anyMatch(q -> q instanceof DefaultLiteral);
 
-        if (isDefault) {
-            if (isNotInterfaceOrAbstract(rawType)) {
-                return (Class<? extends T>)rawType;
-            } else {
-                throw new InjectionException(rawType.getName() + " marked as @Default but is an interface or abstract class.");
-            }
+        if (isDefault && isNotInterfaceOrAbstract(rawType)) {
+            return (Class<? extends T>)rawType;
         }
 
         // Search for all possible implementations
@@ -121,7 +117,7 @@ class ClassResolver {
                 .collect(Collectors.toList());
 
         // Check for @Qualifier / @Named annotations
-        if (!qualifiers.isEmpty()) {
+        if (qualifiers != null &&!qualifiers.isEmpty()) {
             for (Class<? extends T> clazz : activeClasses) {
                 if (matchesQualifiers(clazz, qualifiers)) {
                     return clazz;
@@ -270,6 +266,11 @@ class ClassResolver {
             return isAssignable(targetType, candidate.getSuperclass());
         }
 
+        if (targetType instanceof GenericArrayType || targetType instanceof TypeVariable || targetType instanceof WildcardType) {
+            Class<?> rawTargetType = RawTypeExtractor.getRawType(targetType);
+            return rawTargetType.isAssignableFrom(candidate);
+        }
+
         return false;
     }
 
@@ -284,6 +285,7 @@ class ClassResolver {
     }
 
     private void getClasses(ClassLoader classLoader) throws ClassNotFoundException, IOException {
+        packagesToScan.removeIf(Objects::isNull);
         if (packagesToScan.isEmpty()) {
             packagesToScan.add("");
         }
