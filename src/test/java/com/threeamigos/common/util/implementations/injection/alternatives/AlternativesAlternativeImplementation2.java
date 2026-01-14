@@ -3,5 +3,5 @@ package com.threeamigos.common.util.implementations.injection.alternatives;
 import javax.enterprise.inject.Alternative;
 
 @Alternative
-public class AlternativesTestAlternativeImplementation2 implements AlternativesTestInterface {
+public class AlternativesAlternativeImplementation2 implements AlternativesInterface {
 }

@@ -44,6 +44,10 @@ class ClassResolver {
      */
     private final Map<MappingKey, Class<?>> bindings = new HashMap<>();
     /**
+     * Whether the resolve process should stop at bound classes or scan the classpath
+     */
+    private boolean bindingsOnly;
+    /**
      * A collection of Alternatives that can be used instead of the actual implementations.
      */
     private final Set<Class<?>> enabledAlternatives = new HashSet<>();
@@ -54,6 +58,10 @@ class ClassResolver {
 
     void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation) {
         bindings.put(new MappingKey(type, qualifiers), implementation);
+    }
+
+    void setBindingsOnly(boolean bindingsOnly) {
+        this.bindingsOnly = bindingsOnly;
     }
 
     void enableAlternative(Class<?> alternativeClass) {
@@ -85,6 +93,14 @@ class ClassResolver {
         MappingKey key = new MappingKey(typeToResolve, qualifiers);
         if (bindings.containsKey(key)) {
             return (Class<? extends T>) bindings.get(key);
+        } else if (bindingsOnly) {
+            if (qualifiers != null && !qualifiers.isEmpty()) {
+                throw new UnsatisfiedResolutionException("No implementation found with qualifiers " +
+                        qualifiers.stream().map(Annotation::toString).collect(Collectors.joining(", ")) +
+                        " for " + typeToResolve.getClass().getName());
+            } else {
+                throw new UnsatisfiedResolutionException("No implementation found for " + typeToResolve.getClass().getName());
+            }
         }
 
         Class<?> rawType = RawTypeExtractor.getRawType(typeToResolve);
@@ -261,11 +277,31 @@ class ClassResolver {
             return typesMatch(targetType, candidate);
         }
 
-        if (targetType instanceof GenericArrayType ||
-                targetType instanceof TypeVariable ||
-                targetType instanceof WildcardType) {
-            Class<?> rawTargetType = RawTypeExtractor.getRawType(targetType);
-            return rawTargetType.isAssignableFrom(candidate);
+        // Logic for Intersection Types (Multiple Bounds)
+        if (targetType instanceof TypeVariable) {
+            for (Type bound : ((TypeVariable<?>) targetType).getBounds()) {
+                if (!isAssignable(bound, candidate)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (targetType instanceof WildcardType) {
+            for (Type bound : ((WildcardType) targetType).getUpperBounds()) {
+                if (!isAssignable(bound, candidate)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (targetType instanceof GenericArrayType) {
+            if (!candidate.isArray()) {
+                return false;
+            }
+            Type targetComponent = ((GenericArrayType) targetType).getGenericComponentType();
+            return isAssignable(targetComponent, candidate.getComponentType());
         }
 
         return false;

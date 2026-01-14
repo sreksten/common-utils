@@ -1,4 +1,4 @@
 package com.threeamigos.common.util.implementations.injection.alternatives;
 
-public interface AlternativesTestInterface {
+public interface AlternativesInterface {
 }

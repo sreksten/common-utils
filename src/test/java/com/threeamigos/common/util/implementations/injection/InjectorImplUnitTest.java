@@ -9,9 +9,9 @@ import com.threeamigos.common.util.implementations.injection.abstractclasses.mul
 import com.threeamigos.common.util.implementations.injection.abstractclasses.noconcreteclasses.NoConcreteClassesAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestAlternativeImplementation1;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestInterface;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesTestStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesAlternativeImplementation1;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesInterface;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesStandardImplementation;
 import com.threeamigos.common.util.implementations.injection.circulardependencies.A;
 import com.threeamigos.common.util.implementations.injection.circulardependencies.AWithBProvider;
 import com.threeamigos.common.util.implementations.injection.circulardependencies.B;
@@ -20,6 +20,7 @@ import com.threeamigos.common.util.implementations.injection.fields.*;
 import com.threeamigos.common.util.implementations.injection.generics.GenericsClass;
 import com.threeamigos.common.util.implementations.injection.generics.Object1;
 import com.threeamigos.common.util.implementations.injection.generics.Object2;
+import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleAlternativesAlternativeImplementation;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
@@ -541,12 +542,32 @@ class InjectorImplUnitTest {
 
         /**
          * If we have a dependency on an interface or abstract class that has more than one implementation, the Injector
+         * will resolve the implementation based on the annotations on the class and its dependencies. Normally it uses
+         * the default implementation (not annotated with {@link Named}).
+         */
+        @Test
+        @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency with more implementations (get alternative)")
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            sut.enableAlternative(MultipleAlternativesAlternativeImplementation.class);
+            // When
+            TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault instance =
+                    sut.inject(TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault.class);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getMultipleAnnotatedImplementationsInterface());
+            assertEquals(MultipleAlternativesAlternativeImplementation.class, instance.getMultipleAnnotatedImplementationsInterface().getClass());
+        }
+
+        /**
+         * If we have a dependency on an interface or abstract class that has more than one implementation, the Injector
          * will resolve the implementation based on the annotations on the class and its dependencies. In this case
          * we specify to use a particular alternative implementation.
          */
         @Test
-        @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency (get alternative implementation)")
-        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative() {
+        @DisplayName("Should instantiate an object with an annotated constructor and an abstract dependency (get named2 implementation)")
+        void shouldInstantiateAnObjectWithAnAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsNamed2() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When
@@ -831,7 +852,7 @@ class InjectorImplUnitTest {
             // Then
             assertNotNull(instance);
             assertNotNull(instance.getAlternativesTestInterface());
-            assertEquals(AlternativesTestStandardImplementation.class, instance.getAlternativesTestInterface().getClass());
+            assertEquals(AlternativesStandardImplementation.class, instance.getAlternativesTestInterface().getClass());
         }
 
         @Test
@@ -839,14 +860,14 @@ class InjectorImplUnitTest {
         void shouldInstantiateAnObjectWithAlternativeImplementationWhenAlternativesAreEnabled() {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
-            sut.enableAlternative(AlternativesTestAlternativeImplementation1.class);
+            sut.enableAlternative(AlternativesAlternativeImplementation1.class);
             // When
             TestClassWithAnnotatedConstructorAndAlternativeDependency instance =
                     sut.inject(TestClassWithAnnotatedConstructorAndAlternativeDependency.class);
             // Then
             assertNotNull(instance);
             assertNotNull(instance.getAlternativesTestInterface());
-            assertEquals(AlternativesTestAlternativeImplementation1.class, instance.getAlternativesTestInterface().getClass());
+            assertEquals(AlternativesAlternativeImplementation1.class, instance.getAlternativesTestInterface().getClass());
         }
     }
 
@@ -1919,12 +1940,12 @@ class InjectorImplUnitTest {
     }
 
     static class TestClassWithAnnotatedConstructorAndAlternativeDependency {
-        private final AlternativesTestInterface testInterface;
+        private final AlternativesInterface testInterface;
         @Inject
-        public TestClassWithAnnotatedConstructorAndAlternativeDependency(AlternativesTestInterface testInterface) {
+        public TestClassWithAnnotatedConstructorAndAlternativeDependency(AlternativesInterface testInterface) {
             this.testInterface = testInterface;
         }
-        public AlternativesTestInterface getAlternativesTestInterface() {
+        public AlternativesInterface getAlternativesTestInterface() {
             return testInterface;
         }
     }
