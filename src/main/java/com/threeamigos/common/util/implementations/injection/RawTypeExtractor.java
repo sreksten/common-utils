@@ -2,6 +2,9 @@ package com.threeamigos.common.util.implementations.injection;
 
 import java.lang.reflect.*;
 
+/**
+ * Utility class for extracting raw types from Java type information.
+ */
 class RawTypeExtractor {
 
     static Class<?> getRawType(Type type) {
@@ -16,11 +19,11 @@ class RawTypeExtractor {
             return Array.newInstance(getRawType(componentType), 0).getClass();
         }
         if (type instanceof TypeVariable) {
-            // Usually, we take the first bound (e.g., T extends Number -> Number)
+            // Usually, we take the first bound (e.g., <T extends Number> -> Number)
             return getRawType(((TypeVariable<?>) type).getBounds()[0]);
         }
         if (type instanceof WildcardType) {
-            // Usually, we take the upper bound (e.g., ? extends Number -> Number)
+            // Usually, we take the upper bound (e.g., <? extends Number> -> Number)
             return getRawType(((WildcardType) type).getUpperBounds()[0]);
         }
         throw new IllegalArgumentException("Unsupported type: " + type);
