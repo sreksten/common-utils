@@ -9,8 +9,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("RawTypeHelper unit test")
-class RawTypeHelperUnitTest {
+@DisplayName("RawTypeExtractor unit test")
+class RawTypeExtractorUnitTest {
 
     @Test
     @DisplayName("getRawType should return the class when input is a Class")
@@ -42,7 +42,7 @@ class RawTypeHelperUnitTest {
     @DisplayName("getRawType should return the bound when input is a TypeVariable")
     @SuppressWarnings("unused")
     <T extends Number> void shouldReturnBoundWhenInputIsTypeVariable() throws NoSuchMethodException {
-        Method method = RawTypeHelperUnitTest.class.getDeclaredMethod("shouldReturnBoundWhenInputIsTypeVariable");
+        Method method = RawTypeExtractorUnitTest.class.getDeclaredMethod("shouldReturnBoundWhenInputIsTypeVariable");
         TypeVariable<?> typeVariable = method.getTypeParameters()[0];
 
         assertEquals(Number.class, RawTypeExtractor.getRawType(typeVariable));
