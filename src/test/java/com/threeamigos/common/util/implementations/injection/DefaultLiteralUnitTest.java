@@ -1,7 +1,10 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import javax.enterprise.inject.Default;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.lang.annotation.Annotation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -9,14 +12,43 @@ import static org.junit.jupiter.api.Assertions.*;
 class DefaultLiteralUnitTest {
 
     @Test
-    @DisplayName("equals should work")
-    void equalsShouldWork() {
-        DefaultLiteral defaultLiteral = new DefaultLiteral();
-        assertEquals(defaultLiteral, defaultLiteral);
-        assertNotEquals(null, defaultLiteral);
-        assertNotEquals(new Object(), defaultLiteral);
-        DefaultLiteral other = new DefaultLiteral();
-        assertEquals(defaultLiteral, other);
+    @DisplayName("annotationType() should return Default.class")
+    void annotationTypeShouldReturnDefaultClass() {
+        DefaultLiteral literal = new DefaultLiteral();
+        assertEquals(Default.class, literal.annotationType());
     }
 
+    @Test
+    @DisplayName("equals() should return true for instances of Default")
+    void equalsShouldReturnTrueForDefaultInstances() {
+        DefaultLiteral literal = new DefaultLiteral();
+        Default otherLiteral = new DefaultLiteral();
+        
+        // It should equal itself
+        assertEquals(literal, literal);
+        // It should equal another DefaultLiteral
+        assertEquals(literal, otherLiteral);
+        
+        // It should equal a proxy of @Default if one existed, but DefaultLiteral itself is enough for coverage
+    }
+
+    @Test
+    @DisplayName("equals() should return false for null or non-Default instances")
+    void equalsShouldReturnFalseForNullOrDifferentTypes() {
+        DefaultLiteral literal = new DefaultLiteral();
+
+        assertNotEquals(null, literal);
+        assertNotEquals("not a default", literal);
+        
+        // Testing against another annotation
+        Annotation otherAnnotation = AnnotationLiteral.of(Override.class);
+        assertNotEquals(otherAnnotation, literal);
+    }
+
+    @Test
+    @DisplayName("hashCode() should return 0")
+    void hashCodeShouldReturnZero() {
+        DefaultLiteral literal = new DefaultLiteral();
+        assertEquals(0, literal.hashCode());
+    }
 }
