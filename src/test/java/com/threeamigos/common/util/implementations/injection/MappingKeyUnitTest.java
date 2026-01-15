@@ -36,9 +36,11 @@ class MappingKeyUnitTest {
 
     @Test
     @DisplayName("equals() should return false for a different object")
+    @SuppressWarnings("EqualsBetweenInconvertibleTypes")
     void equalsShouldReturnFalseForDifferentObject() {
         MappingKey key = new MappingKey(String.class, null);
-        assertNotEquals(new Object(), key);
+        boolean areEqual = key.equals("string");
+        assertFalse(areEqual);
     }
 
     @Test
