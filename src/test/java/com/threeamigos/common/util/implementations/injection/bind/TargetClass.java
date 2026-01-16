@@ -1,4 +1,4 @@
 package com.threeamigos.common.util.implementations.injection.bind;
 
-public class TargetClass {
+public class TargetClass extends ClassToBind {
 }

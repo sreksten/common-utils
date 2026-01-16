@@ -5,15 +5,10 @@ import org.jspecify.annotations.Nullable;
 import javax.enterprise.inject.*;
 import javax.inject.Named;
 import javax.inject.Qualifier;
-import java.io.File;
-import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
-import java.net.URL;
 import java.util.*;
 import java.util.function.Function;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 
 /**
@@ -27,14 +22,8 @@ import java.util.stream.Collectors;
  */
 class ClassResolver {
 
-    /**
-     * All packages to scan for concrete implementations. If empty, will scan all packages.
-     */
-    private final Collection<String> packagesToScan = new ArrayList<>();
-    /**
-     * First cache - to avoid browsing the classpath multiple times for the same package
-     */
-    private List<Class<?>> classesCache = null;
+    private final ClasspathScanner classpathScanner;
+    private final TypeChecker typeChecker;
     /**
      * Second cache - to avoid scanning the classes multiple times for the same interface or class
      */
@@ -53,10 +42,20 @@ class ClassResolver {
     private final Set<Class<?>> enabledAlternatives = new HashSet<>();
 
     ClassResolver(String ... packageNames) {
-        packagesToScan.addAll(Arrays.asList(packageNames));
+        classpathScanner = new ClasspathScanner(packageNames);
+        typeChecker = new TypeChecker();
+    }
+
+    ClassResolver(ClasspathScanner classpathScanner, TypeChecker typeChecker) {
+        this.classpathScanner = classpathScanner;
+        this.typeChecker = typeChecker;
     }
 
     void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation) {
+        if (!typeChecker.isAssignable(type, implementation)) {
+            throw new IllegalArgumentException("Cannot bind " + implementation.getName() +
+                    " to " + type.getClass().getName() + " because they are not assignable");
+        }
         bindings.put(new MappingKey(type, qualifiers), implementation);
     }
 
@@ -213,10 +212,10 @@ class ClassResolver {
         if (resolvedClasses.containsKey(abstractClass)) {
             resolvedClasses.get(abstractClass).forEach(c -> candidates.add((Class<? extends T>)c));
         } else {
-            List<Class<?>> allClasses = getAllClasses(classLoader);
+            List<Class<?>> allClasses = classpathScanner.getAllClasses(classLoader);
 
             for (Class<?> candidate : allClasses) {
-                if (isNotInterfaceOrAbstract(candidate) && isAssignable(abstractClass, candidate)) {
+                if (isNotInterfaceOrAbstract(candidate) && typeChecker.isAssignable(abstractClass, candidate)) {
                     candidates.add((Class<? extends T>) candidate);
                 }
             }
@@ -242,207 +241,5 @@ class ClassResolver {
             // @Any matches everything
             return qualifier instanceof Any;
         });
-    }
-
-    boolean isAssignable(Type targetType, Class<?> candidate) {
-        if (targetType instanceof Class<?>) {
-            return ((Class<?>) targetType).isAssignableFrom(candidate);
-        }
-
-        if (targetType instanceof ParameterizedType) {
-            ParameterizedType pt = (ParameterizedType) targetType;
-            Class<?> rawTarget = (Class<?>) pt.getRawType();
-
-            if (!rawTarget.isAssignableFrom(candidate)) {
-                return false;
-            }
-
-            // 1. Check all interfaces of the candidate
-            for (Type itf : candidate.getGenericInterfaces()) {
-                if (typesMatch(targetType, itf)) {
-                    return true;
-                }
-            }
-
-            // 2. Check superclass hierarchy
-            Type superType = candidate.getGenericSuperclass();
-            if (superType != null && superType != Object.class) {
-                if (typesMatch(targetType, superType)) {
-                    return true;
-                }
-                return isAssignable(targetType, candidate.getSuperclass());
-            }
-
-            // Fallback: if we match the raw type, and it's a simple match, consider it assignable
-            return typesMatch(targetType, candidate);
-        }
-
-        // Logic for Intersection Types (Multiple Bounds)
-        if (targetType instanceof TypeVariable) {
-            for (Type bound : ((TypeVariable<?>) targetType).getBounds()) {
-                if (!isAssignable(bound, candidate)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        if (targetType instanceof WildcardType) {
-            for (Type bound : ((WildcardType) targetType).getUpperBounds()) {
-                if (!isAssignable(bound, candidate)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        if (targetType instanceof GenericArrayType) {
-            if (!candidate.isArray()) {
-                return false;
-            }
-            Type targetComponent = ((GenericArrayType) targetType).getGenericComponentType();
-            return isAssignable(targetComponent, candidate.getComponentType());
-        }
-
-        return false;
-    }
-
-    boolean typesMatch(Type target, Type candidate) {
-        if (target.equals(candidate)) {
-            return true;
-        }
-
-        // If the target is a TypeVariable (like T), it matches its bound (usually Object)
-        if (target instanceof TypeVariable) {
-            return true;
-        }
-
-        if (target instanceof ParameterizedType && candidate instanceof ParameterizedType) {
-            ParameterizedType pt1 = (ParameterizedType) target;
-            ParameterizedType pt2 = (ParameterizedType) candidate;
-
-            if (!pt1.getRawType().equals(pt2.getRawType())) {
-                return false;
-            }
-
-            Type[] args1 = pt1.getActualTypeArguments();
-            Type[] args2 = pt2.getActualTypeArguments();
-
-            if (args1.length != args2.length) {
-                return false;
-            }
-
-            for (int i = 0; i < args1.length; i++) {
-                if (!typeArgsMatch(args1[i], args2[i])) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
-    boolean typeArgsMatch(Type t1, Type t2) {
-        if (t1.equals(t2) ||
-                t1 instanceof WildcardType ||
-                t2 instanceof WildcardType ||
-                t1 instanceof TypeVariable ||
-                t2 instanceof TypeVariable) {
-            return true;
-        }
-        return RawTypeExtractor.getRawType(t1).isAssignableFrom(RawTypeExtractor.getRawType(t2));
-    }
-
-    // From now on, package scans to search for classes.
-
-    private List<Class<?>> getAllClasses(ClassLoader classLoader) throws ClassNotFoundException, IOException {
-        if (classesCache == null) {
-            classesCache = new ArrayList<>();
-            getClasses(classLoader);
-        }
-        return classesCache;
-    }
-
-    private void getClasses(ClassLoader classLoader) throws ClassNotFoundException, IOException {
-        packagesToScan.removeIf(Objects::isNull);
-        if (packagesToScan.isEmpty()) {
-            packagesToScan.add("");
-        }
-        for (String packageName : packagesToScan) {
-            String path = packageName.replace('.', '/');
-            Enumeration<URL> resources = classLoader.getResources(path);
-            while (resources.hasMoreElements()) {
-                classesCache.addAll(getClassesFromResource(classLoader, resources.nextElement(), packageName));
-            }
-        }
-    }
-
-    List<Class<?>> getClassesFromResource(ClassLoader classLoader, URL resource, String packageName) throws ClassNotFoundException, IOException{
-        if (resource.getProtocol().equals("file")) {
-            return findClassesInDirectory(classLoader, new File(resource.getFile()), packageName);
-        } else if (resource.getProtocol().equals("jar")) {
-            return findClassesInJar(classLoader, resource, packageName);
-        } else {
-            return Collections.emptyList();
-        }
-    }
-
-    List<Class<?>> findClassesInDirectory(ClassLoader classLoader, File directory, String packageName) throws ClassNotFoundException {
-        if (!directory.exists()) {
-            return Collections.emptyList();
-        }
-        if (!directory.isDirectory()) {
-            return Collections.emptyList();
-        }
-
-        List<Class<?>> classes = new ArrayList<>();
-
-        File[] files = directory.listFiles();
-        // Being a directory, it can't return null, but to avoid false positives from the static checker...
-        for (File file : Objects.requireNonNull(files)) {
-            String prefix = packageName.isEmpty() ? "" : packageName + ".";
-            if (file.isDirectory()) {
-                    classes.addAll(findClassesInDirectory(classLoader, file, prefix + file.getName()));
-                } else if (file.getName().endsWith(".class")) {
-                    String className = prefix + file.getName().substring(0, file.getName().length() - 6);
-                    Class<?> clazz = Class.forName(className, false, classLoader);
-                    classes.add(clazz);
-                }
-        }
-        return classes;
-    }
-
-    List<Class<?>> findClassesInJar(ClassLoader classLoader, URL jarUrl, String packageName) throws IOException {
-        List<Class<?>> classes = new ArrayList<>();
-        // Extract the file path properly handling 'jar:file': and '!'
-        String urlString = jarUrl.toString();
-        String jarFilePath = urlString.substring(urlString.indexOf("file:"), urlString.indexOf("!"));
-
-        File jarFile;
-        try {
-            jarFile = new File(new URL(jarFilePath).toURI());
-        } catch (Exception e) {
-            // Fallback for non-standard URI formats
-            jarFile = new File(jarFilePath.replace("file:", ""));
-        }
-        String packagePath = packageName.replace('.', '/');
-
-        try (JarFile jar = new JarFile(jarFile)) {
-            Enumeration<JarEntry> entries = jar.entries();
-            while (entries.hasMoreElements()) {
-                JarEntry entry = entries.nextElement();
-                String name = entry.getName();
-                if (!name.startsWith("META-INF") && name.startsWith(packagePath) &&
-                        name.endsWith(".class") && !name.endsWith("module-info.class")) {
-                    String className = name.replace('/', '.').substring(0, name.length() - 6);
-                    try {
-                        classes.add(Class.forName(className, false, classLoader));
-                    } catch (NoClassDefFoundError | ClassNotFoundException e) {
-                        // Skip classes with missing dependencies or those that can't be loaded
-                    }
-                }
-            }
-        }
-        return classes;
     }
 }
