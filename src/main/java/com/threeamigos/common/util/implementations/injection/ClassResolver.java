@@ -27,7 +27,7 @@ class ClassResolver {
     /**
      * Second cache - to avoid scanning the classes multiple times for the same interface or class
      */
-    private final Map<Type, Collection<Class<?>>> resolvedClasses = new HashMap<>();
+    private final Cache<Type, Collection<Class<?>>> resolvedClasses = new Cache<>();
     /**
      * Custom mappings to bind a type and qualifiers to a specific implementation.
      */
@@ -203,25 +203,27 @@ class ClassResolver {
 
     @SuppressWarnings("unchecked")
     <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Type abstractClass) throws Exception {
-
-        List<Class<? extends T>> candidates = new ArrayList<>();
-
-        /*
-         * Look for a cache-hit
-         */
-        if (resolvedClasses.containsKey(abstractClass)) {
-            resolvedClasses.get(abstractClass).forEach(c -> candidates.add((Class<? extends T>)c));
-        } else {
-            List<Class<?>> allClasses = classpathScanner.getAllClasses(classLoader);
-
-            for (Class<?> candidate : allClasses) {
-                if (isNotInterfaceOrAbstract(candidate) && typeChecker.isAssignable(abstractClass, candidate)) {
-                    candidates.add((Class<? extends T>) candidate);
+        Collection<Class<?>> cached = resolvedClasses.computeIfAbsent(abstractClass, () -> {
+            List<Class<?>> candidates = new ArrayList<>();
+            try {
+                List<Class<?>> allClasses = classpathScanner.getAllClasses(classLoader);
+                for (Class<?> candidate : allClasses) {
+                    if (isNotInterfaceOrAbstract(candidate) && typeChecker.isAssignable(abstractClass, candidate)) {
+                        candidates.add(candidate);
+                    }
                 }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to resolve implementations for " + abstractClass, e);
             }
-            resolvedClasses.put(abstractClass, new ArrayList<>(candidates));
+            return new ArrayList<>(candidates);
+        });
+
+        // Convert to properly typed collection
+        List<Class<? extends T>> result = new ArrayList<>();
+        for (Class<?> clazz : cached) {
+            result.add((Class<? extends T>) clazz);
         }
-        return candidates;
+        return result;
     }
 
     private boolean isNotInterfaceOrAbstract(Class<?> clazz) {
