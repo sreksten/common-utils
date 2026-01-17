@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import javax.enterprise.inject.spi.DefinitionException;
 import java.lang.reflect.*;
 
 class TypeChecker {
@@ -9,15 +10,15 @@ class TypeChecker {
      * Per JSR 330/346, injection points cannot contain wildcards or type variables.
      *
      * @param type the type to validate
-     * @throws javax.enterprise.inject.spi.DefinitionException if the type contains wildcards or type variables
+     * @throws DefinitionException if the type contains wildcards or type variables
      */
     void validateInjectionPoint(Type type) {
         if (type instanceof WildcardType) {
-            throw new javax.enterprise.inject.spi.DefinitionException("Injection point cannot contain a wildcard: " + type.getTypeName());
+            throw new DefinitionException("Injection point cannot contain a wildcard: " + type.getTypeName());
         }
 
         if (type instanceof TypeVariable) {
-            throw new javax.enterprise.inject.spi.DefinitionException("Injection point cannot be a type variable: " + type.getTypeName());
+            throw new DefinitionException("Injection point cannot be a type variable: " + type.getTypeName());
         }
 
         if (type instanceof ParameterizedType) {
@@ -54,18 +55,27 @@ class TypeChecker {
             // Find how implementationType fulfills targetRaw (e.g., ArrayList<Integer> -> List<Integer>)
             Type exactSuperType = getExactSuperType(implementationType, targetRaw);
             if (exactSuperType == null) {
-                return true; // Fallback for raw types
+                throw new IllegalStateException(
+                    "getExactSuperType returned null despite isAssignableFrom being true. " +
+                    "Target: " + targetType + ", Implementation: " + implementationType);
             }
             return typesMatch(targetType, exactSuperType);
         }
 
         if (targetType instanceof GenericArrayType) {
-            if (!implementationRaw.isArray()) return false;
+            if (!implementationRaw.isArray()) {
+                throw new IllegalStateException(
+                    "Implementation type is not an array despite passing isAssignableFrom check. " +
+                    "Target: " + targetType + " (raw: " + targetRaw + "), " +
+                    "Implementation: " + implementationType + " (raw: " + implementationRaw + ")");
+            }
             Type targetComponent = ((GenericArrayType) targetType).getGenericComponentType();
             return isAssignable(targetComponent, implementationRaw.getComponentType());
         }
 
-        return false;
+        throw new IllegalStateException(
+            "Unexpected target type: " + targetType.getClass().getName() +
+            " - " + targetType + ". Expected Class, ParameterizedType, or GenericArrayType.");
     }
 
     Type getExactSuperType(Type type, Class<?> targetRaw) {
@@ -164,9 +174,12 @@ class TypeChecker {
             // If raw types differ but are assignable, resolve t2 to t1's raw type
             if (raw1.isAssignableFrom(raw2)) {
                 Type resolvedT2 = getExactSuperType(t2, raw1);
-                if (resolvedT2 != null) {
-                    return typeArgsMatch(t1, resolvedT2);
+                if (resolvedT2 == null) {
+                    throw new IllegalStateException(
+                        "getExactSuperType returned null despite isAssignableFrom being true in typeArgsMatch. " +
+                        "t1: " + t1 + " (raw1: " + raw1 + "), t2: " + t2 + " (raw2: " + raw2 + ")");
                 }
+                return typeArgsMatch(t1, resolvedT2);
             }
 
             return false;
