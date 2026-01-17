@@ -202,7 +202,7 @@ class ClassResolver {
     }
 
     @SuppressWarnings("unchecked")
-    <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Type abstractClass) throws Exception {
+    <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Type abstractClass) {
         Collection<Class<?>> cached = resolvedClasses.computeIfAbsent(abstractClass, () -> {
             List<Class<?>> candidates = new ArrayList<>();
             try {
