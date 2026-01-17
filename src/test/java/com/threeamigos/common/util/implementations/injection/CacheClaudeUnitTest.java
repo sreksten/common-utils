@@ -223,52 +223,36 @@ class CacheUnitTest {
     @Test
     @DisplayName("Constructor throws exception for invalid maxCacheSize")
     void testConstructorInvalidMaxCacheSize() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Cache<String, String>(0, 16, 0.75f);
-        });
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> new Cache<String, String>(0, 16, 0.75f));
         assertTrue(exception.getMessage().contains("maxCacheSize must be positive"));
 
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Cache<String, String>(-1, 16, 0.75f);
-        });
+        exception = assertThrows(IllegalArgumentException.class, () -> new Cache<String, String>(-1, 16, 0.75f));
         assertTrue(exception.getMessage().contains("maxCacheSize must be positive"));
     }
 
     @Test
     @DisplayName("Constructor throws exception for invalid initialCapacity")
     void testConstructorInvalidInitialCapacity() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Cache<String, String>(100, 0, 0.75f);
-        });
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> new Cache<String, String>(100, 0, 0.75f));
         assertTrue(exception.getMessage().contains("initialCapacity must be positive"));
 
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Cache<String, String>(100, -5, 0.75f);
-        });
+        exception = assertThrows(IllegalArgumentException.class, () -> new Cache<String, String>(100, -5, 0.75f));
         assertTrue(exception.getMessage().contains("initialCapacity must be positive"));
     }
 
     @Test
     @DisplayName("Constructor throws exception for invalid loadFactor")
     void testConstructorInvalidLoadFactor() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Cache<String, String>(100, 16, 0.0f);
-        });
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> new Cache<String, String>(100, 16, 0.0f));
         assertTrue(exception.getMessage().contains("loadFactor must be in (0, 1)"));
 
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Cache<String, String>(100, 16, 1.0f);
-        });
+        exception = assertThrows(IllegalArgumentException.class, () -> new Cache<String, String>(100, 16, 1.0f));
         assertTrue(exception.getMessage().contains("loadFactor must be in (0, 1)"));
 
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Cache<String, String>(100, 16, -0.5f);
-        });
+        exception = assertThrows(IllegalArgumentException.class, () -> new Cache<String, String>(100, 16, -0.5f));
         assertTrue(exception.getMessage().contains("loadFactor must be in (0, 1)"));
 
-        exception = assertThrows(IllegalArgumentException.class, () -> {
-            new Cache<String, String>(100, 16, 1.5f);
-        });
+        exception = assertThrows(IllegalArgumentException.class, () -> new Cache<String, String>(100, 16, 1.5f));
         assertTrue(exception.getMessage().contains("loadFactor must be in (0, 1)"));
     }
 
@@ -276,9 +260,7 @@ class CacheUnitTest {
     @DisplayName("computeIfAbsent throws NullPointerException for null key")
     void testComputeIfAbsentNullKey() {
         Cache<String, String> cache = new Cache<>();
-        Exception exception = assertThrows(NullPointerException.class, () -> {
-            cache.computeIfAbsent(null, () -> "value");
-        });
+        Exception exception = assertThrows(NullPointerException.class, () -> cache.computeIfAbsent(null, () -> "value"));
         assertTrue(exception.getMessage().contains("key cannot be null"));
     }
 
@@ -286,9 +268,7 @@ class CacheUnitTest {
     @DisplayName("computeIfAbsent throws NullPointerException for null supplier")
     void testComputeIfAbsentNullSupplier() {
         Cache<String, String> cache = new Cache<>();
-        Exception exception = assertThrows(NullPointerException.class, () -> {
-            cache.computeIfAbsent("key", null);
-        });
+        Exception exception = assertThrows(NullPointerException.class, () -> cache.computeIfAbsent("key", null));
         assertTrue(exception.getMessage().contains("supplierFunction cannot be null"));
     }
 
@@ -454,11 +434,9 @@ class CacheUnitTest {
     void testSupplierException() {
         Cache<String, String> cache = new Cache<>();
 
-        Exception exception = assertThrows(RuntimeException.class, () -> {
-            cache.computeIfAbsent("key1", () -> {
-                throw new RuntimeException("Computation failed");
-            });
-        });
+        Exception exception = assertThrows(RuntimeException.class, () -> cache.computeIfAbsent("key1", () -> {
+            throw new RuntimeException("Computation failed");
+        }));
 
         assertEquals("Computation failed", exception.getMessage());
         // Miss should still be recorded
