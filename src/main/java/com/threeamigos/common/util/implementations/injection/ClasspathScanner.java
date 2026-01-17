@@ -47,6 +47,8 @@ import java.util.jar.JarFile;
  *   <li>Classes that cannot be loaded (missing dependencies)</li>
  * </ul>
  *
+ * <p>Checked and commented with Claude.
+ *
  * @author Stefano Reksten
  */
 class ClasspathScanner {

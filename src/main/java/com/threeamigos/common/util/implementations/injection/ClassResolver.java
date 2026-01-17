@@ -12,13 +12,60 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * ClassResolver is responsible for resolving concrete implementations of abstract classes or interfaces.<br/>
- * Given an abstract class, a package name, and an optional identifier, it returns the concrete
- * implementation(s) of the abstract class.<br/>
- * The Unit Test for this class gives information about the expected behavior and edge cases.<br/>
- * This class, however, is to be used by the implementation of the Injector class.
+ * Resolves concrete implementations for abstract types in a dependency injection framework.
+ *
+ * <p>This class implements JSR 330/346 dependency injection semantics including:
+ * <ul>
+ *   <li>Qualifier-based resolution ({@code @Named}, {@code @Any}, {@code @Default}, custom qualifiers)
+ *   <li>Alternative support ({@code @Alternative} annotation)
+ *   <li>Programmatic bindings (override classpath scanning)
+ *   <li>Thread-safe caching of resolution results via {@link Cache}
+ * </ul>
+ *
+ * <p><b>Resolution Priority:</b>
+ * <ol>
+ *   <li>Custom bindings (highest priority)
+ *   <li>Enabled alternatives
+ *   <li>Qualified implementations (if qualifiers specified)
+ *   <li>Standard implementation (no qualifiers)
+ * </ol>
+ *
+ * <p><b>Thread Safety:</b> This class is thread-safe. Concurrent resolution
+ * of the same type will result in only one classpath scan, with other threads
+ * receiving the cached result from the {@link Cache}.
+ *
+ * <p><b>Caching:</b> Resolution results are cached using a thread-safe LRU cache
+ * with bounded size. This prevents redundant classpath scanning while ensuring
+ * memory bounds.
+ *
+ * <p><b>Example Usage:</b>
+ * <pre>{@code
+ * ClassResolver resolver = new ClassResolver("com.example");
+ *
+ * // Simple resolution
+ * Class<? extends MyService> impl = resolver.resolveImplementation(MyService.class, null);
+ *
+ * // With qualifier
+ * Collection<Annotation> qualifiers = Collections.singleton(new NamedLiteral("production"));
+ * Class<? extends MyService> impl = resolver.resolveImplementation(MyService.class, qualifiers);
+ *
+ * // Custom binding
+ * resolver.bind(MyService.class, null, ProductionService.class);
+ *
+ * // Enable alternative
+ * resolver.enableAlternative(TestService.class);
+ *
+ * // Get all implementations
+ * Collection<Class<? extends MyService>> allImpls = resolver.resolveImplementations(MyService.class);
+ * }</pre>
+ *
+ * <p>Checked and commented with Claude.
  *
  * @author Stefano Reksten
+ * @see javax.inject.Named
+ * @see javax.enterprise.inject.Alternative
+ * @see javax.inject.Qualifier
+ * @see Cache
  */
 class ClassResolver {
 
@@ -93,13 +140,7 @@ class ClassResolver {
         if (bindings.containsKey(key)) {
             return (Class<? extends T>) bindings.get(key);
         } else if (bindingsOnly) {
-            if (qualifiers != null && !qualifiers.isEmpty()) {
-                throw new UnsatisfiedResolutionException("No implementation found with qualifiers " +
-                        qualifiers.stream().map(Annotation::toString).collect(Collectors.joining(", ")) +
-                        " for " + typeToResolve.getClass().getName());
-            } else {
-                throw new UnsatisfiedResolutionException("No implementation found for " + typeToResolve.getClass().getName());
-            }
+            throw new UnsatisfiedResolutionException(formatUnsatisfiedError(typeToResolve, qualifiers));
         }
 
         Class<?> rawType = RawTypeExtractor.getRawType(typeToResolve);
@@ -136,9 +177,7 @@ class ClassResolver {
                     return clazz;
                 }
             }
-            throw new UnsatisfiedResolutionException("No implementation found with qualifiers " +
-                    qualifiers.stream().map(Annotation::toString).collect(Collectors.joining(", ")) +
-                    " for " + typeToResolve.getClass().getName());
+            throw new UnsatisfiedResolutionException(formatUnsatisfiedError(typeToResolve, qualifiers));
         }
 
         // Filter out @Qualifier / @Named classes
@@ -153,7 +192,7 @@ class ClassResolver {
 
         // Return the standard implementation (if any)
         if (candidates.isEmpty()) {
-            throw new UnsatisfiedResolutionException("No implementation found for " + typeToResolve.getClass().getName());
+            throw new UnsatisfiedResolutionException(formatUnsatisfiedError(typeToResolve, null));
         } else if (candidates.size() > 1) {
             String candidatesAsList = candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get();
             throw new AmbiguousResolutionException("More than one implementation found for " + typeToResolve.getClass().getName() +
@@ -243,5 +282,32 @@ class ClassResolver {
             // @Any matches everything
             return qualifier instanceof Any;
         });
+    }
+
+    /**
+     * Formats a collection of qualifiers into a human-readable string for error messages.
+     *
+     * @param qualifiers the collection of qualifiers to format
+     * @return a comma-separated string representation of the qualifiers
+     */
+    private String formatQualifiers(Collection<Annotation> qualifiers) {
+        return qualifiers.stream()
+                .map(Annotation::toString)
+                .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * Creates a formatted error message for unsatisfied resolution exceptions.
+     *
+     * @param type the type that could not be resolved
+     * @param qualifiers the qualifiers that were specified (may be null or empty)
+     * @return a formatted error message
+     */
+    private String formatUnsatisfiedError(Type type, Collection<Annotation> qualifiers) {
+        if (qualifiers != null && !qualifiers.isEmpty()) {
+            return "No implementation found with qualifiers " +
+                    formatQualifiers(qualifiers) + " for " + type.getTypeName();
+        }
+        return "No implementation found for " + type.getTypeName();
     }
 }

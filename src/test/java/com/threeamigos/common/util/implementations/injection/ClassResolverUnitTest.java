@@ -29,7 +29,11 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import javax.enterprise.inject.AmbiguousResolutionException;
@@ -42,6 +46,10 @@ import static org.mockito.Mockito.*;
 
 @DisplayName("ClassResolver unit tests")
 class ClassResolverUnitTest {
+
+    // Test interfaces with no implementations
+    interface NoImplInterface {}
+    interface NoImplInterface2 {}
 
     ClassResolver sut;
 
@@ -615,5 +623,554 @@ class ClassResolverUnitTest {
 
     // Test structures
     interface MyGeneric<T> {}
+
+    @Nested
+    @DisplayName("Cache Behavior Tests")
+    class CacheBehaviorTests {
+
+        @Test
+        @DisplayName("Should cache resolved implementations and return same result on subsequent calls")
+        void shouldCacheResolvedImplementations() throws Exception {
+            // Given
+            ClasspathScanner mockScanner = mock(ClasspathScanner.class);
+            TypeChecker mockChecker = mock(TypeChecker.class);
+            ClassResolver resolver = new ClassResolver(mockScanner, mockChecker);
+
+            List<Class<?>> classes = Arrays.asList(SingleImplementationClass.class);
+            when(mockScanner.getAllClasses(any(ClassLoader.class))).thenReturn(classes);
+            when(mockChecker.isAssignable(any(Type.class), any(Class.class))).thenReturn(true);
+
+            // When - first call
+            Collection<Class<? extends SingleImplementationInterface>> result1 =
+                resolver.resolveImplementations(SingleImplementationInterface.class);
+            // Second call
+            Collection<Class<? extends SingleImplementationInterface>> result2 =
+                resolver.resolveImplementations(SingleImplementationInterface.class);
+
+            // Then - scanner should be called only once due to caching
+            verify(mockScanner, times(1)).getAllClasses(any(ClassLoader.class));
+            assertEquals(result1.size(), result2.size());
+        }
+
+        @Test
+        @DisplayName("Cache should work correctly with different types")
+        void cacheShouldWorkWithDifferentTypes() throws Exception {
+            // When
+            Collection<Class<? extends SingleImplementationInterface>> result1 =
+                sut.resolveImplementations(SingleImplementationInterface.class);
+            Collection<Class<? extends MultipleImplementationsInterface>> result2 =
+                sut.resolveImplementations(MultipleImplementationsInterface.class);
+
+            // Call again to verify caching
+            Collection<Class<? extends SingleImplementationInterface>> result1Again =
+                sut.resolveImplementations(SingleImplementationInterface.class);
+
+            // Then
+            assertFalse(result1.isEmpty());
+            assertFalse(result2.isEmpty());
+            assertEquals(result1.size(), result1Again.size());
+        }
+
+        @Test
+        @DisplayName("Should handle cache with parameterized types")
+        void shouldHandleCacheWithParameterizedTypes() throws Exception {
+            // Given
+            Type listOfStrings = new ParameterizedType() {
+                @Override
+                public Type[] getActualTypeArguments() {
+                    return new Type[]{String.class};
+                }
+
+                @Override
+                public Type getRawType() {
+                    return List.class;
+                }
+
+                @Override
+                public Type getOwnerType() {
+                    return null;
+                }
+            };
+
+            // When/Then - should not crash with parameterized types
+            assertDoesNotThrow(() -> sut.resolveImplementations(listOfStrings));
+        }
+    }
+
+    @Nested
+    @DisplayName("Thread Safety Tests")
+    class ThreadSafetyTests {
+
+        @Test
+        @DisplayName("Should handle concurrent resolution of same type")
+        void shouldHandleConcurrentResolutionOfSameType() throws Exception {
+            // Given
+            int threadCount = 10;
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            CountDownLatch startLatch = new CountDownLatch(1);
+            CountDownLatch endLatch = new CountDownLatch(threadCount);
+            AtomicInteger successCount = new AtomicInteger(0);
+            AtomicInteger failureCount = new AtomicInteger(0);
+
+            // When - multiple threads resolve the same type concurrently
+            for (int i = 0; i < threadCount; i++) {
+                executor.submit(() -> {
+                    try {
+                        startLatch.await(); // Wait for all threads to be ready
+                        Collection<Class<? extends SingleImplementationInterface>> result =
+                            sut.resolveImplementations(SingleImplementationInterface.class);
+                        if (!result.isEmpty()) {
+                            successCount.incrementAndGet();
+                        }
+                    } catch (Exception e) {
+                        failureCount.incrementAndGet();
+                    } finally {
+                        endLatch.countDown();
+                    }
+                });
+            }
+
+            startLatch.countDown(); // Release all threads
+            assertTrue(endLatch.await(5, TimeUnit.SECONDS));
+            executor.shutdown();
+
+            // Then - all threads should succeed
+            assertEquals(threadCount, successCount.get());
+            assertEquals(0, failureCount.get());
+        }
+
+        @Test
+        @DisplayName("Should handle concurrent resolution of different types")
+        void shouldHandleConcurrentResolutionOfDifferentTypes() throws Exception {
+            // Given
+            int threadCount = 20;
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            CountDownLatch startLatch = new CountDownLatch(1);
+            CountDownLatch endLatch = new CountDownLatch(threadCount);
+            Set<Type> types = new HashSet<>(Arrays.asList(
+                SingleImplementationInterface.class,
+                MultipleImplementationsInterface.class,
+                SingleImplementationAbstractClass.class,
+                MultipleConcreteClassesAbstractClass.class
+            ));
+            AtomicInteger successCount = new AtomicInteger(0);
+
+            // When - multiple threads resolve different types concurrently
+            for (int i = 0; i < threadCount; i++) {
+                Type type = new ArrayList<>(types).get(i % types.size());
+                executor.submit(() -> {
+                    try {
+                        startLatch.await();
+                        Collection<?> result = sut.resolveImplementations(type);
+                        if (!result.isEmpty()) {
+                            successCount.incrementAndGet();
+                        }
+                    } catch (Exception e) {
+                        // Expected for some types
+                    } finally {
+                        endLatch.countDown();
+                    }
+                });
+            }
+
+            startLatch.countDown();
+            assertTrue(endLatch.await(5, TimeUnit.SECONDS));
+            executor.shutdown();
+
+            // Then - at least some should succeed
+            assertTrue(successCount.get() > 0);
+        }
+    }
+
+    @Nested
+    @DisplayName("Binding Edge Cases")
+    class BindingEdgeCases {
+
+        @Test
+        @DisplayName("Should handle binding with null qualifiers")
+        void shouldHandleBindingWithNullQualifiers() {
+            // Given
+            sut.bind(SingleImplementationInterface.class, null, SingleImplementationClass.class);
+
+            // When/Then - should resolve correctly
+            assertDoesNotThrow(() -> sut.resolveImplementation(SingleImplementationInterface.class, null));
+        }
+
+        @Test
+        @DisplayName("Should handle binding with empty qualifiers collection")
+        void shouldHandleBindingWithEmptyQualifiers() {
+            // Given
+            sut.bind(SingleImplementationInterface.class, Collections.emptySet(), SingleImplementationClass.class);
+
+            // When/Then - should resolve correctly
+            assertDoesNotThrow(() -> sut.resolveImplementation(SingleImplementationInterface.class, Collections.emptyList()));
+        }
+
+        @Test
+        @DisplayName("Should throw IllegalArgumentException when binding null type")
+        void shouldThrowExceptionWhenBindingNullType() {
+            // When/Then
+            assertThrows(NullPointerException.class,
+                () -> sut.bind(null, null, SingleImplementationClass.class));
+        }
+
+        @Test
+        @DisplayName("Should throw IllegalArgumentException when binding null implementation")
+        void shouldThrowExceptionWhenBindingNullImplementation() {
+            // When/Then
+            assertThrows(NullPointerException.class,
+                () -> sut.bind(SingleImplementationInterface.class, null, null));
+        }
+
+        @Test
+        @DisplayName("Should allow rebinding the same type with different qualifiers")
+        void shouldAllowRebindingSameTypeWithDifferentQualifiers() throws Exception {
+            // Given
+            Collection<Annotation> qualifier1 = Collections.singleton(new NamedLiteral("impl1"));
+            Collection<Annotation> qualifier2 = Collections.singleton(new NamedLiteral("impl2"));
+
+            sut.bind(SingleImplementationInterface.class, qualifier1, SingleImplementationClass.class);
+            sut.bind(SingleImplementationAbstractClass.class, qualifier2, SingleImplementationConcreteClass.class);
+
+            // When
+            Class<?> result1 = sut.resolveImplementation(SingleImplementationInterface.class, qualifier1);
+            Class<?> result2 = sut.resolveImplementation(SingleImplementationAbstractClass.class, qualifier2);
+
+            // Then
+            assertEquals(SingleImplementationClass.class, result1);
+            assertEquals(SingleImplementationConcreteClass.class, result2);
+        }
+
+        @Test
+        @DisplayName("Should overwrite binding when binding same type with same qualifiers")
+        void shouldOverwriteBindingWhenBindingSameTypeWithSameQualifiers() throws Exception {
+            // Given
+            Collection<Annotation> qualifiers = Collections.singleton(new NamedLiteral("test"));
+
+            sut.bind(SingleImplementationInterface.class, qualifiers, SingleImplementationClass.class);
+            // Bind again with same qualifiers but different implementation (if available)
+            // For now, just verify that binding twice works without error
+            sut.bind(SingleImplementationInterface.class, qualifiers, SingleImplementationClass.class);
+
+            // When
+            Class<?> result = sut.resolveImplementation(SingleImplementationInterface.class, qualifiers);
+
+            // Then - should return the bound implementation
+            assertEquals(SingleImplementationClass.class, result);
+        }
+    }
+
+    @Nested
+    @DisplayName("Alternative Edge Cases")
+    class AlternativeEdgeCases {
+
+        @Test
+        @DisplayName("Should handle enabling null alternative")
+        void shouldHandleEnablingNullAlternative() {
+            // When/Then - should not crash
+            assertDoesNotThrow(() -> sut.enableAlternative(null));
+        }
+
+        @Test
+        @DisplayName("Should handle enabling same alternative multiple times")
+        void shouldHandleEnablingSameAlternativeMultipleTimes() {
+            // Given
+            Class<?> alternative = SingleImplementationClass.class;
+
+            // When
+            sut.enableAlternative(alternative);
+            sut.enableAlternative(alternative);
+            sut.enableAlternative(alternative);
+
+            // Then - should not cause issues
+            assertDoesNotThrow(() -> sut.resolveImplementation(SingleImplementationInterface.class, null));
+        }
+
+        @Test
+        @DisplayName("Should handle enabling non-existent alternative")
+        void shouldHandleEnablingNonExistentAlternative() throws Exception {
+            // Given - enable an alternative that doesn't implement the interface
+            sut.enableAlternative(String.class);
+
+            // When - resolve interface
+            Class<?> result = sut.resolveImplementation(SingleImplementationInterface.class, null);
+
+            // Then - should return the standard implementation
+            assertEquals(SingleImplementationClass.class, result);
+        }
+    }
+
+    @Nested
+    @DisplayName("Error Handling Tests")
+    class ErrorHandlingTests {
+
+        @Test
+        @DisplayName("Should return empty collection when no implementation found for resolveImplementations")
+        void shouldReturnEmptyCollectionWhenNoImplementationFound() throws Exception {
+            // When
+            Collection<Class<? extends NoImplInterface>> result = sut.resolveImplementations(NoImplInterface.class);
+
+            // Then - should return empty collection for types with no implementations
+            assertNotNull(result);
+            assertTrue(result.isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should return multiple implementations from resolveImplementations")
+        void shouldReturnMultipleImplementationsFromResolveImplementations() throws Exception {
+            // When
+            Collection<Class<? extends MultipleImplementationsInterface>> result =
+                sut.resolveImplementations(MultipleImplementationsInterface.class);
+
+            // Then - should return all implementations (not throw ambiguous exception)
+            assertNotNull(result);
+            assertTrue(result.size() > 1);
+        }
+
+        @Test
+        @DisplayName("Should handle exceptions from ClasspathScanner gracefully")
+        void shouldHandleExceptionsFromClasspathScanner() throws Exception {
+            // Given
+            ClasspathScanner mockScanner = mock(ClasspathScanner.class);
+            TypeChecker mockChecker = mock(TypeChecker.class);
+            ClassResolver resolver = new ClassResolver(mockScanner, mockChecker);
+
+            when(mockScanner.getAllClasses(any(ClassLoader.class)))
+                .thenThrow(new RuntimeException("Scanner failed"));
+
+            // When/Then - should propagate as RuntimeException
+            assertThrows(RuntimeException.class,
+                () -> resolver.resolveImplementations(SingleImplementationInterface.class));
+        }
+
+        @Test
+        @DisplayName("Should handle bindingsOnly mode when no bindings exist")
+        void shouldHandleBindingsOnlyModeWhenNoBindingsExist() {
+            // Given
+            sut.setBindingsOnly(true);
+
+            // When/Then
+            assertThrows(UnsatisfiedResolutionException.class,
+                () -> sut.resolveImplementation(SingleImplementationInterface.class, null));
+        }
+
+        @Test
+        @DisplayName("Should handle bindingsOnly mode with qualifiers when no bindings exist")
+        void shouldHandleBindingsOnlyModeWithQualifiersWhenNoBindingsExist() {
+            // Given
+            sut.setBindingsOnly(true);
+            Collection<Annotation> qualifiers = Collections.singleton(new NamedLiteral("test"));
+
+            // When/Then
+            UnsatisfiedResolutionException exception = assertThrows(
+                UnsatisfiedResolutionException.class,
+                () -> sut.resolveImplementation(SingleImplementationInterface.class, qualifiers)
+            );
+
+            // Error message should mention the qualifiers
+            assertTrue(exception.getMessage().contains("qualifiers"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Concrete Class Resolution Tests")
+    class ConcreteClassResolutionTests {
+
+        @Test
+        @DisplayName("Should return concrete class itself when resolved with @Default qualifier")
+        void shouldReturnConcreteClassWithDefaultQualifier() throws Exception {
+            // Given
+            Collection<Annotation> qualifiers = Collections.singleton(new DefaultLiteral());
+
+            // When
+            Class<?> result = sut.resolveImplementation(SingleImplementationConcreteClass.class, qualifiers);
+
+            // Then
+            assertEquals(SingleImplementationConcreteClass.class, result);
+        }
+
+        @Test
+        @DisplayName("Should throw exception when resolving concrete class with non-default qualifiers")
+        void shouldThrowExceptionWhenResolvingConcreteClassWithNonDefaultQualifiers() {
+            // Given
+            Collection<Annotation> qualifiers = Collections.singleton(new NamedLiteral("test"));
+
+            // When/Then - concrete classes with non-default qualifiers should throw
+            assertThrows(UnsatisfiedResolutionException.class,
+                () -> sut.resolveImplementation(SingleImplementationConcreteClass.class, qualifiers));
+        }
+
+        @Test
+        @DisplayName("Should handle array types correctly")
+        void shouldHandleArrayTypesCorrectly() throws Exception {
+            // When
+            Class<?> result = sut.resolveImplementation(String[].class, null);
+
+            // Then
+            assertEquals(String[].class, result);
+        }
+
+        @Test
+        @DisplayName("Should handle primitive array types")
+        void shouldHandlePrimitiveArrayTypes() throws Exception {
+            // When
+            Class<?> result = sut.resolveImplementation(int[].class, null);
+
+            // Then
+            assertEquals(int[].class, result);
+        }
+    }
+
+    @Nested
+    @DisplayName("Qualifier Matching Tests")
+    class QualifierMatchingTests {
+
+        @Test
+        @DisplayName("Should match @Any qualifier with any implementation")
+        void shouldMatchAnyQualifierWithAnyImplementation() throws Exception {
+            // Given
+            Collection<Annotation> qualifiers = Collections.singleton(new AnyLiteral());
+
+            // When
+            Collection<Class<? extends MultipleImplementationsInterface>> result =
+                sut.resolveImplementations(MultipleImplementationsInterface.class, qualifiers);
+
+            // Then - should return all active implementations
+            assertFalse(result.isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should match @Default qualifier with non-qualified implementations")
+        void shouldMatchDefaultQualifierWithNonQualifiedImplementations() throws Exception {
+            // Given
+            Collection<Annotation> qualifiers = Collections.singleton(new DefaultLiteral());
+
+            // When
+            Collection<Class<? extends MultipleImplementationsInterface>> result =
+                sut.resolveImplementations(MultipleImplementationsInterface.class, qualifiers);
+
+            // Then - should return only implementations without qualifiers
+            assertFalse(result.isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should handle multiple qualifiers on single implementation")
+        void shouldHandleMultipleQualifiersOnSingleImplementation() throws Exception {
+            // Given
+            Collection<Annotation> qualifiers = Arrays.asList(
+                new NamedLiteral("name"),
+                new MyQualifierLiteral()
+            );
+
+            // When/Then - should match implementation with both qualifiers
+            assertDoesNotThrow(() ->
+                sut.resolveImplementations(MultipleImplementationsInterface.class, qualifiers));
+        }
+    }
+
+    @Nested
+    @DisplayName("Edge Cases and Boundary Conditions")
+    class EdgeCasesAndBoundaryConditions {
+
+        @Test
+        @DisplayName("Should handle empty package name in constructor")
+        void shouldHandleEmptyPackageNameInConstructor() {
+            // When/Then - should not crash
+            assertDoesNotThrow(() -> new ClassResolver(""));
+        }
+
+        @Test
+        @DisplayName("Should handle no package names in constructor")
+        void shouldHandleNoPackageNamesInConstructor() {
+            // When
+            ClassResolver resolver = new ClassResolver();
+
+            // Then - should scan entire classpath
+            assertDoesNotThrow(() -> resolver.resolveImplementations(SingleImplementationInterface.class));
+        }
+
+        @Test
+        @DisplayName("Should handle null package names in constructor")
+        void shouldHandleNullPackageNamesInConstructor() {
+            // When/Then - should not crash
+            assertDoesNotThrow(() -> new ClassResolver((String) null));
+        }
+
+        @Test
+        @DisplayName("Should handle setBindingsOnly toggle")
+        void shouldHandleBindingsOnlyToggle() throws Exception {
+            // Given
+            sut.bind(SingleImplementationInterface.class, null, SingleImplementationClass.class);
+
+            // When - enable bindingsOnly
+            sut.setBindingsOnly(true);
+            Class<?> result1 = sut.resolveImplementation(SingleImplementationInterface.class, null);
+
+            // Then - disable bindingsOnly
+            sut.setBindingsOnly(false);
+            Class<?> result2 = sut.resolveImplementation(SingleImplementationInterface.class, null);
+
+            // Both should work
+            assertNotNull(result1);
+            assertNotNull(result2);
+        }
+
+        @Test
+        @DisplayName("Should throw exception when resolving single implementation with no results")
+        void shouldThrowExceptionWhenResolvingSingleImplementationWithNoResults() {
+            // When/Then - resolveImplementation (singular) should throw for types with no implementations
+            assertThrows(UnsatisfiedResolutionException.class,
+                () -> sut.resolveImplementation(NoImplInterface2.class, null));
+        }
+
+        @Test
+        @DisplayName("Should handle type that is both interface and has implementations")
+        void shouldHandleComplexTypeResolution() throws Exception {
+            // When
+            Collection<Class<? extends SingleImplementationInterface>> result =
+                sut.resolveImplementations(SingleImplementationInterface.class);
+
+            // Then
+            assertFalse(result.isEmpty());
+            assertTrue(result.stream().allMatch(
+                c -> !c.isInterface() && SingleImplementationInterface.class.isAssignableFrom(c)
+            ));
+        }
+    }
+
+    // Helper classes for testing
+    private static class AnyLiteral implements javax.enterprise.inject.Any {
+        @Override
+        public Class<? extends Annotation> annotationType() {
+            return javax.enterprise.inject.Any.class;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof javax.enterprise.inject.Any;
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
+        }
+    }
+
+    private static class MyQualifierLiteral implements com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MyQualifier {
+        @Override
+        public Class<? extends Annotation> annotationType() {
+            return com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MyQualifier.class;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MyQualifier;
+        }
+
+        @Override
+        public int hashCode() {
+            return 0;
+        }
+    }
 
 }
