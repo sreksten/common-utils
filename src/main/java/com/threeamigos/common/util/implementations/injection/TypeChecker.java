@@ -6,6 +6,11 @@ import java.lang.reflect.*;
 class TypeChecker {
 
     /**
+     * A cache for storing the results of type assignability checks.
+     */
+    private final Cache<TypePair, Boolean> assignabilityCache = new Cache<>();
+
+    /**
      * Validates that a type is a legal bean type for an injection point.
      * Per JSR 330/346, injection points cannot contain wildcards or type variables.
      *
@@ -33,7 +38,41 @@ class TypeChecker {
         }
     }
 
+    /**
+     * Checks if an implementation type can be assigned to a target type, following
+     * Java's type system rules including generics covariance.
+     *
+     * <p>This method validates that the target type is a legal injection point
+     * (no wildcards or type variables per JSR 330/346), then checks assignability
+     * considering:
+     * <ul>
+     *   <li>Raw type assignability (e.g., ArrayList → List)</li>
+     *   <li>Generic type argument matching (e.g., List&lt;String&gt; → List&lt;String&gt;)</li>
+     *   <li>Covariance in generics (e.g., ArrayList&lt;String&gt; → List&lt;String&gt;)</li>
+     *   <li>Array component type assignability</li>
+     * </ul>
+     *
+     * <p>Results are cached for performance.
+     *
+     * <p>Example:
+     * <pre>
+     * Type target = new TypeLiteral&lt;List&lt;String&gt;&gt;() {}.getType();
+     * Type impl = new TypeLiteral&lt;ArrayList&lt;String&gt;&gt;() {}.getType();
+     * boolean result = checker.isAssignable(target, impl); // returns true
+     * </pre>
+     *
+     * @param targetType the type required by an injection point (must not contain wildcards)
+     * @param implementationType the type of candidate bean to inject
+     * @return true if implementationType can be assigned to targetType
+     * @throws DefinitionException if targetType contains wildcards or type variables
+     * @throws IllegalStateException if type hierarchy navigation fails unexpectedly
+     */
     boolean isAssignable(Type targetType, Type implementationType) {
+        TypePair pair = new TypePair(targetType, implementationType);
+        return assignabilityCache.computeIfAbsent(pair, () -> isAssignableInternal(targetType, implementationType));
+    }
+
+    boolean isAssignableInternal(Type targetType, Type implementationType) {
         validateInjectionPoint(targetType);
 
         if (targetType.equals(implementationType)) {
@@ -112,12 +151,20 @@ class TypeChecker {
         for (int i = 0; i < args.length; i++) {
             if (args[i] instanceof TypeVariable) {
                 TypeVariable<?> tv = (TypeVariable<?>) args[i];
+                boolean found = false;
                 for (int j = 0; j < vars.length; j++) {
                     if (vars[j].getName().equals(tv.getName())) {
                         args[i] = contextPt.getActualTypeArguments()[j];
                         changed = true;
+                        found = true;
                         break;
                     }
+                }
+                // Defensive check - should never happen in valid Java type hierarchies
+                if (!found) {
+                    // Log warning or throw assertion error in development
+                    throw new IllegalStateException("TypeVariable " + tv.getName() +
+                            " not found in context type parameters");
                 }
             }
         }
@@ -160,29 +207,7 @@ class TypeChecker {
 
         // For nested parameterized types, we need to resolve t2 to t1's raw type structure
         if (t1 instanceof ParameterizedType && t2 instanceof ParameterizedType) {
-            ParameterizedType pt1 = (ParameterizedType) t1;
-            ParameterizedType pt2 = (ParameterizedType) t2;
-
-            Class<?> raw1 = (Class<?>) pt1.getRawType();
-            Class<?> raw2 = (Class<?>) pt2.getRawType();
-
-            // If raw types match exactly, check type arguments recursively
-            if (raw1.equals(raw2)) {
-                return actualTypeArgumentsMatch(pt1, pt2);
-            }
-
-            // If raw types differ but are assignable, resolve t2 to t1's raw type
-            if (raw1.isAssignableFrom(raw2)) {
-                Type resolvedT2 = getExactSuperType(t2, raw1);
-                if (resolvedT2 == null) {
-                    throw new IllegalStateException(
-                        "getExactSuperType returned null despite isAssignableFrom being true in typeArgsMatch. " +
-                        "t1: " + t1 + " (raw1: " + raw1 + "), t2: " + t2 + " (raw2: " + raw2 + ")");
-                }
-                return typeArgsMatch(t1, resolvedT2);
-            }
-
-            return false;
+            return matchParameterizedTypes(t1, t2);
         }
 
         // Handle raw type (Class) in t1 vs ParameterizedType in t2
@@ -202,6 +227,32 @@ class TypeChecker {
         }
         // For non-parameterized types, use exact equality (invariance)
         return t1.equals(t2);
+    }
+
+    private boolean matchParameterizedTypes(Type t1, Type t2) {
+        ParameterizedType pt1 = (ParameterizedType) t1;
+        ParameterizedType pt2 = (ParameterizedType) t2;
+
+        Class<?> raw1 = (Class<?>) pt1.getRawType();
+        Class<?> raw2 = (Class<?>) pt2.getRawType();
+
+        // If raw types match exactly, check type arguments recursively
+        if (raw1.equals(raw2)) {
+            return actualTypeArgumentsMatch(pt1, pt2);
+        }
+
+        // If raw types differ but are assignable, resolve t2 to t1's raw type
+        if (raw1.isAssignableFrom(raw2)) {
+            Type resolvedT2 = getExactSuperType(t2, raw1);
+            if (resolvedT2 == null) {
+                throw new IllegalStateException(
+                        "getExactSuperType returned null despite isAssignableFrom being true in typeArgsMatch. " +
+                                "t1: " + t1 + " (raw1: " + raw1 + "), t2: " + t2 + " (raw2: " + raw2 + ")");
+            }
+            return typeArgsMatch(t1, resolvedT2);
+        }
+
+        return false;
     }
 
     boolean actualTypeArgumentsMatch(ParameterizedType pt1, ParameterizedType pt2) {
