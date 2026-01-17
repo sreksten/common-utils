@@ -4,35 +4,38 @@ import java.lang.reflect.*;
 
 class TypeChecker {
 
+    /**
+     * Validates that a type is a legal bean type for an injection point.
+     * Per JSR 330/346, injection points cannot contain wildcards or type variables.
+     *
+     * @param type the type to validate
+     * @throws javax.enterprise.inject.spi.DefinitionException if the type contains wildcards or type variables
+     */
+    void validateInjectionPoint(Type type) {
+        if (type instanceof WildcardType) {
+            throw new javax.enterprise.inject.spi.DefinitionException("Injection point cannot contain a wildcard: " + type.getTypeName());
+        }
+
+        if (type instanceof TypeVariable) {
+            throw new javax.enterprise.inject.spi.DefinitionException("Injection point cannot be a type variable: " + type.getTypeName());
+        }
+
+        if (type instanceof ParameterizedType) {
+            ParameterizedType pt = (ParameterizedType) type;
+            for (Type arg : pt.getActualTypeArguments()) {
+                validateInjectionPoint(arg); // Recursive check
+            }
+        }
+
+        if (type instanceof GenericArrayType) {
+            validateInjectionPoint(((GenericArrayType) type).getGenericComponentType());
+        }
+    }
+
     boolean isAssignable(Type targetType, Type implementationType) {
+        validateInjectionPoint(targetType);
 
         if (targetType.equals(implementationType)) {
-            return true;
-        }
-
-        // Logic for Intersection Types (Multiple Bounds) via TypeVariable
-        if (targetType instanceof TypeVariable) {
-            for (Type bound : ((TypeVariable<?>) targetType).getBounds()) {
-                if (!isAssignable(bound, implementationType)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        // Handle Wildcards
-        if (targetType instanceof WildcardType) {
-            WildcardType wt = (WildcardType) targetType;
-            for (Type bound : wt.getUpperBounds()) {
-                if (!isAssignable(bound, implementationType)) {
-                    return false;
-                }
-            }
-            for (Type bound : wt.getLowerBounds()) {
-                if (!isAssignable(implementationType, bound)) {
-                    return false;
-                }
-            }
             return true;
         }
 
@@ -121,11 +124,6 @@ class TypeChecker {
             return true;
         }
 
-        // If the target is a TypeVariable (like T), it matches its bound (usually Object)
-        if (target instanceof TypeVariable) {
-            return typeArgsMatch(target, candidate);
-        }
-
         if (target instanceof ParameterizedType && candidate instanceof ParameterizedType) {
             ParameterizedType pt1 = (ParameterizedType) target;
             ParameterizedType pt2 = (ParameterizedType) candidate;
@@ -134,19 +132,7 @@ class TypeChecker {
                 return false;
             }
 
-            Type[] args1 = pt1.getActualTypeArguments();
-            Type[] args2 = pt2.getActualTypeArguments();
-
-            if (args1.length != args2.length) {
-                return false;
-            }
-
-            for (int i = 0; i < args1.length; i++) {
-                if (!typeArgsMatch(args1[i], args2[i])) {
-                    return false;
-                }
-            }
-            return true;
+            return actualTypeArgumentsMatch(pt1, pt2);
         }
         return false;
     }
@@ -156,41 +142,69 @@ class TypeChecker {
             return true;
         }
 
-        if (t1 instanceof WildcardType && t2 instanceof WildcardType) {
-            return wildcardsMatch((WildcardType) t1, (WildcardType) t2);
-        }
-
-        if (t1 instanceof TypeVariable && t2 instanceof TypeVariable) {
-            return typeVariablesMatch((TypeVariable<?>) t1, (TypeVariable<?>) t2);
-        }
-
-        if (t1 instanceof WildcardType ||
-                t2 instanceof WildcardType ||
-                t1 instanceof TypeVariable ||
-                t2 instanceof TypeVariable) {
+        // t1 (target) cannot be Wildcard or TypeVariable due to validateInjectionPoint.
+        // But t2 (candidate/implementation) can be.
+        if (t2 instanceof WildcardType || t2 instanceof TypeVariable) {
             return true;
         }
-        return RawTypeExtractor.getRawType(t1).isAssignableFrom(RawTypeExtractor.getRawType(t2));
-    }
 
-    private boolean wildcardsMatch(WildcardType w1, WildcardType w2) {
-        return boundsMatch(w1.getUpperBounds(), w2.getUpperBounds()) &&
-                boundsMatch(w1.getLowerBounds(), w2.getLowerBounds());
-    }
+        // For nested parameterized types, we need to resolve t2 to t1's raw type structure
+        if (t1 instanceof ParameterizedType && t2 instanceof ParameterizedType) {
+            ParameterizedType pt1 = (ParameterizedType) t1;
+            ParameterizedType pt2 = (ParameterizedType) t2;
 
-    private boolean typeVariablesMatch(TypeVariable<?> tv1, TypeVariable<?> tv2) {
-        return boundsMatch(tv1.getBounds(), tv2.getBounds());
-    }
+            Class<?> raw1 = (Class<?>) pt1.getRawType();
+            Class<?> raw2 = (Class<?>) pt2.getRawType();
 
-    private boolean boundsMatch(Type[] bounds1, Type[] bounds2) {
-        if (bounds1.length != bounds2.length) {
+            // If raw types match exactly, check type arguments recursively
+            if (raw1.equals(raw2)) {
+                return actualTypeArgumentsMatch(pt1, pt2);
+            }
+
+            // If raw types differ but are assignable, resolve t2 to t1's raw type
+            if (raw1.isAssignableFrom(raw2)) {
+                Type resolvedT2 = getExactSuperType(t2, raw1);
+                if (resolvedT2 != null) {
+                    return typeArgsMatch(t1, resolvedT2);
+                }
+            }
+
             return false;
         }
-        for (int i = 0; i < bounds1.length; i++) {
-            if (!typesMatch(bounds1[i], bounds2[i])) {
+
+        // Handle raw type (Class) in t1 vs ParameterizedType in t2
+        if (t1 instanceof Class<?> && t2 instanceof ParameterizedType) {
+            Class<?> raw1 = (Class<?>) t1;
+            ParameterizedType pt2 = (ParameterizedType) t2;
+            Class<?> raw2 = (Class<?>) pt2.getRawType();
+            return raw1.isAssignableFrom(raw2);
+        }
+
+        // Handle ParameterizedType in t1 vs raw type (Class) in t2
+        if (t1 instanceof ParameterizedType && t2 instanceof Class<?>) {
+            ParameterizedType pt1 = (ParameterizedType) t1;
+            Class<?> raw1 = (Class<?>) pt1.getRawType();
+            Class<?> raw2 = (Class<?>) t2;
+            return raw1.isAssignableFrom(raw2);
+        }
+        // For non-parameterized types, use exact equality (invariance)
+        return t1.equals(t2);
+    }
+
+    boolean actualTypeArgumentsMatch(ParameterizedType pt1, ParameterizedType pt2) {
+        Type[] args1 = pt1.getActualTypeArguments();
+        Type[] args2 = pt2.getActualTypeArguments();
+
+        if (args1.length != args2.length) {
+            return false;
+        }
+
+        for (int i = 0; i < args1.length; i++) {
+            if (!typeArgsMatch(args1[i], args2[i])) {
                 return false;
             }
         }
         return true;
     }
+
 }
