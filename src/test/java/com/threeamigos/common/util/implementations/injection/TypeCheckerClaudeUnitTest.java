@@ -11,6 +11,8 @@ import java.lang.reflect.*;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 /**
  * Comprehensive unit tests for TypeChecker class covering 100% code coverage.
@@ -153,6 +155,22 @@ class TypeCheckerClaudeUnitTest {
 
             assertThrows(DefinitionException.class,
                 () -> sut.validateInjectionPoint(arrayType));
+        }
+    }
+
+    @Nested
+    @DisplayName("Cache usage")
+    class CacheUsageTests {
+
+        @Test
+        @DisplayName("Should cache resolved types")
+        void testCacheResolvedTypes() {
+            // Given
+            TypeChecker spied = spy(sut);
+            assertTrue(spied.isAssignable(String.class, String.class));
+            // When
+            assertTrue(spied.isAssignable(String.class, String.class));
+            verify(spied, times(1)).isAssignableInternal(any(), any());
         }
     }
 
