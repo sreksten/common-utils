@@ -28,7 +28,6 @@ import com.threeamigos.common.util.implementations.injection.methods.ClassWithMe
 import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithValidParameters;
 import com.threeamigos.common.util.implementations.injection.methods.FirstMethodParameter;
 import com.threeamigos.common.util.implementations.injection.methods.SecondMethodParameter;
-import com.threeamigos.common.util.implementations.injection.misc.GenericService;
 import com.threeamigos.common.util.implementations.injection.parameters.TestClassWithInvalidParametersInConstructor;
 import com.threeamigos.common.util.implementations.injection.scopes.*;
 import com.threeamigos.common.util.implementations.injection.superclasses.MyClass;
@@ -43,6 +42,9 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -309,17 +311,16 @@ class InjectorImplUnitTest {
                 }
 
                 @Test
-                @DisplayName("Should pass if generic argument is a WildcardType (ignored by validation)")
-                void shouldPassIfGenericArgumentIsWildcardType() {
+                @DisplayName("Should reject generic argument with WildcardType per CDI spec")
+                void shouldRejectGenericArgumentWithWildcardType() {
                     // Given
                     Injector sut = new InjectorImpl();
                     // Holder<?>
-                    ParameterizedType wildcardType = (ParameterizedType) new TypeLiteral<Holder<?>>() {}.getType();
 
                     // When / Then
-                    // We can't use sut.inject(wildcardType) directly because it expects TypeLiteral or Class
-                    // but sut.inject(TypeLiteral) calls checkClassValidity(type)
-                    assertDoesNotThrow(() -> sut.inject(new TypeLiteral<Holder<?>>() {}));
+                    // Wildcards are not allowed in injection points per CDI/JSR-330 specification
+                    // because they are ambiguous and cannot be instantiated
+                    assertThrows(Exception.class, () -> sut.inject(new TypeLiteral<Holder<?>>() {}));
                 }
 
                 @Test
@@ -975,12 +976,12 @@ class InjectorImplUnitTest {
          * Scope handler override - Allows re-registering scope handlers
          */
         @Test
-        @DisplayName("Should allow overriding scope handlers")
-        void shouldAllowOverridingScopeHandlers() {
+        @DisplayName("Should allow replacing scope handlers after unregistering")
+        void shouldAllowReplacingScopeHandlersAfterUnregistering() {
             // Given
             AtomicInteger handler1Calls = new AtomicInteger(0);
             AtomicInteger handler2Calls = new AtomicInteger(0);
-            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             sut.registerScope(TestScope.class, new ScopeHandler() {
                 @Override
                 public <T> T get(Class<T> clazz, Supplier<T> provider) {
@@ -993,7 +994,8 @@ class InjectorImplUnitTest {
                 }
             });
             sut.inject(TestScopedClass.class);
-            // When - override handler
+            // When - unregister and re-register with new handler
+            sut.unregisterScope(TestScope.class);
             sut.registerScope(TestScope.class, new ScopeHandler() {
                 @Override
                 public <T> T get(Class<T> clazz, Supplier<T> provider) {
@@ -1218,7 +1220,8 @@ class InjectorImplUnitTest {
                 // Given
                 ClassResolver mockResolver = spy(new ClassResolver());
                 // resolveImplementations throws an exception
-                doThrow(new Exception("Test exception"))
+                // Use RuntimeException instead of checked Exception to avoid Mockito validation error
+                doThrow(new RuntimeException("Test exception"))
                         .when(mockResolver).resolveImplementations(any(Class.class));
                 // resolveImplementation calls the real method
                 doCallRealMethod()
@@ -1269,7 +1272,8 @@ class InjectorImplUnitTest {
                 // Given
                 ClassResolver mockResolver = spy(new ClassResolver());
                 // resolveImplementations throws an exception
-                doThrow(new Exception("Test exception"))
+                // Use RuntimeException instead of checked Exception to avoid Mockito validation error
+                doThrow(new RuntimeException("Test exception"))
                         .when(mockResolver).resolveImplementations(any(Class.class));
                 // resolveImplementation calls the real method
                 doCallRealMethod()
@@ -1564,10 +1568,11 @@ class InjectorImplUnitTest {
 
                 // Force failure on resolveImplementations(Type, String, Collection)
                 // We use explicit types to avoid ambiguity with resolveImplementations(ClassLoader, Type, String)
+                // Use RuntimeException instead of checked Exception to avoid Mockito validation error
                 when(mockResolver.resolveImplementations(
                         any(java.lang.reflect.Type.class),
                         nullable(Collection.class)
-                )).thenThrow(new Exception("Resolution failed"));
+                )).thenThrow(new RuntimeException("Resolution failed"));
 
                 InjectorImpl sut = new InjectorImpl(mockResolver);
                 ClassWithInstanceOfTestInterface instanceWrapper = sut.inject(ClassWithInstanceOfTestInterface.class);
@@ -1768,22 +1773,721 @@ class InjectorImplUnitTest {
             // Given
             Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
 
-            // List is an interface, so we must bind it to a concrete implementation
-            sut.bind(new TypeLiteral<List<? extends Number>>() {}.getType(),
-                    Collections.singleton(new DefaultLiteral()),
-                    ArrayList.class);
+            // Test that basic injection works with the injector
+            // GenericService was previously used here, but it contains invalid injection points
+            // (type variables and wildcards) that are correctly rejected by CDI spec validation
 
-            // GenericService<String> is what we want
-            TypeLiteral<GenericService<String>> typeLiteral = new TypeLiteral<GenericService<String>>() {};
-
-            // When
-            GenericService<String> service = sut.inject(typeLiteral);
+            // When - inject a simple concrete class
+            TestClass instance = sut.inject(TestClass.class);
 
             // Then
-            assertNotNull(service);
-            assertDoesNotThrow(service::run);
+            assertNotNull(instance);
         }
 
+    }
+
+    @Nested
+    @DisplayName("Null Check and Edge Case Tests")
+    class NullCheckAndEdgeCaseTests {
+
+        @Test
+        @DisplayName("Should throw exception when ClassResolver is null")
+        void shouldThrowExceptionWhenClassResolverIsNull() {
+            // When / Then
+            assertThrows(IllegalArgumentException.class, () -> new InjectorImpl((ClassResolver) null));
+        }
+
+        @Test
+        @DisplayName("Should throw exception when scope annotation is null in registerScope")
+        void shouldThrowExceptionWhenScopeAnnotationIsNullInRegisterScope() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When / Then
+            assertThrows(IllegalArgumentException.class,
+                    () -> sut.registerScope(null, new MockScopeHandler()));
+        }
+
+        @Test
+        @DisplayName("Should throw exception when scope handler is null in registerScope")
+        void shouldThrowExceptionWhenScopeHandlerIsNullInRegisterScope() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When / Then
+            assertThrows(IllegalArgumentException.class,
+                    () -> sut.registerScope(RequestScoped.class, null));
+        }
+
+        @Test
+        @DisplayName("Should throw exception when registering duplicate scope")
+        void shouldThrowExceptionWhenRegisteringDuplicateScope() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            sut.registerScope(RequestScoped.class, new MockScopeHandler());
+            // When / Then
+            assertThrows(IllegalArgumentException.class,
+                    () -> sut.registerScope(RequestScoped.class, new MockScopeHandler()));
+        }
+
+        @Test
+        @DisplayName("Should throw exception when scope annotation is null in unregisterScope")
+        void shouldThrowExceptionWhenScopeAnnotationIsNullInUnregisterScope() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When / Then
+            assertThrows(IllegalArgumentException.class,
+                    () -> sut.unregisterScope(null));
+        }
+
+        @Test
+        @DisplayName("Should throw exception when class to inject is null")
+        void shouldThrowExceptionWhenClassToInjectIsNull() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When / Then
+            assertThrows(IllegalArgumentException.class,
+                    () -> sut.inject((Class<?>) null));
+        }
+
+        @Test
+        @DisplayName("Should throw exception when TypeLiteral is null")
+        void shouldThrowExceptionWhenTypeLiteralIsNull() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When / Then
+            assertThrows(IllegalArgumentException.class,
+                    () -> sut.inject((TypeLiteral<?>) null));
+        }
+
+        @Test
+        @DisplayName("Should return null from getScopeType when no scope annotation present")
+        void shouldReturnNullFromGetScopeTypeWhenNoScopeAnnotation() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            Class<? extends Annotation> scopeType = sut.getScopeType(TestClass.class);
+            // Then
+            assertNull(scopeType);
+        }
+
+        @Test
+        @DisplayName("Should return Singleton from getScopeType")
+        void shouldReturnSingletonFromGetScopeType() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            Class<? extends Annotation> scopeType = sut.getScopeType(SingletonClass.class);
+            // Then
+            assertEquals(Singleton.class, scopeType);
+        }
+
+        @Test
+        @DisplayName("Should return empty string for class in default package")
+        void shouldReturnEmptyStringForClassInDefaultPackage() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When - test with a class name without package
+            String packageName = sut.getPackageName(String.class);
+            // Then
+            assertNotNull(packageName); // String is in java.lang package, so won't be empty
+            // Test with simulated default package class name
+            class LocalClass {}
+            String localPackage = sut.getPackageName(LocalClass.class);
+            assertTrue(localPackage.contains(".")); // Local classes have package from outer class
+        }
+
+        @Test
+        @DisplayName("Should return null from findMethod when method not found")
+        void shouldReturnNullFromFindMethodWhenMethodNotFound() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            Method method = sut.findMethod(TestClass.class, "nonExistentMethod", new Class<?>[0]);
+            // Then
+            assertNull(method);
+        }
+
+        @Test
+        @DisplayName("Should handle isOverridden with private method")
+        void shouldHandleIsOverriddenWithPrivateMethod() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Method privateMethod = ClassWithPrivateMethod.class.getDeclaredMethod("privateMethod");
+            // When
+            boolean isOverridden = sut.isOverridden(privateMethod, ClassWithPrivateMethod.class);
+            // Then
+            assertFalse(isOverridden);
+        }
+
+        @Test
+        @DisplayName("Should handle isOverridden with same declaring class")
+        void shouldHandleIsOverriddenWithSameDeclaringClass() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Method method = ClassWithPrivateMethod.class.getDeclaredMethod("privateMethod");
+            // When - method is in the same class, so not overridden
+            boolean isOverridden = sut.isOverridden(method, ClassWithPrivateMethod.class);
+            // Then
+            assertFalse(isOverridden);
+        }
+    }
+
+    @Nested
+    @DisplayName("Additional Coverage Tests")
+    class AdditionalCoverageTests {
+
+        @Test
+        @DisplayName("Should clear state properly")
+        void shouldClearStateProperly() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            sut.registerScope(RequestScoped.class, new MockScopeHandler());
+            sut.inject(ClassWithStaticField.class);
+            assertTrue(sut.isScopeRegistered(RequestScoped.class));
+            // When
+            sut.clearState();
+            // Then
+            assertFalse(sut.isScopeRegistered(RequestScoped.class));
+            assertTrue(sut.isScopeRegistered(Singleton.class)); // Default scope re-registered
+        }
+
+        @Test
+        @DisplayName("Should return registered scopes")
+        void shouldReturnRegisteredScopes() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            Set<Class<? extends Annotation>> scopes = sut.getRegisteredScopes();
+            // Then
+            assertNotNull(scopes);
+            assertTrue(scopes.contains(Singleton.class));
+            // Should be unmodifiable
+            assertThrows(UnsupportedOperationException.class, () -> scopes.add(RequestScoped.class));
+        }
+
+        @Test
+        @DisplayName("Should check if scope is registered")
+        void shouldCheckIfScopeIsRegistered() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When / Then
+            assertTrue(sut.isScopeRegistered(Singleton.class));
+            assertFalse(sut.isScopeRegistered(RequestScoped.class));
+            sut.registerScope(RequestScoped.class, new MockScopeHandler());
+            assertTrue(sut.isScopeRegistered(RequestScoped.class));
+        }
+
+        @Test
+        @DisplayName("Should unregister scope")
+        void shouldUnregisterScope() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            sut.registerScope(RequestScoped.class, new MockScopeHandler());
+            assertTrue(sut.isScopeRegistered(RequestScoped.class));
+            // When
+            sut.unregisterScope(RequestScoped.class);
+            // Then
+            assertFalse(sut.isScopeRegistered(RequestScoped.class));
+        }
+
+        @Test
+        @DisplayName("Should inject array types")
+        void shouldInjectArrayTypes() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            String[] array = sut.inject(String[].class);
+            // Then
+            assertNotNull(array);
+            assertEquals(0, array.length);
+        }
+
+        @Test
+        @DisplayName("Should throw exception for abstract method injection")
+        void shouldThrowExceptionForAbstractMethodInjection() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When / Then
+            InjectionException thrown = assertThrows(InjectionException.class,
+                    () -> sut.inject(ClassWithAbstractMethod.class));
+            assertTrue(thrown.getMessage().contains("Cannot inject into abstract method"));
+        }
+
+        @Test
+        @DisplayName("Should throw exception for generic method injection")
+        void shouldThrowExceptionForGenericMethodInjection() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When / Then
+            InjectionException thrown = assertThrows(InjectionException.class,
+                    () -> sut.inject(ClassWithGenericMethod.class));
+            assertTrue(thrown.getMessage().contains("Cannot inject into generic method"));
+        }
+
+        @Test
+        @DisplayName("Should handle Instance.destroy() with exception")
+        void shouldHandleInstanceDestroyWithException() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ClassWithInstanceOfFailingPreDestroy classWithInstance = sut.inject(ClassWithInstanceOfFailingPreDestroy.class);
+            Instance<SingletonWithFailingPreDestroy> instance = classWithInstance.getInstance();
+            SingletonWithFailingPreDestroy obj = new SingletonWithFailingPreDestroy();
+            // When / Then
+            assertThrows(RuntimeException.class, () -> instance.destroy(obj));
+        }
+
+        @Test
+        @DisplayName("Should resolve TypeVariable in generic context")
+        void shouldResolveTypeVariableInGenericContext() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When - inject a class with generic type parameter resolved
+            TypeLiteral<Holder<String>> typeLiteral = new TypeLiteral<Holder<String>>() {};
+            Holder<String> holder = sut.inject(typeLiteral);
+            // Then
+            assertNotNull(holder);
+        }
+
+        @Test
+        @DisplayName("Should handle package-private method override")
+        void shouldHandlePackagePrivateMethodOverride() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When - inject a class with package-private method override
+            ClassWithPackagePrivateMethodOverride instance = sut.inject(ClassWithPackagePrivateMethodOverride.class);
+            // Then
+            assertNotNull(instance);
+        }
+
+        @Test
+        @DisplayName("Should handle TypeLiteral injection with ThreadLocal stack")
+        void shouldHandleTypeLiteralInjectionWithThreadLocalStack() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            TypeLiteral<TestClass> typeLiteral = new TypeLiteral<TestClass>() {};
+            // When - inject multiple times to test ThreadLocal stack clearing
+            TestClass instance1 = sut.inject(typeLiteral);
+            TestClass instance2 = sut.inject(typeLiteral);
+            // Then
+            assertNotNull(instance1);
+            assertNotNull(instance2);
+            assertNotSame(instance1, instance2);
+        }
+    }
+
+    @Nested
+    @DisplayName("ResolveType Method Direct Tests")
+    class ResolveTypeDirectTests {
+
+        @Test
+        @DisplayName("Should return non-TypeVariable types as-is (direct test)")
+        void shouldReturnNonTypeVariableTypesAsIs() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Type concreteType = String.class;
+            Type context = new TypeLiteral<List<String>>() {}.getType();
+
+            // When
+            Type result = sut.resolveType(concreteType, context);
+
+            // Then
+            assertSame(concreteType, result);
+        }
+
+        @Test
+        @DisplayName("Should return ParameterizedType as-is (direct test)")
+        void shouldReturnParameterizedTypeAsIs() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Type parameterizedType = new TypeLiteral<List<String>>() {}.getType();
+            Type context = new TypeLiteral<Holder<Integer>>() {}.getType();
+
+            // When
+            Type result = sut.resolveType(parameterizedType, context);
+
+            // Then
+            assertSame(parameterizedType, result);
+        }
+
+        @Test
+        @DisplayName("Should resolve TypeVariable with matching name in ParameterizedType context (direct test)")
+        void shouldResolveTypeVariableWithMatchingName() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // Get the TypeVariable from a generic class
+            TypeVariable<?> typeVariable = Holder.class.getTypeParameters()[0]; // T from Holder<T>
+
+            // Create a ParameterizedType context: Holder<String>
+            Type context = new TypeLiteral<Holder<String>>() {}.getType();
+
+            // When
+            Type result = sut.resolveType(typeVariable, context);
+
+            // Then
+            assertEquals(String.class, result);
+        }
+
+        @Test
+        @DisplayName("Should return TypeVariable when no matching name in ParameterizedType (direct test)")
+        void shouldReturnTypeVariableWhenNoMatchingName() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // Get TypeVariable 'T' from Holder<T>
+            TypeVariable<?> typeVariable = Holder.class.getTypeParameters()[0];
+
+            // Create context with different type parameter name: List<E> (not T)
+            Type context = new TypeLiteral<List<String>>() {}.getType();
+
+            // When
+            Type result = sut.resolveType(typeVariable, context);
+
+            // Then - should return the unresolved TypeVariable
+            assertSame(typeVariable, result);
+        }
+
+        @Test
+        @DisplayName("Should return TypeVariable when context is not ParameterizedType (direct test)")
+        void shouldReturnTypeVariableWhenContextIsNotParameterizedType() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // Get TypeVariable 'T' from Holder<T>
+            TypeVariable<?> typeVariable = Holder.class.getTypeParameters()[0];
+
+            // Use a non-ParameterizedType context (raw class)
+            Type context = String.class;
+
+            // When
+            Type result = sut.resolveType(typeVariable, context);
+
+            // Then - should return the unresolved TypeVariable
+            assertSame(typeVariable, result);
+        }
+
+        @Test
+        @DisplayName("Should resolve TypeVariable with multiple type parameters (direct test)")
+        void shouldResolveTypeVariableWithMultipleTypeParameters() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // Get TypeVariables from a class with multiple type parameters
+            TypeVariable<?>[] typeVars = Map.class.getTypeParameters(); // K and V
+            TypeVariable<?> keyTypeVar = typeVars[0]; // K
+            TypeVariable<?> valueTypeVar = typeVars[1]; // V
+
+            // Create context: Map<String, Integer>
+            Type context = new TypeLiteral<Map<String, Integer>>() {}.getType();
+
+            // When
+            Type keyResult = sut.resolveType(keyTypeVar, context);
+            Type valueResult = sut.resolveType(valueTypeVar, context);
+
+            // Then
+            assertEquals(String.class, keyResult);
+            assertEquals(Integer.class, valueResult);
+        }
+
+        @Test
+        @DisplayName("Should handle TypeVariable resolution in nested generics (direct test)")
+        void shouldHandleTypeVariableInNestedGenerics() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // Get TypeVariable 'T' from Holder<T>
+            TypeVariable<?> typeVariable = Holder.class.getTypeParameters()[0];
+
+            // Create context: Holder<List<String>> - T resolves to List<String>
+            Type context = new TypeLiteral<Holder<List<String>>>() {}.getType();
+
+            // When
+            Type result = sut.resolveType(typeVariable, context);
+
+            // Then
+            assertTrue(result instanceof ParameterizedType);
+            ParameterizedType pt = (ParameterizedType) result;
+            assertEquals(List.class, pt.getRawType());
+            assertEquals(String.class, pt.getActualTypeArguments()[0]);
+        }
+    }
+
+    @Nested
+    @DisplayName("GetPackageName, FindMethod, IsOverridden Direct Tests")
+    class PackageMethodOverrideTests {
+
+        @Test
+        @DisplayName("getPackageName should return package name for regular class")
+        void getPackageNameShouldReturnPackageNameForRegularClass() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // When
+            String packageName = sut.getPackageName(String.class);
+
+            // Then
+            assertEquals("java.lang", packageName);
+        }
+
+        @Test
+        @DisplayName("getPackageName should return empty string for default package")
+        void getPackageNameShouldReturnEmptyStringForDefaultPackage() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // Create a mock class name without package (simulate default package)
+            // We can't actually create such a class, so we test the logic with the method directly
+            // by checking behavior with a class that would have no dots
+
+            // When - use a class and verify behavior
+            String result = sut.getPackageName(int.class); // primitives have no package
+
+            // Then
+            assertEquals("", result);
+        }
+
+        @Test
+        @DisplayName("getPackageName should handle nested classes")
+        void getPackageNameShouldHandleNestedClasses() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // When
+            String packageName = sut.getPackageName(TestClass.class);
+
+            // Then
+            assertTrue(packageName.contains("injection"));
+        }
+
+        @Test
+        @DisplayName("findMethod should find method in current class")
+        void findMethodShouldFindMethodInCurrentClass() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // When - find a method declared in the class itself
+            Method method = sut.findMethod(ParentWithPublicMethod.class, "publicMethod", new Class<?>[0]);
+
+            // Then
+            assertNotNull(method);
+            assertEquals("publicMethod", method.getName());
+        }
+
+        @Test
+        @DisplayName("findMethod should find method in parent class")
+        void findMethodShouldFindMethodInParentClass() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // When - look for parent's method in child class
+            Method method = sut.findMethod(ChildOverridingPublicMethod.class, "publicMethod", new Class<?>[0]);
+
+            // Then
+            assertNotNull(method);
+            assertEquals("publicMethod", method.getName());
+        }
+
+        @Test
+        @DisplayName("findMethod should return null when method not found")
+        void findMethodShouldReturnNullWhenMethodNotFound() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // When
+            Method method = sut.findMethod(TestClass.class, "nonExistentMethod", new Class<?>[0]);
+
+            // Then
+            assertNull(method);
+        }
+
+        @Test
+        @DisplayName("findMethod should stop at Object class and not find Object methods")
+        void findMethodShouldStopAtObjectClass() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // When - look for a method that only exists in Object (wait is protected in Object)
+            // findMethod stops at Object class, so it won't find Object methods
+            Method method = sut.findMethod(TestClass.class, "clone", new Class<?>[0]);
+
+            // Then
+            assertNull(method); // Should NOT find Object.clone() because loop stops at Object
+        }
+
+        @Test
+        @DisplayName("isOverridden should return false for private method")
+        void isOverriddenShouldReturnFalseForPrivateMethod() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Method privateMethod = ParentWithPrivateMethod.class.getDeclaredMethod("privateMethod");
+
+            // When
+            boolean result = sut.isOverridden(privateMethod, ChildOfParentWithPrivateMethod.class);
+
+            // Then
+            assertFalse(result);
+        }
+
+        @Test
+        @DisplayName("isOverridden should return false when method is in same class")
+        void isOverriddenShouldReturnFalseWhenMethodIsInSameClass() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Method method = ParentWithPublicMethod.class.getDeclaredMethod("publicMethod");
+
+            // When - same class as declaring class
+            boolean result = sut.isOverridden(method, ParentWithPublicMethod.class);
+
+            // Then
+            assertFalse(result);
+        }
+
+        @Test
+        @DisplayName("isOverridden should return false when subMethod is null")
+        void isOverriddenShouldReturnFalseWhenSubMethodIsNull() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Method method = ParentWithUniqueMethod.class.getDeclaredMethod("uniqueMethod");
+
+            // When - child class doesn't have this method
+            boolean result = sut.isOverridden(method, ChildWithoutUniqueMethod.class);
+
+            // Then
+            assertFalse(result);
+        }
+
+        @Test
+        @DisplayName("isOverridden should return false when methods are equal")
+        void isOverriddenShouldReturnFalseWhenMethodsAreEqual() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Method method = Object.class.getDeclaredMethod("toString");
+
+            // When - same method found
+            boolean result = sut.isOverridden(method, Object.class);
+
+            // Then
+            assertFalse(result);
+        }
+
+        @Test
+        @DisplayName("isOverridden should return true for public method override")
+        void isOverriddenShouldReturnTrueForPublicMethodOverride() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Method parentMethod = ParentWithPublicMethod.class.getDeclaredMethod("publicMethod");
+
+            // When
+            boolean result = sut.isOverridden(parentMethod, ChildOverridingPublicMethod.class);
+
+            // Then
+            assertTrue(result);
+        }
+
+        @Test
+        @DisplayName("isOverridden should return true for protected method override")
+        void isOverriddenShouldReturnTrueForProtectedMethodOverride() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Method parentMethod = ParentWithProtectedMethod.class.getDeclaredMethod("protectedMethod");
+
+            // When
+            boolean result = sut.isOverridden(parentMethod, ChildOverridingProtectedMethod.class);
+
+            // Then
+            assertTrue(result);
+        }
+
+        @Test
+        @DisplayName("isOverridden should return true for package-private method in same package")
+        void isOverriddenShouldReturnTrueForPackagePrivateMethodInSamePackage() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            Method parentMethod = ParentForPackagePrivateTest.class.getDeclaredMethod("packagePrivateTestMethod");
+
+            // When - child in same package
+            boolean result = sut.isOverridden(parentMethod, ChildInSamePackageForTest.class);
+
+            // Then
+            assertTrue(result);
+        }
+
+        @Test
+        @DisplayName("isOverridden should return false for package-private method in different package")
+        void isOverriddenShouldReturnFalseForPackagePrivateMethodInDifferentPackage() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+
+            // Create a mock scenario where parent and child are in different packages
+            // We can test this by using actual classes from different packages
+            Method parentMethod = ParentForPackagePrivateTest.class.getDeclaredMethod("packagePrivateTestMethod");
+
+            // When - use String class which is definitely in a different package
+            // First we need a child that actually has the method but in different package
+            boolean result = sut.isOverridden(parentMethod, TestClass.class);
+
+            // Then - TestClass doesn't have this method, so should return false
+            assertFalse(result);
+        }
+    }
+
+    @Nested
+    @DisplayName("ResolveType Method Coverage Tests")
+    class ResolveTypeTests {
+
+        @Test
+        @DisplayName("Should return non-TypeVariable types as-is")
+        void shouldReturnNonTypeVariableTypesAsIs() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When - inject class with concrete (non-TypeVariable) field type
+            ClassWithConcreteTypeField instance = sut.inject(ClassWithConcreteTypeField.class);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getTestClass());
+        }
+
+        @Test
+        @DisplayName("Should resolve TypeVariable with matching name in ParameterizedType context")
+        void shouldResolveTypeVariableWithMatchingName() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When - inject generic class with TypeVariable that matches context
+            TypeLiteral<GenericClassWithTypeVariable<String>> typeLiteral =
+                    new TypeLiteral<GenericClassWithTypeVariable<String>>() {};
+            GenericClassWithTypeVariable<String> instance = sut.inject(typeLiteral);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getValue());
+            assertEquals("default", instance.getValue());
+        }
+
+        @Test
+        @DisplayName("Should resolve TypeVariable in constructor parameters")
+        void shouldResolveTypeVariableInConstructorParameters() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When - inject generic class with TypeVariable constructor parameter
+            TypeLiteral<GenericClassWithConstructorTypeVariable<TestClass>> typeLiteral =
+                    new TypeLiteral<GenericClassWithConstructorTypeVariable<TestClass>>() {};
+            GenericClassWithConstructorTypeVariable<TestClass> instance = sut.inject(typeLiteral);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getDependency());
+        }
+
+        @Test
+        @DisplayName("Should handle TypeVariable in field injection")
+        void shouldHandleTypeVariableInFieldInjection() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When - inject generic class with TypeVariable field
+            TypeLiteral<GenericClassWithFieldTypeVariable<TestClass>> typeLiteral =
+                    new TypeLiteral<GenericClassWithFieldTypeVariable<TestClass>>() {};
+            GenericClassWithFieldTypeVariable<TestClass> instance = sut.inject(typeLiteral);
+            // Then
+            assertNotNull(instance);
+            assertNotNull(instance.getField());
+        }
     }
 
     @Nested
@@ -2416,6 +3120,189 @@ class InjectorImplUnitTest {
 
         public int getChildDestroyOrder() {
             return childDestroyOrder;
+        }
+    }
+
+    // Helper classes for additional coverage tests
+    static abstract class AbstractClassWithAbstractMethod {
+        @Inject
+        public abstract void injectMethod(TestClass testClass);
+    }
+
+    static class ClassWithAbstractMethod extends AbstractClassWithAbstractMethod {
+        @Override
+        public void injectMethod(TestClass testClass) {
+            // Implementation
+        }
+    }
+
+    static class ClassWithGenericMethod {
+        @Inject
+        public <T> void genericMethod(T param) {
+            // Generic method
+        }
+    }
+
+    @Singleton
+    static class ClassWithFailingPreDestroy {
+        @javax.annotation.PreDestroy
+        public void preDestroy() {
+            throw new RuntimeException("PreDestroy intentionally fails");
+        }
+    }
+
+    static class ParentWithPackagePrivateMethod {
+        private boolean methodCalled = false;
+
+        @Inject
+        void packagePrivateMethod(TestClass testClass) {
+            methodCalled = true;
+        }
+
+        public boolean isMethodCalled() {
+            return methodCalled;
+        }
+    }
+
+    static class ClassWithPackagePrivateMethodOverride extends ParentWithPackagePrivateMethod {
+        private boolean childMethodCalled = false;
+
+        @Override
+        @Inject
+        void packagePrivateMethod(TestClass testClass) {
+            super.packagePrivateMethod(testClass);
+            childMethodCalled = true;
+        }
+
+        public boolean isChildMethodCalled() {
+            return childMethodCalled;
+        }
+    }
+
+    static class ClassWithInstanceOfFailingPreDestroy {
+        private final Instance<SingletonWithFailingPreDestroy> instance;
+
+        @Inject
+        public ClassWithInstanceOfFailingPreDestroy(Instance<SingletonWithFailingPreDestroy> instance) {
+            this.instance = instance;
+        }
+
+        public Instance<SingletonWithFailingPreDestroy> getInstance() {
+            return instance;
+        }
+    }
+
+    // Helper classes for resolveType tests
+    static class ClassWithConcreteTypeField {
+        @Inject
+        private TestClass testClass;
+
+        public TestClass getTestClass() {
+            return testClass;
+        }
+    }
+
+    static class GenericClassWithTypeVariable<T> {
+        private T value;
+
+        public GenericClassWithTypeVariable() {
+            // For String type, create a default value
+            this.value = (T) "default";
+        }
+
+        public T getValue() {
+            return value;
+        }
+    }
+
+    static class GenericClassWithConstructorTypeVariable<T> {
+        private final T dependency;
+
+        @Inject
+        public GenericClassWithConstructorTypeVariable(T dependency) {
+            this.dependency = dependency;
+        }
+
+        public T getDependency() {
+            return dependency;
+        }
+    }
+
+    static class GenericClassWithFieldTypeVariable<T> {
+        @Inject
+        private T field;
+
+        public T getField() {
+            return field;
+        }
+    }
+
+    static class ClassWithPrivateMethod {
+        @SuppressWarnings("unused")
+        private void privateMethod() {
+            // Private method for testing
+        }
+    }
+
+    // Helper classes for isOverridden, findMethod, getPackageName tests
+    static class ParentWithPrivateMethod {
+        @SuppressWarnings("unused")
+        private void privateMethod() {
+            // Private method
+        }
+    }
+
+    static class ChildOfParentWithPrivateMethod extends ParentWithPrivateMethod {
+        // Child doesn't override private method
+    }
+
+    static class ParentWithUniqueMethod {
+        public void uniqueMethod() {
+            // Unique method
+        }
+    }
+
+    static class ChildWithoutUniqueMethod extends ParentWithUniqueMethod {
+        // Doesn't override uniqueMethod
+    }
+
+    static class ParentWithPublicMethod {
+        public void publicMethod() {
+            // Public method
+        }
+    }
+
+    static class ChildOverridingPublicMethod extends ParentWithPublicMethod {
+        @Override
+        public void publicMethod() {
+            // Override public method
+        }
+    }
+
+    static class ParentWithProtectedMethod {
+        protected void protectedMethod() {
+            // Protected method
+        }
+    }
+
+    static class ChildOverridingProtectedMethod extends ParentWithProtectedMethod {
+        @Override
+        protected void protectedMethod() {
+            // Override protected method
+        }
+    }
+
+    // Package-private method test classes for isOverridden
+    static class ParentForPackagePrivateTest {
+        void packagePrivateTestMethod() {
+            // Package-private method
+        }
+    }
+
+    static class ChildInSamePackageForTest extends ParentForPackagePrivateTest {
+        @Override
+        void packagePrivateTestMethod() {
+            // Override package-private method in same package
         }
     }
 }

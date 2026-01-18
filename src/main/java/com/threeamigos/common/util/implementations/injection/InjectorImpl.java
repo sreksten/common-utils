@@ -10,7 +10,6 @@ import javax.inject.*;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 
-import java.io.Closeable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
@@ -61,7 +60,10 @@ public class InjectorImpl implements Injector {
         addShutdownHook();
     }
 
-    InjectorImpl(final ClassResolver classResolver) {
+    InjectorImpl(@NonNull final ClassResolver classResolver) {
+        if (classResolver == null) {
+            throw new IllegalArgumentException("Class resolver cannot be null");
+        }
         this.classResolver = classResolver;
         registerDefaultScope();
         addShutdownHook();
@@ -90,7 +92,7 @@ public class InjectorImpl implements Injector {
             }
 
             @Override
-            public void close() throws Exception {
+            public void close() {
                 // Call @PreDestroy on all singletons
                 for (Object instance : instances.values()) {
                     try {
@@ -110,26 +112,73 @@ public class InjectorImpl implements Injector {
 
     @Override
     public void registerScope(@NonNull Class<? extends Annotation> scopeAnnotation, @NonNull ScopeHandler handler) {
+        if (scopeAnnotation == null) {
+            throw new IllegalArgumentException("Scope annotation cannot be null");
+        }
+        if (handler == null) {
+            throw new IllegalArgumentException("Scope handler cannot be null");
+        }
+        if (scopeRegistry.containsKey(scopeAnnotation)) {
+            throw new IllegalArgumentException("Scope handler for annotation " + scopeAnnotation.getName() + " is already registered");
+        }
         scopeRegistry.put(scopeAnnotation, handler);
+    }
+
+    /**
+     * Returns all registered scope annotations.
+     */
+    public Set<Class<? extends Annotation>> getRegisteredScopes() {
+        return Collections.unmodifiableSet(scopeRegistry.keySet());
+    }
+
+    /**
+     * Checks if a scope is registered.
+     */
+    public boolean isScopeRegistered(Class<? extends Annotation> scopeAnnotation) {
+        return scopeRegistry.containsKey(scopeAnnotation);
+    }
+
+    /**
+     * Unregisters a scope handler.
+     */
+    public void unregisterScope(@NonNull Class<? extends Annotation> scopeAnnotation) {
+        if (scopeAnnotation == null) {
+            throw new IllegalArgumentException("Scope annotation cannot be null");
+        }
+        scopeRegistry.remove(scopeAnnotation);
     }
 
     @Override
     public void enableAlternative(@NonNull Class<?> alternativeClass) {
+        // Non-null check done by classResolver
         classResolver.enableAlternative(alternativeClass);
     }
 
     @Override
     public void bind(@NonNull Type type, @NonNull Collection<Annotation> qualifiers, @NonNull Class<?> implementation) {
+        // Non-null checks done by classResolver
         classResolver.bind(type, qualifiers, implementation);
     }
 
     @Override
     public <T> T inject(@NonNull Class<T> classToInject) {
-        return inject(classToInject, new Stack<>(), null);
+        if (classToInject == null) {
+            throw new IllegalArgumentException("Class to inject cannot be null");
+        }
+        Stack<Type> stack = STACK_POOL.get();
+        try {
+            stack.clear();
+            return inject(classToInject, stack, null);
+        } finally {
+            stack.clear();
+        }
     }
 
     @Override
     public <T> T inject(@NonNull TypeLiteral<T> typeLiteral) {
+        if (typeLiteral == null) {
+            throw new IllegalArgumentException("Type literal cannot be null");
+        }
         Stack<Type> stack = STACK_POOL.get();
         try {
             stack.clear();
@@ -181,7 +230,7 @@ public class InjectorImpl implements Injector {
      * NOTE: this method supports one annotation only at a time.
      * @param clazz class to check
      */
-    private Class<? extends Annotation> getScopeType(Class<?> clazz) {
+    Class<? extends Annotation> getScopeType(Class<?> clazz) {
         return Arrays.stream(clazz.getAnnotations())
                 .map(Annotation::annotationType)
                 .filter(at -> at.isAnnotationPresent(Scope.class) || at.equals(Singleton.class))
@@ -193,14 +242,15 @@ public class InjectorImpl implements Injector {
      * Helper method to bridge the generic gap between Class<? extends T> and ScopeHandler
      */
     @SuppressWarnings("unchecked")
-    private <T> T handleScopedInjection(ScopeHandler handler, Type typeContext, Class<? extends T> clazz, Stack<Type> stack) {
+    <T> T handleScopedInjection(ScopeHandler handler, Type typeContext, Class<? extends T> clazz, Stack<Type> stack) {
         return (T) handler.get((Class<Object>) clazz, () -> performInjection(typeContext, clazz, stack));
     }
 
     /**
      * The actual instantiation logic
      */
-    private <T> T performInjection(Type typeContext, Class<? extends T> resolvedClass, Stack<Type> stack) {
+    @SuppressWarnings("unchecked")
+    <T> T performInjection(Type typeContext, Class<? extends T> resolvedClass, Stack<Type> stack) {
         try {
             if (resolvedClass.isArray()) {
                 return (T) Array.newInstance(resolvedClass.getComponentType(), 0);
@@ -212,12 +262,7 @@ public class InjectorImpl implements Injector {
             T t = buildInstance(constructor, args);
 
             // Collect all classes in the hierarchy, from top to bottom
-            List<Class<?>> hierarchy = new ArrayList<>();
-            Class<?> current = t.getClass();
-            while (current != Object.class) {
-                hierarchy.add(0, current); // Add as first, so we start processing from parent classes
-                current = current.getSuperclass();
-            }
+            List<Class<?>> hierarchy = LifecycleMethodHelper.buildHierarchy(t);
 
             for (Class<?> clazz : hierarchy) {
                 injectFields(t, typeContext, stack, clazz, resolvedClass, true);
@@ -262,7 +307,7 @@ public class InjectorImpl implements Injector {
         return constructors.get(0);
     }
 
-    private void validateConstructorParameters(Parameter[] parameters, Class<?> clazz) {
+    void validateConstructorParameters(Parameter[] parameters, Class<?> clazz) {
         for (Parameter param : parameters) {
             try {
                 checkClassValidity(param.getType());
@@ -273,7 +318,7 @@ public class InjectorImpl implements Injector {
         }
     }
 
-    private void validateMethodParameters(Parameter[] parameters, String methodName, Class<?> clazz) {
+    void validateMethodParameters(Parameter[] parameters, String methodName, Class<?> clazz) {
         for (Parameter param : parameters) {
             try {
                 checkClassValidity(param.getType());
@@ -284,7 +329,7 @@ public class InjectorImpl implements Injector {
         }
     }
 
-    private Object[] resolveParameters(Type typeContext, Parameter[] parameters, Stack<Type> stack) {
+    Object[] resolveParameters(Type typeContext, Parameter[] parameters, Stack<Type> stack) {
         Object[] args = new Object[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
@@ -300,7 +345,7 @@ public class InjectorImpl implements Injector {
         return args;
     }
 
-    private Type resolveType(Type toResolve, Type context) {
+    Type resolveType(Type toResolve, Type context) {
         if (!(toResolve instanceof TypeVariable)) {
             return toResolve;
         }
@@ -325,7 +370,7 @@ public class InjectorImpl implements Injector {
         return constructor.newInstance(args);
     }
 
-    private <T> void injectFields(T t, Type typeContext, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
+    <T> void injectFields(T t, Type typeContext, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
         Field[] fields = clazz.getDeclaredFields();
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
 
@@ -358,7 +403,7 @@ public class InjectorImpl implements Injector {
         }
     }
 
-    private<T> void injectMethods(T t, Type typeContext, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
+    <T> void injectMethods(T t, Type typeContext, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
         Method[] methods = clazz.getDeclaredMethods();
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
 
@@ -408,7 +453,7 @@ public class InjectorImpl implements Injector {
        LifecycleMethodHelper.invokeLifecycleMethod(instance, PreDestroy.class);
     }
 
-    private boolean isOverridden(Method superMethod, Class<?> leafClass) {
+    boolean isOverridden(Method superMethod, Class<?> leafClass) {
         if (Modifier.isPrivate(superMethod.getModifiers())) {
             return false;
         }
@@ -436,13 +481,13 @@ public class InjectorImpl implements Injector {
         return true;
     }
 
-    private String getPackageName(Class<?> clazz) {
+    String getPackageName(Class<?> clazz) {
         String name = clazz.getName();
         int lastDot = name.lastIndexOf('.');
         return (lastDot == -1) ? "" : name.substring(0, lastDot);
     }
 
-    private Method findMethod(Class<?> clazz, String name, Class<?>[] parameterTypes) {
+    Method findMethod(Class<?> clazz, String name, Class<?>[] parameterTypes) {
         Class<?> current = clazz;
         while (current != null && current != Object.class) {
             try {
@@ -458,7 +503,7 @@ public class InjectorImpl implements Injector {
      * Checks that the class is valid for injection.
      * @param type the type to check
      */
-    private void checkClassValidity(Type type) {
+    void checkClassValidity(Type type) {
         Class<?> clazz = RawTypeExtractor.getRawType(type);
 
         // 1. Basic JSR 330 / Java constraints
@@ -494,7 +539,7 @@ public class InjectorImpl implements Injector {
         }
     }
 
-    private Collection<Annotation> getQualifiers(Parameter param) {
+    Collection<Annotation> getQualifiers(Parameter param) {
         Collection<Annotation> qualifiers = Arrays.stream(param.getAnnotations())
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
                 .collect(Collectors.toList());
@@ -504,7 +549,7 @@ public class InjectorImpl implements Injector {
         return qualifiers;
     }
 
-    private Collection<Annotation> getQualifiers(Field field) {
+    Collection<Annotation> getQualifiers(Field field) {
         Collection<Annotation> qualifiers = Arrays.stream(field.getAnnotations())
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
                 .collect(Collectors.toList());
@@ -514,21 +559,21 @@ public class InjectorImpl implements Injector {
         return qualifiers;
     }
 
-    private Instance<?> createInstanceWrapper(Field field) {
+    Instance<?> createInstanceWrapper(Field field) {
         ParameterizedType type = (ParameterizedType) field.getGenericType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
         Collection<Annotation> qualifiers = getQualifiers(field);
         return createInstance(genericType, qualifiers);
     }
 
-    private Instance<?> createInstanceWrapper(Parameter param) {
+    Instance<?> createInstanceWrapper(Parameter param) {
         ParameterizedType type = (ParameterizedType) param.getParameterizedType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
         Collection<Annotation> qualifiers = getQualifiers(param);
         return createInstance(genericType, qualifiers);
     }
 
-    private <T> Instance<T> createInstance(Class<T> type, Collection<Annotation> qualifiers) {
+    <T> Instance<T> createInstance(Class<T> type, Collection<Annotation> qualifiers) {
         return new Instance<T>() {
             @Override
             public T get() {
@@ -635,37 +680,14 @@ public class InjectorImpl implements Injector {
         injectedStaticClasses.clear();
     }
 
-    /**
-     * Returns all registered scope annotations.
-     */
-    public Set<Class<? extends Annotation>> getRegisteredScopes() {
-        return Collections.unmodifiableSet(scopeRegistry.keySet());
-    }
-
-    /**
-     * Checks if a scope is registered.
-     */
-    public boolean isScopeRegistered(Class<? extends Annotation> scopeAnnotation) {
-        return scopeRegistry.containsKey(scopeAnnotation);
-    }
-
-    /**
-     * Unregisters a scope handler.
-     */
-    public void unregisterScope(Class<? extends Annotation> scopeAnnotation) {
-        scopeRegistry.remove(scopeAnnotation);
-    }
-
     @Override
     public void shutdown() {
         // Notify custom scopes
         for (ScopeHandler handler : scopeRegistry.values()) {
-            if (handler != null) {
-                try {
-                    handler.close();
-                } catch (Exception e) {
-                    // Log but continue
-                }
+            try {
+                handler.close();
+            } catch (Exception e) {
+                // Log but continue
             }
         }
     }
