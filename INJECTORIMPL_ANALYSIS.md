@@ -194,9 +194,9 @@ The official JSR-330 Technology Compatibility Kit test suite passes completely.
 | **@Observes** | ❌ **Missing** | No event system |
 | **@Interceptor** | ❌ **Missing** | No method interception |
 | **@Decorator** | ❌ **Missing** | No decoration support |
-| **@ApplicationScoped** | ⚠️ **Partial** | Must implement custom handler |
-| **@RequestScoped** | ⚠️ **Partial** | Must implement custom handler |
-| **@SessionScoped** | ⚠️ **Partial** | Must implement custom handler |
+| **@ApplicationScoped** | ✅ **Complete** | Registered by default, uses SingletonScopeHandler |
+| **@RequestScoped** | ✅ **Complete** | Requires RequestScopeHandler registration |
+| **@SessionScoped** | ✅ **Complete** | Requires SessionScopeHandler registration |
 | **@ConversationScoped** | ❌ **Missing** | No conversation management |
 | **Portable Extensions** | ❌ **Missing** | No SPI for extensions |
 
@@ -354,8 +354,8 @@ Cannot create factory methods for third-party classes
 
 **Workaround:** Manual binding
 
-#### **3. Limited Scope Implementations** ⚠️ **MEDIUM Impact**
-Only @Singleton provided; must implement custom scopes
+#### **3. Limited Scope Implementations** ✅ **RESOLVED**
+@Singleton, @ApplicationScoped, @RequestScoped, and @SessionScoped now supported
 
 ### 4.3 Security Considerations
 
@@ -416,15 +416,18 @@ Only @Singleton provided; must implement custom scopes
 
 ### 6.1 Priority Improvements (P0 - Critical)
 
-#### **1. Add Application Scope** 🔴
-```java
-@Scope
-@Retention(RUNTIME)
-public @interface ApplicationScoped {}
-```
-**Effort:** 1 day | **Impact:** HIGH
+#### **1. Add Application Scope** ✅ **COMPLETED**
+- @ApplicationScoped now registered by default
+- Uses shared SingletonScopeHandler with @Singleton
+- Comprehensive tests added and passing
 
-#### **2. Add Concurrency Tests** 🔴
+#### **2. Add Request and Session Scopes** ✅ **COMPLETED**
+- @RequestScoped support via RequestScopeHandler (ThreadLocal-based)
+- @SessionScoped support via SessionScopeHandler (session-ID-based)
+- Full lifecycle management with @PreDestroy support
+- Comprehensive tests added and passing
+
+#### **3. Add Concurrency Tests** 🔴
 ```java
 @Test
 void shouldHandleConcurrentSingletonAccess() {
@@ -433,13 +436,9 @@ void shouldHandleConcurrentSingletonAccess() {
 ```
 **Effort:** 2 days | **Impact:** HIGH
 
-#### **3. Add ClassLoader Cleanup** 🔴
-```java
-public void shutdown() {
-    classResolver.clearCaches();
-    resolvedClasses.clear();
-}
-```
+#### **4. Add ClassLoader Cleanup** ✅ **COMPLETED**
+- Cache clearing now implemented in ClassResolver
+- Prevents memory leaks in hot-reload scenarios
 **Effort:** 1 day | **Impact:** HIGH (prevents memory leaks)
 
 ### 6.2 Important Improvements (P1)
@@ -484,10 +483,12 @@ interface Module {
 - ✅ Library internals
 
 **NOT suitable for:**
-- ❌ Enterprise web applications (needs @RequestScoped, @SessionScoped)
+- ⚠️ Enterprise web applications requiring advanced CDI features
 - ❌ Spring-dependent projects (no Spring integration)
 - ❌ Applications requiring AOP (@Transactional, etc.)
 - ❌ Full CDI feature requirements
+
+**NOTE:** Basic web application support is now available with @RequestScoped and @SessionScoped!
 
 ### 7.2 Final Assessment
 
@@ -504,21 +505,27 @@ interface Module {
 | **Documentation** | A+ |
 | **Production Features** | B- |
 
-**Overall Grade: 8.5/10 (A-)**
+**Overall Grade: 9.0/10 (A)**
 
 ### 7.3 Recommendation Summary
 
 **For Production Use:**
 - ✅ **Approved** for microservices and embedded applications
-- ⚠️ **Conditional** for web applications (needs custom scopes)
-- ❌ **Not Recommended** for enterprise applications needing full CDI/Spring
+- ✅ **Approved** for web applications with standard scopes (@RequestScoped, @SessionScoped)
+- ⚠️ **Conditional** for enterprise applications (AOP/interceptor limitations)
+- ❌ **Not Recommended** for applications requiring full CDI/Spring feature set
 
-**Priority Actions:**
-1. Add @ApplicationScoped support (P0)
-2. Add concurrency stress tests (P0)
-3. Add ClassLoader cleanup (P0)
-4. Document scope handler examples (P1)
-5. Add performance benchmarks (P1)
+**Completed Improvements:**
+1. ✅ @ApplicationScoped support - DONE
+2. ✅ @RequestScoped support with RequestScopeHandler - DONE
+3. ✅ @SessionScoped support with SessionScopeHandler - DONE
+4. ✅ ClassLoader cleanup in ClassResolver - DONE
+5. ✅ Comprehensive scope tests - DONE
+
+**Remaining Priority Actions:**
+1. Add concurrency stress tests (P0)
+2. Document scope handler examples (P1)
+3. Add performance benchmarks (P1)
 
 ---
 

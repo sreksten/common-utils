@@ -896,7 +896,7 @@ class InjectorImplUnitTest {
                     return (T) scopeStorage.computeIfAbsent(clazz, c -> provider.get());
                 }
                 @Override
-                public void close() throws Exception {
+                public void close() {
                     // No-op for test
                 }
             });
@@ -926,7 +926,7 @@ class InjectorImplUnitTest {
                     return provider.get();
                 }
                 @Override
-                public void close() throws Exception {
+                public void close() {
                     // No-op for test
                 }
             });
@@ -989,7 +989,7 @@ class InjectorImplUnitTest {
                     return provider.get();
                 }
                 @Override
-                public void close() throws Exception {
+                public void close() {
                     // No-op for test
                 }
             });
@@ -1003,7 +1003,7 @@ class InjectorImplUnitTest {
                     return provider.get();
                 }
                 @Override
-                public void close() throws Exception {
+                public void close() {
                     // No-op for test
                 }
             });
@@ -1011,6 +1011,207 @@ class InjectorImplUnitTest {
             // Then
             assertEquals(1, handler1Calls.get());
             assertEquals(1, handler2Calls.get());
+        }
+
+        /**
+         * @ApplicationScoped behaves like singleton - one instance per application
+         */
+        @Test
+        @DisplayName("Should create single instance for @ApplicationScoped")
+        void shouldCreateSingleInstanceForApplicationScoped() {
+            // Given
+            Injector sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            ApplicationScopedClass instance1 = sut.inject(ApplicationScopedClass.class);
+            ApplicationScopedClass instance2 = sut.inject(ApplicationScopedClass.class);
+            // Then
+            assertSame(instance1, instance2, "ApplicationScoped should return same instance");
+            assertEquals(instance1.getId(), instance2.getId(), "IDs should match");
+        }
+
+        /**
+         * @ApplicationScoped with @PreDestroy lifecycle
+         */
+        @Test
+        @DisplayName("Should invoke @PreDestroy on @ApplicationScoped beans during shutdown")
+        void shouldInvokePreDestroyOnApplicationScopedBeans() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ApplicationScopedWithPreDestroy instance = sut.inject(ApplicationScopedWithPreDestroy.class);
+            assertFalse(instance.isDestroyed(), "Should not be destroyed initially");
+            // When
+            sut.shutdown();
+            // Then
+            assertTrue(instance.isDestroyed(), "@PreDestroy should have been called");
+        }
+
+        /**
+         * @RequestScoped with RequestScopeHandler - one instance per thread
+         */
+        @Test
+        @DisplayName("Should create one instance per thread for @RequestScoped with RequestScopeHandler")
+        void shouldCreateOneInstancePerThreadForRequestScoped() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            RequestScopeHandler requestHandler = new RequestScopeHandler();
+            sut.registerScope(RequestScoped.class, requestHandler);
+
+            // When - inject in main thread
+            RequestScopedClass mainThread1 = sut.inject(RequestScopedClass.class);
+            RequestScopedClass mainThread2 = sut.inject(RequestScopedClass.class);
+
+            // Then - same instance within thread
+            assertSame(mainThread1, mainThread2, "Should return same instance within thread");
+
+            // When - inject in different thread
+            Holder<RequestScopedClass> otherThreadInstance = new Holder<>();
+            Thread thread = new Thread(() -> otherThreadInstance.set(sut.inject(RequestScopedClass.class)));
+            thread.start();
+            thread.join();
+
+            // Then - different instance in different thread
+            assertNotSame(mainThread1, otherThreadInstance.get(),
+                "Should create different instance in different thread");
+
+            // Cleanup
+            requestHandler.close();
+        }
+
+        /**
+         * @RequestScoped cleanup with @PreDestroy
+         */
+        @Test
+        @DisplayName("Should invoke @PreDestroy on @RequestScoped beans when scope closes")
+        void shouldInvokePreDestroyOnRequestScopedBeans() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            RequestScopeHandler requestHandler = new RequestScopeHandler();
+            sut.registerScope(RequestScoped.class, requestHandler);
+
+            RequestScopedWithPreDestroy instance = sut.inject(RequestScopedWithPreDestroy.class);
+            assertFalse(instance.isPreDestroyCalled(), "Should not be destroyed initially");
+
+            // When
+            requestHandler.close();
+
+            // Then
+            assertTrue(instance.isPreDestroyCalled(), "@PreDestroy should have been called");
+        }
+
+        /**
+         * @SessionScoped with SessionScopeHandler - one instance per session
+         */
+        @Test
+        @DisplayName("Should create one instance per session for @SessionScoped")
+        void shouldCreateOneInstancePerSessionForSessionScoped() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            SessionScopeHandler sessionHandler = new SessionScopeHandler();
+            sut.registerScope(javax.enterprise.context.SessionScoped.class, sessionHandler);
+
+            // When - session 1
+            sessionHandler.setCurrentSession("session-1");
+            SessionScopedClass session1Instance1 = sut.inject(SessionScopedClass.class);
+            SessionScopedClass session1Instance2 = sut.inject(SessionScopedClass.class);
+
+            // Then - same instance within session
+            assertSame(session1Instance1, session1Instance2,
+                "Should return same instance within same session");
+            assertEquals(session1Instance1.getId(), session1Instance2.getId(),
+                "IDs should match within session");
+
+            // When - session 2
+            sessionHandler.setCurrentSession("session-2");
+            SessionScopedClass session2Instance = sut.inject(SessionScopedClass.class);
+
+            // Then - different instance in different session
+            assertNotSame(session1Instance1, session2Instance,
+                "Should create different instance in different session");
+            assertNotEquals(session1Instance1.getId(), session2Instance.getId(),
+                "IDs should differ across sessions");
+
+            // Cleanup
+            sessionHandler.setCurrentSession("session-1");
+            sessionHandler.close();
+            sessionHandler.setCurrentSession("session-2");
+            sessionHandler.close();
+        }
+
+        /**
+         * @SessionScoped cleanup with @PreDestroy
+         */
+        @Test
+        @DisplayName("Should invoke @PreDestroy on @SessionScoped beans when session closes")
+        void shouldInvokePreDestroyOnSessionScopedBeans() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            SessionScopeHandler sessionHandler = new SessionScopeHandler();
+            sut.registerScope(javax.enterprise.context.SessionScoped.class, sessionHandler);
+
+            sessionHandler.setCurrentSession("test-session");
+            SessionScopedWithPreDestroy instance = sut.inject(SessionScopedWithPreDestroy.class);
+            assertFalse(instance.isDestroyed(), "Should not be destroyed initially");
+
+            // When
+            sessionHandler.close();
+
+            // Then
+            assertTrue(instance.isDestroyed(), "@PreDestroy should have been called");
+        }
+
+        /**
+         * @SessionScoped without session context should throw exception
+         */
+        @Test
+        @DisplayName("Should throw exception when no session context is set for @SessionScoped")
+        void shouldThrowExceptionWhenNoSessionContextForSessionScoped() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            SessionScopeHandler sessionHandler = new SessionScopeHandler();
+            sut.registerScope(javax.enterprise.context.SessionScoped.class, sessionHandler);
+
+            // When/Then - no session set
+            // The IllegalStateException is wrapped in InjectionException
+            InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(SessionScopedClass.class), "Should throw InjectionException when no session context");
+
+            // Verify the cause is IllegalStateException
+            assertInstanceOf(IllegalStateException.class, thrown.getCause(), "Cause should be IllegalStateException");
+            assertTrue(thrown.getCause().getMessage().contains("No session context"),
+                "Should mention no session context");
+        }
+
+        /**
+         * Multiple scopes working together
+         */
+        @Test
+        @DisplayName("Should handle multiple different scopes correctly")
+        void shouldHandleMultipleScopesCorrectly() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            RequestScopeHandler requestHandler = new RequestScopeHandler();
+            SessionScopeHandler sessionHandler = new SessionScopeHandler();
+
+            sut.registerScope(RequestScoped.class, requestHandler);
+            sut.registerScope(javax.enterprise.context.SessionScoped.class, sessionHandler);
+
+            sessionHandler.setCurrentSession("session-1");
+
+            // When
+            ApplicationScopedClass appScoped1 = sut.inject(ApplicationScopedClass.class);
+            ApplicationScopedClass appScoped2 = sut.inject(ApplicationScopedClass.class);
+            RequestScopedClass reqScoped1 = sut.inject(RequestScopedClass.class);
+            RequestScopedClass reqScoped2 = sut.inject(RequestScopedClass.class);
+            SessionScopedClass sesScoped1 = sut.inject(SessionScopedClass.class);
+            SessionScopedClass sesScoped2 = sut.inject(SessionScopedClass.class);
+
+            // Then
+            assertSame(appScoped1, appScoped2, "ApplicationScoped should be singleton");
+            assertSame(reqScoped1, reqScoped2, "RequestScoped should be same within thread");
+            assertSame(sesScoped1, sesScoped2, "SessionScoped should be same within session");
+
+            // Cleanup
+            requestHandler.close();
+            sessionHandler.close();
         }
     }
 
@@ -1216,7 +1417,7 @@ class InjectorImplUnitTest {
 
             @Test
             @DisplayName("If an exception is thrown, isUnsatisfied() is true")
-            void ifExceptionThrownIsUnsatisfiedIsTrue() throws Exception {
+            void ifExceptionThrownIsUnsatisfiedIsTrue() {
                 // Given
                 ClassResolver mockResolver = spy(new ClassResolver());
                 // resolveImplementations throws an exception
@@ -1268,7 +1469,7 @@ class InjectorImplUnitTest {
 
             @Test
             @DisplayName("If an exception is thrown, isAmbiguous() is false")
-            void ifExceptionThrownIsAmbiguousIsFalse() throws Exception{
+            void ifExceptionThrownIsAmbiguousIsFalse() {
                 // Given
                 ClassResolver mockResolver = spy(new ClassResolver());
                 // resolveImplementations throws an exception
@@ -1555,7 +1756,7 @@ class InjectorImplUnitTest {
             @Test
             @DisplayName("Instance.iterator() should throw RuntimeException if resolution fails")
             @SuppressWarnings("unchecked")
-            void iteratorShouldThrowRuntimeExceptionIfResolutionFails() throws Exception {
+            void iteratorShouldThrowRuntimeExceptionIfResolutionFails() {
                 // Given
                 ClassResolver mockResolver = mock(ClassResolver.class);
 
@@ -2080,7 +2281,7 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("Should return non-TypeVariable types as-is (direct test)")
-        void shouldReturnNonTypeVariableTypesAsIs() throws Exception {
+        void shouldReturnNonTypeVariableTypesAsIs() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             Type concreteType = String.class;
@@ -2095,7 +2296,7 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("Should return ParameterizedType as-is (direct test)")
-        void shouldReturnParameterizedTypeAsIs() throws Exception {
+        void shouldReturnParameterizedTypeAsIs() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             Type parameterizedType = new TypeLiteral<List<String>>() {}.getType();
@@ -2110,7 +2311,7 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("Should resolve TypeVariable with matching name in ParameterizedType context (direct test)")
-        void shouldResolveTypeVariableWithMatchingName() throws Exception {
+        void shouldResolveTypeVariableWithMatchingName() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
 
@@ -2129,7 +2330,7 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("Should return TypeVariable when no matching name in ParameterizedType (direct test)")
-        void shouldReturnTypeVariableWhenNoMatchingName() throws Exception {
+        void shouldReturnTypeVariableWhenNoMatchingName() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
 
@@ -2148,7 +2349,7 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("Should return TypeVariable when context is not ParameterizedType (direct test)")
-        void shouldReturnTypeVariableWhenContextIsNotParameterizedType() throws Exception {
+        void shouldReturnTypeVariableWhenContextIsNotParameterizedType() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
 
@@ -2167,7 +2368,7 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("Should resolve TypeVariable with multiple type parameters (direct test)")
-        void shouldResolveTypeVariableWithMultipleTypeParameters() throws Exception {
+        void shouldResolveTypeVariableWithMultipleTypeParameters() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
 
@@ -2190,7 +2391,7 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("Should handle TypeVariable resolution in nested generics (direct test)")
-        void shouldHandleTypeVariableInNestedGenerics() throws Exception {
+        void shouldHandleTypeVariableInNestedGenerics() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
 
@@ -2204,7 +2405,7 @@ class InjectorImplUnitTest {
             Type result = sut.resolveType(typeVariable, context);
 
             // Then
-            assertTrue(result instanceof ParameterizedType);
+            assertInstanceOf(ParameterizedType.class, result);
             ParameterizedType pt = (ParameterizedType) result;
             assertEquals(List.class, pt.getRawType());
             assertEquals(String.class, pt.getActualTypeArguments()[0]);
@@ -2260,7 +2461,7 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("findMethod should find method in current class")
-        void findMethodShouldFindMethodInCurrentClass() throws Exception {
+        void findMethodShouldFindMethodInCurrentClass() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
 
@@ -2274,7 +2475,7 @@ class InjectorImplUnitTest {
 
         @Test
         @DisplayName("findMethod should find method in parent class")
-        void findMethodShouldFindMethodInParentClass() throws Exception {
+        void findMethodShouldFindMethodInParentClass() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
 
@@ -2632,10 +2833,11 @@ class InjectorImplUnitTest {
                     return (T) scopeStorage.computeIfAbsent(clazz, c -> provider.get());
                 }
                 @Override
-                public void close() throws Exception {
+                public void close() {
                     scopeStorage.clear();
                 }
             });
+            @SuppressWarnings("unused")
             RequestScopedWithPreDestroy instance = sut.inject(RequestScopedWithPreDestroy.class);
             // When
             sut.shutdown();
@@ -2969,7 +3171,7 @@ class InjectorImplUnitTest {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             closeCalled = true;
         }
 
@@ -3203,7 +3405,7 @@ class InjectorImplUnitTest {
     }
 
     static class GenericClassWithTypeVariable<T> {
-        private T value;
+        private final T value;
 
         public GenericClassWithTypeVariable() {
             // For String type, create a default value

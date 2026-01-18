@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
-public class BasicScopeHandler implements ScopeHandler {
+public class RequestScopeHandler implements ScopeHandler {
     private final ThreadLocal<Map<Class<?>, Object>> requestBeans = new ThreadLocal<>();
 
     @Override

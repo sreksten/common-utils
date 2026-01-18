@@ -4,6 +4,8 @@ import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 import org.jspecify.annotations.NonNull;
 
+import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.context.RequestScoped;
 import javax.enterprise.inject.*;
 import javax.enterprise.util.TypeLiteral;
 import javax.inject.*;
@@ -60,14 +62,44 @@ import java.util.stream.Collectors;
  *   <li>Fields are injected (including static fields, once per class)</li>
  *   <li>Methods are invoked with injected parameters (including static methods)</li>
  *   <li>{@code @PostConstruct} methods are invoked (zero parameters required)</li>
- *   <li>Instance is returned to caller</li>
+ *   <li>Instance is returned to the caller</li>
  *   <li>Upon scope closure or shutdown, {@code @PreDestroy} methods are invoked</li>
  * </ol>
  *
  * <h2>Scope Management:</h2>
- * The injector supports pluggable scope handlers via {@link ScopeHandler}. The default scope is
- * {@code @Singleton}. Custom scopes can be registered using {@link #registerScope(Class, ScopeHandler)}.
- * All scopes are automatically closed during JVM shutdown via a registered shutdown hook.
+ * The injector supports pluggable scope handlers via {@link ScopeHandler}. By default, the following
+ * scopes are registered:
+ * <ul>
+ *   <li>{@link javax.inject.Singleton @Singleton} - One instance per injector (JSR-330)</li>
+ *   <li>{@link javax.enterprise.context.ApplicationScoped @ApplicationScoped} - One instance per injector (CDI)</li>
+ * </ul>
+ *
+ * <p>The application must manually register additional scopes before use. This allows applications
+ * to provide context-specific scope handlers that match their runtime environment:</p>
+ *
+ * <pre>{@code
+ * // For web applications - register request and session scopes
+ * InjectorImpl injector = new InjectorImpl("com.myapp");
+ *
+ * // RequestScoped: One instance per thread (HTTP request)
+ * injector.registerScope(RequestScoped.class, new RequestScopeHandler());
+ *
+ * // SessionScoped: One instance per session ID
+ * SessionScopeHandler sessionHandler = new SessionScopeHandler();
+ * injector.registerScope(SessionScoped.class, sessionHandler);
+ *
+ * // In request processing:
+ * sessionHandler.setCurrentSession(httpRequest.getSessionId());
+ * MyBean bean = injector.inject(MyBean.class);
+ * // ... use bean ...
+ * sessionHandler.close(); // Cleanup when request ends
+ * }</pre>
+ *
+ * <p><b>Why manual registration?</b> Request and session scopes are context-dependent and vary by
+ * application type (web apps use HTTP sessions, desktop apps might use user sessions, etc.). Manual
+ * registration gives applications full control over scope lifecycle and context management.</p>
+ *
+ * <p>All scopes are automatically closed during JVM shutdown via a registered shutdown hook.</p>
  *
  * <h2>Type Resolution:</h2>
  * When injecting interfaces or abstract classes, the injector searches the configured packages for
@@ -146,7 +178,7 @@ public class InjectorImpl implements Injector {
      */
     public InjectorImpl(final String ... packageNames) {
         this.classResolver = new ClassResolver(packageNames);
-        registerDefaultScope();
+        registerDefaultScopes();
         addShutdownHook();
     }
 
@@ -162,7 +194,7 @@ public class InjectorImpl implements Injector {
             throw new IllegalArgumentException("Class resolver cannot be null");
         }
         this.classResolver = classResolver;
-        registerDefaultScope();
+        registerDefaultScopes();
         addShutdownHook();
     }
 
@@ -174,41 +206,14 @@ public class InjectorImpl implements Injector {
      *
      * @see javax.inject.Singleton
      */
-    private void registerDefaultScope() {
-        // Standard Singleton scope implementation
-        scopeRegistry.put(Singleton.class, new ScopeHandler() {
-            private final Map<Class<?>, Object> instances = new ConcurrentHashMap<>();
-            @Override
-            @SuppressWarnings("unchecked")
-            public <T> T get(Class<T> clazz, Supplier<T> provider) {
-                // We don't use computeIfAbsent to handle concurrency issues, when A depends on B and
-                // both are Singletons
-                Object instance = instances.get(clazz);
-                if (instance == null) {
-                    synchronized (instances) {
-                        instance = instances.get(clazz);
-                        if (instance == null) {
-                            instance = provider.get();
-                            instances.put(clazz, instance);
-                        }
-                    }
-                }
-                return (T) instance;
-            }
-
-            @Override
-            public void close() {
-                // Call @PreDestroy on all singletons
-                for (Object instance : instances.values()) {
-                    try {
-                        invokePreDestroy(instance);
-                    } catch (Exception e) {
-                        // Log but continue destroying others
-                    }
-                }
-                instances.clear();
-            }
-        });
+    private void registerDefaultScopes() {
+        // Standard Singleton scope implementation - shared handler for Singleton and ApplicationScoped
+        SingletonScopeHandler singletonHandler = new SingletonScopeHandler();
+        scopeRegistry.put(Singleton.class, singletonHandler);
+        // ApplicationScoped behaves like Singleton in CDI - uses the same handler instance
+        scopeRegistry.put(ApplicationScoped.class, singletonHandler);
+        // RequestScoped and SessionScoped must be registered manually by the user
+        // with appropriate scope handlers (BasicScopeHandler or SessionScopeHandler)
     }
 
     /**
@@ -326,7 +331,7 @@ public class InjectorImpl implements Injector {
      * }</pre>
      *
      * @param type the interface or abstract type to bind
-     * @param qualifiers qualifier annotations to distinguish this binding (may be empty)
+     * @param qualifiers qualifier annotations to distinguish this binding (can be empty)
      * @param implementation the concrete implementation class
      * @throws IllegalArgumentException if any parameter is null
      * @see javax.inject.Qualifier
@@ -412,7 +417,7 @@ public class InjectorImpl implements Injector {
      * applies scope handling, and performs the actual injection.
      *
      * @param <T> the type to inject
-     * @param typeToInject the type to resolve and inject (may be generic)
+     * @param typeToInject the type to resolve and inject (can be generic)
      * @param stack dependency resolution stack for circular dependency detection
      * @param qualifiers optional qualifiers to disambiguate implementations
      * @return fully injected instance
@@ -463,7 +468,7 @@ public class InjectorImpl implements Injector {
      * one scope annotation. This method searches for any annotation that is itself annotated with
      * {@link javax.inject.Scope @Scope}, or for the built-in {@link Singleton} annotation.
      *
-     * <p>If no scope annotation is found, returns null, indicating the class uses dependent scope
+     * <p>If no scope annotation is found, returns null, indicating the class uses a dependent scope
      * (new instance per injection point).
      *
      * @param clazz the class to inspect for scope annotations
@@ -474,7 +479,11 @@ public class InjectorImpl implements Injector {
     Class<? extends Annotation> getScopeType(Class<?> clazz) {
         return Arrays.stream(clazz.getAnnotations())
                 .map(Annotation::annotationType)
-                .filter(at -> at.isAnnotationPresent(Scope.class) || at.equals(Singleton.class))
+                .filter(at -> at.isAnnotationPresent(Scope.class)
+                        || at.equals(Singleton.class)
+                        || at.equals(ApplicationScoped.class)
+                        || at.equals(RequestScoped.class)
+                        || at.equals(javax.enterprise.context.SessionScoped.class))
                 .findFirst()
                 .orElse(null);
     }
@@ -678,7 +687,7 @@ public class InjectorImpl implements Injector {
      * <p>If the type to resolve is not a TypeVariable, it is returned as-is. If the context is not
      * a ParameterizedType or the TypeVariable cannot be resolved, the original TypeVariable is returned.
      *
-     * @param toResolve the type to resolve (may be a TypeVariable or concrete type)
+     * @param toResolve the type to resolve (can be a TypeVariable or concrete type)
      * @param context the context type containing actual type arguments (typically a ParameterizedType)
      * @return the resolved concrete type, or the original type if resolution is not possible
      * @see java.lang.reflect.TypeVariable
@@ -958,7 +967,7 @@ public class InjectorImpl implements Injector {
                 !Modifier.isPrivate(superMethod.getModifiers());
 
         if (isSuperPackagePrivate) {
-            // Package-private method is only overridden if subclass method is in the same package
+            // Package-private method is only overridden if a subclass method is in the same package
             return getPackageName(superMethod.getDeclaringClass())
                     .equals(getPackageName(subMethod.getDeclaringClass()));
         }
@@ -982,7 +991,7 @@ public class InjectorImpl implements Injector {
      * includes primitives and arrays), this method returns an empty string.
      *
      * @param clazz the class whose package name to extract
-     * @return the fully qualified package name, or empty string if the class has no package
+     * @return the fully qualified package name or empty string if the class has no package
      * @see #isOverridden(Method, Class)
      * @see Class#getPackage()
      */
@@ -1006,7 +1015,7 @@ public class InjectorImpl implements Injector {
      *   <li>Returns null if no matching method is found before reaching Object</li>
      * </ul>
      *
-     * <p>The search stops at Object.class because methods declared in Object (toString, equals,
+     * <p>The search stops at the Object class because methods declared in Object (toString, equals,
      * hashCode, etc.) are not relevant for JSR-330 method override detection with {@code @Inject}.
      *
      * <p><b>Example:</b>
@@ -1090,7 +1099,7 @@ public class InjectorImpl implements Injector {
      * @Inject List<MyEnum> enums; // Rejected (MyEnum is not injectable)
      * }</pre>
      *
-     * @param type the type to validate (may be a Class or ParameterizedType)
+     * @param type the type to validate (can be a Class or ParameterizedType)
      * @throws IllegalArgumentException if the type violates any injection constraints
      * @see RawTypeExtractor#getRawType(Type)
      * @see javax.inject.Inject
@@ -1347,11 +1356,11 @@ public class InjectorImpl implements Injector {
      * injector's internal state. Existing singleton instances will become unreachable but not
      * explicitly destroyed.
      *
-     * @see #registerDefaultScope()
+     * @see #registerDefaultScopes()
      */
     void clearState() {
         scopeRegistry.clear();
-        registerDefaultScope();
+        registerDefaultScopes();
         injectedStaticClasses.clear();
     }
 
@@ -1377,5 +1386,6 @@ public class InjectorImpl implements Injector {
                 // Log but continue
             }
         }
+        classResolver.clearCaches();
     }
 }
