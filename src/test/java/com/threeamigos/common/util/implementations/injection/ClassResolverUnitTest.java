@@ -559,6 +559,45 @@ class ClassResolverUnitTest {
             // Then
             assertEquals(4, resolved.size());
         }
+
+        @Test
+        @DisplayName("Should return all active classes if qualifiers are empty collection")
+        void shouldReturnAllActiveClassesIfQualifiersAreEmpty() throws Exception {
+            // When - Line 238: qualifiers.isEmpty() branch
+            Collection<Class<? extends MultipleImplementationsInterface>> resolved = sut.resolveImplementations(
+                    MultipleImplementationsInterface.class, Collections.emptyList());
+            // Then
+            // Expects 4: Standard, Named1, Named2, NamedAndAnnotated. Alternatives are filtered out by default if not enabled.
+            assertEquals(4, resolved.size());
+        }
+
+        @Test
+        @DisplayName("Should filter out @Alternative classes that are not enabled")
+        void shouldFilterOutNotEnabledAlternatives() throws Exception {
+            // When - Line 235: Tests that @Alternative classes are filtered when not enabled
+            Collection<Class<? extends MultipleImplementationsInterface>> resolved = sut.resolveImplementations(
+                    MultipleImplementationsInterface.class, null);
+
+            // Then - MultipleAlternativesAlternativeImplementation should NOT be in results
+            assertFalse(resolved.contains(com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleAlternativesAlternativeImplementation.class));
+            // But non-alternative classes should be present
+            assertTrue(resolved.contains(com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation.class));
+        }
+
+        @Test
+        @DisplayName("Should include @Alternative classes when they are enabled")
+        void shouldIncludeEnabledAlternatives() throws Exception {
+            // Given - Line 235: Tests enabledAlternatives.contains(clazz) == true branch
+            Class<?> alternative = com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleAlternativesAlternativeImplementation.class;
+            sut.enableAlternative(alternative);
+
+            // When
+            Collection<Class<? extends MultipleImplementationsInterface>> resolved = sut.resolveImplementations(
+                    MultipleImplementationsInterface.class, null);
+
+            // Then - The enabled alternative should now be included
+            assertTrue(resolved.contains(alternative));
+        }
     }
 
     @Nested
@@ -788,22 +827,30 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle binding with null qualifiers")
-        void shouldHandleBindingWithNullQualifiers() {
+        void shouldHandleBindingWithNullQualifiers() throws Exception {
             // Given
+            sut.setBindingsOnly(true);
             sut.bind(SingleImplementationInterface.class, null, SingleImplementationClass.class);
 
-            // When/Then - should resolve correctly
-            assertDoesNotThrow(() -> sut.resolveImplementation(SingleImplementationInterface.class, null));
+            // When
+            Class<?> result = sut.resolveImplementation(SingleImplementationInterface.class, null);
+
+            // Then
+            assertEquals(SingleImplementationClass.class, result);
         }
 
         @Test
         @DisplayName("Should handle binding with empty qualifiers collection")
-        void shouldHandleBindingWithEmptyQualifiers() {
+        void shouldHandleBindingWithEmptyQualifiers() throws Exception {
             // Given
+            sut.setBindingsOnly(true);
             sut.bind(SingleImplementationInterface.class, Collections.emptySet(), SingleImplementationClass.class);
 
-            // When/Then - should resolve correctly
-            assertDoesNotThrow(() -> sut.resolveImplementation(SingleImplementationInterface.class, Collections.emptyList()));
+            // When
+            Class<?> result = sut.resolveImplementation(SingleImplementationInterface.class, Collections.emptyList());
+
+            // Then
+            assertEquals(SingleImplementationClass.class, result);
         }
 
         @Test
@@ -873,7 +920,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle enabling same alternative multiple times")
-        void shouldHandleEnablingSameAlternativeMultipleTimes() {
+        void shouldHandleEnablingSameAlternativeMultipleTimes() throws Exception {
             // Given
             Class<?> alternative = SingleImplementationClass.class;
 
@@ -882,8 +929,9 @@ class ClassResolverUnitTest {
             sut.enableAlternative(alternative);
             sut.enableAlternative(alternative);
 
-            // Then - should not cause issues
-            assertDoesNotThrow(() -> sut.resolveImplementation(SingleImplementationInterface.class, null));
+            // Then - should resolve correctly without issues
+            Class<?> result = sut.resolveImplementation(SingleImplementationInterface.class, null);
+            assertEquals(SingleImplementationClass.class, result);
         }
 
         @Test

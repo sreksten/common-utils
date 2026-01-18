@@ -8,6 +8,7 @@ import javax.inject.Qualifier;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -22,13 +23,17 @@ import java.util.stream.Collectors;
  *   <li>Thread-safe caching of resolution results via {@link Cache}
  * </ul>
  *
- * <p><b>Resolution Priority:</b>
+ * <p><b>Resolution Priority (differs from CDI specification):</b>
  * <ol>
- *   <li>Custom bindings (highest priority)
- *   <li>Enabled alternatives
+ *   <li>Custom bindings via bind() (highest priority - allows test mocking)
+ *   <li>Enabled alternatives (@Alternative annotation)
  *   <li>Qualified implementations (if qualifiers specified)
  *   <li>Standard implementation (no qualifiers)
  * </ol>
+ *
+ * <p><b>Note:</b> Unlike pure CDI implementations, programmatic bindings
+ * take precedence over alternatives. This design choice allows for easier
+ * testing and environment-specific configuration overrides.
  *
  * <p><b>Thread Safety:</b> This class is thread-safe. Concurrent resolution
  * of the same type will result in only one classpath scan, with other threads
@@ -78,9 +83,10 @@ class ClassResolver {
     /**
      * Custom mappings to bind a type and qualifiers to a specific implementation.
      */
-    private final Map<MappingKey, Class<?>> bindings = new HashMap<>();
+    private final Map<MappingKey, Class<?>> bindings = new ConcurrentHashMap<>();
     /**
-     * Whether the resolve process should stop at bound classes or scan the classpath
+     * Whether the resolve process should stop at bound classes or scan the classpath.
+     * Default is false. This flag is for testing purposes only!
      */
     private boolean bindingsOnly;
     /**
