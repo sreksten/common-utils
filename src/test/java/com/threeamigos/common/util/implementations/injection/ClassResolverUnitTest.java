@@ -706,8 +706,6 @@ class ClassResolverUnitTest {
     }
 
     // Test structures
-    interface MyGeneric<T> {}
-
     @Nested
     @DisplayName("Cache Behavior Tests")
     class CacheBehaviorTests {
@@ -720,7 +718,7 @@ class ClassResolverUnitTest {
             TypeChecker mockChecker = mock(TypeChecker.class);
             ClassResolver resolver = new ClassResolver(mockScanner, mockChecker);
 
-            List<Class<?>> classes = Arrays.asList(SingleImplementationClass.class);
+            List<Class<?>> classes = Collections.singletonList(SingleImplementationClass.class);
             when(mockScanner.getAllClasses(any(ClassLoader.class))).thenReturn(classes);
             when(mockChecker.isAssignable(any(Type.class), any(Class.class))).thenReturn(true);
 
