@@ -309,7 +309,7 @@ class ClassResolver {
             return new ArrayList<>(candidates);
         });
 
-        // Convert to properly typed collection
+        // Convert to a properly typed collection
         List<Class<? extends T>> result = new ArrayList<>();
         for (Class<?> clazz : cached) {
             result.add((Class<? extends T>) clazz);
@@ -352,7 +352,7 @@ class ClassResolver {
      * Creates a formatted error message for unsatisfied resolution exceptions.
      *
      * @param type the type that could not be resolved
-     * @param qualifiers the qualifiers that were specified (may be null or empty)
+     * @param qualifiers the qualifiers that were specified (can be null or empty)
      * @return a formatted error message
      */
     private String formatUnsatisfiedError(Type type, Collection<Annotation> qualifiers) {
@@ -361,5 +361,9 @@ class ClassResolver {
                     formatQualifiers(qualifiers) + " for " + type.getTypeName();
         }
         return "No implementation found for " + type.getTypeName();
+    }
+
+    void clearCaches() {
+        resolvedClasses.clear();
     }
 }
