@@ -46,6 +46,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -1014,7 +1015,7 @@ class InjectorImplUnitTest {
         }
 
         /**
-         * @ApplicationScoped behaves like singleton - one instance per application
+         * ApplicationScoped behaves like a singleton - one instance per application
          */
         @Test
         @DisplayName("Should create single instance for @ApplicationScoped")
@@ -1030,7 +1031,7 @@ class InjectorImplUnitTest {
         }
 
         /**
-         * @ApplicationScoped with @PreDestroy lifecycle
+         * ApplicationScoped with PreDestroy lifecycle
          */
         @Test
         @DisplayName("Should invoke @PreDestroy on @ApplicationScoped beans during shutdown")
@@ -1046,7 +1047,7 @@ class InjectorImplUnitTest {
         }
 
         /**
-         * @RequestScoped with RequestScopeHandler - one instance per thread
+         * RequestScoped with RequestScopeHandler - one instance per thread
          */
         @Test
         @DisplayName("Should create one instance per thread for @RequestScoped with RequestScopeHandler")
@@ -1078,7 +1079,7 @@ class InjectorImplUnitTest {
         }
 
         /**
-         * @RequestScoped cleanup with @PreDestroy
+         * RequestScoped cleanup with PreDestroy
          */
         @Test
         @DisplayName("Should invoke @PreDestroy on @RequestScoped beans when scope closes")
@@ -1099,7 +1100,7 @@ class InjectorImplUnitTest {
         }
 
         /**
-         * @SessionScoped with SessionScopeHandler - one instance per session
+         * SessionScoped with SessionScopeHandler - one instance per session
          */
         @Test
         @DisplayName("Should create one instance per session for @SessionScoped")
@@ -1138,7 +1139,7 @@ class InjectorImplUnitTest {
         }
 
         /**
-         * @SessionScoped cleanup with @PreDestroy
+         * SessionScoped cleanup with PreDestroy
          */
         @Test
         @DisplayName("Should invoke @PreDestroy on @SessionScoped beans when session closes")
@@ -1160,7 +1161,7 @@ class InjectorImplUnitTest {
         }
 
         /**
-         * @SessionScoped without session context should throw exception
+         * SessionScoped without session context should throw exception
          */
         @Test
         @DisplayName("Should throw exception when no session context is set for @SessionScoped")
@@ -1212,6 +1213,218 @@ class InjectorImplUnitTest {
             // Cleanup
             requestHandler.close();
             sessionHandler.close();
+        }
+
+        /**
+         * Concurrent singleton access stress test - validates thread safety of singleton scope
+         */
+        @Test
+        @DisplayName("Should handle concurrent singleton access without creating duplicate instances")
+        void shouldHandleConcurrentSingletonAccess() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            int threadCount = 100;
+            int injectionsPerThread = 100;
+            ConcurrentHashMap<SingletonScopedClass, Boolean> instancesMap = new ConcurrentHashMap<>();
+            Set<SingletonScopedClass> instances = Collections.newSetFromMap(instancesMap);
+            AtomicInteger successCount = new AtomicInteger(0);
+
+            // When - multiple threads concurrently request the same singleton
+            Thread[] threads = new Thread[threadCount];
+            for (int i = 0; i < threadCount; i++) {
+                threads[i] = new Thread(() -> {
+                    for (int j = 0; j < injectionsPerThread; j++) {
+                        try {
+                            SingletonScopedClass instance = sut.inject(SingletonScopedClass.class);
+                            instances.add(instance);
+                            successCount.incrementAndGet();
+                        } catch (Exception e) {
+                            fail("Injection should not fail: " + e.getMessage());
+                        }
+                    }
+                });
+                threads[i].start();
+            }
+
+            // Wait for all threads to complete
+            for (Thread thread : threads) {
+                thread.join();
+            }
+
+            // Then - only one instance should have been created
+            assertEquals(1, instances.size(), "Should only create one singleton instance");
+            assertEquals(threadCount * injectionsPerThread, successCount.get(),
+                "All injections should succeed");
+        }
+
+        /**
+         * Concurrent ApplicationScoped access stress test
+         */
+        @Test
+        @DisplayName("Should handle concurrent ApplicationScoped access without creating duplicate instances")
+        void shouldHandleConcurrentApplicationScopedAccess() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            int threadCount = 100;
+            int injectionsPerThread = 100;
+            ConcurrentHashMap<ApplicationScopedClass, Boolean> instancesMap = new ConcurrentHashMap<>();
+            Set<ApplicationScopedClass> instances = Collections.newSetFromMap(instancesMap);
+            AtomicInteger successCount = new AtomicInteger(0);
+
+            // When - multiple threads concurrently request the same ApplicationScoped bean
+            Thread[] threads = new Thread[threadCount];
+            for (int i = 0; i < threadCount; i++) {
+                threads[i] = new Thread(() -> {
+                    for (int j = 0; j < injectionsPerThread; j++) {
+                        try {
+                            ApplicationScopedClass instance = sut.inject(ApplicationScopedClass.class);
+                            instances.add(instance);
+                            successCount.incrementAndGet();
+                        } catch (Exception e) {
+                            fail("Injection should not fail: " + e.getMessage());
+                        }
+                    }
+                });
+                threads[i].start();
+            }
+
+            // Wait for all threads to complete
+            for (Thread thread : threads) {
+                thread.join();
+            }
+
+            // Then - only one instance should have been created
+            assertEquals(1, instances.size(), "Should only create one ApplicationScoped instance");
+            assertEquals(threadCount * injectionsPerThread, successCount.get(),
+                "All injections should succeed");
+        }
+
+        /**
+         * Concurrent RequestScoped access - each thread should get its own instance
+         */
+        @Test
+        @DisplayName("Should handle concurrent RequestScoped access with proper thread isolation")
+        void shouldHandleConcurrentRequestScopedAccess() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            RequestScopeHandler requestHandler = new RequestScopeHandler();
+            sut.registerScope(RequestScoped.class, requestHandler);
+
+            int threadCount = 50;
+            int injectionsPerThread = 100;
+            ConcurrentHashMap<Long, Set<RequestScopedClass>> instancesByThread = new ConcurrentHashMap<>();
+            AtomicInteger successCount = new AtomicInteger(0);
+
+            // When - multiple threads concurrently request RequestScoped beans
+            Thread[] threads = new Thread[threadCount];
+            for (int i = 0; i < threadCount; i++) {
+                threads[i] = new Thread(() -> {
+                    long threadId = Thread.currentThread().getId();
+                    ConcurrentHashMap<RequestScopedClass, Boolean> threadMap = new ConcurrentHashMap<>();
+                    instancesByThread.putIfAbsent(threadId,
+                        Collections.newSetFromMap(threadMap));
+
+                    for (int j = 0; j < injectionsPerThread; j++) {
+                        try {
+                            RequestScopedClass instance = sut.inject(RequestScopedClass.class);
+                            instancesByThread.get(threadId).add(instance);
+                            successCount.incrementAndGet();
+                        } catch (Exception e) {
+                            fail("Injection should not fail: " + e.getMessage());
+                        }
+                    }
+                });
+                threads[i].start();
+            }
+
+            // Wait for all threads to complete
+            for (Thread thread : threads) {
+                thread.join();
+            }
+
+            // Then - each thread should have exactly one instance
+            assertEquals(threadCount, instancesByThread.size(),
+                "Should have instances for all threads");
+            instancesByThread.forEach((threadId, instances) -> {
+                assertEquals(1, instances.size(),
+                    "Thread " + threadId + " should have exactly one RequestScoped instance");
+            });
+            assertEquals(threadCount * injectionsPerThread, successCount.get(),
+                "All injections should succeed");
+
+            // Cleanup
+            requestHandler.close();
+        }
+
+        /**
+         * Mixed concurrent access - stress test with multiple scope types
+         */
+        @Test
+        @DisplayName("Should handle concurrent mixed scope access correctly")
+        void shouldHandleConcurrentMixedScopeAccess() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            RequestScopeHandler requestHandler = new RequestScopeHandler();
+            sut.registerScope(RequestScoped.class, requestHandler);
+
+            int threadCount = 50;
+            int injectionsPerThread = 50;
+            ConcurrentHashMap<ApplicationScopedClass, Boolean> appMap = new ConcurrentHashMap<>();
+            Set<ApplicationScopedClass> appScopedInstances = Collections.newSetFromMap(appMap);
+            ConcurrentHashMap<SingletonScopedClass, Boolean> singletonMap = new ConcurrentHashMap<>();
+            Set<SingletonScopedClass> singletonInstances = Collections.newSetFromMap(singletonMap);
+            ConcurrentHashMap<Long, Set<RequestScopedClass>> requestScopedByThread = new ConcurrentHashMap<>();
+            AtomicInteger successCount = new AtomicInteger(0);
+
+            // When - threads inject beans of different scopes concurrently
+            Thread[] threads = new Thread[threadCount];
+            for (int i = 0; i < threadCount; i++) {
+                threads[i] = new Thread(() -> {
+                    long threadId = Thread.currentThread().getId();
+                    ConcurrentHashMap<RequestScopedClass, Boolean> threadMap = new ConcurrentHashMap<>();
+                    requestScopedByThread.putIfAbsent(threadId,
+                        Collections.newSetFromMap(threadMap));
+
+                    for (int j = 0; j < injectionsPerThread; j++) {
+                        try {
+                            // Inject different scope types
+                            ApplicationScopedClass appScoped = sut.inject(ApplicationScopedClass.class);
+                            SingletonScopedClass singleton = sut.inject(SingletonScopedClass.class);
+                            RequestScopedClass requestScoped = sut.inject(RequestScopedClass.class);
+
+                            appScopedInstances.add(appScoped);
+                            singletonInstances.add(singleton);
+                            requestScopedByThread.get(threadId).add(requestScoped);
+                            successCount.incrementAndGet();
+                        } catch (Exception e) {
+                            fail("Injection should not fail: " + e.getMessage());
+                        }
+                    }
+                });
+                threads[i].start();
+            }
+
+            // Wait for all threads to complete
+            for (Thread thread : threads) {
+                thread.join();
+            }
+
+            // Then - verify scope semantics
+            assertEquals(1, appScopedInstances.size(),
+                "Should only create one ApplicationScoped instance");
+            assertEquals(1, singletonInstances.size(),
+                "Should only create one Singleton instance");
+            assertEquals(threadCount, requestScopedByThread.size(),
+                "Should have RequestScoped instances for all threads");
+            requestScopedByThread.forEach((threadId, instances) -> {
+                assertEquals(1, instances.size(),
+                    "Each thread should have exactly one RequestScoped instance");
+            });
+            assertEquals(threadCount * injectionsPerThread, successCount.get(),
+                "All injections should succeed");
+
+            // Cleanup
+            requestHandler.close();
         }
     }
 

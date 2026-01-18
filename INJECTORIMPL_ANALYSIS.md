@@ -403,7 +403,7 @@ Cannot create factory methods for third-party classes
 | **Provider<T>** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Instance<T>** | ✅ | ⚠️ Partial | ⚠️ Partial | ✅ Full | ❌ |
 | **Qualifiers** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Scopes** | ⚠️ Custom | ✅ Multiple | ✅ Multiple | ✅ Multiple | ✅ Multiple |
+| **Scopes** | ✅ Multiple | ✅ Multiple | ✅ Multiple | ✅ Multiple | ✅ Multiple |
 | **AOP** | ❌ | ✅ | ✅ | ✅ | ❌ |
 | **Producer Methods** | ❌ | ✅ | ✅ | ✅ | ✅ |
 | **Events** | ❌ | ❌ | ✅ | ✅ | ❌ |
@@ -427,13 +427,13 @@ Cannot create factory methods for third-party classes
 - Full lifecycle management with @PreDestroy support
 - Comprehensive tests added and passing
 
-#### **3. Add Concurrency Tests** 🔴
-```java
-@Test
-void shouldHandleConcurrentSingletonAccess() {
-    // 100 threads × 1000 injections
-}
-```
+#### **3. Add Concurrency Tests** ✅ **COMPLETED**
+- Added 4 comprehensive concurrency stress tests (100 threads × 100 injections each)
+- Tests singleton thread safety under concurrent access
+- Tests ApplicationScoped thread safety
+- Tests RequestScoped thread isolation
+- Tests mixed scope access with concurrent threads
+- All tests pass successfully
 **Effort:** 2 days | **Impact:** HIGH
 
 #### **4. Add ClassLoader Cleanup** ✅ **COMPLETED**
@@ -443,10 +443,18 @@ void shouldHandleConcurrentSingletonAccess() {
 
 ### 6.2 Important Improvements (P1)
 
-#### **4. Lazy Classpath Scanning** 🟠
+#### **5. Document Scope Handler Examples** ✅ **COMPLETED**
+- Created comprehensive SCOPE_HANDLERS_GUIDE.md
+- Includes examples for all scope types
+- Web application integration guide
+- Custom scope handler creation
+- Best practices and anti-patterns
+**Effort:** 1 day | **Impact:** HIGH (usability)
+
+#### **6. Lazy Classpath Scanning** 🟠
 **Effort:** 3 days | **Impact:** MEDIUM (startup performance)
 
-#### **5. Specific Exception Types** 🟠
+#### **7. Specific Exception Types** 🟠
 ```java
 class CircularDependencyException extends InjectionException {}
 class UnsatisfiedResolutionException extends InjectionException {}
@@ -520,12 +528,14 @@ interface Module {
 2. ✅ @RequestScoped support with RequestScopeHandler - DONE
 3. ✅ @SessionScoped support with SessionScopeHandler - DONE
 4. ✅ ClassLoader cleanup in ClassResolver - DONE
-5. ✅ Comprehensive scope tests - DONE
+5. ✅ Comprehensive scope tests (17 tests) - DONE
+6. ✅ Concurrency stress tests (4 tests, 100 threads each) - DONE
+7. ✅ Scope handler documentation (SCOPE_HANDLERS_GUIDE.md) - DONE
 
 **Remaining Priority Actions:**
-1. Add concurrency stress tests (P0)
-2. Document scope handler examples (P1)
-3. Add performance benchmarks (P1)
+1. Add performance benchmarks (P1)
+2. Lazy classpath scanning optimization (P1)
+3. Specific exception types (P1)
 
 ---
 
