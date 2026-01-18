@@ -22,13 +22,13 @@
 - ✅ **Comprehensive lifecycle management** (@PostConstruct, @PreDestroy)
 - ✅ **Circular dependency detection** with detailed error messages
 - ✅ **Extensible scope system** with custom scope support
+- ✅ **Complete CDI scope support** (@ApplicationScoped, @RequestScoped, @SessionScoped, @ConversationScoped)
 
 ### Critical Gaps
 - ⚠️ **No interception/AOP** (Spring's @Transactional, @Cacheable, etc.)
 - ⚠️ **No method interceptors** (CDI's @Interceptor, @Decorator)
 - ⚠️ **No producer methods** (CDI's @Produces)
 - ⚠️ **No event system** (CDI's @Observes)
-- ⚠️ **Limited scope implementations** (only Singleton out-of-box)
 - ⚠️ **No bean validation integration** (JSR-380)
 
 ---
@@ -222,7 +222,7 @@ public class MyService {
 | **@ApplicationScoped** | ✅ **Complete** | Registered by default, uses SingletonScopeHandler |
 | **@RequestScoped** | ✅ **Complete** | Requires RequestScopeHandler registration |
 | **@SessionScoped** | ✅ **Complete** | Requires SessionScopeHandler registration |
-| **@ConversationScoped** | ❌ **Missing** | No conversation management |
+| **@ConversationScoped** | ✅ **Complete** | Requires ConversationScopeHandler registration |
 | **Portable Extensions** | ❌ **Missing** | No SPI for extensions |
 
 **Assessment:** CDI support is **limited to core DI features** (40% of full CDI spec).
@@ -552,12 +552,13 @@ interface Module {
 1. ✅ @ApplicationScoped support - DONE
 2. ✅ @RequestScoped support with RequestScopeHandler - DONE
 3. ✅ @SessionScoped support with SessionScopeHandler - DONE
-4. ✅ ClassLoader cleanup in ClassResolver - DONE
-5. ✅ Comprehensive scope tests (17 tests) - DONE
-6. ✅ Concurrency stress tests (4 tests, 100 threads each) - DONE
-7. ✅ Scope handler documentation (SCOPE_HANDLERS_GUIDE.md) - DONE
-8. ✅ Optional<T> injection support (JSR-330 pattern) - DONE
-9. ✅ Optional injection tests (7 comprehensive tests) - DONE
+4. ✅ @ConversationScoped support with ConversationScopeHandler - DONE
+5. ✅ ClassLoader cleanup in ClassResolver - DONE
+6. ✅ Comprehensive scope tests (21 tests) - DONE
+7. ✅ Concurrency stress tests (4 tests, 100 threads each) - DONE
+8. ✅ Scope handler documentation (SCOPE_HANDLERS_GUIDE.md) - DONE
+9. ✅ Optional<T> injection support (JSR-330 pattern) - DONE
+10. ✅ Optional injection tests (7 comprehensive tests) - DONE
 
 **Remaining Priority Actions:**
 1. Add performance benchmarks (P1)

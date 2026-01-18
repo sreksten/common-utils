@@ -211,11 +211,93 @@ assert prefs1 != prefs2; // Different instances per session
 
 ---
 
+### @ConversationScoped
+
+**Requires manual registration** - One instance per conversation ID.
+
+Conversations are longer-lived than requests but shorter than sessions, typically used for multi-step workflows (wizards, checkout processes, etc.).
+
+#### Step 1: Register the scope handler
+
+```java
+import com.threeamigos.common.util.implementations.injection.ConversationScopeHandler;
+import javax.enterprise.context.ConversationScoped;
+
+ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
+injector.registerScope(ConversationScoped.class, conversationHandler);
+```
+
+#### Step 2: Define conversation-scoped beans
+
+```java
+@ConversationScoped
+public class CheckoutWizard {
+    private Address shippingAddress;
+    private PaymentInfo paymentInfo;
+    private int currentStep = 1;
+
+    @PreDestroy
+    public void cleanup() {
+        System.out.println("Conversation ended");
+    }
+}
+```
+
+#### Step 3: Use with conversation management
+
+```java
+public void startCheckout(String userId) {
+    // Begin a new conversation
+    String conversationId = "checkout-" + userId + "-" + System.currentTimeMillis();
+    conversationHandler.beginConversation(conversationId);
+
+    // Get conversation-scoped bean
+    CheckoutWizard wizard = injector.inject(CheckoutWizard.class);
+    wizard.setCurrentStep(1);
+
+    // Store conversation ID in session for subsequent requests
+    httpSession.setAttribute("conversationId", conversationId);
+}
+
+public void continueCheckout(HttpServletRequest request) {
+    // Resume existing conversation
+    String conversationId = (String) request.getSession().getAttribute("conversationId");
+    conversationHandler.beginConversation(conversationId);
+
+    // Same wizard instance across multiple requests
+    CheckoutWizard wizard = injector.inject(CheckoutWizard.class);
+    wizard.setCurrentStep(wizard.getCurrentStep() + 1);
+}
+
+public void completeCheckout(HttpServletRequest request) {
+    String conversationId = (String) request.getSession().getAttribute("conversationId");
+
+    // End conversation - invokes @PreDestroy and cleans up
+    conversationHandler.endConversation(conversationId);
+    request.getSession().removeAttribute("conversationId");
+}
+```
+
+**Multi-conversation behavior:**
+```java
+// Conversation 1 (User A's checkout)
+conversationHandler.beginConversation("checkout-userA-123");
+CheckoutWizard wizardA = injector.inject(CheckoutWizard.class);
+
+// Conversation 2 (User B's checkout)
+conversationHandler.beginConversation("checkout-userB-456");
+CheckoutWizard wizardB = injector.inject(CheckoutWizard.class);
+
+assert wizardA != wizardB; // Different instances per conversation
+```
+
+---
+
 ## Custom Scope Handlers
 
-You can create custom scope handlers by implementing the `ScopeHandler` interface.
+You can create custom scope handlers for application-specific needs by implementing the `ScopeHandler` interface.
 
-### Example: ConversationScopeHandler
+### Example: Custom TenantScopeHandler
 
 ```java
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
@@ -223,46 +305,33 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-public class ConversationScopeHandler implements ScopeHandler {
-    private final Map<String, Map<Class<?>, Object>> conversations = new ConcurrentHashMap<>();
-    private final ThreadLocal<String> currentConversation = new ThreadLocal<>();
+public class TenantScopeHandler implements ScopeHandler {
+    private final Map<String, Map<Class<?>, Object>> tenants = new ConcurrentHashMap<>();
+    private final ThreadLocal<String> currentTenant = new ThreadLocal<>();
 
-    public void beginConversation(String conversationId) {
-        currentConversation.set(conversationId);
-        conversations.putIfAbsent(conversationId, new ConcurrentHashMap<>());
-    }
-
-    public void endConversation(String conversationId) {
-        Map<Class<?>, Object> beans = conversations.remove(conversationId);
-        if (beans != null) {
-            // Cleanup beans
-            beans.values().forEach(this::destroyBean);
-        }
+    public void setCurrentTenant(String tenantId) {
+        currentTenant.set(tenantId);
+        tenants.putIfAbsent(tenantId, new ConcurrentHashMap<>());
     }
 
     @Override
     public <T> T get(Class<T> clazz, Supplier<T> provider) {
-        String convId = currentConversation.get();
-        if (convId == null) {
-            throw new IllegalStateException("No active conversation");
+        String tenantId = currentTenant.get();
+        if (tenantId == null) {
+            throw new IllegalStateException("No tenant context set");
         }
 
-        Map<Class<?>, Object> beans = conversations.get(convId);
+        Map<Class<?>, Object> beans = tenants.get(tenantId);
         return (T) beans.computeIfAbsent(clazz, k -> provider.get());
     }
 
     @Override
     public void close() throws Exception {
-        String convId = currentConversation.get();
-        if (convId != null) {
-            endConversation(convId);
-            currentConversation.remove();
+        String tenantId = currentTenant.get();
+        if (tenantId != null) {
+            tenants.remove(tenantId);
+            currentTenant.remove();
         }
-    }
-
-    private void destroyBean(Object bean) {
-        // Invoke @PreDestroy if present
-        // (implementation omitted for brevity)
     }
 }
 ```
@@ -273,24 +342,22 @@ public class ConversationScopeHandler implements ScopeHandler {
 @Scope
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD})
-public @interface ConversationScoped {}
+public @interface TenantScoped {}
 
 // Register
-ConversationScopeHandler convHandler = new ConversationScopeHandler();
-injector.registerScope(ConversationScoped.class, convHandler);
+TenantScopeHandler tenantHandler = new TenantScopeHandler();
+injector.registerScope(TenantScoped.class, tenantHandler);
 
 // Use
-@ConversationScoped
-public class WizardState {
-    private int currentStep = 0;
+@TenantScoped
+public class TenantConfiguration {
+    private String databaseUrl;
+    private String theme;
 }
 
 // In application
-convHandler.beginConversation("wizard-001");
-WizardState state = injector.inject(WizardState.class);
-state.setCurrentStep(2);
-// ... multi-request conversation ...
-convHandler.endConversation("wizard-001");
+tenantHandler.setCurrentTenant("tenant-acme");
+TenantConfiguration config = injector.inject(TenantConfiguration.class);
 ```
 
 ---
@@ -379,7 +446,8 @@ public class UserController {
 - **@Singleton/@ApplicationScoped**: Stateless services, database connections, configuration
 - **@RequestScoped**: Request-specific data, temporary state, HTTP request context
 - **@SessionScoped**: User-specific state, shopping carts, user preferences
-- **Custom scopes**: Special lifecycle requirements (conversations, transactions, etc.)
+- **@ConversationScoped**: Multi-step workflows, wizards, checkout processes
+- **Custom scopes**: Special lifecycle requirements (tenant isolation, transactions, etc.)
 
 ### 2. **Cleanup**
 
@@ -494,6 +562,7 @@ void testRequestScoped() {
 | @ApplicationScoped | Automatic | Application | Thread-safe | CDI compatibility |
 | @RequestScoped | Manual | Per thread | Thread-confined | HTTP requests |
 | @SessionScoped | Manual | Per session ID | Requires care | User state |
+| @ConversationScoped | Manual | Per conversation ID | Requires care | Multi-step workflows |
 | Custom | Manual | Custom | Depends | Special needs |
 
 For more details, see the [InjectorImpl Javadoc](src/main/java/com/threeamigos/common/util/implementations/injection/InjectorImpl.java).

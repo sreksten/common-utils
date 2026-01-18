@@ -1183,6 +1183,119 @@ class InjectorImplUnitTest {
         }
 
         /**
+         * ConversationScoped with ConversationScopeHandler - one instance per conversation
+         */
+        @Test
+        @DisplayName("Should create one instance per conversation for @ConversationScoped")
+        void shouldCreateOneInstancePerConversationForConversationScoped() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
+            sut.registerScope(javax.enterprise.context.ConversationScoped.class, conversationHandler);
+
+            // When - conversation 1
+            conversationHandler.beginConversation("conversation-1");
+            ConversationScopedClass conv1Instance1 = sut.inject(ConversationScopedClass.class);
+            ConversationScopedClass conv1Instance2 = sut.inject(ConversationScopedClass.class);
+
+            // Then - same instance within conversation
+            assertSame(conv1Instance1, conv1Instance2,
+                "Should return same instance within same conversation");
+            assertEquals(conv1Instance1.getInstanceId(), conv1Instance2.getInstanceId(),
+                "IDs should match within conversation");
+
+            // When - conversation 2
+            conversationHandler.beginConversation("conversation-2");
+            ConversationScopedClass conv2Instance = sut.inject(ConversationScopedClass.class);
+
+            // Then - different instance in different conversation
+            assertNotSame(conv1Instance1, conv2Instance,
+                "Should create different instance in different conversation");
+            assertNotEquals(conv1Instance1.getInstanceId(), conv2Instance.getInstanceId(),
+                "IDs should differ across conversations");
+
+            // Cleanup
+            conversationHandler.endConversation("conversation-1");
+            conversationHandler.endConversation("conversation-2");
+        }
+
+        /**
+         * ConversationScoped cleanup with PreDestroy
+         */
+        @Test
+        @DisplayName("Should invoke @PreDestroy on @ConversationScoped beans when conversation ends")
+        void shouldInvokePreDestroyOnConversationScopedBeans() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
+            sut.registerScope(javax.enterprise.context.ConversationScoped.class, conversationHandler);
+
+            conversationHandler.beginConversation("test-conversation");
+            ConversationScopedWithPreDestroy instance = sut.inject(ConversationScopedWithPreDestroy.class);
+            assertFalse(instance.isPreDestroyCalled(), "Should not be destroyed initially");
+
+            // When
+            conversationHandler.endConversation("test-conversation");
+
+            // Then
+            assertTrue(instance.isPreDestroyCalled(), "@PreDestroy should have been called");
+        }
+
+        /**
+         * ConversationScoped without conversation context should throw exception
+         */
+        @Test
+        @DisplayName("Should throw exception when no conversation context is set for @ConversationScoped")
+        void shouldThrowExceptionWhenNoConversationContextForConversationScoped() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
+            sut.registerScope(javax.enterprise.context.ConversationScoped.class, conversationHandler);
+
+            // When/Then - no conversation set
+            // The IllegalStateException is wrapped in InjectionException
+            InjectionException thrown = assertThrows(InjectionException.class, () -> sut.inject(ConversationScopedClass.class), "Should throw InjectionException when no conversation context");
+
+            // Verify the cause is IllegalStateException
+            assertInstanceOf(IllegalStateException.class, thrown.getCause(), "Cause should be IllegalStateException");
+            assertTrue(thrown.getCause().getMessage().contains("No active conversation"),
+                "Should mention no active conversation");
+        }
+
+        /**
+         * ConversationScoped with multiple conversations in different threads
+         */
+        @Test
+        @DisplayName("Should isolate conversations across threads")
+        void shouldIsolateConversationsAcrossThreads() throws Exception {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
+            sut.registerScope(javax.enterprise.context.ConversationScoped.class, conversationHandler);
+
+            // When - main thread conversation
+            conversationHandler.beginConversation("main-conversation");
+            ConversationScopedClass mainInstance = sut.inject(ConversationScopedClass.class);
+
+            // When - other thread conversation
+            Holder<ConversationScopedClass> otherThreadInstance = new Holder<>();
+            Thread thread = new Thread(() -> {
+                conversationHandler.beginConversation("other-conversation");
+                otherThreadInstance.set(sut.inject(ConversationScopedClass.class));
+                conversationHandler.endConversation("other-conversation");
+            });
+            thread.start();
+            thread.join();
+
+            // Then - different instances in different conversations
+            assertNotSame(mainInstance, otherThreadInstance.get(),
+                "Should create different instance in different conversation");
+
+            // Cleanup
+            conversationHandler.endConversation("main-conversation");
+        }
+
+        /**
          * Multiple scopes working together
          */
         @Test

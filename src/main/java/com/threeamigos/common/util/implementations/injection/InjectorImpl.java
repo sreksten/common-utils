@@ -96,7 +96,7 @@ import java.util.stream.Collectors;
  * to provide context-specific scope handlers that match their runtime environment:</p>
  *
  * <pre>{@code
- * // For web applications - register request and session scopes
+ * // For web applications - register request, session, and conversation scopes
  * InjectorImpl injector = new InjectorImpl("com.myapp");
  *
  * // RequestScoped: One instance per thread (HTTP request)
@@ -106,16 +106,22 @@ import java.util.stream.Collectors;
  * SessionScopeHandler sessionHandler = new SessionScopeHandler();
  * injector.registerScope(SessionScoped.class, sessionHandler);
  *
+ * // ConversationScoped: One instance per conversation ID
+ * ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
+ * injector.registerScope(ConversationScoped.class, conversationHandler);
+ *
  * // In request processing:
  * sessionHandler.setCurrentSession(httpRequest.getSessionId());
+ * conversationHandler.beginConversation(conversationId);
  * MyBean bean = injector.inject(MyBean.class);
  * // ... use bean ...
- * sessionHandler.close(); // Cleanup when request ends
+ * conversationHandler.endConversation(conversationId); // Cleanup when conversation ends
+ * sessionHandler.close(); // Cleanup when session ends
  * }</pre>
  *
- * <p><b>Why manual registration?</b> Request and session scopes are context-dependent and vary by
- * application type (web apps use HTTP sessions, desktop apps might use user sessions, etc.). Manual
- * registration gives applications full control over scope lifecycle and context management.</p>
+ * <p><b>Why manual registration?</b> Request, session, and conversation scopes are context-dependent
+ * and vary by application type (web apps use HTTP sessions, desktop apps might use user sessions, etc.).
+ * Manual registration gives applications full control over scope lifecycle and context management.</p>
  *
  * <p>All scopes are automatically closed during JVM shutdown via a registered shutdown hook.</p>
  *
@@ -527,7 +533,8 @@ public class InjectorImpl implements Injector {
                         || at.equals(Singleton.class)
                         || at.equals(ApplicationScoped.class)
                         || at.equals(RequestScoped.class)
-                        || at.equals(javax.enterprise.context.SessionScoped.class))
+                        || at.equals(javax.enterprise.context.SessionScoped.class)
+                        || at.equals(javax.enterprise.context.ConversationScoped.class))
                 .findFirst()
                 .orElse(null);
     }
