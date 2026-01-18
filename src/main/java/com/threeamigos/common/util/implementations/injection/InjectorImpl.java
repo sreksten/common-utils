@@ -56,6 +56,24 @@ import java.util.stream.Collectors;
  *       All method parameters are resolved and injected. Static methods are supported.</li>
  * </ul>
  *
+ * <h2>Optional Dependencies:</h2>
+ * <p>JSR-330's {@code @Inject} annotation does not have a {@code required} attribute (unlike Spring's
+ * {@code @Autowired}). To support optional dependencies, wrap the type in {@code java.util.Optional<T>}:</p>
+ *
+ * <pre>{@code
+ * public class MyService {
+ *     @Inject
+ *     private Optional<CacheService> cache;  // Optional - may be empty
+ *
+ *     public void doWork() {
+ *         cache.ifPresent(c -> c.cache(data));  // Only use if available
+ *     }
+ * }
+ * }</pre>
+ *
+ * <p>If the dependency cannot be resolved, {@code Optional.empty()} is injected instead of throwing
+ * an exception. This works for constructor, field, and method injection.</p>
+ *
  * <h2>Lifecycle Management:</h2>
  * <ol>
  *   <li>Constructor is invoked with injected dependencies</li>
@@ -416,16 +434,42 @@ public class InjectorImpl implements Injector {
      * Validates the type, detects circular dependencies, resolves the implementation,
      * applies scope handling, and performs the actual injection.
      *
+     * <p><b>Optional Dependency Support:</b> If the type is {@code Optional<T>}, this method
+     * will attempt to inject {@code T}. If {@code T} cannot be resolved, an empty {@code Optional}
+     * is returned instead of throwing an exception. This provides JSR-330 compliant optional
+     * dependency injection without requiring a {@code required} attribute on {@code @Inject}.
+     *
      * @param <T> the type to inject
-     * @param typeToInject the type to resolve and inject (can be generic)
+     * @param typeToInject the type to resolve and inject (can be generic, including Optional&lt;T&gt;)
      * @param stack dependency resolution stack for circular dependency detection
      * @param qualifiers optional qualifiers to disambiguate implementations
-     * @return fully injected instance
-     * @throws InjectionException if injection fails for any reason
+     * @return fully injected instance, or {@code Optional.empty()} if type is Optional and dependency not found
+     * @throws InjectionException if injection fails for any reason (except for Optional types)
      * @see #checkClassValidity(Type)
      * @see #performInjection(Type, Class, Stack)
+     * @see java.util.Optional
      */
     private <T> T inject(@NonNull Type typeToInject, Stack<Type> stack, Collection<Annotation> qualifiers) {
+        // Handle Optional<T> injection - JSR-330 optional dependency pattern
+        if (typeToInject instanceof ParameterizedType) {
+            ParameterizedType pt = (ParameterizedType) typeToInject;
+            if (Optional.class.equals(pt.getRawType())) {
+                Type innerType = pt.getActualTypeArguments()[0];
+                try {
+                    // Try to inject the inner type
+                    T instance = inject(innerType, stack, qualifiers);
+                    @SuppressWarnings("unchecked")
+                    T result = (T) Optional.of(instance);
+                    return result;
+                } catch (InjectionException e) {
+                    // Dependency not found - return empty Optional (this is expected behavior)
+                    @SuppressWarnings("unchecked")
+                    T result = (T) Optional.empty();
+                    return result;
+                }
+            }
+        }
+
         if (stack.contains(typeToInject)) {
             stack.add(typeToInject);
             throw new InjectionException("Circular dependency detected for class " +

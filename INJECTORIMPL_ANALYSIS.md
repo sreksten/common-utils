@@ -156,7 +156,7 @@ InjectorImpl (Core Orchestrator)
 | **@Named** | ✅ **Complete** | String-based qualifiers |
 | **@Qualifier** | ✅ **Complete** | Custom qualifier support |
 | **Provider<T>** | ✅ **Complete** | Lazy instantiation, circular dep breaking |
-| **Optional Injection** | ❌ **Missing** | No support for optional dependencies |
+| **Optional Injection** | ✅ **Complete** | Via `Optional<T>` wrapper (JSR-330 pattern) |
 
 **JSR-330 TCK Results:** ✅ **PASSING**
 ```java
@@ -168,6 +168,31 @@ Stream<DynamicTest> tck() {
 }
 ```
 The official JSR-330 Technology Compatibility Kit test suite passes completely.
+
+**Optional Dependency Support:**
+JSR-330's `@Inject` annotation does not have a `required` attribute (unlike Spring's `@Autowired(required=false)`). InjectorImpl supports optional dependencies via Java 8's `Optional<T>` wrapper:
+
+```java
+public class MyService {
+    @Inject
+    private Optional<CacheService> cache;  // Optional dependency
+
+    @Inject
+    public MyService(Optional<FeatureFlag> flag) {  // Constructor
+        this.featureEnabled = flag.isPresent() && flag.get().isEnabled();
+    }
+
+    public void doWork() {
+        cache.ifPresent(c -> c.cache(data));  // Use only if available
+    }
+}
+```
+
+**Behavior:**
+- If dependency exists: `Optional.of(dependency)` is injected
+- If dependency missing: `Optional.empty()` is injected (no exception)
+- Works with: field, constructor, and method injection
+- Works with: all scopes (singleton, request, session, etc.)
 
 ### 2.2 JSR-250 Implementation (javax.annotation)
 
@@ -511,9 +536,9 @@ interface Module {
 | **Error Diagnostics** | A |
 | **Test Coverage** | A |
 | **Documentation** | A+ |
-| **Production Features** | B- |
+| **Production Features** | A- |
 
-**Overall Grade: 9.0/10 (A)**
+**Overall Grade: 9.2/10 (A)**
 
 ### 7.3 Recommendation Summary
 
@@ -531,6 +556,8 @@ interface Module {
 5. ✅ Comprehensive scope tests (17 tests) - DONE
 6. ✅ Concurrency stress tests (4 tests, 100 threads each) - DONE
 7. ✅ Scope handler documentation (SCOPE_HANDLERS_GUIDE.md) - DONE
+8. ✅ Optional<T> injection support (JSR-330 pattern) - DONE
+9. ✅ Optional injection tests (7 comprehensive tests) - DONE
 
 **Remaining Priority Actions:**
 1. Add performance benchmarks (P1)

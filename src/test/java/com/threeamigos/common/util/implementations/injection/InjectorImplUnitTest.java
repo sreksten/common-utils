@@ -28,6 +28,7 @@ import com.threeamigos.common.util.implementations.injection.methods.ClassWithMe
 import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithValidParameters;
 import com.threeamigos.common.util.implementations.injection.methods.FirstMethodParameter;
 import com.threeamigos.common.util.implementations.injection.methods.SecondMethodParameter;
+import com.threeamigos.common.util.implementations.injection.optional.*;
 import com.threeamigos.common.util.implementations.injection.parameters.TestClassWithInvalidParametersInConstructor;
 import com.threeamigos.common.util.implementations.injection.scopes.*;
 import com.threeamigos.common.util.implementations.injection.superclasses.MyClass;
@@ -1104,7 +1105,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should create one instance per session for @SessionScoped")
-        void shouldCreateOneInstancePerSessionForSessionScoped() throws Exception {
+        void shouldCreateOneInstancePerSessionForSessionScoped() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             SessionScopeHandler sessionHandler = new SessionScopeHandler();
@@ -1143,7 +1144,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should invoke @PreDestroy on @SessionScoped beans when session closes")
-        void shouldInvokePreDestroyOnSessionScopedBeans() throws Exception {
+        void shouldInvokePreDestroyOnSessionScopedBeans() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             SessionScopeHandler sessionHandler = new SessionScopeHandler();
@@ -1186,7 +1187,7 @@ class InjectorImplUnitTest {
          */
         @Test
         @DisplayName("Should handle multiple different scopes correctly")
-        void shouldHandleMultipleScopesCorrectly() throws Exception {
+        void shouldHandleMultipleScopesCorrectly() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             RequestScopeHandler requestHandler = new RequestScopeHandler();
@@ -1345,10 +1346,8 @@ class InjectorImplUnitTest {
             // Then - each thread should have exactly one instance
             assertEquals(threadCount, instancesByThread.size(),
                 "Should have instances for all threads");
-            instancesByThread.forEach((threadId, instances) -> {
-                assertEquals(1, instances.size(),
-                    "Thread " + threadId + " should have exactly one RequestScoped instance");
-            });
+            instancesByThread.forEach((threadId, instances) -> assertEquals(1, instances.size(),
+                "Thread " + threadId + " should have exactly one RequestScoped instance"));
             assertEquals(threadCount * injectionsPerThread, successCount.get(),
                 "All injections should succeed");
 
@@ -1416,15 +1415,133 @@ class InjectorImplUnitTest {
                 "Should only create one Singleton instance");
             assertEquals(threadCount, requestScopedByThread.size(),
                 "Should have RequestScoped instances for all threads");
-            requestScopedByThread.forEach((threadId, instances) -> {
-                assertEquals(1, instances.size(),
-                    "Each thread should have exactly one RequestScoped instance");
-            });
+            requestScopedByThread.forEach((threadId, instances) -> assertEquals(1, instances.size(),
+                "Each thread should have exactly one RequestScoped instance"));
             assertEquals(threadCount * injectionsPerThread, successCount.get(),
                 "All injections should succeed");
 
             // Cleanup
             requestHandler.close();
+        }
+    }
+
+    /**
+     * Tests for Optional injection support (JSR-330 optional dependency pattern).
+     */
+    @Nested
+    @DisplayName("Optional Injection Tests")
+    class OptionalInjectionTests {
+
+        @Test
+        @DisplayName("Should inject Optional.of() when dependency exists - field injection")
+        void shouldInjectOptionalOfWhenDependencyExistsFieldInjection() {
+            // Given
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            // When
+            ClassWithOptionalFieldInjection instance = sut.inject(ClassWithOptionalFieldInjection.class);
+            // Then
+            assertNotNull(instance.getOptionalService(), "Optional field should not be null");
+            assertTrue(instance.getOptionalService().isPresent(),
+                "Optional should be present when dependency exists");
+            assertEquals("OptionalService is present",
+                instance.getOptionalService().get().getValue());
+        }
+
+        @Test
+        @DisplayName("Should inject Optional.empty() when dependency missing - field injection")
+        void shouldInjectOptionalEmptyWhenDependencyMissingFieldInjection() {
+            // Given
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            // When
+            ClassWithOptionalFieldInjection instance = sut.inject(ClassWithOptionalFieldInjection.class);
+            // Then
+            assertNotNull(instance.getNonExistentService(), "Optional field should not be null");
+            assertFalse(instance.getNonExistentService().isPresent(),
+                "Optional should be empty when dependency does not exist");
+        }
+
+        @Test
+        @DisplayName("Should inject Optional dependencies via constructor")
+        void shouldInjectOptionalDependenciesViaConstructor() {
+            // Given
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            // When
+            ClassWithOptionalConstructorInjection instance =
+                sut.inject(ClassWithOptionalConstructorInjection.class);
+            // Then
+            assertNotNull(instance.getOptionalService(), "Optional should not be null");
+            assertTrue(instance.getOptionalService().isPresent(),
+                "Optional should be present when dependency exists");
+            assertNotNull(instance.getNonExistentService(), "Optional should not be null");
+            assertFalse(instance.getNonExistentService().isPresent(),
+                "Optional should be empty when dependency does not exist");
+        }
+
+        @Test
+        @DisplayName("Should inject Optional dependencies via method injection")
+        void shouldInjectOptionalDependenciesViaMethodInjection() {
+            // Given
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            // When
+            ClassWithOptionalMethodInjection instance =
+                sut.inject(ClassWithOptionalMethodInjection.class);
+            // Then
+            assertNotNull(instance.getOptionalService(), "Optional should not be null");
+            assertTrue(instance.getOptionalService().isPresent(),
+                "Optional should be present when dependency exists");
+            assertNotNull(instance.getNonExistentService(), "Optional should not be null");
+            assertFalse(instance.getNonExistentService().isPresent(),
+                "Optional should be empty when dependency does not exist");
+        }
+
+        @Test
+        @DisplayName("Should allow Optional of singleton to be injected")
+        void shouldAllowOptionalOfSingletonToBeInjected() {
+            // Given
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.scopes");
+            // When
+            Optional<SingletonScopedClass> optional1 =
+                sut.inject(new TypeLiteral<Optional<SingletonScopedClass>>() {});
+            Optional<SingletonScopedClass> optional2 =
+                sut.inject(new TypeLiteral<Optional<SingletonScopedClass>>() {});
+            // Then
+            assertTrue(optional1.isPresent(), "Optional should contain singleton");
+            assertTrue(optional2.isPresent(), "Optional should contain singleton");
+            assertSame(optional1.get(), optional2.get(),
+                "Should be same singleton instance inside Optional");
+        }
+
+        @Test
+        @DisplayName("Should inject empty Optional for non-existent interface")
+        void shouldInjectEmptyOptionalForNonExistentInterface() {
+            // Given
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            // When
+            Optional<NonExistentService> optional =
+                sut.inject(new TypeLiteral<Optional<NonExistentService>>() {});
+            // Then
+            assertNotNull(optional, "Optional should not be null");
+            assertFalse(optional.isPresent(),
+                "Optional should be empty when no implementation exists");
+        }
+
+        @Test
+        @DisplayName("Should handle multiple Optional injections consistently")
+        void shouldHandleMultipleOptionalInjectionsConsistently() {
+            // Given
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            // When - inject same Optional type multiple times
+            Optional<OptionalService> optional1 =
+                sut.inject(new TypeLiteral<Optional<OptionalService>>() {});
+            Optional<OptionalService> optional2 =
+                sut.inject(new TypeLiteral<Optional<OptionalService>>() {});
+            // Then
+            assertTrue(optional1.isPresent(), "First Optional should contain service");
+            assertTrue(optional2.isPresent(), "Second Optional should contain service");
+            // Note: The service instances may be different (not singleton),
+            // but both Optionals should contain a value
+            assertEquals(optional1.get().getValue(), optional2.get().getValue(),
+                "Both should have same getValue() result");
         }
     }
 
