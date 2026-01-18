@@ -7,6 +7,7 @@ import com.threeamigos.common.util.implementations.injection.abstractclasses.mul
 import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.subpackage.MultipleConcreteClassesNamed3;
 import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesAlternativeImplementation1;
+import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesAlternativeImplementation2;
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesInterface;
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesStandardImplementation;
 import com.threeamigos.common.util.implementations.injection.bind.*;
@@ -38,6 +39,7 @@ import java.util.stream.Stream;
 
 import javax.enterprise.inject.AmbiguousResolutionException;
 import javax.enterprise.inject.Any;
+import javax.enterprise.inject.ResolutionException;
 import javax.enterprise.inject.UnsatisfiedResolutionException;
 import javax.inject.Named;
 
@@ -93,7 +95,7 @@ class ClassResolverUnitTest {
             @ParameterizedTest
             @DisplayName("A class bound with no qualifiers should be resolved with target class when resolving with no qualifiers")
             @MethodSource("com.threeamigos.common.util.implementations.injection.ClassResolverUnitTest#noQualifiers")
-            void classWithNoQualifierShouldResolveWithNoQualifier(Collection<Annotation> noQualifier) throws Exception {
+            void classWithNoQualifierShouldResolveWithNoQualifier(Collection<Annotation> noQualifier) {
                 //Given
                 sut.bind(ClassToBind.class, noQualifier, TargetClass.class);
                 // When
@@ -123,7 +125,7 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("A class bound with qualifiers should be resolved with target class when resolving with correct qualifiers")
-            void classWithQualifierShouldResolveWithQualifier() throws Exception {
+            void classWithQualifierShouldResolveWithQualifier() {
                 //Given
                 sut.bind(ClassToBind.class, qualifier, TargetClass.class);
                 // When
@@ -133,7 +135,7 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("A class bound with qualifier should not be resolved when resolving with non-matching qualifiers")
-            void classWithQualifierShouldResolveWithNonMatchingQualifier() throws Exception {
+            void classWithQualifierShouldResolveWithNonMatchingQualifier() {
                 //Given
                 sut.bind(ClassToBind.class, qualifier, TargetClass.class);
                 // When
@@ -148,7 +150,7 @@ class ClassResolverUnitTest {
             @ParameterizedTest
             @DisplayName("An interface bound with no qualifiers should be resolved with target implementation when resolving with no qualifiers")
             @MethodSource("com.threeamigos.common.util.implementations.injection.ClassResolverUnitTest#noQualifiers")
-            void interfaceWithNoQualifierShouldResolveWithNoQualifier(Collection<Annotation> noQualifier) throws Exception {
+            void interfaceWithNoQualifierShouldResolveWithNoQualifier(Collection<Annotation> noQualifier) {
                 //Given
                 sut.bind(InterfaceToBind.class, noQualifier, TargetImplementation.class);
                 // When
@@ -178,7 +180,7 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("An interface bound with qualifiers should be resolved with target implementation when resolving with correct qualifiers")
-            void interfaceWithQualifierShouldResolveWithQualifier() throws Exception {
+            void interfaceWithQualifierShouldResolveWithQualifier() {
                 //Given
                 sut.bind(InterfaceToBind.class, qualifier, TargetImplementation.class);
                 // When
@@ -188,7 +190,7 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("An interface bound with qualifier should not be resolved when resolving with non-matching qualifiers")
-            void classWithQualifierShouldResolveWithNonMatchingQualifier() throws Exception {
+            void classWithQualifierShouldResolveWithNonMatchingQualifier() {
                 //Given
                 sut.bind(InterfaceToBind.class, qualifier, TargetImplementation.class);
                 // When
@@ -203,7 +205,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("If no alternatives are enabled should return the default class")
-        void shouldReturnTheDefaultClass() throws Exception{
+        void shouldReturnTheDefaultClass() {
             // When
             Class<?> clazz = sut.resolveImplementation(AlternativesInterface.class, null);
             // Then
@@ -212,7 +214,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("If alternatives are enabled should return the alternative class with no qualifiers")
-        void shouldReturnTheAlternativeClassWithNoQualifiers() throws Exception{
+        void shouldReturnTheAlternativeClassWithNoQualifiers() {
             // Given
             sut.enableAlternative(AlternativesAlternativeImplementation1.class);
             // When
@@ -223,13 +225,56 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("If alternatives are enabled should return the alternative class with any qualifiers")
-        void shouldReturnTheAlternativeClassWithAnyQualifiers() throws Exception{
+        void shouldReturnTheAlternativeClassWithAnyQualifiers() {
             // Given
             sut.enableAlternative(AlternativesAlternativeImplementation1.class);
             // When
             Class<?> clazz = sut.resolveImplementation(AlternativesInterface.class, qualifier);
             // Then
             assertEquals(AlternativesAlternativeImplementation1.class, clazz);
+        }
+
+        @Test
+        @DisplayName("Enabled alternatives should take precedence over custom bindings")
+        void alternativesShouldTakePrecedenceOverBindings() {
+            // Given - bind AlternativesStandardImplementation
+            sut.bind(AlternativesInterface.class, Collections.emptyList(), AlternativesStandardImplementation.class);
+            // And enable alternative
+            sut.enableAlternative(AlternativesAlternativeImplementation1.class);
+
+            // When
+            Class<?> clazz = sut.resolveImplementation(AlternativesInterface.class, null);
+
+            // Then - alternative should win over binding
+            assertEquals(AlternativesAlternativeImplementation1.class, clazz);
+        }
+
+        @Test
+        @DisplayName("Enabled alternatives should override bindings even with matching qualifiers")
+        void alternativesShouldOverrideBindingsWithQualifiers() {
+            // Given - bind with qualifier
+            sut.bind(AlternativesInterface.class, qualifier, AlternativesStandardImplementation.class);
+            // And enable alternative
+            sut.enableAlternative(AlternativesAlternativeImplementation1.class);
+
+            // When - resolve with same qualifier
+            Class<?> clazz = sut.resolveImplementation(AlternativesInterface.class, qualifier);
+
+            // Then - alternative should win, ignoring the binding
+            assertEquals(AlternativesAlternativeImplementation1.class, clazz);
+        }
+
+        @Test
+        @DisplayName("Bindings should be used when no alternatives are enabled")
+        void bindingsShouldBeUsedWhenNoAlternativesEnabled() {
+            // Given - only bind, no alternative enabled
+            sut.bind(AlternativesInterface.class, Collections.emptyList(), AlternativesStandardImplementation.class);
+
+            // When
+            Class<?> clazz = sut.resolveImplementation(AlternativesInterface.class, null);
+
+            // Then - binding should be used
+            assertEquals(AlternativesStandardImplementation.class, clazz);
         }
     }
 
@@ -243,7 +288,7 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("resolveImplementation should return the concrete class itself")
-            void resolveImplementation() throws Exception {
+            void resolveImplementation() {
                 // When
                 Class<?> resolved = sut.resolveImplementation(SingleImplementationConcreteClass.class, null);
                 // Then
@@ -252,7 +297,7 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("resolveImplementations should return the concrete class itself")
-            void resolveImplementations() throws Exception {
+            void resolveImplementations() {
                 // When
                 Collection<Class<?>> resolved = sut.resolveImplementations(SingleImplementationConcreteClass.class);
                 // Then
@@ -273,7 +318,7 @@ class ClassResolverUnitTest {
          */
         @Test
         @DisplayName("Should resolve an abstract class with a single standard implementation")
-        void shouldResolveAnAbstractClassWithStandardImplementation() throws Exception {
+        void shouldResolveAnAbstractClassWithStandardImplementation() {
             // When
             Class<?> resolved = sut.resolveImplementation(SingleImplementationAbstractClass.class, null);
             // Then
@@ -286,7 +331,7 @@ class ClassResolverUnitTest {
          */
         @Test
         @DisplayName("Should resolve an abstract class with multiple implementations with standard implementation")
-        void shouldResolveInterfaceWithStandardImplementation() throws Exception {
+        void shouldResolveInterfaceWithStandardImplementation() {
             // When
             Class<?> resolved = sut.resolveImplementation(MultipleConcreteClassesAbstractClass.class, null);
             // Then
@@ -299,7 +344,7 @@ class ClassResolverUnitTest {
          */
         @Test
         @DisplayName("Should resolve a class with specified named implementation")
-        void shouldResolveClassWithSpecifiedNamedImplementation() throws Exception {
+        void shouldResolveClassWithSpecifiedNamedImplementation() {
             // Given
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("name1"));
             // When
@@ -337,7 +382,7 @@ class ClassResolverUnitTest {
          */
         @Test
         @DisplayName("Should return all concrete classes for a given abstract class")
-        void shouldReturnAllConcreteClassesForAGivenAbstractClass() throws Exception {
+        void shouldReturnAllConcreteClassesForAGivenAbstractClass() {
             // Given
             Collection<Class<? extends MultipleConcreteClassesAbstractClass>> expected = new ArrayList<>();
             expected.add(MultipleConcreteClassesStandardClass.class);
@@ -369,7 +414,7 @@ class ClassResolverUnitTest {
          */
         @Test
         @DisplayName("Should resolve an interface with a single standard implementation")
-        void shouldResolveInterfaceWithSingleStandardImplementation() throws Exception {
+        void shouldResolveInterfaceWithSingleStandardImplementation() {
             // When
             Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, null);
             // Then
@@ -382,7 +427,7 @@ class ClassResolverUnitTest {
          */
         @Test
         @DisplayName("Should resolve an interface with multiple implementations with standard implementation")
-        void shouldResolveInterfaceWithStandardImplementation() throws Exception {
+        void shouldResolveInterfaceWithStandardImplementation() {
             // When
             Class<?> resolved = sut.resolveImplementation(MultipleImplementationsInterface.class, null);
             // Then
@@ -395,7 +440,7 @@ class ClassResolverUnitTest {
          */
         @Test
         @DisplayName("Should resolve an interface with specified qualifier")
-        void shouldResolveInterfaceWithSpecifiedQualifier() throws Exception {
+        void shouldResolveInterfaceWithSpecifiedQualifier() {
             // Given
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("name1"));
             // When
@@ -437,7 +482,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should resolve an interface with @Default qualifier to standard implementation")
-        void shouldResolveInterfaceWithDefaultQualifier() throws Exception {
+        void shouldResolveInterfaceWithDefaultQualifier() {
             // Given
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
             // When
@@ -464,7 +509,7 @@ class ClassResolverUnitTest {
          */
         @Test
         @DisplayName("Should resolve an interface if only qualified implementations found but qualifier specified")
-        void shouldResolveInterfaceIfOnlyQualifiedImplementationsFoundButQualifierSpecified() throws Exception {
+        void shouldResolveInterfaceIfOnlyQualifiedImplementationsFoundButQualifierSpecified() {
             // Given
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("name1"));
             // When
@@ -501,7 +546,7 @@ class ClassResolverUnitTest {
          */
         @Test
         @DisplayName("Should return all implementations for a given interface")
-        void shouldReturnAllImplementationsForAGivenInterface() throws Exception {
+        void shouldReturnAllImplementationsForAGivenInterface() {
             // Given
             Collection<Class<? extends MultipleImplementationsInterface>> expected = new ArrayList<>();
             expected.add(MultipleImplementationsStandardImplementation.class);
@@ -521,7 +566,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should return all active classes if qualifiers are null")
-        void shouldReturnAllActiveClassesIfQualifiersAreNull() throws Exception {
+        void shouldReturnAllActiveClassesIfQualifiersAreNull() {
             // When
             Collection<Class<? extends MultipleImplementationsInterface>> resolved = sut.resolveImplementations(
                     MultipleImplementationsInterface.class, null);
@@ -532,7 +577,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should return only matching classes for a specific qualifier")
-        void shouldReturnOnlyMatchingClassesForSpecificQualifier() throws Exception {
+        void shouldReturnOnlyMatchingClassesForSpecificQualifier() {
             // Given
             Collection<Annotation> qualifiers = Collections.singletonList(new NamedLiteral("name1"));
             // When
@@ -562,7 +607,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should return all active classes if qualifiers are empty collection")
-        void shouldReturnAllActiveClassesIfQualifiersAreEmpty() throws Exception {
+        void shouldReturnAllActiveClassesIfQualifiersAreEmpty() {
             // When - Line 238: qualifiers.isEmpty() branch
             Collection<Class<? extends MultipleImplementationsInterface>> resolved = sut.resolveImplementations(
                     MultipleImplementationsInterface.class, Collections.emptyList());
@@ -573,7 +618,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should filter out @Alternative classes that are not enabled")
-        void shouldFilterOutNotEnabledAlternatives() throws Exception {
+        void shouldFilterOutNotEnabledAlternatives() {
             // When - Line 235: Tests that @Alternative classes are filtered when not enabled
             Collection<Class<? extends MultipleImplementationsInterface>> resolved = sut.resolveImplementations(
                     MultipleImplementationsInterface.class, null);
@@ -586,7 +631,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should include @Alternative classes when they are enabled")
-        void shouldIncludeEnabledAlternatives() throws Exception {
+        void shouldIncludeEnabledAlternatives() {
             // Given - Line 235: Tests enabledAlternatives.contains(clazz) == true branch
             Class<?> alternative = com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleAlternativesAlternativeImplementation.class;
             sut.enableAlternative(alternative);
@@ -610,7 +655,7 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("Should work if qualifiers collection is null")
-            void shouldFindALotOfClassesIfPackageIsNull() throws Exception {
+            void shouldFindALotOfClassesIfPackageIsNull() {
                 // Given
                 ClassResolver sut = new ClassResolver(getPackageName(SingleImplementationInterface.class));
                 // When
@@ -621,7 +666,7 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("Should work if qualifiers collection is empty")
-            void shouldFindALotOfClassesIfPackageIsEmpty() throws Exception {
+            void shouldFindALotOfClassesIfPackageIsEmpty() {
                 // Given
                 ClassResolver sut = new ClassResolver();
                 // When
@@ -657,7 +702,7 @@ class ClassResolverUnitTest {
     }
 
     static Stream<Arguments> noQualifiers() {
-        return Stream.of(Arguments.of((Object) null), Arguments.of(Collections.emptyList()));
+        return Stream.of(Arguments.of(Collections.emptyList()));
     }
 
     // Test structures
@@ -693,7 +738,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Cache should work correctly with different types")
-        void cacheShouldWorkWithDifferentTypes() throws Exception {
+        void cacheShouldWorkWithDifferentTypes() {
             // When
             Collection<Class<? extends SingleImplementationInterface>> result1 =
                 sut.resolveImplementations(SingleImplementationInterface.class);
@@ -827,10 +872,10 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle binding with null qualifiers")
-        void shouldHandleBindingWithNullQualifiers() throws Exception {
+        void shouldHandleBindingWithNullQualifiers() {
             // Given
             sut.setBindingsOnly(true);
-            sut.bind(SingleImplementationInterface.class, null, SingleImplementationClass.class);
+            sut.bind(SingleImplementationInterface.class, Collections.emptyList(), SingleImplementationClass.class);
 
             // When
             Class<?> result = sut.resolveImplementation(SingleImplementationInterface.class, null);
@@ -841,7 +886,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle binding with empty qualifiers collection")
-        void shouldHandleBindingWithEmptyQualifiers() throws Exception {
+        void shouldHandleBindingWithEmptyQualifiers() {
             // Given
             sut.setBindingsOnly(true);
             sut.bind(SingleImplementationInterface.class, Collections.emptySet(), SingleImplementationClass.class);
@@ -857,21 +902,21 @@ class ClassResolverUnitTest {
         @DisplayName("Should throw IllegalArgumentException when binding null type")
         void shouldThrowExceptionWhenBindingNullType() {
             // When/Then
-            assertThrows(NullPointerException.class,
-                () -> sut.bind(null, null, SingleImplementationClass.class));
+            assertThrows(IllegalArgumentException.class,
+                () -> sut.bind(null, Collections.emptyList(), SingleImplementationClass.class));
         }
 
         @Test
         @DisplayName("Should throw IllegalArgumentException when binding null implementation")
         void shouldThrowExceptionWhenBindingNullImplementation() {
             // When/Then
-            assertThrows(NullPointerException.class,
-                () -> sut.bind(SingleImplementationInterface.class, null, null));
+            assertThrows(IllegalArgumentException.class,
+                () -> sut.bind(SingleImplementationInterface.class, Collections.emptyList(), null));
         }
 
         @Test
         @DisplayName("Should allow rebinding the same type with different qualifiers")
-        void shouldAllowRebindingSameTypeWithDifferentQualifiers() throws Exception {
+        void shouldAllowRebindingSameTypeWithDifferentQualifiers() {
             // Given
             Collection<Annotation> qualifier1 = Collections.singleton(new NamedLiteral("impl1"));
             Collection<Annotation> qualifier2 = Collections.singleton(new NamedLiteral("impl2"));
@@ -890,7 +935,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should overwrite binding when binding same type with same qualifiers")
-        void shouldOverwriteBindingWhenBindingSameTypeWithSameQualifiers() throws Exception {
+        void shouldOverwriteBindingWhenBindingSameTypeWithSameQualifiers() {
             // Given
             Collection<Annotation> qualifiers = Collections.singleton(new NamedLiteral("test"));
 
@@ -912,17 +957,24 @@ class ClassResolverUnitTest {
     class AlternativeEdgeCases {
 
         @Test
-        @DisplayName("Should handle enabling null alternative")
+        @DisplayName("Should throw IllegalArgumentException enabling null alternative")
         void shouldHandleEnablingNullAlternative() {
             // When/Then - should not crash
-            assertDoesNotThrow(() -> sut.enableAlternative(null));
+            assertThrows(IllegalArgumentException.class, () -> sut.enableAlternative(null));
+        }
+
+        @Test
+        @DisplayName("Should throw IllegalArgumentException handling class not marked with @Alternative")
+        void shouldHandleClassNotMarkedWithAlternative() {
+            // When / Then
+            assertThrows(IllegalArgumentException.class, () -> sut.enableAlternative(SingleImplementationClass.class));
         }
 
         @Test
         @DisplayName("Should handle enabling same alternative multiple times")
-        void shouldHandleEnablingSameAlternativeMultipleTimes() throws Exception {
+        void shouldHandleEnablingSameAlternativeMultipleTimes() {
             // Given
-            Class<?> alternative = SingleImplementationClass.class;
+            Class<?> alternative = AlternativesAlternativeImplementation1.class;
 
             // When
             sut.enableAlternative(alternative);
@@ -936,9 +988,9 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle enabling non-existent alternative")
-        void shouldHandleEnablingNonExistentAlternative() throws Exception {
+        void shouldHandleEnablingNonExistentAlternative() {
             // Given - enable an alternative that doesn't implement the interface
-            sut.enableAlternative(String.class);
+            sut.enableAlternative(AlternativesAlternativeImplementation1.class);
 
             // When - resolve interface
             Class<?> result = sut.resolveImplementation(SingleImplementationInterface.class, null);
@@ -954,7 +1006,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should return empty collection when no implementation found for resolveImplementations")
-        void shouldReturnEmptyCollectionWhenNoImplementationFound() throws Exception {
+        void shouldReturnEmptyCollectionWhenNoImplementationFound() {
             // When
             Collection<Class<? extends NoImplInterface>> result = sut.resolveImplementations(NoImplInterface.class);
 
@@ -965,7 +1017,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should return multiple implementations from resolveImplementations")
-        void shouldReturnMultipleImplementationsFromResolveImplementations() throws Exception {
+        void shouldReturnMultipleImplementationsFromResolveImplementations() {
             // When
             Collection<Class<? extends MultipleImplementationsInterface>> result =
                 sut.resolveImplementations(MultipleImplementationsInterface.class);
@@ -1026,7 +1078,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should return concrete class itself when resolved with @Default qualifier")
-        void shouldReturnConcreteClassWithDefaultQualifier() throws Exception {
+        void shouldReturnConcreteClassWithDefaultQualifier() {
             // Given
             Collection<Annotation> qualifiers = Collections.singleton(new DefaultLiteral());
 
@@ -1050,7 +1102,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle array types correctly")
-        void shouldHandleArrayTypesCorrectly() throws Exception {
+        void shouldHandleArrayTypesCorrectly() {
             // When
             Class<?> result = sut.resolveImplementation(String[].class, null);
 
@@ -1060,7 +1112,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle primitive array types")
-        void shouldHandlePrimitiveArrayTypes() throws Exception {
+        void shouldHandlePrimitiveArrayTypes() {
             // When
             Class<?> result = sut.resolveImplementation(int[].class, null);
 
@@ -1075,7 +1127,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should match @Any qualifier with any implementation")
-        void shouldMatchAnyQualifierWithAnyImplementation() throws Exception {
+        void shouldMatchAnyQualifierWithAnyImplementation() {
             // Given
             Collection<Annotation> qualifiers = Collections.singleton(new AnyLiteral());
 
@@ -1089,7 +1141,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should match @Default qualifier with non-qualified implementations")
-        void shouldMatchDefaultQualifierWithNonQualifiedImplementations() throws Exception {
+        void shouldMatchDefaultQualifierWithNonQualifiedImplementations() {
             // Given
             Collection<Annotation> qualifiers = Collections.singleton(new DefaultLiteral());
 
@@ -1103,7 +1155,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle multiple qualifiers on single implementation")
-        void shouldHandleMultipleQualifiersOnSingleImplementation() throws Exception {
+        void shouldHandleMultipleQualifiersOnSingleImplementation() {
             // Given
             Collection<Annotation> qualifiers = Arrays.asList(
                 new NamedLiteral("name"),
@@ -1146,9 +1198,9 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle setBindingsOnly toggle")
-        void shouldHandleBindingsOnlyToggle() throws Exception {
+        void shouldHandleBindingsOnlyToggle() {
             // Given
-            sut.bind(SingleImplementationInterface.class, null, SingleImplementationClass.class);
+            sut.bind(SingleImplementationInterface.class, Collections.emptyList(), SingleImplementationClass.class);
 
             // When - enable bindingsOnly
             sut.setBindingsOnly(true);
@@ -1173,7 +1225,7 @@ class ClassResolverUnitTest {
 
         @Test
         @DisplayName("Should handle type that is both interface and has implementations")
-        void shouldHandleComplexTypeResolution() throws Exception {
+        void shouldHandleComplexTypeResolution() {
             // When
             Collection<Class<? extends SingleImplementationInterface>> result =
                 sut.resolveImplementations(SingleImplementationInterface.class);
@@ -1183,6 +1235,186 @@ class ClassResolverUnitTest {
             assertTrue(result.stream().allMatch(
                 c -> !c.isInterface() && SingleImplementationInterface.class.isAssignableFrom(c)
             ));
+        }
+    }
+
+    @Nested
+    @DisplayName("Null Argument Validation Tests")
+    class NullArgumentTests {
+
+        @Test
+        @DisplayName("Constructor should throw IllegalArgumentException for null ClasspathScanner")
+        void constructorShouldRejectNullClasspathScanner() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new ClassResolver(null, new TypeChecker()));
+
+            assertEquals("ClasspathScanner cannot be null", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("Constructor should throw IllegalArgumentException for null TypeChecker")
+        void constructorShouldRejectNullTypeChecker() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new ClassResolver(new ClasspathScanner(), null));
+
+            assertEquals("TypeChecker cannot be null", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("bind() should throw IllegalArgumentException for null type")
+        void bindShouldRejectNullType() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> sut.bind(null, Collections.emptyList(), SingleImplementationClass.class));
+
+            assertEquals("type cannot be null", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("bind() should throw IllegalArgumentException for null implementation")
+        void bindShouldRejectNullImplementation() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> sut.bind(SingleImplementationInterface.class, Collections.emptyList(), null));
+
+            assertEquals("implementation cannot be null", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("bind() should throw IllegalArgumentException for null qualifiers")
+        void bindShouldRejectNullQualifiers() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> sut.bind(SingleImplementationInterface.class, null, SingleImplementationClass.class));
+
+            assertEquals("qualifiers cannot be null", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("enableAlternative() should throw IllegalArgumentException for null")
+        void enableAlternativeShouldRejectNull() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> sut.enableAlternative(null));
+
+            assertEquals("alternativeClass cannot be null", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("enableAlternative() should throw IllegalArgumentException for non-@Alternative class")
+        void enableAlternativeShouldRejectNonAlternativeClass() {
+            // When/Then - SingleImplementationClass is not annotated with @Alternative
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> sut.enableAlternative(SingleImplementationClass.class));
+
+            assertTrue(exception.getMessage().contains("is not annotated with @Alternative"));
+        }
+
+        @Test
+        @DisplayName("resolveImplementation() should throw IllegalArgumentException for null type")
+        void resolveImplementationShouldRejectNullType() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> sut.resolveImplementation(Thread.currentThread().getContextClassLoader(), null, null));
+
+            assertEquals("typeToResolve cannot be null", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("resolveImplementation() should throw IllegalArgumentException for null classLoader")
+        void resolveImplementationShouldRejectNullClassLoader() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> sut.resolveImplementation(null, SingleImplementationInterface.class, null));
+
+            assertEquals("classLoader cannot be null", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("resolveImplementations() should throw IllegalArgumentException for null type")
+        void resolveImplementationsShouldRejectNullType() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> sut.resolveImplementations(Thread.currentThread().getContextClassLoader(), null));
+
+            assertEquals("typeToResolve cannot be null", exception.getMessage());
+        }
+
+        @Test
+        @DisplayName("resolveImplementations() should throw IllegalArgumentException for null classLoader")
+        void resolveImplementationsShouldRejectNullClassLoader() {
+            // When/Then
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> sut.resolveImplementations(null, SingleImplementationInterface.class));
+
+            assertEquals("classLoader cannot be null", exception.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("Multiple Enabled Alternatives Tests")
+    class MultipleEnabledAlternativesTests {
+
+        @Test
+        @DisplayName("Should throw AmbiguousResolutionException when multiple alternatives enabled")
+        void shouldThrowExceptionForMultipleEnabledAlternatives() {
+            // Given - enable multiple alternatives
+            sut.enableAlternative(AlternativesAlternativeImplementation1.class);
+            sut.enableAlternative(AlternativesAlternativeImplementation2.class);
+
+            // When/Then
+            AmbiguousResolutionException exception = assertThrows(AmbiguousResolutionException.class,
+                () -> sut.resolveImplementation(AlternativesInterface.class, null));
+
+            assertTrue(exception.getMessage().contains("More than one alternative found"));
+            assertTrue(exception.getMessage().contains("AlternativesAlternativeImplementation1"));
+            assertTrue(exception.getMessage().contains("AlternativesAlternativeImplementation2"));
+        }
+
+        @Test
+        @DisplayName("Should throw AmbiguousResolutionException for multiple alternatives even with qualifiers")
+        void shouldThrowExceptionForMultipleAlternativesWithQualifiers() {
+            // Given
+            sut.enableAlternative(AlternativesAlternativeImplementation1.class);
+            sut.enableAlternative(AlternativesAlternativeImplementation2.class);
+            Collection<Annotation> qualifiers = Collections.singleton(new NamedLiteral("test"));
+
+            // When/Then
+            AmbiguousResolutionException exception = assertThrows(AmbiguousResolutionException.class,
+                () -> sut.resolveImplementation(AlternativesInterface.class, qualifiers));
+
+            assertTrue(exception.getMessage().contains("More than one alternative found"));
+        }
+    }
+
+    @Nested
+    @DisplayName("ResolutionException Tests")
+    class ResolutionExceptionTests {
+
+        @Test
+        @DisplayName("Should wrap ClasspathScanner exceptions in ResolutionException")
+        void shouldWrapClasspathScannerExceptions() {
+            // Given
+            ClasspathScanner mockScanner = mock(ClasspathScanner.class);
+            TypeChecker mockChecker = mock(TypeChecker.class);
+            ClassResolver resolver = new ClassResolver(mockScanner, mockChecker);
+
+            try {
+                when(mockScanner.getAllClasses(any(ClassLoader.class)))
+                    .thenThrow(new RuntimeException("Scanner failed"));
+            } catch (Exception e) {
+                fail("Setup failed");
+            }
+
+            // When/Then
+            ResolutionException exception = assertThrows(ResolutionException.class,
+                () -> resolver.resolveImplementations(SingleImplementationInterface.class));
+
+            assertTrue(exception.getMessage().contains("Failed to resolve implementations"));
+            assertNotNull(exception.getCause());
+            assertEquals("Scanner failed", exception.getCause().getMessage());
         }
     }
 

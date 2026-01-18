@@ -15,25 +15,15 @@ import java.util.stream.Collectors;
 /**
  * Resolves concrete implementations for abstract types in a dependency injection framework.
  *
- * <p>This class implements JSR 330/346 dependency injection semantics including:
- * <ul>
- *   <li>Qualifier-based resolution ({@code @Named}, {@code @Any}, {@code @Default}, custom qualifiers)
- *   <li>Alternative support ({@code @Alternative} annotation)
- *   <li>Programmatic bindings (override classpath scanning)
- *   <li>Thread-safe caching of resolution results via {@link Cache}
- * </ul>
- *
- * <p><b>Resolution Priority (differs from CDI specification):</b>
+ * <p>This class implements JSR 330/346 dependency injection semantics, with the following
+ * resolution priority:
+ * <p><b>Resolution Priority (closer to CDI specification):</b>
  * <ol>
- *   <li>Custom bindings via bind() (highest priority - allows test mocking)
- *   <li>Enabled alternatives (@Alternative annotation)
- *   <li>Qualified implementations (if qualifiers specified)
- *   <li>Standard implementation (no qualifiers)
+ *   <li>Enabled alternatives ({@code @Alternative} annotation) - highest priority
+ *   <li>Custom bindings via bind() method
+ *   <li>Qualifier-based resolution ({@code @Named}, {@code @Any}, {@code @Default}, custom qualifiers)
+ *   <li>Standard implementation (no qualifiers or @Default)
  * </ol>
- *
- * <p><b>Note:</b> Unlike pure CDI implementations, programmatic bindings
- * take precedence over alternatives. This design choice allows for easier
- * testing and environment-specific configuration overrides.
  *
  * <p><b>Thread Safety:</b> This class is thread-safe. Concurrent resolution
  * of the same type will result in only one classpath scan, with other threads
@@ -85,38 +75,74 @@ class ClassResolver {
      */
     private final Map<MappingKey, Class<?>> bindings = new ConcurrentHashMap<>();
     /**
-     * Whether the resolve process should stop at bound classes or scan the classpath.
-     * Default is false. This flag is for testing purposes only!
+     * See comments in setter.
      */
-    private boolean bindingsOnly;
+    private volatile boolean bindingsOnly;
     /**
      * A collection of Alternatives that can be used instead of the actual implementations.
      */
-    private final Set<Class<?>> enabledAlternatives = new HashSet<>();
+    private final Set<Class<?>> enabledAlternatives = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Package-private because intended to be used by InjectorImpl only
+     * @param packageNames packages to scan for classes
+     */
     ClassResolver(String ... packageNames) {
         classpathScanner = new ClasspathScanner(packageNames);
         typeChecker = new TypeChecker();
     }
 
-    ClassResolver(ClasspathScanner classpathScanner, TypeChecker typeChecker) {
+    /**
+     * Package-private because intended to be used by InjectorImpl only or unit testing
+     * @param classpathScanner a custom ClasspathScanner implementation
+     * @param typeChecker a custom TypeChecker implementation
+     */
+    ClassResolver(@NonNull ClasspathScanner classpathScanner, @NonNull TypeChecker typeChecker) {
+        if (classpathScanner == null) {
+            throw new IllegalArgumentException("ClasspathScanner cannot be null");
+        }
+        if (typeChecker == null) {
+            throw new IllegalArgumentException("TypeChecker cannot be null");
+        }
         this.classpathScanner = classpathScanner;
         this.typeChecker = typeChecker;
     }
 
-    void bind(Type type, Collection<Annotation> qualifiers, Class<?> implementation) {
+    void bind(@NonNull Type type, @NonNull Collection<Annotation> qualifiers, @NonNull Class<?> implementation) {
+        if (type == null) {
+            throw new IllegalArgumentException("type cannot be null");
+        }
+        if (implementation == null) {
+            throw new IllegalArgumentException("implementation cannot be null");
+        }
+        if (qualifiers == null) {
+            throw new IllegalArgumentException("qualifiers cannot be null");
+        }
         if (!typeChecker.isAssignable(type, implementation)) {
             throw new IllegalArgumentException("Cannot bind " + implementation.getName() +
-                    " to " + type.getClass().getName() + " because they are not assignable");
+                    " to " + type.getTypeName() + " because they are not assignable");
         }
         bindings.put(new MappingKey(type, qualifiers), implementation);
     }
 
+    /**
+     * Whether the resolve process should stop at alternatives and bound classes or scan the classpath.
+     * Default is false. You can enable this flag to disable classpath scanning, but you MUST manually
+     * do all the bindings!
+     *
+     * @param bindingsOnly whether the resolve process should stop at alternatives and bound classes or scan the classpath
+     */
     void setBindingsOnly(boolean bindingsOnly) {
         this.bindingsOnly = bindingsOnly;
     }
 
-    void enableAlternative(Class<?> alternativeClass) {
+    void enableAlternative(@NonNull Class<?> alternativeClass) {
+        if (alternativeClass == null) {
+            throw new IllegalArgumentException("alternativeClass cannot be null");
+        }
+        if (!alternativeClass.isAnnotationPresent(Alternative.class)) {
+            throw new IllegalArgumentException(alternativeClass.getName() + " is not annotated with @Alternative");
+        }
         enabledAlternatives.add(alternativeClass);
     }
 
@@ -133,15 +159,38 @@ class ClassResolver {
      * @param <T> type of the class to resolve
      */
     <T> Class<? extends T> resolveImplementation(@NonNull Type typeToResolve,
-                                                 @Nullable Collection<Annotation> qualifiers) throws Exception {
+                                                 @Nullable Collection<Annotation> qualifiers) {
         return resolveImplementation(Thread.currentThread().getContextClassLoader(), typeToResolve, qualifiers);
     }
 
     @SuppressWarnings("unchecked")
-    <T> Class<? extends T> resolveImplementation(ClassLoader classLoader, Type typeToResolve,
-                                                 @Nullable Collection<Annotation> qualifiers) throws Exception {
+    <T> Class<? extends T> resolveImplementation(@NonNull ClassLoader classLoader, @NonNull Type typeToResolve,
+                                                 @Nullable Collection<Annotation> qualifiers) {
+        if (classLoader == null) {
+            throw new IllegalArgumentException("classLoader cannot be null");
+        }
+        if (typeToResolve == null) {
+            throw new IllegalArgumentException("typeToResolve cannot be null");
+        }
 
-        // Check custom mappings first
+        // Search for all possible implementations
+        Collection<Class<? extends T>> resolvedClasses = resolveImplementations(classLoader, typeToResolve);
+
+        // If one of the implementations is an enabled Alternative, return that class
+        List<Class<? extends T>> matchingEnabledAlternatives = new ArrayList<>();
+        for (Class<? extends T> clazz : resolvedClasses) {
+            if (enabledAlternatives.contains(clazz)) {
+                matchingEnabledAlternatives.add(clazz);
+            }
+        }
+        if (matchingEnabledAlternatives.size() == 1) {
+            return matchingEnabledAlternatives.get(0);
+        } else if (matchingEnabledAlternatives.size() > 1) {
+            throw new AmbiguousResolutionException("More than one alternative found for " + typeToResolve.getClass().getName() +
+                    ": " + matchingEnabledAlternatives.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get());
+        }
+
+        // Check if we have a custom mapping
         MappingKey key = new MappingKey(typeToResolve, qualifiers);
         if (bindings.containsKey(key)) {
             return (Class<? extends T>) bindings.get(key);
@@ -158,16 +207,6 @@ class ClassResolver {
 
         if (isDefault && (isNotInterfaceOrAbstract(rawType) || rawType.isArray())) {
             return (Class<? extends T>)rawType;
-        }
-
-        // Search for all possible implementations
-        Collection<Class<? extends T>> resolvedClasses = resolveImplementations(classLoader, typeToResolve);
-
-        // If one of the implementations is an enabled Alternative, return that class
-        for (Class<? extends T> clazz : resolvedClasses) {
-            if (enabledAlternatives.contains(clazz)) {
-                return clazz;
-            }
         }
 
         // Filter out alternatives
@@ -201,7 +240,7 @@ class ClassResolver {
             throw new UnsatisfiedResolutionException(formatUnsatisfiedError(typeToResolve, null));
         } else if (candidates.size() > 1) {
             String candidatesAsList = candidates.stream().map(Class::getName).reduce((a, b) -> a + ", " + b).get();
-            throw new AmbiguousResolutionException("More than one implementation found for " + typeToResolve.getClass().getName() +
+            throw new AmbiguousResolutionException("More than one implementation found for " + typeToResolve.getTypeName() +
                     ": " + candidatesAsList);
         }
         return candidates.get(0);
@@ -215,7 +254,7 @@ class ClassResolver {
      * @return the resolved classes
      * @param <T> type of the class to resolve
      */
-    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve) throws Exception {
+    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve) {
         return resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve);
     }
 
@@ -229,7 +268,7 @@ class ClassResolver {
      * @param <T> type of the class to resolve
      */
     <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve,
-                                                              @Nullable Collection<Annotation> qualifiers) throws Exception {
+                                                              @Nullable Collection<Annotation> qualifiers) {
         Collection<Class<? extends T>> resolvedClasses =
                 resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve);
 
@@ -247,18 +286,25 @@ class ClassResolver {
     }
 
     @SuppressWarnings("unchecked")
-    <T> Collection<Class<? extends T>> resolveImplementations(ClassLoader classLoader, Type abstractClass) {
-        Collection<Class<?>> cached = resolvedClasses.computeIfAbsent(abstractClass, () -> {
+    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull ClassLoader classLoader, @NonNull Type typeToResolve) {
+        if (classLoader == null) {
+            throw new IllegalArgumentException("classLoader cannot be null");
+        }
+        if (typeToResolve == null) {
+            throw new IllegalArgumentException("typeToResolve cannot be null");
+        }
+
+        Collection<Class<?>> cached = resolvedClasses.computeIfAbsent(typeToResolve, () -> {
             List<Class<?>> candidates = new ArrayList<>();
             try {
                 List<Class<?>> allClasses = classpathScanner.getAllClasses(classLoader);
                 for (Class<?> candidate : allClasses) {
-                    if (isNotInterfaceOrAbstract(candidate) && typeChecker.isAssignable(abstractClass, candidate)) {
+                    if (isNotInterfaceOrAbstract(candidate) && typeChecker.isAssignable(typeToResolve, candidate)) {
                         candidates.add(candidate);
                     }
                 }
             } catch (Exception e) {
-                throw new RuntimeException("Failed to resolve implementations for " + abstractClass, e);
+                throw new ResolutionException("Failed to resolve implementations for " + typeToResolve, e);
             }
             return new ArrayList<>(candidates);
         });
