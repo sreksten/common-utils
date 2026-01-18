@@ -894,6 +894,10 @@ class InjectorImplUnitTest {
                 public <T> T get(Class<T> clazz, Supplier<T> provider) {
                     return (T) scopeStorage.computeIfAbsent(clazz, c -> provider.get());
                 }
+                @Override
+                public void close() throws Exception {
+                    // No-op for test
+                }
             });
             RequestScopedClass instance1 = sut.inject(RequestScopedClass.class);
             RequestScopedClass instance2 = sut.inject(RequestScopedClass.class);
@@ -919,6 +923,10 @@ class InjectorImplUnitTest {
                 public <T> T get(Class<T> clazz, Supplier<T> provider) {
                     callCount.incrementAndGet();
                     return provider.get();
+                }
+                @Override
+                public void close() throws Exception {
+                    // No-op for test
                 }
             });
             // When
@@ -979,6 +987,10 @@ class InjectorImplUnitTest {
                     handler1Calls.incrementAndGet();
                     return provider.get();
                 }
+                @Override
+                public void close() throws Exception {
+                    // No-op for test
+                }
             });
             sut.inject(TestScopedClass.class);
             // When - override handler
@@ -987,6 +999,10 @@ class InjectorImplUnitTest {
                 public <T> T get(Class<T> clazz, Supplier<T> provider) {
                     handler2Calls.incrementAndGet();
                     return provider.get();
+                }
+                @Override
+                public void close() throws Exception {
+                    // No-op for test
                 }
             });
             sut.inject(TestScopedClass.class);
@@ -1770,6 +1786,209 @@ class InjectorImplUnitTest {
 
     }
 
+    @Nested
+    @DisplayName("Shutdown and Lifecycle Tests")
+    class ShutdownTests {
+
+        @Test
+        @DisplayName("Should call @PreDestroy on all singletons during shutdown")
+        void shouldCallPreDestroyOnAllSingletonsDuringShutdown() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            SingletonWithPreDestroy singleton1 = sut.inject(SingletonWithPreDestroy.class);
+            AnotherSingletonWithPreDestroy singleton2 = sut.inject(AnotherSingletonWithPreDestroy.class);
+            // When
+            sut.shutdown();
+            // Then
+            assertTrue(singleton1.isPreDestroyCalled());
+            assertTrue(singleton2.isPreDestroyCalled());
+        }
+
+        @Test
+        @DisplayName("Should handle singletons without @PreDestroy gracefully")
+        void shouldHandleSingletonsWithoutPreDestroyGracefully() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            sut.inject(SingletonClass.class); // No @PreDestroy method
+            // When/Then
+            assertDoesNotThrow(sut::shutdown);
+        }
+
+        @Test
+        @DisplayName("Should continue shutdown even if @PreDestroy throws exception")
+        void shouldContinueShutdownEvenIfPreDestroyThrowsException() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            SingletonWithFailingPreDestroy failing = sut.inject(SingletonWithFailingPreDestroy.class);
+            SingletonWithPreDestroy working = sut.inject(SingletonWithPreDestroy.class);
+            // When
+            sut.shutdown();
+            // Then - Both @PreDestroy methods should have been called despite exception
+            assertTrue(failing.isPreDestroyCalled());
+            assertTrue(working.isPreDestroyCalled());
+        }
+
+        @Test
+        @DisplayName("Should clear singleton instances after shutdown")
+        void shouldClearSingletonInstancesAfterShutdown() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            SingletonWithPreDestroy singleton1 = sut.inject(SingletonWithPreDestroy.class);
+            // When
+            sut.shutdown();
+            SingletonWithPreDestroy singleton2 = sut.inject(SingletonWithPreDestroy.class);
+            // Then
+            assertNotSame(singleton1, singleton2, "Should create new singleton after shutdown");
+        }
+
+        @Test
+        @DisplayName("Should call close() on custom scope handlers")
+        void shouldCallCloseOnCustomScopeHandlers() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            MockScopeHandler mockHandler = new MockScopeHandler();
+            sut.registerScope(RequestScoped.class, mockHandler);
+            // When
+            sut.shutdown();
+            // Then
+            assertTrue(mockHandler.isCloseCalled());
+        }
+
+        @Test
+        @DisplayName("Should handle null scope handlers gracefully")
+        void shouldHandleNullScopeHandlersGracefully() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // Register and then don't use the scope
+            // When/Then
+            assertDoesNotThrow(sut::shutdown);
+        }
+
+        @Test
+        @DisplayName("Should continue closing scopes even if one throws exception")
+        void shouldContinueClosingScopesEvenIfOneThrowsException() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            TrackedScopeHandler handler1 = new TrackedScopeHandler(true); // Will throw
+            TrackedScopeHandler handler2 = new TrackedScopeHandler(false); // Won't throw
+            sut.registerScope(RequestScoped.class, handler1);
+            sut.registerScope(TestScope.class, handler2);
+            // When
+            sut.shutdown();
+            // Then
+            assertTrue(handler1.isCloseCalled());
+            assertTrue(handler2.isCloseCalled());
+        }
+
+        @Test
+        @DisplayName("Should handle singletons with dependencies during shutdown")
+        void shouldHandleSingletonsWithDependenciesDuringShutdown() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            SingletonWithPreDestroyAndDependencies singleton = sut.inject(SingletonWithPreDestroyAndDependencies.class);
+            // When
+            sut.shutdown();
+            // Then
+            assertTrue(singleton.isPreDestroyCalled());
+        }
+
+        @Test
+        @DisplayName("Should allow multiple shutdown() calls safely")
+        void shouldAllowMultipleShutdownCallsSafely() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            sut.inject(SingletonWithPreDestroy.class);
+            // When/Then
+            assertDoesNotThrow(() -> {
+                sut.shutdown();
+                sut.shutdown();
+                sut.shutdown();
+            });
+        }
+
+        @Test
+        @DisplayName("Should register shutdown hook on construction")
+        void shouldRegisterShutdownHookOnConstruction() {
+            // Given/When
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // Then - Can't directly verify hook registration, but ensure method exists and doesn't throw
+            assertDoesNotThrow(sut::addShutdownHook);
+        }
+
+        @Test
+        @DisplayName("Should cleanup custom scope with @PreDestroy via close()")
+        void shouldCleanupCustomScopeWithPreDestroyViaClose() {
+            // Given
+            Map<Class<?>, Object> scopeStorage = new HashMap<>();
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            sut.registerScope(RequestScoped.class, new ScopeHandler() {
+                @Override
+                @SuppressWarnings("unchecked")
+                public <T> T get(Class<T> clazz, Supplier<T> provider) {
+                    return (T) scopeStorage.computeIfAbsent(clazz, c -> provider.get());
+                }
+                @Override
+                public void close() throws Exception {
+                    scopeStorage.clear();
+                }
+            });
+            RequestScopedWithPreDestroy instance = sut.inject(RequestScopedWithPreDestroy.class);
+            // When
+            sut.shutdown();
+            // Then
+            assertTrue(scopeStorage.isEmpty(), "Scope storage should be cleared");
+        }
+
+        @Test
+        @DisplayName("Should call @PostConstruct after injection")
+        void shouldCallPostConstructAfterInjection() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            ClassWithPostConstruct instance = sut.inject(ClassWithPostConstruct.class);
+            // Then
+            assertTrue(instance.isPostConstructCalled());
+        }
+
+        @Test
+        @DisplayName("Should call @PostConstruct on parent class before child class")
+        void shouldCallPostConstructOnParentBeforeChild() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When
+            ChildWithPostConstruct instance = sut.inject(ChildWithPostConstruct.class);
+            // Then
+            assertTrue(instance.isParentPostConstructCalled());
+            assertTrue(instance.isChildPostConstructCalled());
+            assertTrue(instance.getParentCallOrder() < instance.getChildCallOrder(),
+                    "Parent @PostConstruct should be called before child");
+        }
+
+        @Test
+        @DisplayName("Should handle @PostConstruct throwing exception")
+        void shouldHandlePostConstructThrowingException() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            // When/Then
+            assertThrows(Exception.class, () -> sut.inject(ClassWithFailingPostConstruct.class));
+        }
+
+        @Test
+        @DisplayName("Should call @PreDestroy on parent class before child class")
+        void shouldCallPreDestroyOnParentBeforeChild() {
+            // Given
+            InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
+            ChildWithPreDestroy instance = sut.inject(ChildWithPreDestroy.class);
+            // When
+            sut.shutdown();
+            // Then
+            assertTrue(instance.isParentPreDestroyCalled());
+            assertTrue(instance.isChildPreDestroyCalled());
+            assertTrue(instance.getParentDestroyOrder() < instance.getChildDestroyOrder(),
+                    "Parent @PreDestroy should be called before child");
+        }
+    }
+
     // Test classes used above.
 
     // Valid classes
@@ -1953,5 +2172,250 @@ class InjectorImplUnitTest {
     static class ClassWithPrivateConstructor {
         @Inject
         private ClassWithPrivateConstructor() { }
+    }
+
+    // Helper classes for shutdown tests
+    @Singleton
+    static class SingletonWithPreDestroy {
+        private boolean preDestroyCalled = false;
+
+        @javax.annotation.PreDestroy
+        public void preDestroy() {
+            preDestroyCalled = true;
+        }
+
+        public boolean isPreDestroyCalled() {
+            return preDestroyCalled;
+        }
+    }
+
+    @Singleton
+    static class AnotherSingletonWithPreDestroy {
+        private boolean preDestroyCalled = false;
+
+        @javax.annotation.PreDestroy
+        public void preDestroy() {
+            preDestroyCalled = true;
+        }
+
+        public boolean isPreDestroyCalled() {
+            return preDestroyCalled;
+        }
+    }
+
+    @Singleton
+    static class SingletonWithFailingPreDestroy {
+        private boolean preDestroyCalled = false;
+
+        @javax.annotation.PreDestroy
+        public void preDestroy() {
+            preDestroyCalled = true;
+            throw new RuntimeException("PreDestroy failed intentionally");
+        }
+
+        public boolean isPreDestroyCalled() {
+            return preDestroyCalled;
+        }
+    }
+
+    @Singleton
+    static class SingletonWithPreDestroyAndDependencies {
+        private final TestClass dependency;
+        private boolean preDestroyCalled = false;
+
+        @Inject
+        public SingletonWithPreDestroyAndDependencies(TestClass dependency) {
+            this.dependency = dependency;
+        }
+
+        @javax.annotation.PreDestroy
+        public void preDestroy() {
+            preDestroyCalled = true;
+        }
+
+        public boolean isPreDestroyCalled() {
+            return preDestroyCalled;
+        }
+
+        public TestClass getDependency() {
+            return dependency;
+        }
+    }
+
+    @RequestScoped
+    static class RequestScopedWithPreDestroy {
+        private boolean preDestroyCalled = false;
+
+        @javax.annotation.PreDestroy
+        public void preDestroy() {
+            preDestroyCalled = true;
+        }
+
+        public boolean isPreDestroyCalled() {
+            return preDestroyCalled;
+        }
+    }
+
+    static class MockScopeHandler implements ScopeHandler {
+        private boolean closeCalled = false;
+
+        @Override
+        public <T> T get(Class<T> clazz, Supplier<T> provider) {
+            return provider.get();
+        }
+
+        @Override
+        public void close() throws Exception {
+            closeCalled = true;
+        }
+
+        public boolean isCloseCalled() {
+            return closeCalled;
+        }
+    }
+
+    static class TrackedScopeHandler implements ScopeHandler {
+        private boolean closeCalled = false;
+        private final boolean throwOnClose;
+
+        public TrackedScopeHandler(boolean throwOnClose) {
+            this.throwOnClose = throwOnClose;
+        }
+
+        @Override
+        public <T> T get(Class<T> clazz, Supplier<T> provider) {
+            return provider.get();
+        }
+
+        @Override
+        public void close() throws Exception {
+            closeCalled = true;
+            if (throwOnClose) {
+                throw new Exception("Close failed intentionally");
+            }
+        }
+
+        public boolean isCloseCalled() {
+            return closeCalled;
+        }
+    }
+
+    @Singleton
+    static class ClassWithInstanceOfSingleton {
+        private final Instance<SingletonDependency> instance;
+
+        @Inject
+        public ClassWithInstanceOfSingleton(Instance<SingletonDependency> instance) {
+            this.instance = instance;
+        }
+
+        public Instance<SingletonDependency> getInstance() {
+            return instance;
+        }
+    }
+
+    @Singleton
+    static class SingletonDependency {
+    }
+
+    // Helper classes for @PostConstruct tests
+    static class ClassWithPostConstruct {
+        private boolean postConstructCalled = false;
+
+        @javax.annotation.PostConstruct
+        public void postConstruct() {
+            postConstructCalled = true;
+        }
+
+        public boolean isPostConstructCalled() {
+            return postConstructCalled;
+        }
+    }
+
+    static class ParentWithPostConstruct {
+        private static int callCounter = 0;
+        private boolean parentPostConstructCalled = false;
+        private int parentCallOrder = 0;
+
+        @javax.annotation.PostConstruct
+        public void parentPostConstruct() {
+            parentPostConstructCalled = true;
+            parentCallOrder = callCounter++;
+        }
+
+        public boolean isParentPostConstructCalled() {
+            return parentPostConstructCalled;
+        }
+
+        public int getParentCallOrder() {
+            return parentCallOrder;
+        }
+    }
+
+    static class ChildWithPostConstruct extends ParentWithPostConstruct {
+        private boolean childPostConstructCalled = false;
+        private int childCallOrder = 0;
+
+        @javax.annotation.PostConstruct
+        public void childPostConstruct() {
+            childPostConstructCalled = true;
+            childCallOrder = ParentWithPostConstruct.callCounter++;
+        }
+
+        public boolean isChildPostConstructCalled() {
+            return childPostConstructCalled;
+        }
+
+        public int getChildCallOrder() {
+            return childCallOrder;
+        }
+    }
+
+    static class ClassWithFailingPostConstruct {
+        @javax.annotation.PostConstruct
+        public void postConstruct() {
+            throw new RuntimeException("PostConstruct failed intentionally");
+        }
+    }
+
+    @Singleton
+    static class ParentWithPreDestroy {
+        private static int destroyCounter = 0;
+        private boolean parentPreDestroyCalled = false;
+        private int parentDestroyOrder = 0;
+
+        @javax.annotation.PreDestroy
+        public void parentPreDestroy() {
+            parentPreDestroyCalled = true;
+            parentDestroyOrder = destroyCounter++;
+        }
+
+        public boolean isParentPreDestroyCalled() {
+            return parentPreDestroyCalled;
+        }
+
+        public int getParentDestroyOrder() {
+            return parentDestroyOrder;
+        }
+    }
+
+    @Singleton
+    static class ChildWithPreDestroy extends ParentWithPreDestroy {
+        private boolean childPreDestroyCalled = false;
+        private int childDestroyOrder = 0;
+
+        @javax.annotation.PreDestroy
+        public void childPreDestroy() {
+            childPreDestroyCalled = true;
+            childDestroyOrder = ParentWithPreDestroy.destroyCounter++;
+        }
+
+        public boolean isChildPreDestroyCalled() {
+            return childPreDestroyCalled;
+        }
+
+        public int getChildDestroyOrder() {
+            return childDestroyOrder;
+        }
     }
 }

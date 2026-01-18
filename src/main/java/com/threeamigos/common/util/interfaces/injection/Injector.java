@@ -59,4 +59,6 @@ public interface Injector {
     <T> T inject(@NonNull Class<T> clazz);
 
     <T> T inject(@NonNull TypeLiteral<T> clazz);
+
+    void shutdown();
 }

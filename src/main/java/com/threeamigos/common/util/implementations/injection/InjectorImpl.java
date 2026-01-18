@@ -7,7 +7,10 @@ import org.jspecify.annotations.NonNull;
 import javax.enterprise.inject.*;
 import javax.enterprise.util.TypeLiteral;
 import javax.inject.*;
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 
+import java.io.Closeable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
@@ -27,9 +30,15 @@ import java.util.stream.Collectors;
 public class InjectorImpl implements Injector {
 
     /**
-     * Internal registry for scope handlers. By default, it contains only the SingletonScopeHandler.
+     * A stack pool for thread-local storage of type stacks. Each thread has its own stack to avoid contention.
      */
-    private final Map<Class<? extends Annotation>, ScopeHandler> scopeRegistry = new HashMap<>();
+    private static final ThreadLocal<Stack<Type>> STACK_POOL = ThreadLocal.withInitial(Stack::new);
+
+    /**
+     * Internal registry for scope handlers. By default, it contains only the SingletonScopeHandler.
+     * Should be set up during initialization and should not be modified after that.
+     */
+    private final Map<Class<? extends Annotation>, ScopeHandler> scopeRegistry = new ConcurrentHashMap<>();
 
     /**
      * The class resolver used in this injector to find concrete implementations of abstract classes and interfaces.
@@ -49,11 +58,13 @@ public class InjectorImpl implements Injector {
     public InjectorImpl(final String ... packageNames) {
         this.classResolver = new ClassResolver(packageNames);
         registerDefaultScope();
+        addShutdownHook();
     }
 
     InjectorImpl(final ClassResolver classResolver) {
         this.classResolver = classResolver;
         registerDefaultScope();
+        addShutdownHook();
     }
 
     private void registerDefaultScope() {
@@ -77,7 +88,24 @@ public class InjectorImpl implements Injector {
                 }
                 return (T) instance;
             }
+
+            @Override
+            public void close() throws Exception {
+                // Call @PreDestroy on all singletons
+                for (Object instance : instances.values()) {
+                    try {
+                        invokePreDestroy(instance);
+                    } catch (Exception e) {
+                        // Log but continue destroying others
+                    }
+                }
+                instances.clear();
+            }
         });
+    }
+
+    void addShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
     }
 
     @Override
@@ -102,7 +130,13 @@ public class InjectorImpl implements Injector {
 
     @Override
     public <T> T inject(@NonNull TypeLiteral<T> typeLiteral) {
-        return inject(typeLiteral.getType(), new Stack<>(), null);
+        Stack<Type> stack = STACK_POOL.get();
+        try {
+            stack.clear();
+            return inject(typeLiteral.getType(), new Stack<>(), null);
+        } finally {
+            stack.clear();
+        }
     }
 
     private <T> T inject(@NonNull Type typeToInject, Stack<Type> stack, Collection<Annotation> qualifiers) {
@@ -134,8 +168,12 @@ public class InjectorImpl implements Injector {
         } catch (InjectionException e) {
             throw e;
         } catch (Exception e) {
+            String injectionPath = stack.stream()
+                    .map(Type::getTypeName)
+                    .collect(Collectors.joining(" -> "));
             throw new InjectionException("Failed to inject " + RawTypeExtractor.getRawType(typeToInject).getName() +
-                    ": " + e.getMessage(), e);
+                    "\nInjection path: " + injectionPath +
+                    "\nCause: " + e.getMessage(), e);
         }
     }
 
@@ -194,6 +232,10 @@ public class InjectorImpl implements Injector {
                 injectFields(t, typeContext, stack, clazz, resolvedClass, false);
                 injectMethods(t, typeContext, stack, clazz, resolvedClass, false);
             }
+
+            // Call @PostConstruct methods
+            invokePostConstruct(t);
+
             return t;
         } catch (Exception e) {
             throw new InjectionException("Injection failed for " + resolvedClass.getName() + ": " + e.getMessage(), e);
@@ -356,6 +398,14 @@ public class InjectorImpl implements Injector {
                 method.invoke(t, params);
             }
         }
+    }
+
+    private void invokePostConstruct(Object instance) throws InvocationTargetException, IllegalAccessException {
+        LifecycleMethodHelper.invokeLifecycleMethod(instance, PostConstruct.class);
+    }
+
+   private void invokePreDestroy(Object instance) throws InvocationTargetException, IllegalAccessException {
+       LifecycleMethodHelper.invokeLifecycleMethod(instance, PreDestroy.class);
     }
 
     private boolean isOverridden(Method superMethod, Class<?> leafClass) {
@@ -527,7 +577,13 @@ public class InjectorImpl implements Injector {
 
             @Override
             public void destroy(T instance) {
-                // No-op
+                try {
+                    if (instance != null) {
+                        invokePreDestroy(instance);
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to invoke @PreDestroy on " + type.getName(), e);
+                }
             }
 
             @Override
@@ -577,5 +633,40 @@ public class InjectorImpl implements Injector {
         scopeRegistry.clear();
         registerDefaultScope();
         injectedStaticClasses.clear();
+    }
+
+    /**
+     * Returns all registered scope annotations.
+     */
+    public Set<Class<? extends Annotation>> getRegisteredScopes() {
+        return Collections.unmodifiableSet(scopeRegistry.keySet());
+    }
+
+    /**
+     * Checks if a scope is registered.
+     */
+    public boolean isScopeRegistered(Class<? extends Annotation> scopeAnnotation) {
+        return scopeRegistry.containsKey(scopeAnnotation);
+    }
+
+    /**
+     * Unregisters a scope handler.
+     */
+    public void unregisterScope(Class<? extends Annotation> scopeAnnotation) {
+        scopeRegistry.remove(scopeAnnotation);
+    }
+
+    @Override
+    public void shutdown() {
+        // Notify custom scopes
+        for (ScopeHandler handler : scopeRegistry.values()) {
+            if (handler != null) {
+                try {
+                    handler.close();
+                } catch (Exception e) {
+                    // Log but continue
+                }
+            }
+        }
     }
 }
