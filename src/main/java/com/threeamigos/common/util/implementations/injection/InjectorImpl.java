@@ -18,41 +18,131 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
- * The InjectorImpl class is responsible for injecting dependencies into classes, using the constructor annotated
- * with {@link Inject}.<br/> Only one constructor is allowed to be annotated with @Inject. If such a constructor
- * is not found, the Injector will try to instantiate the class using the no-args constructor. This is done to
- * instantiate dependencies needed by the class.<br/>
- * The Unit Test for this class gives information about the expected behavior and edge cases.
+ * A complete implementation of JSR-330 (Dependency Injection for Java) and JSR-250 (Common Annotations)
+ * specifications, providing comprehensive dependency injection capabilities with lifecycle management.
+ *
+ * <h2>Supported JSR-330 Annotations:</h2>
+ * <ul>
+ *   <li>{@link javax.inject.Inject @Inject} - Marks constructors, fields, and methods for dependency injection</li>
+ *   <li>{@link javax.inject.Singleton @Singleton} - Marks classes as singleton-scoped (one instance per injector)</li>
+ *   <li>{@link javax.inject.Qualifier @Qualifier} - Used to create custom qualifier annotations for disambiguation</li>
+ *   <li>{@link javax.inject.Named @Named} - Qualifier annotation to distinguish multiple implementations by name</li>
+ *   <li>{@link javax.inject.Provider Provider} - Interface for lazy/dynamic instance provisioning</li>
+ * </ul>
+ *
+ * <h2>Supported JSR-250 Lifecycle Annotations:</h2>
+ * <ul>
+ *   <li>{@link javax.annotation.PostConstruct @PostConstruct} - Invoked after dependency injection is complete</li>
+ *   <li>{@link javax.annotation.PreDestroy @PreDestroy} - Invoked before instance destruction during scope cleanup</li>
+ * </ul>
+ *
+ * <h2>Supported CDI Annotations (JSR-299/JSR-346):</h2>
+ * <ul>
+ *   <li>{@link javax.enterprise.inject.Instance Instance} - Enhanced Provider with iteration and destruction capabilities</li>
+ *   <li>{@link javax.enterprise.inject.Any @Any} - Built-in qualifier that matches all beans</li>
+ *   <li>{@link javax.enterprise.inject.Default @Default} - Default qualifier applied when no other qualifier is present</li>
+ *   <li>{@link javax.inject.Scope @Scope} - Meta-annotation for creating custom scope annotations</li>
+ * </ul>
+ *
+ * <h2>Injection Points:</h2>
+ * <ul>
+ *   <li><b>Constructor Injection:</b> Only one constructor may be annotated with @Inject. If none is found,
+ *       the no-args constructor is used. Constructor parameters are automatically resolved and injected.</li>
+ *   <li><b>Field Injection:</b> Fields annotated with @Inject are set after construction, even if private.
+ *       Static field injection is supported and happens once per class.</li>
+ *   <li><b>Method Injection:</b> Methods annotated with @Inject are invoked after field injection.
+ *       All method parameters are resolved and injected. Static methods are supported.</li>
+ * </ul>
+ *
+ * <h2>Lifecycle Management:</h2>
+ * <ol>
+ *   <li>Constructor is invoked with injected dependencies</li>
+ *   <li>Fields are injected (including static fields, once per class)</li>
+ *   <li>Methods are invoked with injected parameters (including static methods)</li>
+ *   <li>{@code @PostConstruct} methods are invoked (zero parameters required)</li>
+ *   <li>Instance is returned to caller</li>
+ *   <li>Upon scope closure or shutdown, {@code @PreDestroy} methods are invoked</li>
+ * </ol>
+ *
+ * <h2>Scope Management:</h2>
+ * The injector supports pluggable scope handlers via {@link ScopeHandler}. The default scope is
+ * {@code @Singleton}. Custom scopes can be registered using {@link #registerScope(Class, ScopeHandler)}.
+ * All scopes are automatically closed during JVM shutdown via a registered shutdown hook.
+ *
+ * <h2>Type Resolution:</h2>
+ * When injecting interfaces or abstract classes, the injector searches the configured packages for
+ * concrete implementations. If multiple implementations exist, qualifiers must be used to disambiguate.
+ * Generic type parameters (e.g., {@code List<String>}) are resolved and matched when possible.
+ *
+ * <h2>Thread Safety:</h2>
+ * This implementation is fully thread-safe. Singleton instances use double-checked locking for
+ * efficient concurrent access. Each thread maintains its own injection stack to detect circular
+ * dependencies.
+ *
+ * <h2>Circular Dependency Detection:</h2>
+ * The injector maintains a per-thread stack to detect circular dependencies. If class A depends on
+ * class B which depends on class A, an {@link InjectionException} is thrown with a detailed
+ * dependency chain.
+ *
+ * <p>Checked and commented with Claude.
  *
  * @author Stefano Reksten
+ *
+ * @see javax.inject.Inject JSR-330: Dependency Injection for Java
+ * @see javax.annotation.PostConstruct JSR-250: Common Annotations for the Java Platform
+ * @see javax.enterprise.inject.Instance CDI: Contexts and Dependency Injection
  */
 public class InjectorImpl implements Injector {
 
     /**
-     * A stack pool for thread-local storage of type stacks. Each thread has its own stack to avoid contention.
+     * Thread-local stack for tracking the current dependency resolution chain. Each thread maintains
+     * its own stack to enable concurrent injection while detecting circular dependencies within
+     * a single resolution path.
+     *
+     * @see #inject(Type, Stack, Collection)
      */
     private static final ThreadLocal<Stack<Type>> STACK_POOL = ThreadLocal.withInitial(Stack::new);
 
     /**
-     * Internal registry for scope handlers. By default, it contains only the SingletonScopeHandler.
-     * Should be set up during initialization and should not be modified after that.
+     * Registry mapping scope annotations to their handlers. Handlers control instance lifecycle
+     * and cardinality (e.g., singleton vs. prototype). This map is thread-safe and supports
+     * runtime registration of custom scopes per JSR-330 extensibility requirements.
+     *
+     * @see javax.inject.Scope
+     * @see #registerScope(Class, ScopeHandler)
      */
     private final Map<Class<? extends Annotation>, ScopeHandler> scopeRegistry = new ConcurrentHashMap<>();
 
     /**
-     * The class resolver used in this injector to find concrete implementations of abstract classes and interfaces.
+     * Resolves concrete implementations for interfaces and abstract classes by scanning the
+     * configured package(s). Maintains internal caches for performance optimization during
+     * repeated lookups.
+     *
+     * @see ClassResolver
      */
     private final ClassResolver classResolver;
 
     /**
-     * Tracks classes that have already had their static members injected to prevent redundant injections.
+     * Set of classes that have already undergone static member injection. Static fields and methods
+     * are injected only once per class per injector instance, regardless of how many times the class
+     * is instantiated. Thread-safe to support concurrent injection.
+     *
+     * @see #injectFields(Object, Type, Stack, Class, Class, boolean)
+     * @see #injectMethods(Object, Type, Stack, Class, Class, boolean)
      */
     private final Set<Class<?>> injectedStaticClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     /**
-     * Package names are used to restrict classes search to a particular package(s). If you don't want to
-     * scan the whole classpath, you can use your package name here. Beware - all your interfaces and
-     * implementations should reside in that package or subpackages!
+     * Creates a new injector that scans the specified package(s) for injectable components.
+     * If no packages are specified, the injector will scan all available packages, which may
+     * impact startup performance.
+     *
+     * <p>The injector automatically registers the default {@link Singleton} scope and sets up
+     * a JVM shutdown hook to invoke {@link PreDestroy} methods on all managed instances.
+     *
+     * @param packageNames optional package names to restrict classpath scanning. All interfaces
+     *                     and implementations must reside within these packages or their subpackages
+     * @throws IllegalArgumentException if package scanning fails
      */
     public InjectorImpl(final String ... packageNames) {
         this.classResolver = new ClassResolver(packageNames);
@@ -60,6 +150,13 @@ public class InjectorImpl implements Injector {
         addShutdownHook();
     }
 
+    /**
+     * Package-private constructor for testing purposes. Allows injection of a custom
+     * {@link ClassResolver} instance to control type resolution behavior.
+     *
+     * @param classResolver the class resolver to use for finding implementations
+     * @throws IllegalArgumentException if classResolver is null
+     */
     InjectorImpl(@NonNull final ClassResolver classResolver) {
         if (classResolver == null) {
             throw new IllegalArgumentException("Class resolver cannot be null");
@@ -69,6 +166,14 @@ public class InjectorImpl implements Injector {
         addShutdownHook();
     }
 
+    /**
+     * Registers the default {@link Singleton} scope handler as required by JSR-330.
+     * This handler uses thread-safe double-checked locking to ensure only one instance
+     * per class exists within this injector. The handler also manages {@link PreDestroy}
+     * lifecycle callbacks when the scope is closed.
+     *
+     * @see javax.inject.Singleton
+     */
     private void registerDefaultScope() {
         // Standard Singleton scope implementation
         scopeRegistry.put(Singleton.class, new ScopeHandler() {
@@ -106,10 +211,38 @@ public class InjectorImpl implements Injector {
         });
     }
 
+    /**
+     * Registers a JVM shutdown hook that invokes {@link PreDestroy} callbacks on all scoped
+     * instances when the application terminates. This ensures proper resource cleanup per
+     * JSR-250 requirements.
+     *
+     * @see javax.annotation.PreDestroy
+     * @see #shutdown()
+     */
     void addShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
     }
 
+    /**
+     * Registers a custom scope annotation with its corresponding handler. The scope annotation
+     * must be meta-annotated with {@link javax.inject.Scope @Scope} per JSR-330. Once registered,
+     * classes annotated with this scope will have their lifecycle managed by the provided handler.
+     *
+     * <p>Example custom scope registration:
+     * <pre>{@code
+     * @Scope
+     * @Retention(RUNTIME)
+     * public @interface RequestScoped {}
+     *
+     * injector.registerScope(RequestScoped.class, new RequestScopeHandler());
+     * }</pre>
+     *
+     * @param scopeAnnotation the scope annotation class (must be meta-annotated with @Scope)
+     * @param handler the handler that manages instances of this scope
+     * @throws IllegalArgumentException if either parameter is null or if the scope is already registered
+     * @see javax.inject.Scope
+     * @see ScopeHandler
+     */
     @Override
     public void registerScope(@NonNull Class<? extends Annotation> scopeAnnotation, @NonNull ScopeHandler handler) {
         if (scopeAnnotation == null) {
@@ -125,21 +258,36 @@ public class InjectorImpl implements Injector {
     }
 
     /**
-     * Returns all registered scope annotations.
+     * Returns an immutable set of all currently registered scope annotations.
+     * The default {@link Singleton} scope is always present.
+     *
+     * @return unmodifiable set of registered scope annotation classes
+     * @see javax.inject.Singleton
      */
     public Set<Class<? extends Annotation>> getRegisteredScopes() {
         return Collections.unmodifiableSet(scopeRegistry.keySet());
     }
 
     /**
-     * Checks if a scope is registered.
+     * Checks whether a specific scope annotation has been registered with this injector.
+     *
+     * @param scopeAnnotation the scope annotation to check
+     * @return true if the scope is registered, false otherwise
      */
     public boolean isScopeRegistered(Class<? extends Annotation> scopeAnnotation) {
         return scopeRegistry.containsKey(scopeAnnotation);
     }
 
     /**
-     * Unregisters a scope handler.
+     * Unregisters a scope handler, preventing further use of that scope. Existing instances
+     * managed by the scope are not affected, but new injections will fail if they require
+     * this scope.
+     *
+     * <p><b>Warning:</b> Unregistering a scope does not invoke cleanup on existing instances.
+     * Call the scope handler's {@link ScopeHandler#close()} method explicitly if cleanup is needed.
+     *
+     * @param scopeAnnotation the scope annotation to unregister
+     * @throws IllegalArgumentException if scopeAnnotation is null
      */
     public void unregisterScope(@NonNull Class<? extends Annotation> scopeAnnotation) {
         if (scopeAnnotation == null) {
@@ -148,18 +296,70 @@ public class InjectorImpl implements Injector {
         scopeRegistry.remove(scopeAnnotation);
     }
 
+    /**
+     * Enables an alternative implementation class for dependency resolution. Alternative classes
+     * take precedence over standard implementations when resolving interfaces or abstract types.
+     * This is useful for testing or swapping implementations at runtime.
+     *
+     * <p>Per CDI specification (JSR-299/346), alternatives must be explicitly enabled to be
+     * considered during resolution.
+     *
+     * @param alternativeClass the alternative implementation to enable
+     * @throws IllegalArgumentException if alternativeClass is null
+     * @see javax.enterprise.inject.Alternative
+     */
     @Override
     public void enableAlternative(@NonNull Class<?> alternativeClass) {
         // Non-null check done by classResolver
         classResolver.enableAlternative(alternativeClass);
     }
 
+    /**
+     * Manually binds a type to a specific implementation with optional qualifiers. This overrides
+     * automatic resolution and is useful for programmatic configuration or when implementations
+     * cannot be discovered via classpath scanning.
+     *
+     * <p>Example binding:
+     * <pre>{@code
+     * Collection<Annotation> qualifiers = Arrays.asList(new NamedLiteral("database"));
+     * injector.bind(DataSource.class, qualifiers, PostgresDataSource.class);
+     * }</pre>
+     *
+     * @param type the interface or abstract type to bind
+     * @param qualifiers qualifier annotations to distinguish this binding (may be empty)
+     * @param implementation the concrete implementation class
+     * @throws IllegalArgumentException if any parameter is null
+     * @see javax.inject.Qualifier
+     */
     @Override
     public void bind(@NonNull Type type, @NonNull Collection<Annotation> qualifiers, @NonNull Class<?> implementation) {
         // Non-null checks done by classResolver
         classResolver.bind(type, qualifiers, implementation);
     }
 
+    /**
+     * Creates and injects an instance of the specified class. This is the main entry point for
+     * dependency injection. The injector will:
+     * <ol>
+     *   <li>Resolve concrete implementation if the type is abstract</li>
+     *   <li>Find or use the injectable constructor</li>
+     *   <li>Recursively inject all constructor parameters</li>
+     *   <li>Inject fields annotated with {@link Inject @Inject}</li>
+     *   <li>Invoke methods annotated with {@link Inject @Inject}</li>
+     *   <li>Call {@link PostConstruct @PostConstruct} lifecycle methods</li>
+     * </ol>
+     *
+     * <p>The instance lifecycle is managed according to its scope annotation. {@link Singleton}
+     * instances are cached and reused.
+     *
+     * @param <T> the type to inject
+     * @param classToInject the class to instantiate and inject
+     * @return fully injected instance of the specified class
+     * @throws IllegalArgumentException if classToInject is null
+     * @throws InjectionException if injection fails (e.g., circular dependency, no suitable constructor)
+     * @see javax.inject.Inject
+     * @see javax.annotation.PostConstruct
+     */
     @Override
     public <T> T inject(@NonNull Class<T> classToInject) {
         if (classToInject == null) {
@@ -174,6 +374,24 @@ public class InjectorImpl implements Injector {
         }
     }
 
+    /**
+     * Creates and injects an instance using a {@link TypeLiteral} to preserve generic type
+     * information at runtime. This is necessary when injecting parameterized types like
+     * {@code List<String>} where the type parameter matters.
+     *
+     * <p>Example usage:
+     * <pre>{@code
+     * TypeLiteral<List<String>> type = new TypeLiteral<List<String>>() {};
+     * List<String> list = injector.inject(type);
+     * }</pre>
+     *
+     * @param <T> the generic type to inject
+     * @param typeLiteral type literal capturing the generic type information
+     * @return fully injected instance matching the generic type
+     * @throws IllegalArgumentException if typeLiteral is null
+     * @throws InjectionException if injection fails
+     * @see javax.enterprise.util.TypeLiteral
+     */
     @Override
     public <T> T inject(@NonNull TypeLiteral<T> typeLiteral) {
         if (typeLiteral == null) {
@@ -188,6 +406,20 @@ public class InjectorImpl implements Injector {
         }
     }
 
+    /**
+     * Internal injection method that handles the core dependency resolution logic.
+     * Validates the type, detects circular dependencies, resolves the implementation,
+     * applies scope handling, and performs the actual injection.
+     *
+     * @param <T> the type to inject
+     * @param typeToInject the type to resolve and inject (may be generic)
+     * @param stack dependency resolution stack for circular dependency detection
+     * @param qualifiers optional qualifiers to disambiguate implementations
+     * @return fully injected instance
+     * @throws InjectionException if injection fails for any reason
+     * @see #checkClassValidity(Type)
+     * @see #performInjection(Type, Class, Stack)
+     */
     private <T> T inject(@NonNull Type typeToInject, Stack<Type> stack, Collection<Annotation> qualifiers) {
         if (stack.contains(typeToInject)) {
             stack.add(typeToInject);
@@ -227,8 +459,17 @@ public class InjectorImpl implements Injector {
     }
 
     /**
-     * NOTE: this method supports one annotation only at a time.
-     * @param clazz class to check
+     * Determines the scope annotation present on a class. Per JSR-330, a class may have at most
+     * one scope annotation. This method searches for any annotation that is itself annotated with
+     * {@link javax.inject.Scope @Scope}, or for the built-in {@link Singleton} annotation.
+     *
+     * <p>If no scope annotation is found, returns null, indicating the class uses dependent scope
+     * (new instance per injection point).
+     *
+     * @param clazz the class to inspect for scope annotations
+     * @return the scope annotation type, or null if no scope is defined
+     * @see javax.inject.Scope
+     * @see javax.inject.Singleton
      */
     Class<? extends Annotation> getScopeType(Class<?> clazz) {
         return Arrays.stream(clazz.getAnnotations())
@@ -239,7 +480,18 @@ public class InjectorImpl implements Injector {
     }
 
     /**
-     * Helper method to bridge the generic gap between Class<? extends T> and ScopeHandler
+     * Delegates instance creation to the appropriate scope handler. This method bridges the
+     * generic type safety gap between {@code Class<? extends T>} and {@code ScopeHandler}.
+     * The handler determines whether to create a new instance or return an existing one based
+     * on the scope's lifecycle rules.
+     *
+     * @param <T> the type being injected
+     * @param handler the scope handler managing instances of this scope
+     * @param typeContext the type context for generic type resolution
+     * @param clazz the concrete class to instantiate
+     * @param stack the dependency stack for circular dependency detection
+     * @return instance managed by the scope handler
+     * @see ScopeHandler#get(Class, Supplier)
      */
     @SuppressWarnings("unchecked")
     <T> T handleScopedInjection(ScopeHandler handler, Type typeContext, Class<? extends T> clazz, Stack<Type> stack) {
@@ -247,7 +499,29 @@ public class InjectorImpl implements Injector {
     }
 
     /**
-     * The actual instantiation logic
+     * Performs the complete injection lifecycle for a class instance:
+     * <ol>
+     *   <li>Finds the appropriate constructor (with {@link Inject @Inject} or no-args)</li>
+     *   <li>Resolves and injects constructor parameter dependencies</li>
+     *   <li>Invokes the constructor to create the instance</li>
+     *   <li>Injects static members (once per class)</li>
+     *   <li>Injects instance fields annotated with {@link Inject @Inject}</li>
+     *   <li>Invokes methods annotated with {@link Inject @Inject} with resolved parameters</li>
+     *   <li>Calls {@link PostConstruct @PostConstruct} lifecycle methods</li>
+     * </ol>
+     *
+     * @param <T> the type being injected
+     * @param typeContext the type context for resolving generic parameters
+     * @param resolvedClass the concrete class to instantiate and inject
+     * @param stack the dependency stack for circular dependency detection
+     * @return fully initialized and injected instance
+     * @throws InjectionException if any step of the injection process fails
+     * @see javax.inject.Inject
+     * @see javax.annotation.PostConstruct
+     * @see #getConstructor(Class)
+     * @see #injectFields(Object, Type, Stack, Class, Class, boolean)
+     * @see #injectMethods(Object, Type, Stack, Class, Class, boolean)
+     * @see #invokePostConstruct(Object)
      */
     @SuppressWarnings("unchecked")
     <T> T performInjection(Type typeContext, Class<? extends T> resolvedClass, Stack<Type> stack) {
@@ -287,6 +561,20 @@ public class InjectorImpl implements Injector {
         }
     }
 
+    /**
+     * Finds the constructor to use for dependency injection per JSR-330 rules.
+     * <ol>
+     *   <li>If exactly one constructor is annotated with {@link Inject @Inject}, use it</li>
+     *   <li>If no constructor is annotated, use the no-argument constructor</li>
+     *   <li>If multiple constructors are annotated or no suitable constructor exists, throw exception</li>
+     * </ol>
+     *
+     * @param <T> the type of the class
+     * @param clazz the class whose constructor to find
+     * @return the constructor to use for injection
+     * @throws InjectionException if multiple @Inject constructors exist or no suitable constructor is found
+     * @see javax.inject.Inject
+     */
     @SuppressWarnings("unchecked")
     <T> Constructor<T> getConstructor(@NonNull Class<T> clazz) {
         List<Constructor<T>> constructors = Arrays.stream((Constructor<T>[])clazz.getDeclaredConstructors())
@@ -307,6 +595,15 @@ public class InjectorImpl implements Injector {
         return constructors.get(0);
     }
 
+    /**
+     * Validates that all constructor parameters are valid injectable types per JSR-330.
+     * Each parameter is checked using {@link #checkClassValidity(Type)}.
+     *
+     * @param parameters the constructor parameters to validate
+     * @param clazz the class containing the constructor (for error messages)
+     * @throws InjectionException if any parameter is not a valid injectable type
+     * @see #checkClassValidity(Type)
+     */
     void validateConstructorParameters(Parameter[] parameters, Class<?> clazz) {
         for (Parameter param : parameters) {
             try {
@@ -318,6 +615,16 @@ public class InjectorImpl implements Injector {
         }
     }
 
+    /**
+     * Validates that all method parameters are valid injectable types per JSR-330.
+     * Each parameter is checked using {@link #checkClassValidity(Type)}.
+     *
+     * @param parameters the method parameters to validate
+     * @param methodName the name of the method (for error messages)
+     * @param clazz the class containing the method (for error messages)
+     * @throws InjectionException if any parameter is not a valid injectable type
+     * @see #checkClassValidity(Type)
+     */
     void validateMethodParameters(Parameter[] parameters, String methodName, Class<?> clazz) {
         for (Parameter param : parameters) {
             try {
@@ -329,6 +636,21 @@ public class InjectorImpl implements Injector {
         }
     }
 
+    /**
+     * Resolves and injects all parameters for a constructor or method. For each parameter:
+     * <ul>
+     *   <li>If the parameter is a {@link Provider} or {@link Instance}, creates a wrapper</li>
+     *   <li>Otherwise, recursively injects the parameter type</li>
+     *   <li>Uses qualifiers from the parameter to disambiguate multiple implementations</li>
+     * </ul>
+     *
+     * @param typeContext the type context for resolving generic type parameters
+     * @param parameters the parameters to resolve
+     * @param stack the dependency stack for circular dependency detection
+     * @return array of resolved parameter values ready for invocation
+     * @see #resolveType(Type, Type)
+     * @see #getQualifiers(Parameter)
+     */
     Object[] resolveParameters(Type typeContext, Parameter[] parameters, Stack<Type> stack) {
         Object[] args = new Object[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
@@ -345,6 +667,23 @@ public class InjectorImpl implements Injector {
         return args;
     }
 
+    /**
+     * Resolves a {@link TypeVariable} to its concrete type within a given context. This is essential
+     * for supporting generic injection where the actual type parameter needs to be determined.
+     *
+     * <p>For example, when injecting into {@code class MyList extends ArrayList<String>}, this method
+     * resolves the type variable {@code E} to {@code String} when the context is
+     * {@code ArrayList<String>}.
+     *
+     * <p>If the type to resolve is not a TypeVariable, it is returned as-is. If the context is not
+     * a ParameterizedType or the TypeVariable cannot be resolved, the original TypeVariable is returned.
+     *
+     * @param toResolve the type to resolve (may be a TypeVariable or concrete type)
+     * @param context the context type containing actual type arguments (typically a ParameterizedType)
+     * @return the resolved concrete type, or the original type if resolution is not possible
+     * @see java.lang.reflect.TypeVariable
+     * @see java.lang.reflect.ParameterizedType
+     */
     Type resolveType(Type toResolve, Type context) {
         if (!(toResolve instanceof TypeVariable)) {
             return toResolve;
@@ -363,6 +702,16 @@ public class InjectorImpl implements Injector {
         return toResolve;
     }
 
+    /**
+     * Invokes a constructor with the given arguments to create an instance. Sets the constructor
+     * accessible if it is not public, allowing injection into private and package-private constructors.
+     *
+     * @param <T> the type being instantiated
+     * @param constructor the constructor to invoke
+     * @param args the arguments to pass to the constructor
+     * @return the newly created instance
+     * @throws Exception if instantiation fails for any reason
+     */
     <T> T buildInstance(Constructor<? extends T> constructor, Object... args) throws Exception {
         if (!Modifier.isPublic(constructor.getModifiers())) {
             constructor.setAccessible(true);
@@ -370,6 +719,31 @@ public class InjectorImpl implements Injector {
         return constructor.newInstance(args);
     }
 
+    /**
+     * Injects dependencies into fields annotated with {@link Inject @Inject} per JSR-330.
+     * Handles both static and instance fields, with special logic to ensure static fields are
+     * injected only once per class.
+     *
+     * <p><b>Injection Rules:</b>
+     * <ul>
+     *   <li>Final fields cannot be injected (throws exception)</li>
+     *   <li>Static fields are injected once per class across all instances</li>
+     *   <li>Private fields are made accessible before injection</li>
+     *   <li>{@link Provider} and {@link Instance} fields receive wrappers instead of direct instances</li>
+     *   <li>Qualifiers on fields are used for disambiguation</li>
+     * </ul>
+     *
+     * @param <T> the type of the instance
+     * @param t the instance to inject into (null for static fields)
+     * @param typeContext the type context for resolving generic parameters
+     * @param stack the dependency stack for circular dependency detection
+     * @param clazz the class whose fields to process
+     * @param resolvedClass the concrete resolved class (for error messages)
+     * @param onlyStatic true to inject only static fields, false to inject only instance fields
+     * @throws Exception if field injection fails
+     * @see javax.inject.Inject
+     * @see #getQualifiers(Field)
+     */
     <T> void injectFields(T t, Type typeContext, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
         Field[] fields = clazz.getDeclaredFields();
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
@@ -403,6 +777,32 @@ public class InjectorImpl implements Injector {
         }
     }
 
+    /**
+     * Invokes methods annotated with {@link Inject @Inject} per JSR-330, injecting their parameters.
+     * Handles both static and instance methods, with special logic to ensure static methods are
+     * invoked only once per class. Properly handles method overriding per JSR-330 rules.
+     *
+     * <p><b>Injection Rules:</b>
+     * <ul>
+     *   <li>Abstract methods cannot be injected (throws exception)</li>
+     *   <li>Generic methods (with type parameters) cannot be injected (throws exception)</li>
+     *   <li>Static methods are invoked once per class across all instances</li>
+     *   <li>Private methods are made accessible before invocation</li>
+     *   <li>Overridden methods are not re-injected in subclasses per JSR-330</li>
+     *   <li>Method parameters are resolved and injected recursively</li>
+     * </ul>
+     *
+     * @param <T> the type of the instance
+     * @param t the instance to inject into (null for static methods)
+     * @param typeContext the type context for resolving generic parameters
+     * @param stack the dependency stack for circular dependency detection
+     * @param clazz the class whose methods to process
+     * @param resolvedClass the concrete resolved class (for error messages and override detection)
+     * @param onlyStatic true to invoke only static methods, false to invoke only instance methods
+     * @throws Exception if method injection fails
+     * @see javax.inject.Inject
+     * @see #isOverridden(Method, Class)
+     */
     <T> void injectMethods(T t, Type typeContext, Stack<Type> stack, Class<?> clazz, Class<?> resolvedClass, boolean onlyStatic) throws Exception {
         Method[] methods = clazz.getDeclaredMethods();
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
@@ -445,14 +845,99 @@ public class InjectorImpl implements Injector {
         }
     }
 
+    /**
+     * Invokes all {@link PostConstruct @PostConstruct} annotated methods on the given instance.
+     * Per JSR-250 specification, {@code @PostConstruct} methods:
+     * <ul>
+     *   <li>Must have no parameters</li>
+     *   <li>May have any access modifier (public, protected, package-private, or private)</li>
+     *   <li>Must not throw checked exceptions (except checked exceptions allowed by the platform)</li>
+     *   <li>May be defined on the class itself or inherited from superclasses</li>
+     *   <li>Are invoked after all dependency injection is complete</li>
+     *   <li>Are invoked in order from superclass to subclass (parent first)</li>
+     * </ul>
+     *
+     * <p>This method is called automatically as the final step in {@link #performInjection(Type, Class, Stack)}
+     * after constructor injection, field injection, and method injection are complete.
+     *
+     * @param instance the fully injected instance on which to invoke @PostConstruct methods
+     * @throws InvocationTargetException if a @PostConstruct method throws an exception
+     * @throws IllegalAccessException if a @PostConstruct method cannot be accessed
+     * @see javax.annotation.PostConstruct
+     * @see LifecycleMethodHelper#invokeLifecycleMethod(Object, Class)
+     */
     private void invokePostConstruct(Object instance) throws InvocationTargetException, IllegalAccessException {
         LifecycleMethodHelper.invokeLifecycleMethod(instance, PostConstruct.class);
     }
 
+    /**
+     * Invokes all {@link PreDestroy @PreDestroy} annotated methods on the given instance.
+     * Per JSR-250 specification, {@code @PreDestroy} methods:
+     * <ul>
+     *   <li>Must have no parameters</li>
+     *   <li>May have any access modifier (public, protected, package-private, or private)</li>
+     *   <li>Must not throw checked exceptions (except checked exceptions allowed by the platform)</li>
+     *   <li>May be defined on the class itself or inherited from superclasses</li>
+     *   <li>Are invoked during scope cleanup or application shutdown</li>
+     *   <li>Are invoked in order from subclass to superclass (child first)</li>
+     * </ul>
+     *
+     * <p>This method is called automatically when:
+     * <ul>
+     *   <li>A scope is closed via {@link ScopeHandler#close()}</li>
+     *   <li>The application shuts down (via {@link #shutdown()})</li>
+     *   <li>An instance is explicitly destroyed via {@link Instance#destroy(Object)}</li>
+     * </ul>
+     *
+     * @param instance the instance on which to invoke @PreDestroy methods
+     * @throws InvocationTargetException if a @PreDestroy method throws an exception
+     * @throws IllegalAccessException if a @PreDestroy method cannot be accessed
+     * @see javax.annotation.PreDestroy
+     * @see LifecycleMethodHelper#invokeLifecycleMethod(Object, Class)
+     * @see #shutdown()
+     */
    private void invokePreDestroy(Object instance) throws InvocationTargetException, IllegalAccessException {
        LifecycleMethodHelper.invokeLifecycleMethod(instance, PreDestroy.class);
     }
 
+    /**
+     * Determines whether a method has been overridden in a subclass according to JSR-330 rules.
+     * This is critical for correctly processing {@link Inject @Inject} methods in class hierarchies,
+     * as JSR-330 §5.2 specifies that overridden methods should not be injected multiple times.
+     *
+     * <p><b>JSR-330 Method Override Rules:</b>
+     * <ul>
+     *   <li><b>Private methods:</b> Never considered overridden (private methods are not inherited)</li>
+     *   <li><b>Public methods:</b> Can be overridden across package boundaries</li>
+     *   <li><b>Protected methods:</b> Can be overridden across package boundaries</li>
+     *   <li><b>Package-private methods:</b> Can only be overridden within the same package</li>
+     * </ul>
+     *
+     * <p>A method is considered overridden if:
+     * <ol>
+     *   <li>It is not private</li>
+     *   <li>The leaf class is different from the method's declaring class</li>
+     *   <li>A method with the same signature exists in the leaf class or its hierarchy</li>
+     *   <li>If the method is package-private, both declaring and overriding classes are in the same package</li>
+     * </ol>
+     *
+     * <p><b>Example:</b>
+     * <pre>{@code
+     * class Parent {
+     *     @Inject void injectMethod() { } // Will be called
+     * }
+     * class Child extends Parent {
+     *     @Override @Inject void injectMethod() { } // Will NOT be called (overridden)
+     * }
+     * }</pre>
+     *
+     * @param superMethod the method in the superclass to check for override
+     * @param leafClass the most derived class in the hierarchy to check
+     * @return true if the method is overridden in leafClass according to JSR-330 rules, false otherwise
+     * @see javax.inject.Inject
+     * @see #findMethod(Class, String, Class[])
+     * @see #getPackageName(Class)
+     */
     boolean isOverridden(Method superMethod, Class<?> leafClass) {
         if (Modifier.isPrivate(superMethod.getModifiers())) {
             return false;
@@ -481,12 +966,70 @@ public class InjectorImpl implements Injector {
         return true;
     }
 
+    /**
+     * Extracts the package name from a class's fully qualified name. This is used in conjunction
+     * with {@link #isOverridden(Method, Class)} to determine whether package-private methods can
+     * be overridden according to JSR-330 rules.
+     *
+     * <p><b>Examples:</b>
+     * <ul>
+     *   <li>{@code getPackageName(java.lang.String.class)} returns {@code "java.lang"}</li>
+     *   <li>{@code getPackageName(int.class)} returns {@code ""} (primitives have no package)</li>
+     *   <li>{@code getPackageName(int[].class)} returns {@code ""} (arrays have no package)</li>
+     * </ul>
+     *
+     * <p>For classes in the default package (which is rare in modern Java and typically only
+     * includes primitives and arrays), this method returns an empty string.
+     *
+     * @param clazz the class whose package name to extract
+     * @return the fully qualified package name, or empty string if the class has no package
+     * @see #isOverridden(Method, Class)
+     * @see Class#getPackage()
+     */
     String getPackageName(Class<?> clazz) {
         String name = clazz.getName();
         int lastDot = name.lastIndexOf('.');
         return (lastDot == -1) ? "" : name.substring(0, lastDot);
     }
 
+    /**
+     * Searches for a method with the given signature in the class hierarchy, traversing from
+     * the specified class up through its superclasses until the method is found or {@link Object}
+     * is reached. This method is essential for finding methods that may be private or package-private,
+     * which {@link Class#getMethod(String, Class[])} cannot locate.
+     *
+     * <p><b>Search Behavior:</b>
+     * <ul>
+     *   <li>Starts with the given class and searches each superclass in order</li>
+     *   <li>Uses {@link Class#getDeclaredMethod(String, Class[])} to find private and package-private methods</li>
+     *   <li>Stops searching when {@link Object} is reached (Object methods are excluded)</li>
+     *   <li>Returns null if no matching method is found before reaching Object</li>
+     * </ul>
+     *
+     * <p>The search stops at Object.class because methods declared in Object (toString, equals,
+     * hashCode, etc.) are not relevant for JSR-330 method override detection with {@code @Inject}.
+     *
+     * <p><b>Example:</b>
+     * <pre>{@code
+     * class Parent {
+     *     private void privateMethod() { }
+     *     void packageMethod() { }
+     * }
+     * class Child extends Parent { }
+     *
+     * // Can find privateMethod in Parent even though it's private
+     * Method m = findMethod(Child.class, "privateMethod", new Class[0]);
+     * assert m != null;
+     * assert m.getDeclaringClass() == Parent.class;
+     * }</pre>
+     *
+     * @param clazz the class to start searching from
+     * @param name the name of the method to find
+     * @param parameterTypes the parameter types of the method signature
+     * @return the Method if found in the hierarchy (excluding Object), or null if not found
+     * @see Class#getDeclaredMethod(String, Class[])
+     * @see #isOverridden(Method, Class)
+     */
     Method findMethod(Class<?> clazz, String name, Class<?>[] parameterTypes) {
         Class<?> current = clazz;
         while (current != null && current != Object.class) {
@@ -500,13 +1043,62 @@ public class InjectorImpl implements Injector {
     }
 
     /**
-     * Checks that the class is valid for injection.
-     * @param type the type to check
+     * Validates that a type is suitable for dependency injection according to JSR-330 specifications
+     * and Java language constraints. This method enforces type safety and prevents injection of
+     * problematic types that cannot be properly instantiated or managed by the dependency injection
+     * container.
+     *
+     * <p><b>Validation Rules (JSR-330 and Java Constraints):</b>
+     * <ol>
+     *   <li><b>Enums:</b> Cannot be injected because enums have predefined instances and
+     *       cannot be instantiated via constructors. Use {@code @Inject} on fields within
+     *       the enum instead.</li>
+     *   <li><b>Primitives:</b> Cannot be injected because primitives have no constructors and
+     *       cannot be null. Use wrapper classes (Integer, Boolean, etc.) instead.</li>
+     *   <li><b>Synthetic Classes:</b> Cannot be injected because these are compiler-generated
+     *       internal classes (e.g., lambda implementations, bridges) not intended for direct use.</li>
+     *   <li><b>Local Classes:</b> Cannot be injected because local classes (defined within methods)
+     *       may capture local variables and have complex scoping rules.</li>
+     *   <li><b>Anonymous Classes:</b> Cannot be injected because anonymous classes have no
+     *       constructors that can be annotated with {@code @Inject} and are typically
+     *       single-use instances.</li>
+     *   <li><b>Non-static Inner Classes:</b> Cannot be injected because non-static inner classes
+     *       require an enclosing instance, which the injector cannot provide. Use static
+     *       nested classes instead.</li>
+     * </ol>
+     *
+     * <p><b>Recursive Validation:</b>
+     * For parameterized types (generics), this method recursively validates all type arguments.
+     * For example, {@code List<MyEnum>} will be rejected because {@code MyEnum} is not injectable,
+     * even though {@code List} itself would be valid. This ensures type safety throughout the
+     * entire type hierarchy.
+     *
+     * <p><b>Examples of Invalid Types:</b>
+     * <pre>{@code
+     * // Enums - INVALID
+     * @Inject MyEnum myEnum; // Rejected
+     *
+     * // Primitives - INVALID
+     * @Inject int count; // Rejected (use Integer instead)
+     *
+     * // Non-static inner classes - INVALID
+     * class Outer {
+     *     class Inner { } // Rejected (make it static)
+     * }
+     *
+     * // Parameterized with invalid type argument - INVALID
+     * @Inject List<MyEnum> enums; // Rejected (MyEnum is not injectable)
+     * }</pre>
+     *
+     * @param type the type to validate (may be a Class or ParameterizedType)
+     * @throws IllegalArgumentException if the type violates any injection constraints
+     * @see RawTypeExtractor#getRawType(Type)
+     * @see javax.inject.Inject
      */
     void checkClassValidity(Type type) {
         Class<?> clazz = RawTypeExtractor.getRawType(type);
 
-        // 1. Basic JSR 330 / Java constraints
+        // Basic JSR-330 and Java constraints
         if (clazz.isEnum()) {
             throw new IllegalArgumentException("Cannot inject an enum");
         }
@@ -516,7 +1108,6 @@ public class InjectorImpl implements Injector {
         if (clazz.isSynthetic()) {
             throw new IllegalArgumentException("Cannot inject a synthetic class");
         }
-        // Let's keep this simple
         if (clazz.isLocalClass()) {
             throw new IllegalArgumentException("Cannot inject a local class");
         }
@@ -527,7 +1118,7 @@ public class InjectorImpl implements Injector {
             throw new IllegalArgumentException("Cannot inject a non-static inner class");
         }
 
-        // 2. Recursive validation for Parameterized Types (Generics)
+        // Recursive validation for Parameterized Types (Generics)
         // This ensures Holder<MyEnum> is rejected if MyEnum is not injectable
         if (type instanceof ParameterizedType) {
             for (Type arg : ((ParameterizedType) type).getActualTypeArguments()) {
@@ -539,6 +1130,16 @@ public class InjectorImpl implements Injector {
         }
     }
 
+    /**
+     * Extracts qualifier annotations from a parameter per JSR-330. Qualifiers are annotations
+     * that are themselves annotated with {@link javax.inject.Qualifier @Qualifier}. If no
+     * qualifiers are present, the {@link Default @Default} qualifier is added automatically.
+     *
+     * @param param the parameter to extract qualifiers from
+     * @return collection of qualifier annotations (at least {@link Default @Default})
+     * @see javax.inject.Qualifier
+     * @see javax.enterprise.inject.Default
+     */
     Collection<Annotation> getQualifiers(Parameter param) {
         Collection<Annotation> qualifiers = Arrays.stream(param.getAnnotations())
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
@@ -549,6 +1150,16 @@ public class InjectorImpl implements Injector {
         return qualifiers;
     }
 
+    /**
+     * Extracts qualifier annotations from a field per JSR-330. Qualifiers are annotations
+     * that are themselves annotated with {@link javax.inject.Qualifier @Qualifier}. If no
+     * qualifiers are present, the {@link Default @Default} qualifier is added automatically.
+     *
+     * @param field the field to extract qualifiers from
+     * @return collection of qualifier annotations (at least {@link Default @Default})
+     * @see javax.inject.Qualifier
+     * @see javax.enterprise.inject.Default
+     */
     Collection<Annotation> getQualifiers(Field field) {
         Collection<Annotation> qualifiers = Arrays.stream(field.getAnnotations())
                 .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
@@ -559,6 +1170,15 @@ public class InjectorImpl implements Injector {
         return qualifiers;
     }
 
+    /**
+     * Creates an {@link Instance} wrapper for a field injection point. Extracts the generic
+     * type argument (e.g., {@code String} from {@code Instance<String>}) and the field's
+     * qualifiers to create the appropriate Instance implementation.
+     *
+     * @param field the field requiring an Instance wrapper
+     * @return Instance implementation that can lazily resolve and provide instances
+     * @see javax.enterprise.inject.Instance
+     */
     Instance<?> createInstanceWrapper(Field field) {
         ParameterizedType type = (ParameterizedType) field.getGenericType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
@@ -566,6 +1186,15 @@ public class InjectorImpl implements Injector {
         return createInstance(genericType, qualifiers);
     }
 
+    /**
+     * Creates an {@link Instance} wrapper for a parameter injection point. Extracts the generic
+     * type argument (e.g., {@code String} from {@code Instance<String>}) and the parameter's
+     * qualifiers to create the appropriate Instance implementation.
+     *
+     * @param param the parameter requiring an Instance wrapper
+     * @return Instance implementation that can lazily resolve and provide instances
+     * @see javax.enterprise.inject.Instance
+     */
     Instance<?> createInstanceWrapper(Parameter param) {
         ParameterizedType type = (ParameterizedType) param.getParameterizedType();
         Class<?> genericType = (Class<?>) type.getActualTypeArguments()[0];
@@ -573,6 +1202,28 @@ public class InjectorImpl implements Injector {
         return createInstance(genericType, qualifiers);
     }
 
+    /**
+     * Creates an {@link Instance} implementation per CDI specification (JSR-299/346).
+     * Instance provides lazy and programmatic access to bean instances, allowing iteration
+     * over multiple implementations and explicit destruction via {@link Instance#destroy(Object)}.
+     *
+     * <p>The returned Instance supports:
+     * <ul>
+     *   <li>{@link Instance#get()} - Lazily retrieves an instance</li>
+     *   <li>{@link Instance#select(Annotation...)} - Refines selection with additional qualifiers</li>
+     *   <li>{@link Instance#isAmbiguous()} - Checks if multiple implementations exist</li>
+     *   <li>{@link Instance#isUnsatisfied()} - Checks if no implementations exist</li>
+     *   <li>{@link Instance#iterator()} - Iterates over all matching implementations</li>
+     *   <li>{@link Instance#destroy(Object)} - Explicitly invokes {@link PreDestroy} on an instance</li>
+     * </ul>
+     *
+     * @param <T> the type of instances this Instance provides
+     * @param type the class of instances to provide
+     * @param qualifiers the qualifiers to use for instance resolution
+     * @return Instance implementation for the specified type and qualifiers
+     * @see javax.enterprise.inject.Instance
+     * @see javax.annotation.PreDestroy
+     */
     <T> Instance<T> createInstance(Class<T> type, Collection<Annotation> qualifiers) {
         return new Instance<T>() {
             @Override
@@ -648,6 +1299,22 @@ public class InjectorImpl implements Injector {
         };
     }
 
+    /**
+     * Merges qualifier annotations, giving precedence to new annotations. This is used when
+     * {@link Instance#select(Annotation...)} is called to refine the qualifier set.
+     *
+     * <p>Merge Rules:
+     * <ul>
+     *   <li>New annotations override existing ones of the same type</li>
+     *   <li>If specific qualifiers are added, the {@link Default @Default} qualifier is removed</li>
+     *   <li>Returns the existing collection unchanged if no new annotations are provided</li>
+     * </ul>
+     *
+     * @param existing the existing qualifier annotations
+     * @param newAnnotations new qualifier annotations to add/override
+     * @return merged collection of qualifiers
+     * @see javax.enterprise.inject.Instance#select(Annotation...)
+     */
     Collection<Annotation> mergeQualifiers(Collection<Annotation> existing, Annotation... newAnnotations) {
         if (newAnnotations == null || newAnnotations.length == 0) {
             return existing;
@@ -672,7 +1339,15 @@ public class InjectorImpl implements Injector {
     }
 
     /**
-     * Clears all internal state, including scope handlers and injected static classes.
+     * Clears all internal state, including custom scope handlers and static injection tracking.
+     * After clearing, the default {@link Singleton} scope is re-registered. This method is
+     * primarily used for testing purposes.
+     *
+     * <p><b>Warning:</b> This does not destroy existing scoped instances. It only clears the
+     * injector's internal state. Existing singleton instances will become unreachable but not
+     * explicitly destroyed.
+     *
+     * @see #registerDefaultScope()
      */
     void clearState() {
         scopeRegistry.clear();
@@ -680,6 +1355,18 @@ public class InjectorImpl implements Injector {
         injectedStaticClasses.clear();
     }
 
+    /**
+     * Initiates graceful shutdown of all registered scopes, invoking {@link PreDestroy @PreDestroy}
+     * methods on all managed instances per JSR-250. This method is automatically called during JVM
+     * shutdown via the registered shutdown hook.
+     *
+     * <p>Each {@link ScopeHandler} is closed in turn. If a handler throws an exception during
+     * closure, it is caught and ignored to allow other handlers to complete their cleanup.
+     *
+     * @see javax.annotation.PreDestroy
+     * @see ScopeHandler#close()
+     * @see #addShutdownHook()
+     */
     @Override
     public void shutdown() {
         // Notify custom scopes
