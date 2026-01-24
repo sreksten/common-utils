@@ -35,6 +35,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     private Policy policy;
     private int nonEmptyCount = 0;
+    private int elementCount = 0;
 
     public GeneralPurposePriorityDeque() {
         this.policy = Policy.FIFO;
@@ -61,6 +62,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
             return new ArrayDeque<>();
         });
         q.addLast(t);
+        elementCount++;
     }
 
     public @Nullable T peek() {
@@ -115,6 +117,9 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         }
         ArrayDeque<T> q = e.getValue();
         T t = q.pollFirst();
+        if (t != null) {
+            elementCount--;
+        }
         if (q.isEmpty()) {
             byPriority.remove(e.getKey());
             nonEmptyCount--;
@@ -128,6 +133,9 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
             return null;
         }
         T t = q.pollFirst();
+        if (t != null) {
+            elementCount--;
+        }
         if (q.isEmpty()) {
             byPriority.remove(priority);
             nonEmptyCount--;
@@ -143,6 +151,9 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         }
         ArrayDeque<T> q = e.getValue();
         T t = q.pollLast();
+        if (t != null) {
+            elementCount--;
+        }
         if (q.isEmpty()) {
             byPriority.remove(e.getKey());
             nonEmptyCount--;
@@ -156,6 +167,9 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
             return null;
         }
         T t = q.pollLast();
+        if (t != null) {
+            elementCount--;
+        }
         if (q.isEmpty()) {
             byPriority.remove(priority);
             nonEmptyCount--;
@@ -173,7 +187,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     public int size() {
-        return byPriority.values().stream().mapToInt(ArrayDeque::size).sum();
+        return elementCount;
     }
 
     public int size(final int priority) {
@@ -184,11 +198,13 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     public void clear() {
         byPriority.clear();
         nonEmptyCount = 0;
+        elementCount = 0;
     }
 
     public void clear(final int priority) {
         ArrayDeque<T> q = byPriority.remove(priority);
         if (q != null) {
+            elementCount -= q.size();
             nonEmptyCount--;
         }
     }
@@ -197,7 +213,10 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         validateFilteringFunction(filteringFunction);
         List<Integer> emptyPriorities = new ArrayList<>();
         for (Map.Entry<Integer, ArrayDeque<T>> entry : byPriority.entrySet()) {
-            entry.getValue().removeIf(filteringFunction::apply);
+            ArrayDeque<T> q = entry.getValue();
+            int beforeSize = q.size();
+            q.removeIf(filteringFunction::apply);
+            elementCount -= (beforeSize - q.size());
             if (entry.getValue().isEmpty()) {
                 emptyPriorities.add(entry.getKey());
             }
@@ -213,7 +232,9 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         validateFilteringFunction(filteringFunction);
         ArrayDeque<T> q = byPriority.get(priority);
         if (q != null) {
+            int beforeSize = q.size();
             q.removeIf(filteringFunction::apply);
+            elementCount -= (beforeSize - q.size());
             if (q.isEmpty()) {
                 byPriority.remove(priority);
                 nonEmptyCount--;
@@ -229,7 +250,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public boolean contains(@Nonnull final T t) {
+    public boolean contains(@Nullable final T t) {
         if (t == null) {
             return false;
         }
@@ -242,7 +263,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public boolean contains(@Nonnull final T t, final int priority) {
+    public boolean contains(@Nullable final T t, final int priority) {
         if (t == null) {
             return false;
         }
@@ -281,12 +302,13 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public boolean remove(final @Nonnull T t) {
+    public boolean remove(final @Nullable T t) {
         if (t == null) {
             return false;
         }
         for (Map.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
             if (e.getValue().remove(t)) {
+                elementCount--;
                 if (e.getValue().isEmpty()) {
                     byPriority.remove(e.getKey());
                     nonEmptyCount--;
@@ -307,12 +329,13 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public boolean remove(final @Nonnull T t, final int priority) {
+    public boolean remove(final @Nullable T t, final int priority) {
         if (t == null) {
             return false;
         }
         ArrayDeque<T> q = byPriority.get(priority);
         if (q != null && q.remove(t)) {
+            elementCount--;
             if (q.isEmpty()) {
                 byPriority.remove(priority);
                 nonEmptyCount--;
@@ -341,7 +364,11 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         if (q == null) {
             return false;
         }
+        int beforeSize = q.size();
         boolean removed = q.removeAll(iterable);
+        if (removed) {
+            elementCount -= (beforeSize - q.size());
+        }
         if (removed && q.isEmpty()) {
             byPriority.remove(priority);
             nonEmptyCount--;
@@ -355,9 +382,12 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         boolean result = false;
         List<Integer> emptyPriorities = new ArrayList<>();
         for (Map.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
-            if (e.getValue().retainAll(iterable)) {
+            ArrayDeque<T> q = e.getValue();
+            int beforeSize = q.size();
+            if (q.retainAll(iterable)) {
+                elementCount -= (beforeSize - q.size());
                 result = true;
-                if (e.getValue().isEmpty()) {
+                if (q.isEmpty()) {
                     emptyPriorities.add(e.getKey());
                 }
             }
@@ -376,7 +406,11 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         if (q == null) {
             return false;
         }
+        int beforeSize = q.size();
         boolean changed = q.retainAll(iterable);
+        if (changed) {
+            elementCount -= (beforeSize - q.size());
+        }
         if (changed && q.isEmpty()) {
             byPriority.remove(priority);
             nonEmptyCount--;
@@ -470,6 +504,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
                 throw new IllegalStateException();
             }
             currentDequeIterator.remove();
+            elementCount--;
             if (currentDeque.isEmpty()) {
                 if (singlePriority) {
                     byPriority.remove(currentPriority);

@@ -40,6 +40,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
 
     private Policy policy;
     private int nonEmptyMask = 0; // bit i set => bucket i has items
+    private int elementCount = 0;
 
     @SuppressWarnings("unchecked")
     public BucketedPriorityDeque(final int maxPriority, final @Nonnull Policy policy) {
@@ -77,6 +78,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         ArrayDeque<T> q = buckets[priority];
         q.addLast(t);
         nonEmptyMask |= (1 << priority);
+        elementCount++;
     }
 
     @Override
@@ -113,6 +115,9 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         }
         ArrayDeque<T> q = buckets[p];
         T t = q.pollFirst();
+        if (t != null) {
+            elementCount--;
+        }
         if (q.isEmpty()) {
             nonEmptyMask &= ~(1 << p);
         }
@@ -127,6 +132,9 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         }
         ArrayDeque<T> q = buckets[p];
         T t = q.pollLast();
+        if (t != null) {
+            elementCount--;
+        }
         if (q.isEmpty()) {
             nonEmptyMask &= ~(1 << p);
         }
@@ -140,15 +148,11 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public int size() {
-        int size = 0;
-        for (int i = 0; i <= maxPriority; i++) {
-            size += buckets[i].size();
-        }
-        return size;
+        return elementCount;
     }
 
     @Override
-    public boolean contains(final @Nonnull T t) {
+    public boolean contains(final @Nullable T t) {
         if (t == null) {
             return false;
         }
@@ -187,13 +191,17 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
             buckets[i].clear();
         }
         nonEmptyMask = 0;
+        elementCount = 0;
     }
 
     @Override
     public void clear(final @Nonnull Function<T, Boolean> filteringFunction) {
         validateFilteringFunction(filteringFunction);
         for (int i = 0; i <= maxPriority; i++) {
-            buckets[i].removeIf(filteringFunction::apply);
+            ArrayDeque<T> q = buckets[i];
+            int beforeSize = q.size();
+            q.removeIf(filteringFunction::apply);
+            elementCount -= (beforeSize - q.size());
             if (buckets[i].isEmpty()) {
                 nonEmptyMask &= ~(1 << i);
             }
@@ -210,12 +218,13 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public boolean remove(final @Nonnull T t) {
+    public boolean remove(final @Nullable T t) {
         if (t == null) {
             return false;
         }
         for (int i = 0; i <= maxPriority; i++) {
             if (buckets[i].remove(t)) {
+                elementCount--;
                 if (buckets[i].isEmpty()) {
                     nonEmptyMask &= ~(1 << i);
                 }
@@ -242,9 +251,12 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         validateCollection(iterable);
         boolean result = false;
         for (int i = 0; i <= maxPriority; i++) {
-            if (buckets[i].retainAll(iterable)) {
+            ArrayDeque<T> q = buckets[i];
+            int beforeSize = q.size();
+            if (q.retainAll(iterable)) {
+                elementCount -= (beforeSize - q.size());
                 result = true;
-                if (buckets[i].isEmpty()) {
+                if (q.isEmpty()) {
                     nonEmptyMask &= ~(1 << i);
                 }
             }
@@ -311,6 +323,9 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         validatePriority(priority);
         ArrayDeque<T> q = buckets[priority];
         T t = q.pollFirst();
+        if (t != null) {
+            elementCount--;
+        }
         if (q.isEmpty()) {
             nonEmptyMask &= ~(1 << priority);
         }
@@ -322,6 +337,9 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         validatePriority(priority);
         ArrayDeque<T> q = buckets[priority];
         T t = q.pollLast();
+        if (t != null) {
+            elementCount--;
+        }
         if (q.isEmpty()) {
             nonEmptyMask &= ~(1 << priority);
         }
@@ -341,7 +359,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public boolean contains(final @Nonnull T t, final int priority) {
+    public boolean contains(final @Nullable T t, final int priority) {
         validatePriority(priority);
         if (t == null) {
             return false;
@@ -361,6 +379,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     @Override
     public void clear(final int priority) {
         validatePriority(priority);
+        elementCount -= buckets[priority].size();
         buckets[priority].clear();
         nonEmptyMask &= ~(1 << priority);
     }
@@ -369,7 +388,10 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     public void clear(final @Nonnull Function<T, Boolean> filteringFunction, final int priority) {
         validateFilteringFunction(filteringFunction);
         validatePriority(priority);
-        buckets[priority].removeIf(filteringFunction::apply);
+        ArrayDeque<T> q = buckets[priority];
+        int beforeSize = q.size();
+        q.removeIf(filteringFunction::apply);
+        elementCount -= (beforeSize - q.size());
         if (buckets[priority].isEmpty()) {
             nonEmptyMask &= ~(1 << priority);
         }
@@ -386,12 +408,15 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public boolean remove(final @Nonnull T t, final int priority) {
+    public boolean remove(final @Nullable T t, final int priority) {
         validatePriority(priority);
         if (t == null) {
             return false;
         }
         boolean removed = buckets[priority].remove(t);
+        if (removed) {
+            elementCount--;
+        }
         if (removed && buckets[priority].isEmpty()) {
             nonEmptyMask &= ~(1 << priority);
         }
@@ -402,7 +427,12 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     public boolean removeAll(final @Nonnull Collection<T> iterable, final int priority) {
         validateCollection(iterable);
         validatePriority(priority);
-        boolean removed = buckets[priority].removeAll(iterable);
+        ArrayDeque<T> q = buckets[priority];
+        int beforeSize = q.size();
+        boolean removed = q.removeAll(iterable);
+        if (removed) {
+            elementCount -= (beforeSize - q.size());
+        }
         if (removed && buckets[priority].isEmpty()) {
             nonEmptyMask &= ~(1 << priority);
         }
@@ -413,7 +443,12 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     public boolean retainAll(@Nonnull Collection<T> iterable, int priority) {
         validateCollection(iterable);
         validatePriority(priority);
-        boolean changed = buckets[priority].retainAll(iterable);
+        ArrayDeque<T> q = buckets[priority];
+        int beforeSize = q.size();
+        boolean changed = q.retainAll(iterable);
+        if (changed) {
+            elementCount -= (beforeSize - q.size());
+        }
         if (changed && buckets[priority].isEmpty()) {
             nonEmptyMask &= ~(1 << priority);
         }
@@ -481,6 +516,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
             }
             currentDequeIterator.remove();
             canRemove = false;
+            elementCount--;
             if (currentDeque.isEmpty()) {
                 nonEmptyMask &= ~(1 << currentBucketIndex);
             }
