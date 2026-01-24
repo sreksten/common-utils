@@ -204,6 +204,19 @@ class InMemoryMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Should handle null exception message by using exception.toString()")
+    void shouldHandleNullExceptionMessage() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+        Exception ex = new Exception((String) null);
+
+        sut.handleException(ex);
+
+        assertEquals(1, sut.getAllExceptionMessages().size());
+        assertEquals(ex.toString(), sut.getAllExceptionMessages().get(0));
+        assertEquals(ex, sut.getAllExceptions().get(0));
+    }
+
+    @Test
     @DisplayName("Should evict oldest when maxEntries exceeded")
     void shouldEvictOldestWhenMaxEntriesExceeded() {
         InMemoryMessageHandler handler = new InMemoryMessageHandler(2);
@@ -223,5 +236,50 @@ class InMemoryMessageHandlerUnitTest {
     void shouldRejectNonPositiveMaxEntries() {
         assertThrows(IllegalArgumentException.class, () -> new InMemoryMessageHandler(0));
         assertThrows(IllegalArgumentException.class, () -> new InMemoryMessageHandler(-5));
+    }
+
+    @Test
+    @DisplayName("Supplier should not be evaluated when level disabled")
+    void supplierShouldNotBeEvaluatedWhenLevelDisabled() {
+        InMemoryMessageHandler sut = new InMemoryMessageHandler();
+
+        sut.setInfoEnabled(false);
+        sut.handleInfoMessage((java.util.function.Supplier<String>) () -> {
+            throw new AssertionError("Supplier should not be called");
+        });
+        sut.setInfoEnabled(true);
+
+        sut.setWarnEnabled(false);
+        sut.handleWarnMessage((java.util.function.Supplier<String>) () -> {
+            throw new AssertionError("Supplier should not be called");
+        });
+        sut.setWarnEnabled(true);
+
+        sut.setErrorEnabled(false);
+        sut.handleErrorMessage((java.util.function.Supplier<String>) () -> {
+            throw new AssertionError("Supplier should not be called");
+        });
+        sut.setErrorEnabled(true);
+
+        sut.setDebugEnabled(false);
+        sut.handleDebugMessage((java.util.function.Supplier<String>) () -> {
+            throw new AssertionError("Supplier should not be called");
+        });
+        sut.setDebugEnabled(true);
+
+        sut.setTraceEnabled(false);
+        sut.handleTraceMessage((java.util.function.Supplier<String>) () -> {
+            throw new AssertionError("Supplier should not be called");
+        });
+        sut.setTraceEnabled(true);
+
+        assertEquals(0, sut.getAllMessages().size());
+        assertEquals(0, sut.getAllInfoMessages().size());
+        assertEquals(0, sut.getAllWarnMessages().size());
+        assertEquals(0, sut.getAllErrorMessages().size());
+        assertEquals(0, sut.getAllDebugMessages().size());
+        assertEquals(0, sut.getAllTraceMessages().size());
+        assertEquals(0, sut.getAllExceptionMessages().size());
+        assertEquals(0, sut.getAllExceptions().size());
     }
 }

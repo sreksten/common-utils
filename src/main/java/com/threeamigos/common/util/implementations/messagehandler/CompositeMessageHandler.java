@@ -61,9 +61,6 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     private void addMessageHandlers(@Nonnull Collection<MessageHandler> handlers) {
-        if (handlers == null) {
-            throw new IllegalArgumentException(getBundle().getString("noMessageHandlersProvided"));
-        }
         lock.writeLock().lock();
         try {
             for (MessageHandler handler : handlers) {

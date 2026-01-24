@@ -205,6 +205,18 @@ class CompositeMessageHandlerUnitTest {
         }
     }
 
+    @Test
+    @DisplayName("Supplier should not be evaluated when info level disabled")
+    void supplierShouldNotBeEvaluatedWhenInfoLevelDisabled() {
+        CompositeMessageHandler sut = new CompositeMessageHandler(firstMessageHandler, secondMessageHandler);
+        sut.setInfoEnabled(false);
+        Supplier<String> supplier = mock(Supplier.class);
+
+        sut.handleInfoMessage(supplier);
+
+        verifyNoInteractions(supplier);
+    }
+
     @ParameterizedTest
     @DisplayName("Should remember if warn level is active")
     @CsvSource({"true, true", "false, false"})
