@@ -48,6 +48,14 @@ public interface PriorityDeque<T> {
     void add(final @Nonnull T t, final int priority);
 
     /**
+     * Adds all objects to the deque with a given priority.
+     *
+     * @param iterable objects to add
+     * @param priority priority of the objects
+     */
+    void addAll(final @Nonnull Collection<T> iterable, final int priority);
+
+    /**
      * Retrieves, but does not remove, the head of the highest non-empty priority bucket using the default policy.
      *
      * @return the head of the highest non-empty priority bucket, or null if the deque is empty

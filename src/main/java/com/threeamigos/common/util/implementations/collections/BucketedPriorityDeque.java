@@ -82,6 +82,23 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
+    public void addAll(@Nonnull Collection<T> iterable, int priority) {
+        validateCollection(iterable);
+        validatePriority(priority);
+        ArrayDeque<T> q = buckets[priority];
+        boolean added = false;
+        for (T t : iterable) {
+            validateObject(t);
+            q.addLast(t);
+            elementCount++;
+            added = true;
+        }
+        if (added) {
+            nonEmptyMask |= (1 << priority);
+        }
+    }
+
+    @Override
     public @Nullable T peek() {
         return policy == Policy.FIFO ? peekFifo() : peekLifo();
     }

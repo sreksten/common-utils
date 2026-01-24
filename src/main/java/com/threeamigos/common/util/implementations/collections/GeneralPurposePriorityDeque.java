@@ -65,6 +65,14 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         elementCount++;
     }
 
+    @Override
+    public void addAll(@Nonnull Collection<T> iterable, int priority) {
+        validateCollection(iterable);
+        for (T t : iterable) {
+            add(t, priority);
+        }
+    }
+
     public @Nullable T peek() {
         return policy == Policy.FIFO ? peekFifo() : peekLifo();
     }

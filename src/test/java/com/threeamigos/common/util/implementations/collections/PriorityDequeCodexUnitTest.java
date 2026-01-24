@@ -426,6 +426,38 @@ public class PriorityDequeCodexUnitTest {
         }
 
         @ParameterizedTest(name = "{0}")
+        @DisplayName("addAll by priority should add elements and update sizes")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.PriorityDequeCodexUnitTest#createSut")
+        void addAllByPriorityAddsElements(String sutName, Supplier<PriorityDeque<String>> factory) {
+            PriorityDeque<String> sut = newSut(factory);
+            List<String> items = Arrays.asList("a", "b", "c");
+
+            sut.addAll(items, 2);
+
+            assertEquals(3, sut.size());
+            assertEquals(3, sut.size(2));
+            assertTrue(sut.containsAll(items, 2));
+            assertEquals("a", sut.peekFifo(2));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("addAll by priority should reject null collection")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.PriorityDequeCodexUnitTest#createSut")
+        void addAllByPriorityRejectsNullCollection(String sutName, Supplier<PriorityDeque<String>> factory) {
+            PriorityDeque<String> sut = newSut(factory);
+            assertThrows(IllegalArgumentException.class, () -> sut.addAll(null, 1));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("addAll by priority should reject null elements")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.PriorityDequeCodexUnitTest#createSut")
+        void addAllByPriorityRejectsNullElements(String sutName, Supplier<PriorityDeque<String>> factory) {
+            PriorityDeque<String> sut = newSut(factory);
+            List<String> items = Arrays.asList("a", null);
+            assertThrows(IllegalArgumentException.class, () -> sut.addAll(items, 1));
+        }
+
+        @ParameterizedTest(name = "{0}")
         @DisplayName("pollFifo by priority should handle non-empty and empty buckets")
         @MethodSource("com.threeamigos.common.util.implementations.collections.PriorityDequeCodexUnitTest#createSut")
         void pollFifoByPriorityHandlesBucketState(String sutName, Supplier<PriorityDeque<String>> factory) {

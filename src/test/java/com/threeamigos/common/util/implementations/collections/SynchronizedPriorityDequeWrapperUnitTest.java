@@ -70,6 +70,7 @@ class SynchronizedPriorityDequeWrapperUnitTest {
         sut.setPolicy(PriorityDeque.Policy.FIFO);
         assertEquals(PriorityDeque.Policy.FIFO, sut.getPolicy());
         sut.add("a", 1);
+        sut.addAll(list, 1);
         assertEquals("peek", sut.peek());
         assertEquals("peekFifo", sut.peekFifo());
         assertEquals("peekLifo", sut.peekLifo());
@@ -109,6 +110,7 @@ class SynchronizedPriorityDequeWrapperUnitTest {
         assertTrue(delegate.calledSetPolicy);
         assertTrue(delegate.calledGetPolicy);
         assertTrue(delegate.calledAdd);
+        assertTrue(delegate.calledAddAll);
         assertTrue(delegate.calledPeek);
         assertTrue(delegate.calledPeekFifo);
         assertTrue(delegate.calledPeekLifo);
@@ -261,6 +263,7 @@ class SynchronizedPriorityDequeWrapperUnitTest {
         private boolean calledSetPolicy;
         private boolean calledGetPolicy;
         private boolean calledAdd;
+        private boolean calledAddAll;
         private boolean calledPeek;
         private boolean calledPeekFifo;
         private boolean calledPeekLifo;
@@ -348,6 +351,11 @@ class SynchronizedPriorityDequeWrapperUnitTest {
         @Override
         public void add(@Nonnull String t, int priority) {
             calledAdd = true;
+        }
+
+        @Override
+        public void addAll(@Nonnull Collection<String> iterable, int priority) {
+            calledAddAll = true;
         }
 
         @Override

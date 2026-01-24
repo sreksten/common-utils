@@ -64,6 +64,16 @@ public class SynchronizedPriorityDequeWrapper<T> implements PriorityDeque<T> {
     }
 
     @Override
+    public void addAll(@Nonnull Collection<T> iterable, int priority) {
+        write.lock();
+        try {
+            delegate.addAll(iterable, priority);
+        } finally {
+            write.unlock();
+        }
+    }
+
+    @Override
     public @Nullable T peek() {
         read.lock();
         try {
