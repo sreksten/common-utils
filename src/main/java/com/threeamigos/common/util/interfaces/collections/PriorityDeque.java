@@ -105,7 +105,7 @@ public interface PriorityDeque<T> {
      * @param t object to check
      * @return true if the deque contains the given object at any priority, false otherwise.
      */
-    boolean contains(final @Nonnull T t);
+    boolean contains(final @Nullable T t);
 
     /**
      * Tells if the deque contains all objects in the given iterable whatever the priority.
@@ -138,7 +138,7 @@ public interface PriorityDeque<T> {
      * @param t object to remove
      * @return true if the deque contained the specified element.
      */
-    boolean remove(final @Nonnull T t);
+    boolean remove(final @Nullable T t);
 
     /**
      * Removes all objects from the deque whatever the priority.
@@ -240,7 +240,7 @@ public interface PriorityDeque<T> {
      * @param priority priority of the object to check
      * @return true if the deque contains the given object at the given priority, false otherwise.
      */
-    boolean contains(final @Nonnull T t, final int priority);
+    boolean contains(final @Nullable T t, final int priority);
 
     /**
      * Tells if the deque contains all objects in the given iterable at the given priority.
@@ -279,7 +279,7 @@ public interface PriorityDeque<T> {
      * @param priority priority of the object to remove
      * @return true if the deque contained the specified element.
      */
-    boolean remove(final @Nonnull T t, final int priority);
+    boolean remove(final @Nullable T t, final int priority);
 
     /**
      * Removes all objects from the deque in the given priority bucket.

@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.collections;
 
 import com.threeamigos.common.util.interfaces.collections.PriorityDeque;
 import jakarta.annotation.Nonnull;
+import jakarta.annotation.Nullable;
 
 import java.util.*;
 import java.util.function.Function;
@@ -62,38 +63,38 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         q.addLast(t);
     }
 
-    public T peek() {
+    public @Nullable T peek() {
         return policy == Policy.FIFO ? peekFifo() : peekLifo();
     }
 
-    public T peekFifo() {
+    public @Nullable T peekFifo() {
         Map.Entry<Integer, ArrayDeque<T>> integerArrayDequeEntry = byPriority.lastEntry();
         return integerArrayDequeEntry != null ? integerArrayDequeEntry.getValue().peekFirst() : null;
     }
 
-    public T peekLifo() {
+    public @Nullable T peekLifo() {
         Map.Entry<Integer, ArrayDeque<T>> integerArrayDequeEntry = byPriority.lastEntry();
         return integerArrayDequeEntry != null ? integerArrayDequeEntry.getValue().peekLast() : null;
     }
 
     @Override
-    public T peek(final int priority) {
+    public @Nullable T peek(final int priority) {
         return policy == Policy.FIFO ? peekFifo(priority) : peekLifo(priority);
     }
 
     @Override
-    public T peekFifo(final int priority) {
+    public @Nullable T peekFifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         return q != null ? q.peekFirst() : null;
     }
 
     @Override
-    public T peekLifo(final int priority) {
+    public @Nullable T peekLifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         return q != null ? q.peekLast() : null;
     }
 
-    public T poll() {
+    public @Nullable T poll() {
         if (policy == Policy.FIFO) {
             return pollFifo();
         } else {
@@ -102,12 +103,12 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public T poll(final int priority) {
+    public @Nullable T poll(final int priority) {
         return policy == Policy.FIFO ? pollFifo(priority) : pollLifo(priority);
     }
 
     /** Take the next task preferring the highest priority, FIFO within that priority */
-    public T pollFifo() {
+    public @Nullable T pollFifo() {
         Map.Entry<Integer, ArrayDeque<T>> e = byPriority.lastEntry();
         if (e == null) {
             return null;
@@ -121,7 +122,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public T pollFifo(final int priority) {
+    public @Nullable T pollFifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         if (q == null) {
             return null;
@@ -135,7 +136,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     /** Take the next task preferring the highest priority, LIFO within that priority */
-    public T pollLifo() {
+    public @Nullable T pollLifo() {
         Map.Entry<Integer, ArrayDeque<T>> e = byPriority.lastEntry();
         if (e == null) {
             return null;
@@ -149,7 +150,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public T pollLifo(final int priority) {
+    public @Nullable T pollLifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         if (q == null) {
             return null;

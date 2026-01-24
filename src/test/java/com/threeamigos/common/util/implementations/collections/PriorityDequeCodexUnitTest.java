@@ -420,11 +420,7 @@ public class PriorityDequeCodexUnitTest {
             assertEquals("b", sut.peekLifo(2));
 
             sut.setPolicy(PriorityDeque.Policy.LIFO);
-            if (sut instanceof BucketedPriorityDeque) {
-                assertEquals("a", sut.peek(2));
-            } else {
-                assertEquals("b", sut.peek(2));
-            }
+            assertEquals("b", sut.peek(2));
             assertEquals("b", sut.poll(2));
             assertEquals("a", sut.poll(2));
         }

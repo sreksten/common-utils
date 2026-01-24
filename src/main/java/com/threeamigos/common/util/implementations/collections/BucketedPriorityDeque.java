@@ -80,12 +80,12 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public T peek() {
+    public @Nullable T peek() {
         return policy == Policy.FIFO ? peekFifo() : peekLifo();
     }
 
     @Override
-    public T peekFifo() {
+    public @Nullable T peekFifo() {
         if (nonEmptyMask == 0) {
             return null;
         }
@@ -93,7 +93,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public T peekLifo() {
+    public @Nullable T peekLifo() {
         if (nonEmptyMask == 0) {
             return null;
         }
@@ -101,12 +101,12 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public T poll() {
+    public @Nullable T poll() {
         return policy == Policy.FIFO ? pollFifo() : pollLifo();
     }
 
     @Override
-    public T pollFifo() {
+    public @Nullable T pollFifo() {
         int p = getHighestNotEmptyPriority();
         if (p < 0) {
             return null;
@@ -120,7 +120,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public T pollLifo() {
+    public @Nullable T pollLifo() {
         int p = getHighestNotEmptyPriority();
         if (p < 0) {
             return null;
@@ -283,8 +283,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     @Override
     public @Nullable T peek(final int priority) {
         validatePriority(priority);
-        ArrayDeque<T> q = buckets[priority];
-        return q.peekFirst();
+        return policy == Policy.FIFO ? peekFifo(priority) : peekLifo(priority);
     }
 
     @Override
@@ -308,7 +307,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public T pollFifo(final int priority) {
+    public @Nullable T pollFifo(final int priority) {
         validatePriority(priority);
         ArrayDeque<T> q = buckets[priority];
         T t = q.pollFirst();
@@ -319,7 +318,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public T pollLifo(final int priority) {
+    public @Nullable T pollLifo(final int priority) {
         validatePriority(priority);
         ArrayDeque<T> q = buckets[priority];
         T t = q.pollLast();
