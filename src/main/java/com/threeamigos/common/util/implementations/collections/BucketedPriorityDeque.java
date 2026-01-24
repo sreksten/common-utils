@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.collections;
 
 import com.threeamigos.common.util.interfaces.collections.PriorityDeque;
 import jakarta.annotation.Nonnull;
+import jakarta.annotation.Nullable;
 
 import java.util.*;
 import java.util.function.Function;
@@ -56,7 +57,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         this(MAX_PRIORITY);
     }
 
-    public void setPolicy(@Nonnull Policy policy) {
+    public void setPolicy(final @Nonnull Policy policy) {
         validatePolicy(policy);
         this.policy = policy;
     }
@@ -65,20 +66,21 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return policy;
     }
 
-    public synchronized void add(@Nonnull T task, int priority) {
-        if (task == null) {
-            throw new NullPointerException("Task cannot be null");
-        }
+    @Override
+    public synchronized void add(final @Nonnull T t, final int priority) {
+        validateObject(t);
         validatePriority(priority);
         ArrayDeque<T> q = buckets[priority];
-        q.addLast(task);
+        q.addLast(t);
         nonEmptyMask |= (1 << priority);
     }
 
+    @Override
     public synchronized T peek() {
         return policy == Policy.FIFO ? peekFifo() : peekLifo();
     }
 
+    @Override
     public synchronized T peekFifo() {
         if (nonEmptyMask == 0) {
             return null;
@@ -86,6 +88,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return buckets[getHighestNotEmptyPriority()].peekFirst();
     }
 
+    @Override
     public synchronized T peekLifo() {
         if (nonEmptyMask == 0) {
             return null;
@@ -93,6 +96,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return buckets[getHighestNotEmptyPriority()].peekLast();
     }
 
+    @Override
     public synchronized T poll() {
         if (policy == Policy.FIFO) {
             return pollFifo();
@@ -101,6 +105,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         }
     }
 
+    @Override
     public synchronized T pollFifo() {
         int p = getHighestNotEmptyPriority();
         if (p < 0) {
@@ -114,15 +119,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public synchronized T pollFifo(int priority) {
-        ArrayDeque<T> q = buckets[priority];
-        T t = q.pollFirst();
-        if (q.isEmpty()) {
-            nonEmptyMask &= ~(1 << priority);
-        }
-        return t;
-    }
-
+    @Override
     public synchronized T pollLifo() {
         int p = getHighestNotEmptyPriority();
         if (p < 0) {
@@ -136,23 +133,12 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public synchronized T pollLifo(int priority) {
-        ArrayDeque<T> q = buckets[priority];
-        T t = q.pollLast();
-        if (q.isEmpty()) {
-            nonEmptyMask &= ~(1 << priority);
-        }
-        return t;
-    }
-
+    @Override
     public synchronized boolean isEmpty() {
         return nonEmptyMask == 0;
     }
 
-    public synchronized boolean isEmpty(final int priority) {
-        return buckets[priority].isEmpty();
-    }
-
+    @Override
     public synchronized int size() {
         int size = 0;
         for (int i = 0; i <= maxPriority; i++) {
@@ -161,34 +147,11 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return size;
     }
 
-    public synchronized int size(int priority) {
-        return buckets[priority].size();
-    }
-
-    public synchronized void clear() {
-        for (int i = 0; i <= maxPriority; i++) {
-            buckets[i].clear();
-        }
-        nonEmptyMask = 0;
-    }
-
-    public synchronized void clear(int priority) {
-        buckets[priority].clear();
-    }
-
-    public synchronized void clear(@Nonnull Function<T, Boolean> filteringFunction) {
-        for (int i = 0; i <= maxPriority; i++) {
-            buckets[i].removeIf(filteringFunction::apply);
-        }
-    }
-
-    public synchronized int getHighestNotEmptyPriority() {
-        if (nonEmptyMask == 0) return -1;
-        return 31 - Integer.numberOfLeadingZeros(nonEmptyMask);
-    }
-
     @Override
-    public synchronized boolean contains(@Nonnull T t) {
+    public synchronized boolean contains(final @Nonnull T t) {
+        if (t == null) {
+            return false;
+        }
         for (ArrayDeque<T> q : buckets) {
             if (q.contains(t)) {
                 return true;
@@ -198,13 +161,30 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean containsAll(@Nonnull Collection<T> iterable) {
+    public synchronized boolean containsAll(final @Nonnull Collection<T> iterable) {
+        validateCollection(iterable);
         for (T t : iterable) {
             if (!contains(t)) {
                 return false;
             }
         }
         return true;
+    }
+
+    @Override
+    public synchronized void clear() {
+        for (int i = 0; i <= maxPriority; i++) {
+            buckets[i].clear();
+        }
+        nonEmptyMask = 0;
+    }
+
+    @Override
+    public synchronized void clear(final @Nonnull Function<T, Boolean> filteringFunction) {
+        validateFilteringFunction(filteringFunction);
+        for (int i = 0; i <= maxPriority; i++) {
+            buckets[i].removeIf(filteringFunction::apply);
+        }
     }
 
     @Override
@@ -217,17 +197,20 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean remove(@Nonnull T t) {
-        for (ArrayDeque<T> q : buckets) {
-            if (q.remove(t)) {
-                return true;
+    public synchronized boolean remove(final @Nonnull T t) {
+        if (t != null) {
+            for (ArrayDeque<T> q : buckets) {
+                if (q.remove(t)) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
     @Override
-    public synchronized boolean removeAll(@Nonnull Collection<T> iterable) {
+    public synchronized boolean removeAll(final @Nonnull Collection<T> iterable) {
+        validateCollection(iterable);
         boolean result = true;
         for (T t : iterable) {
             if (!remove(t)) {
@@ -238,7 +221,8 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean retainAll(@Nonnull Collection<T> iterable) {
+    public synchronized boolean retainAll(final @Nonnull Collection<T> iterable) {
+        validateCollection(iterable);
         boolean result = false;
         for (int i = 0; i <= maxPriority; i++) {
             if (buckets[i].retainAll(iterable)) {
@@ -248,8 +232,8 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return result;
     }
 
-    @Nonnull
-    public synchronized List<T> toList() {
+    @Override
+    public synchronized @Nonnull List<T> toList() {
         List<T> result = new ArrayList<>();
         // Iterate from maxPriority down to MIN_PRIORITY (highest first)
         for (int i = maxPriority; i >= MIN_PRIORITY; i--) {
@@ -268,10 +252,138 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return result;
     }
 
-    @Nonnull
     @Override
-    public synchronized Iterator<T> iterator() {
+    public synchronized @Nonnull Iterator<T> iterator() {
         return new PriorityIterator();
+    }
+
+    @Override
+    public synchronized int getHighestNotEmptyPriority() {
+        if (nonEmptyMask == 0) return -1;
+        return 31 - Integer.numberOfLeadingZeros(nonEmptyMask);
+    }
+
+    @Override
+    public @Nullable T peek(final int priority) {
+        ArrayDeque<T> q = buckets[priority];
+        return q.peekFirst();
+    }
+
+    @Override
+    public @Nullable T peekFifo(final int priority) {
+        ArrayDeque<T> q = buckets[priority];
+        return q.peekFirst();
+    }
+
+    @Override
+    public @Nullable T peekLifo(final int priority) {
+        ArrayDeque<T> q = buckets[priority];
+        return q.peekLast();
+    }
+
+    @Override
+    public @Nullable T poll(final int priority) {
+        if (policy == Policy.FIFO) {
+            return pollFifo(priority);
+        } else {
+            return pollLifo(priority);
+        }
+    }
+
+    @Override
+    public synchronized T pollFifo(final int priority) {
+        ArrayDeque<T> q = buckets[priority];
+        T t = q.pollFirst();
+        if (q.isEmpty()) {
+            nonEmptyMask &= ~(1 << priority);
+        }
+        return t;
+    }
+
+    @Override
+    public synchronized T pollLifo(final int priority) {
+        ArrayDeque<T> q = buckets[priority];
+        T t = q.pollLast();
+        if (q.isEmpty()) {
+            nonEmptyMask &= ~(1 << priority);
+        }
+        return t;
+    }
+
+    @Override
+    public synchronized boolean isEmpty(final int priority) {
+        return buckets[priority].isEmpty();
+    }
+
+    @Override
+    public synchronized int size(int priority) {
+        return buckets[priority].size();
+    }
+
+    @Override
+    public boolean contains(final @Nonnull T t, final int priority) {
+        if (t == null) {
+            return false;
+        }
+        ArrayDeque<T> q = buckets[priority];
+        return q.contains(t);
+    }
+
+    @Override
+    public boolean containsAll(final @Nonnull Collection<T> iterable, final int priority) {
+        validateCollection(iterable);
+        ArrayDeque<T> q = buckets[priority];
+        return q.containsAll(iterable);
+    }
+
+    @Override
+    public synchronized void clear(final int priority) {
+        buckets[priority].clear();
+    }
+
+    @Override
+    public synchronized void clear(final @Nonnull Function<T, Boolean> filteringFunction, final int priority) {
+        validateFilteringFunction(filteringFunction);
+        buckets[priority].removeIf(filteringFunction::apply);
+    }
+
+    @Override
+    public boolean remove(final int priority) {
+        T t = poll(priority);
+        if (t == null) {
+            throw new NoSuchElementException();
+        }
+        return true;
+    }
+
+    @Override
+    public boolean remove(final @Nonnull T t, final int priority) {
+        if (t == null) {
+            return false;
+        }
+        return buckets[priority].remove(t);
+    }
+
+    @Override
+    public boolean removeAll(final @Nonnull Collection<T> iterable, final int priority) {
+        validateCollection(iterable);
+        return buckets[priority].removeAll(iterable);
+    }
+
+    @Override
+    public boolean retainAll(@Nonnull Collection<T> iterable, int priority) {
+        validateCollection(iterable);
+        return buckets[priority].retainAll(iterable);
+    }
+
+    @Override
+    public @Nonnull List<T> toList(int priority) {
+        return new ArrayList<>(buckets[priority]);
+    }
+
+    @Override
+    public @Nonnull Iterator<T> iterator(int priority) {
+        return buckets[priority].iterator();
     }
 
     private class PriorityIterator implements Iterator<T> {
@@ -281,7 +393,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
 
         PriorityIterator() {
             // Start from the highest possible priority
-            this.currentBucketIndex = maxPriority;
+            this.currentBucketIndex = maxPriority + 1;
         }
 
         @Override
@@ -344,4 +456,21 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         }
     }
 
+    void validateObject(T object) {
+        if (object == null) {
+            throw new NullPointerException("Object cannot be null");
+        }
+    }
+
+    void validateCollection(Collection<T> collection) {
+        if (collection == null) {
+            throw new NullPointerException("Collection cannot be null");
+        }
+    }
+
+    void validateFilteringFunction(Function<T, Boolean> filteringFunction) {
+        if (filteringFunction == null) {
+            throw new IllegalArgumentException("Filtering function cannot be null");
+        }
+    }
 }
