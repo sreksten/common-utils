@@ -94,7 +94,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
-        handleInfoMessage(messageSupplier.get());
+        if (isInfoEnabled) {
+            handleInfoMessage(messageSupplier.get());
+        }
     }
 
     @Override
@@ -113,7 +115,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
-        handleWarnMessage(messageSupplier.get());
+        if (isWarnEnabled) {
+            handleWarnMessage(messageSupplier.get());
+        }
     }
 
     @Override
@@ -132,7 +136,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
-        handleErrorMessage(messageSupplier.get());
+        if (isErrorEnabled) {
+            handleErrorMessage(messageSupplier.get());
+        }
     }
 
     @Override
@@ -151,7 +157,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
-        handleDebugMessage(messageSupplier.get());
+        if (isDebugEnabled) {
+            handleDebugMessage(messageSupplier.get());
+        }
     }
 
     @Override

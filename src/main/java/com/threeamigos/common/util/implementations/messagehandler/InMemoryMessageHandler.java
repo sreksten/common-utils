@@ -4,6 +4,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -18,14 +19,14 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
 
     private final int maxEntries;
 
-    private final List<String> allMessages = new ArrayList<>();
-    private final List<String> allInfoMessages = new ArrayList<>();
-    private final List<String> allWarnMessages = new ArrayList<>();
-    private final List<String> allErrorMessages = new ArrayList<>();
-    private final List<String> allDebugMessages = new ArrayList<>();
-    private final List<String> allTraceMessages = new ArrayList<>();
-    private final List<String> allExceptionMessages = new ArrayList<>();
-    private final List<Exception> allExceptions = new ArrayList<>();
+    private final List<String> allMessages = new LinkedList<>();
+    private final List<String> allInfoMessages = new LinkedList<>();
+    private final List<String> allWarnMessages = new LinkedList<>();
+    private final List<String> allErrorMessages = new LinkedList<>();
+    private final List<String> allDebugMessages = new LinkedList<>();
+    private final List<String> allTraceMessages = new LinkedList<>();
+    private final List<String> allExceptionMessages = new LinkedList<>();
+    private final List<Exception> allExceptions = new LinkedList<>();
     private final ReentrantLock lock = new ReentrantLock();
     private String lastMessage;
 

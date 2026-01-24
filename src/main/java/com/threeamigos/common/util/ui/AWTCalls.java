@@ -3,8 +3,10 @@ package com.threeamigos.common.util.ui;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-import javax.swing.*;
 import java.awt.*;
+import javax.swing.*;
+import javax.swing.SwingUtilities;
+import java.lang.reflect.InvocationTargetException;
 
 /**
  * A class making direct calls to the AWT. Used to decouple other classes and be able to test them
@@ -26,6 +28,16 @@ public class AWTCalls {
      */
     public static void showOptionPane(final @Nullable Component parentComponent, final @Nonnull String message,
                                       final @Nonnull String title, final int icon) {
-        JOptionPane.showMessageDialog(parentComponent, message, title, icon);
+        if (SwingUtilities.isEventDispatchThread()) {
+            JOptionPane.showMessageDialog(parentComponent, message, title, icon);
+        } else {
+            try {
+                SwingUtilities.invokeAndWait(() -> JOptionPane.showMessageDialog(parentComponent, message, title, icon));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (InvocationTargetException e) {
+                throw new RuntimeException(e.getCause());
+            }
+        }
     }
 }
