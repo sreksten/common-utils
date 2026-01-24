@@ -4,6 +4,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * An implementation of the {@link MessageHandler} interface that forwards
@@ -16,18 +17,25 @@ import java.util.*;
  */
 public class CompositeMessageHandler extends AbstractMessageHandler {
 
-    private static ResourceBundle bundle;
+    private static volatile ResourceBundle bundle;
 
     private static ResourceBundle getBundle() {
-        if (bundle == null) {
-            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.CompositeMessageHandler.CompositeMessageHandler");
+        ResourceBundle local = bundle;
+        if (local == null) {
+            synchronized (CompositeMessageHandler.class) {
+                local = bundle;
+                if (local == null) {
+                    local = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.CompositeMessageHandler.CompositeMessageHandler");
+                    bundle = local;
+                }
+            }
         }
-        return bundle;
+        return local;
     }
 
     // End of static methods
 
-    private final List<MessageHandler> messageHandlers = new ArrayList<>();
+    private final CopyOnWriteArrayList<MessageHandler> messageHandlers = new CopyOnWriteArrayList<>();
 
     /**
      * Constructor.
@@ -88,7 +96,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * @return an unmodifiable collection of the registered MessageHandlers
      */
     public Collection<MessageHandler> getMessageHandlers() {
-        return Collections.unmodifiableList(messageHandlers);
+        return Collections.unmodifiableList(new ArrayList<>(messageHandlers));
     }
 
     @Override

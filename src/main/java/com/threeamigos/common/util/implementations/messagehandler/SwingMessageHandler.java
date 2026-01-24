@@ -15,13 +15,20 @@ import java.util.ResourceBundle;
  */
 public class SwingMessageHandler extends AbstractMessageHandler {
 
-    private static ResourceBundle bundle;
+    private static volatile ResourceBundle bundle;
 
     private static ResourceBundle getBundle() {
-        if (bundle == null) {
-            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler.SwingMessageHandler");
+        ResourceBundle local = bundle;
+        if (local == null) {
+            synchronized (SwingMessageHandler.class) {
+                local = bundle;
+                if (local == null) {
+                    local = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.SwingMessageHandler.SwingMessageHandler");
+                    bundle = local;
+                }
+            }
         }
-        return bundle;
+        return local;
     }
 
     // End of static methods

@@ -17,23 +17,30 @@ import java.util.function.Supplier;
  */
 public abstract class AbstractMessageHandler implements MessageHandler {
 
-    private static ResourceBundle bundle;
+    private static volatile ResourceBundle bundle;
 
     private static ResourceBundle getBundle() {
-        if (bundle == null) {
-            bundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler.AbstractMessageHandler");
+        ResourceBundle local = bundle;
+        if (local == null) {
+            synchronized (AbstractMessageHandler.class) {
+                local = bundle;
+                if (local == null) {
+                    local = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.messagehandler.AbstractMessageHandler.AbstractMessageHandler");
+                    bundle = local;
+                }
+            }
         }
-        return bundle;
+        return local;
     }
 
     // End of static methods
 
-    private boolean isInfoEnabled = true;
-    private boolean isWarnEnabled = true;
-    private boolean isErrorEnabled = true;
-    private boolean isDebugEnabled = true;
-    private boolean isTraceEnabled = true;
-    private boolean isExceptionEnabled = true;
+    private volatile boolean isInfoEnabled = true;
+    private volatile boolean isWarnEnabled = true;
+    private volatile boolean isErrorEnabled = true;
+    private volatile boolean isDebugEnabled = true;
+    private volatile boolean isTraceEnabled = true;
+    private volatile boolean isExceptionEnabled = true;
 
     public boolean isInfoEnabled() {
         return isInfoEnabled;
@@ -173,7 +180,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
-        handleTraceMessageImpl(messageSupplier.get());
+        if (isTraceEnabled) {
+            handleTraceMessageImpl(messageSupplier.get());
+        }
     }
 
     protected abstract void handleTraceMessageImpl(final String message);
