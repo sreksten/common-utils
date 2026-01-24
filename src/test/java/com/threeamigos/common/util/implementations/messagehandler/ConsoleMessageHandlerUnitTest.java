@@ -3,10 +3,14 @@ package com.threeamigos.common.util.implementations.messagehandler;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.mockito.ArgumentCaptor;
 
 import java.io.PrintStream;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.*;
 
 @DisplayName("ConsoleMessageHandler unit test")
@@ -60,7 +64,7 @@ class ConsoleMessageHandlerUnitTest {
         // When
         sut.handleInfoMessage("INFO");
         // Then
-        verify(out, times(1)).println("INFO");
+        assertFormattedLine(out, "INFO ", "INFO");
     }
 
     @Test
@@ -82,7 +86,7 @@ class ConsoleMessageHandlerUnitTest {
         // When
         sut.handleWarnMessage("WARN");
         // Then
-        verify(out, times(1)).println("WARN");
+        assertFormattedLine(out, "WARN ", "WARN");
     }
 
     @Test
@@ -104,7 +108,7 @@ class ConsoleMessageHandlerUnitTest {
         // When
         sut.handleErrorMessage("ERROR");
         // Then
-        verify(err, times(1)).println("ERROR");
+        assertFormattedLine(err, "ERROR", "ERROR");
     }
 
     @Test
@@ -126,7 +130,7 @@ class ConsoleMessageHandlerUnitTest {
         // When
         sut.handleDebugMessage("DEBUG");
         // Then
-        verify(out, times(1)).println("DEBUG");
+        assertFormattedLine(out, "DEBUG", "DEBUG");
     }
 
     @Test
@@ -148,7 +152,7 @@ class ConsoleMessageHandlerUnitTest {
         // When
         sut.handleTraceMessage("TRACE");
         // Then
-        verify(out, times(1)).println("TRACE");
+        assertFormattedLine(out, "TRACE", "TRACE");
     }
 
     @Test
@@ -168,10 +172,20 @@ class ConsoleMessageHandlerUnitTest {
         // Given
         ConsoleMessageHandler sut = new ConsoleMessageHandler();
         Exception exception = mock(IllegalArgumentException.class);
+        when(exception.getMessage()).thenReturn("Boom");
         // When
         sut.handleException(exception);
         // Then
+        assertFormattedLine(err, "EXCEP", "Boom");
         verify(exception, times(1)).printStackTrace(err);
+    }
+
+    private void assertFormattedLine(PrintStream stream, String level, String message) {
+        ArgumentCaptor<String> captor = forClass(String.class);
+        verify(stream, times(1)).println(captor.capture());
+        String actual = captor.getValue();
+        String regex = "^\\[[^\\]]+\\] \\[" + Pattern.quote(level) + "\\] " + Pattern.quote(message) + "$";
+        assertTrue(actual.matches(regex), () -> "Unexpected message: " + actual);
     }
 
 }

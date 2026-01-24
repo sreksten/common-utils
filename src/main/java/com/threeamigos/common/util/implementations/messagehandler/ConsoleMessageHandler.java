@@ -46,7 +46,7 @@ public class ConsoleMessageHandler extends AbstractMessageHandler {
     }
 
     private String format(String level, String message) {
-        String date = ZonedDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
+        String date = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         return String.format("[%s] [%s] %s", date, level, message);
     }
 }
