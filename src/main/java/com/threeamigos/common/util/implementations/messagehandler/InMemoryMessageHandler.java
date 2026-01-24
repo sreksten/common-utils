@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,43 +26,43 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     private String lastMessage;
 
     @Override
-    protected void handleInfoMessageImpl(final @NonNull String message) {
+    protected void handleInfoMessageImpl(final String message) {
         allInfoMessages.add(message);
         handleImpl(message);
     }
 
     @Override
-    protected void handleWarnMessageImpl(final @NonNull String message) {
+    protected void handleWarnMessageImpl(final String message) {
         allWarnMessages.add(message);
         handleImpl(message);
     }
 
     @Override
-    protected void handleErrorMessageImpl(final @NonNull String message) {
+    protected void handleErrorMessageImpl(final String message) {
         allErrorMessages.add(message);
         handleImpl(message);
     }
 
     @Override
-    protected void handleDebugMessageImpl(final @NonNull String message) {
+    protected void handleDebugMessageImpl(final String message) {
         allDebugMessages.add(message);
         handleImpl(message);
     }
 
     @Override
-    protected void handleTraceMessageImpl(final @NonNull String message) {
+    protected void handleTraceMessageImpl(final String message) {
         allTraceMessages.add(message);
         handleImpl(message);
     }
 
     @Override
-    protected void handleExceptionImpl(final @NonNull Exception exception) {
+    protected void handleExceptionImpl(final Exception exception) {
         allExceptionMessages.add(exception.getMessage());
         allExceptions.add(exception);
         handleImpl(exception.getMessage());
     }
 
-    private void handleImpl(final @NonNull String message) {
+    private void handleImpl(final String message) {
         allMessages.add(message);
         lastMessage = message;
     }

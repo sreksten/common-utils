@@ -3,7 +3,7 @@ package com.threeamigos.common.util.implementations.json;
 import com.threeamigos.common.util.interfaces.json.Json;
 import com.threeamigos.common.util.interfaces.json.JsonAdapter;
 import com.threeamigos.common.util.interfaces.json.JsonBuilder;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -30,7 +30,7 @@ class JsonBuilderImpl implements JsonBuilder {
     private final Map<Class<?>, JsonAdapter<?>> map = new HashMap<>();
 
     @Override
-    public <C, A extends JsonAdapter<C>> JsonBuilder registerAdapter(final @NonNull Class<C> clazz, final @NonNull A adapter) {
+    public <C, A extends JsonAdapter<C>> JsonBuilder registerAdapter(final @Nonnull Class<C> clazz, final @Nonnull A adapter) {
         if (clazz == null) {
             throw new IllegalArgumentException(getBundle().getString("noClassProvided"));
         }
@@ -42,7 +42,7 @@ class JsonBuilderImpl implements JsonBuilder {
     }
 
     @Override
-    public <T> Json<T> build(final @NonNull Class<T> clazz) {
+    public <T> Json<T> build(final @Nonnull Class<T> clazz) {
         if (clazz == null) {
             throw new IllegalArgumentException(getBundle().getString("noClassProvided"));
         }

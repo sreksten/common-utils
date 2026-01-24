@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import javax.inject.Named;
 import java.lang.annotation.Annotation;
@@ -22,7 +22,7 @@ class NamedLiteral implements Named {
     }
 
     @Override
-    public @NonNull Class<? extends Annotation> annotationType() {
+    public @Nonnull Class<? extends Annotation> annotationType() {
         return Named.class;
     }
 

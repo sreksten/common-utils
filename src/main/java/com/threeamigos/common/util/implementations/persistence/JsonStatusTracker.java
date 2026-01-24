@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.persistence;
 
 import com.threeamigos.common.util.interfaces.json.Json;
 import com.threeamigos.common.util.interfaces.persistence.StatusTracker;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.ResourceBundle;
 
@@ -31,7 +31,7 @@ public class JsonStatusTracker<T> implements StatusTracker<T> {
 
     private String initialEntityRepresentationAsString;
 
-    JsonStatusTracker(final @NonNull T entity, final @NonNull Json<T> json) {
+    JsonStatusTracker(final @Nonnull T entity, final @Nonnull Json<T> json) {
         if (entity == null) {
             throw new IllegalArgumentException(getBundle().getString("noEntityProvided"));
         }
@@ -52,7 +52,7 @@ public class JsonStatusTracker<T> implements StatusTracker<T> {
         return !getEntityRepresentationAsString().equals(initialEntityRepresentationAsString);
     }
 
-    @NonNull String getEntityRepresentationAsString() {
+    @Nonnull String getEntityRepresentationAsString() {
         return json.toJson(entity);
     }
 

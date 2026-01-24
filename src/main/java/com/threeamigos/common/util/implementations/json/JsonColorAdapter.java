@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.json;
 
 import com.google.gson.*;
 import com.threeamigos.common.util.interfaces.json.JsonAdapter;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.awt.*;
 import java.lang.reflect.Type;
@@ -27,7 +27,7 @@ public class JsonColorAdapter implements JsonAdapter<Color> {
     // End of static methods
 
     @Override
-    public JsonElement serialize(final @NonNull Color src, final Type typeOfSrc, final JsonSerializationContext context) {
+    public JsonElement serialize(final @Nonnull Color src, final Type typeOfSrc, final JsonSerializationContext context) {
         if (src == null) {
             throw new IllegalArgumentException(getBundle().getString("noColorProvided"));
         }
@@ -36,7 +36,7 @@ public class JsonColorAdapter implements JsonAdapter<Color> {
     }
 
     @Override
-    public @NonNull Color deserialize(final @NonNull JsonElement json, final Type typeOfT, final JsonDeserializationContext context)
+    public @Nonnull Color deserialize(final @Nonnull JsonElement json, final Type typeOfT, final JsonDeserializationContext context)
             throws JsonParseException {
         if (json == null) {
             throw new IllegalArgumentException(getBundle().getString("noJsonProvided"));

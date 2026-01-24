@@ -9,7 +9,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
 import com.threeamigos.common.util.interfaces.persistence.PersistResult;
 import com.threeamigos.common.util.interfaces.persistence.file.FilePersistResult;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -290,12 +290,12 @@ class JsonFilePersisterIntegrationTest {
             }
 
             @Override
-            protected InputStream createInputStream(@NonNull String filename) throws IOException {
+            protected InputStream createInputStream(@Nonnull String filename) throws IOException {
                 return FileUtils.createFailingInputStream();
             }
 
             @Override
-            protected OutputStream createOutputStream(@NonNull String filename) throws IOException {
+            protected OutputStream createOutputStream(@Nonnull String filename) throws IOException {
                 return FileUtils.createFailingOutputStream();
             }
         }

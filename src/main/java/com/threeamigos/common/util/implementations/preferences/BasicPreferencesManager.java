@@ -7,7 +7,7 @@ import com.threeamigos.common.util.interfaces.persistence.StatusTracker;
 import com.threeamigos.common.util.interfaces.persistence.StatusTrackerFactory;
 import com.threeamigos.common.util.interfaces.preferences.Preferences;
 import com.threeamigos.common.util.interfaces.preferences.PreferencesManager;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.Objects;
 import java.util.ResourceBundle;
@@ -49,9 +49,9 @@ public class BasicPreferencesManager<T extends Preferences> implements Preferenc
      *                             in the set of Preferences
      * @param messageHandler       a {@link MessageHandler} used if problems arise
      */
-    public BasicPreferencesManager(final @NonNull T preferences, final @NonNull Persister<T> persister,
-                                   final @NonNull StatusTrackerFactory<T> statusTrackerFactory,
-                                   final @NonNull MessageHandler messageHandler) {
+    public BasicPreferencesManager(final @Nonnull T preferences, final @Nonnull Persister<T> persister,
+                                   final @Nonnull StatusTrackerFactory<T> statusTrackerFactory,
+                                   final @Nonnull MessageHandler messageHandler) {
         if (preferences == null) {
             throw new IllegalArgumentException(getBundle().getString("noPreferencesProvided"));
         }
@@ -102,7 +102,7 @@ public class BasicPreferencesManager<T extends Preferences> implements Preferenc
         }
     }
 
-    public boolean isTracking(final @NonNull Preferences preferences) {
+    public boolean isTracking(final @Nonnull Preferences preferences) {
         if (preferences == null) {
             throw new IllegalArgumentException(getBundle().getString("noPreferencesProvided"));
         }

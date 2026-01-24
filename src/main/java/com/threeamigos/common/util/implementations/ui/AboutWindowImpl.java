@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.ui;
 
 import com.threeamigos.common.util.interfaces.ui.AboutWindow;
-import org.jspecify.annotations.Nullable;
+import jakarta.annotation.Nullable;
 
 import javax.swing.*;
 import java.awt.*;

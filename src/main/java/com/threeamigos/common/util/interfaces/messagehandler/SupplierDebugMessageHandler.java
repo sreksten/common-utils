@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.function.Supplier;
 
@@ -18,6 +18,6 @@ public interface SupplierDebugMessageHandler {
      *
      * @param debugMessageSupplier a supplier for a debug message to show to the programmer
      */
-    void handleDebugMessage(@NonNull Supplier<String> debugMessageSupplier);
+    void handleDebugMessage(final @Nonnull Supplier<String> debugMessageSupplier);
 
 }

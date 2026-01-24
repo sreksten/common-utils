@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.*;
 
@@ -33,25 +33,28 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
      * Constructor.
      * @param handlers a collection of non-null MessageHandlers
      */
-    public CompositeMessageHandler(final Collection<MessageHandler> handlers) {
+    public CompositeMessageHandler(final @Nonnull Collection<MessageHandler> handlers) {
         if (handlers == null) {
             throw new IllegalArgumentException(getBundle().getString("noMessageHandlersProvided"));
         }
-        addHandlers(handlers);
+        addMessageHandlers(handlers);
     }
 
     /**
      * Constructor.
      * @param handlers a collection of non-null MessageHandlers
      */
-    public CompositeMessageHandler(final MessageHandler... handlers) {
+    public CompositeMessageHandler(final @Nonnull MessageHandler... handlers) {
         if (handlers == null) {
             throw new IllegalArgumentException(getBundle().getString("noMessageHandlersProvided"));
         }
-        addHandlers(Arrays.asList(handlers));
+        addMessageHandlers(Arrays.asList(handlers));
     }
 
-    private void addHandlers(Collection<MessageHandler> handlers) {
+    private void addMessageHandlers(@Nonnull Collection<MessageHandler> handlers) {
+        if (handlers == null) {
+            throw new IllegalArgumentException(getBundle().getString("noMessageHandlersProvided"));
+        }
         for (MessageHandler handler : handlers) {
             if (handler == null) {
                 throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
@@ -64,7 +67,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     /**
      * @param messageHandler a non-null MessageHandler to add
      */
-    public void addMessageHandler(final @NonNull MessageHandler messageHandler) {
+    public void addMessageHandler(final @Nonnull MessageHandler messageHandler) {
         if (messageHandler == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
         }
@@ -74,7 +77,7 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     /**
      * @param messageHandler a non-null MessageHandler to remove
      */
-    public void removeMessageHandler(final @NonNull MessageHandler messageHandler) {
+    public void removeMessageHandler(final @Nonnull MessageHandler messageHandler) {
         if (messageHandler == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
         }
@@ -89,32 +92,32 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(final @NonNull String message) {
+    protected void handleInfoMessageImpl(final String message) {
         messageHandlers.forEach(mh -> mh.handleInfoMessage(message));
     }
 
     @Override
-    protected void handleWarnMessageImpl(final @NonNull String message) {
+    protected void handleWarnMessageImpl(final String message) {
         messageHandlers.forEach(mh -> mh.handleWarnMessage(message));
     }
 
     @Override
-    protected void handleErrorMessageImpl(final @NonNull String message) {
+    protected void handleErrorMessageImpl(final String message) {
         messageHandlers.forEach(mh -> mh.handleErrorMessage(message));
     }
 
     @Override
-    protected void handleDebugMessageImpl(final @NonNull String message) {
+    protected void handleDebugMessageImpl(final String message) {
         messageHandlers.forEach(mh -> mh.handleDebugMessage(message));
     }
 
     @Override
-    protected void handleTraceMessageImpl(final @NonNull String message) {
+    protected void handleTraceMessageImpl(final String message) {
         messageHandlers.forEach(mh -> mh.handleTraceMessage(message));
     }
 
     @Override
-    protected void handleExceptionImpl(final @NonNull Exception exception) {
+    protected void handleExceptionImpl(final Exception exception) {
         messageHandlers.forEach(mh -> mh.handleException(exception));
     }
 }

@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.ResourceBundle;
 import java.util.function.Supplier;
@@ -83,7 +83,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         isExceptionEnabled = exceptionEnabled;
     }
 
-    public void handleInfoMessage(final @NonNull Supplier<String> messageSupplier) {
+    public void handleInfoMessage(final @Nonnull Supplier<String> messageSupplier) {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
@@ -91,7 +91,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     @Override
-    public void handleInfoMessage(final @NonNull String message) {
+    public void handleInfoMessage(final @Nonnull String message) {
         if (message == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
         }
@@ -100,9 +100,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         }
     }
 
-    protected abstract void handleInfoMessageImpl(@NonNull String message);
+    protected abstract void handleInfoMessageImpl(final String message);
 
-    public void handleWarnMessage(final @NonNull Supplier<String> messageSupplier) {
+    public void handleWarnMessage(final @Nonnull Supplier<String> messageSupplier) {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
@@ -110,7 +110,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     @Override
-    public void handleWarnMessage(final @NonNull String message) {
+    public void handleWarnMessage(final @Nonnull String message) {
         if (message == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
         }
@@ -119,9 +119,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         }
     }
 
-    protected abstract void handleWarnMessageImpl(@NonNull String message);
+    protected abstract void handleWarnMessageImpl(final String message);
 
-    public void handleErrorMessage(final @NonNull Supplier<String> messageSupplier) {
+    public void handleErrorMessage(final @Nonnull Supplier<String> messageSupplier) {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
@@ -129,7 +129,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     @Override
-    public void handleErrorMessage(final @NonNull String message) {
+    public void handleErrorMessage(final @Nonnull String message) {
         if (message == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
         }
@@ -138,9 +138,9 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         }
     }
 
-    protected abstract void handleErrorMessageImpl(@NonNull String message);
+    protected abstract void handleErrorMessageImpl(final String message);
 
-    public void handleDebugMessage(final @NonNull Supplier<String> messageSupplier) {
+    public void handleDebugMessage(final @Nonnull Supplier<String> messageSupplier) {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
@@ -148,7 +148,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
     }
 
     @Override
-    public void handleDebugMessage(final @NonNull String message) {
+    public void handleDebugMessage(final @Nonnull String message) {
         if (message == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
         }
@@ -157,10 +157,10 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         }
     }
 
-    protected abstract void handleDebugMessageImpl(@NonNull String message);
+    protected abstract void handleDebugMessageImpl(final String message);
 
     @Override
-    public void handleTraceMessage(final @NonNull String message) {
+    public void handleTraceMessage(final @Nonnull String message) {
         if (message == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
         }
@@ -169,17 +169,17 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         }
     }
 
-    public void handleTraceMessage(final @NonNull Supplier<String> messageSupplier) {
+    public void handleTraceMessage(final @Nonnull Supplier<String> messageSupplier) {
         if (messageSupplier == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
         handleTraceMessageImpl(messageSupplier.get());
     }
 
-    protected abstract void handleTraceMessageImpl(@NonNull String message);
+    protected abstract void handleTraceMessageImpl(final String message);
 
     @Override
-    public void handleException(final @NonNull Exception exception) {
+    public void handleException(final @Nonnull Exception exception) {
         if (exception == null) {
             throw new IllegalArgumentException(getBundle().getString("nullExceptionProvided"));
         }
@@ -188,6 +188,6 @@ public abstract class AbstractMessageHandler implements MessageHandler {
         }
     }
 
-    protected abstract void handleExceptionImpl(@NonNull Exception exception);
+    protected abstract void handleExceptionImpl(final Exception exception);
 
 }

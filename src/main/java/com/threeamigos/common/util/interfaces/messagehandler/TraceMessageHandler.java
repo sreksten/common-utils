@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 /**
  * An interface used to handle trace messages.<br/>
@@ -18,6 +18,6 @@ public interface TraceMessageHandler {
      *
      * @param traceMessage a trace message to show to the programmer
      */
-    void handleTraceMessage(@NonNull String traceMessage);
+    void handleTraceMessage(final @Nonnull String traceMessage);
 
 }

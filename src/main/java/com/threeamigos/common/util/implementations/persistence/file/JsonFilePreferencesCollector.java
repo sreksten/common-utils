@@ -7,7 +7,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.interfaces.persistence.StatusTrackerFactory;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
 import com.threeamigos.common.util.interfaces.preferences.Preferences;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.ResourceBundle;
 
@@ -39,8 +39,8 @@ public class JsonFilePreferencesCollector<T extends Preferences> extends BasicPe
      * @param messageHandler   to inform the end user of loa and save operations
      *                         results
      */
-    public JsonFilePreferencesCollector(final @NonNull RootPathProvider rootPathProvider, final @NonNull MessageHandler messageHandler,
-                                        final @NonNull StatusTrackerFactory<T> statusTrackerFactory, final @NonNull Json<T> json) {
+    public JsonFilePreferencesCollector(final @Nonnull RootPathProvider rootPathProvider, final @Nonnull MessageHandler messageHandler,
+                                        final @Nonnull StatusTrackerFactory<T> statusTrackerFactory, final @Nonnull Json<T> json) {
         super();
         if (rootPathProvider == null) {
             throw new IllegalArgumentException(getBundle().getString("noRootPathProviderProvided"));
@@ -66,7 +66,7 @@ public class JsonFilePreferencesCollector<T extends Preferences> extends BasicPe
      * @param preferences the preferences object
      * @param filename    the filename to use to save and retrieve those preferences
      */
-    public void add(final @NonNull T preferences, final @NonNull String filename) {
+    public void add(final @Nonnull T preferences, final @Nonnull String filename) {
         if (preferences == null) {
             throw new IllegalArgumentException(getBundle().getString("noPreferencesProvided"));
         }
@@ -82,7 +82,7 @@ public class JsonFilePreferencesCollector<T extends Preferences> extends BasicPe
      * @param preferences a set of Preferences
      * @return true if this collector is tracking the given preferences
      */
-    public boolean isTracking(final @NonNull Preferences preferences) {
+    public boolean isTracking(final @Nonnull Preferences preferences) {
         if (preferences == null) {
             throw new IllegalArgumentException(getBundle().getString("noPreferencesProvided"));
         }

@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.persistence;
 
 import com.threeamigos.common.util.interfaces.persistence.Persistable;
 import com.threeamigos.common.util.interfaces.persistence.PersistablesCollector;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.*;
 
@@ -57,7 +57,7 @@ public class BasicPersistablesCollector implements PersistablesCollector {
     }
 
     @Override
-    public void add(final @NonNull Persistable persistable) {
+    public void add(final @Nonnull Persistable persistable) {
         if (persistable == null) {
             throw new IllegalArgumentException(getBundle().getString("cannotAddNullPersistable"));
         }
@@ -65,7 +65,7 @@ public class BasicPersistablesCollector implements PersistablesCollector {
     }
 
     @Override
-    public void remove(final @NonNull Persistable persistable) {
+    public void remove(final @Nonnull Persistable persistable) {
         if (persistable == null) {
             throw new IllegalArgumentException(getBundle().getString("cannotRemoveNullPersistable"));
         }
@@ -76,7 +76,7 @@ public class BasicPersistablesCollector implements PersistablesCollector {
      * @return an unmodifiable collection of tracked Persistables.
      */
     @Override
-    public @NonNull Collection<Persistable> getPersistables() {
+    public @Nonnull Collection<Persistable> getPersistables() {
         return Collections.unmodifiableSet(persistables);
     }
 

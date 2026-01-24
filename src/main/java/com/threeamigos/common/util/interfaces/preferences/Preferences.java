@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.interfaces.preferences;
 
 import com.threeamigos.common.util.interfaces.PropertyChangeAware;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 /**
  * A set of preferences for part of an application. Extending {@link PropertyChangeAware},
@@ -14,7 +14,7 @@ public interface Preferences extends PropertyChangeAware {
     /**
      * @return a description of this set of preferences.
      */
-    @NonNull String getDescription();
+    @Nonnull String getDescription();
 
     /**
      * Checks if the preferences are in a valid state.

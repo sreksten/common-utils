@@ -2,8 +2,8 @@ package com.threeamigos.common.util.implementations.persistence.file.rootpathpro
 
 import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
+import jakarta.annotation.Nonnull;
+import jakarta.annotation.Nullable;
 
 import java.io.File;
 import java.util.ResourceBundle;
@@ -43,7 +43,7 @@ public class RootPathProviderImpl implements RootPathProvider {
      * @param object the object to use for root path determination
      * @param exceptionHandler the exception handler to use
      */
-    public RootPathProviderImpl(final @NonNull Object object, final @NonNull ExceptionHandler exceptionHandler) {
+    public RootPathProviderImpl(final @Nonnull Object object, final @Nonnull ExceptionHandler exceptionHandler) {
         this.exceptionHandler = exceptionHandler;
         if (object == null) {
             throw new NullObjectException(getBundle().getString("nullObject"));
@@ -63,7 +63,7 @@ public class RootPathProviderImpl implements RootPathProvider {
      * @param clazz the class to use for root path determination
      * @param exceptionHandler the exception handler to use
      */
-    public RootPathProviderImpl(final @NonNull Class<?> clazz, final @NonNull ExceptionHandler exceptionHandler) {
+    public RootPathProviderImpl(final @Nonnull Class<?> clazz, final @Nonnull ExceptionHandler exceptionHandler) {
         this.exceptionHandler = exceptionHandler;
         impl(clazz);
     }

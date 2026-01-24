@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.persistence;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.Collection;
 
@@ -18,10 +18,10 @@ public interface PersistablesCollector extends Persistable {
      *
      * @param persistable a Persistable to track
      */
-    void add(@NonNull Persistable persistable);
+    void add(@Nonnull Persistable persistable);
 
-    void remove(@NonNull Persistable persistable);
+    void remove(@Nonnull Persistable persistable);
 
-    @NonNull Collection<Persistable> getPersistables();
+    @Nonnull Collection<Persistable> getPersistables();
 
 }

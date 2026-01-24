@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.persistence;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 /**
  * An object that can be used to persist something or to retrieve its previous state.
@@ -16,12 +16,12 @@ public interface Persister<T> {
 	 * @param entity an entity whose state should be loaded
 	 * @return a {@link PersistResult} with the outcome of the load operation
 	 */
-	PersistResult load(@NonNull T entity);
+	PersistResult load(@Nonnull T entity);
 
 	/**
 	 * @param entity an entity whose state should be saved
 	 * @return a {@link PersistResult} with the outcome of the save operation
 	 */
-	PersistResult save(@NonNull T entity);
+	PersistResult save(@Nonnull T entity);
 
 }

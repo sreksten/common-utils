@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.ui;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.awt.*;
 
@@ -22,6 +22,6 @@ public interface FontService {
      * @param fontHeight height of the font
      * @return Font object with the specified attributes
      */
-    Font getFont(@NonNull String fontName, int fontAttributes, int fontHeight);
+    Font getFont(@Nonnull String fontName, int fontAttributes, int fontHeight);
 
 }

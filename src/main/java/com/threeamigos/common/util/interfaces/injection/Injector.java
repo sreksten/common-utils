@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.injection;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import javax.enterprise.util.TypeLiteral;
 import javax.inject.Named;
@@ -37,7 +37,7 @@ public interface Injector {
      * @param scopeAnnotation an Annotation for the scope
      * @param handler a ScopeHandler implementation
      */
-    void registerScope(@NonNull Class<? extends Annotation> scopeAnnotation, @NonNull ScopeHandler handler);
+    void registerScope(@Nonnull Class<? extends Annotation> scopeAnnotation, @Nonnull ScopeHandler handler);
 
     /**
      * To dynamically bind a type to a specific implementation given a set of qualifiers.
@@ -46,19 +46,19 @@ public interface Injector {
      * @param qualifiers annotations to qualify the type
      * @param implementation the target class that should be used
      */
-    void bind(@NonNull Type type, @NonNull Collection<Annotation> qualifiers, @NonNull Class<?> implementation);
+    void bind(@Nonnull Type type, @Nonnull Collection<Annotation> qualifiers, @Nonnull Class<?> implementation);
 
     /**
      * Enable alternative implementation for a class.
      * @param alternativeClass the class to enable alternative implementation for
      */
-    void enableAlternative(@NonNull Class<?> alternativeClass);
+    void enableAlternative(@Nonnull Class<?> alternativeClass);
 
     // Injection methods
 
-    <T> T inject(@NonNull Class<T> clazz);
+    <T> T inject(@Nonnull Class<T> clazz);
 
-    <T> T inject(@NonNull TypeLiteral<T> clazz);
+    <T> T inject(@Nonnull TypeLiteral<T> clazz);
 
     void shutdown();
 }

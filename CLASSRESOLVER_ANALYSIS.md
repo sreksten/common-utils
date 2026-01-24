@@ -311,7 +311,7 @@ if (matchingEnabledAlternatives.size() == 1) {
 #### `resolveImplementations()` - Multiple Results (Lines 281-296)
 
 ```java
-<T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve,
+<T> Collection<Class<? extends T>> resolveImplementations(@Nonnull Type typeToResolve,
                                                           @Nullable Collection<Annotation> qualifiers) {
     Collection<Class<? extends T>> resolvedClasses =
             resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve);

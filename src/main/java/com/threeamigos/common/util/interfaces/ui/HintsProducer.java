@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.ui;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.Collection;
 
@@ -16,6 +16,6 @@ public interface HintsProducer<T> {
     /**
      * @return a collection of {@link Hint}s to show at startup.
      */
-    @NonNull Collection<Hint<T>> getHints();
+    @Nonnull Collection<Hint<T>> getHints();
 
 }

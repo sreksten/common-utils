@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.persistence.file;
 
 import com.threeamigos.common.util.interfaces.persistence.PersistResultReturnCodeEnum;
 import com.threeamigos.common.util.interfaces.persistence.file.FilePersistResult;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.ResourceBundle;
 
@@ -103,7 +103,7 @@ class FilePersistResultImpl implements FilePersistResult {
         returnCode = PersistResultReturnCodeEnum.CANNOT_BE_WRITTEN;
     }
 
-    void setError(final @NonNull String error) {
+    void setError(final @Nonnull String error) {
         if (error == null) {
             throw new IllegalArgumentException(getBundle().getString("nullErrorProvided"));
         }

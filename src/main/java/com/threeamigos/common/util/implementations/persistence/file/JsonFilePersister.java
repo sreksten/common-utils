@@ -4,7 +4,7 @@ import com.threeamigos.common.util.interfaces.json.Json;
 import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
 import com.threeamigos.common.util.interfaces.persistence.Persister;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,9 +45,9 @@ public class JsonFilePersister<T> extends AbstractFilePersister<T> implements Pe
      * @param rootPathProvider  used to find the correct path for the entity
      * @param exceptionHandler  in case any problems arise
      */
-    public JsonFilePersister(final @NonNull String filename, final @NonNull String entityDescription,
-                             final @NonNull RootPathProvider rootPathProvider,
-                             final @NonNull ExceptionHandler exceptionHandler, final @NonNull Json<T> json) {
+    public JsonFilePersister(final @Nonnull String filename, final @Nonnull String entityDescription,
+                             final @Nonnull RootPathProvider rootPathProvider,
+                             final @Nonnull ExceptionHandler exceptionHandler, final @Nonnull Json<T> json) {
         super(rootPathProvider, exceptionHandler);
         if (filename == null) {
             throw new IllegalArgumentException(getBundle().getString("noFilenameProvided"));
@@ -64,12 +64,12 @@ public class JsonFilePersister<T> extends AbstractFilePersister<T> implements Pe
     }
 
     @Override
-    protected void load(final @NonNull InputStream inputStream, final @NonNull T entity) throws IllegalArgumentException, IOException {
+    protected void load(final @Nonnull InputStream inputStream, final @Nonnull T entity) throws IllegalArgumentException, IOException {
         json.fromJson(inputStream, entity);
     }
 
     @Override
-    protected void save(final @NonNull OutputStream outputStream, final @NonNull T entity) throws IOException {
+    protected void save(final @Nonnull OutputStream outputStream, final @Nonnull T entity) throws IOException {
         json.toJson(entity, outputStream);
     }
 

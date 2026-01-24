@@ -5,7 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.InstanceCreator;
 import com.threeamigos.common.util.interfaces.json.Json;
 import com.threeamigos.common.util.interfaces.json.JsonAdapter;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -34,7 +34,7 @@ class JsonImpl<T> implements Json<T> {
     private final Class<T> tClass;
     private final Map<Class<?>, JsonAdapter<?>> typeAdapters;
 
-    JsonImpl(final @NonNull Class<T> clazz, final @NonNull Map<Class<?>, JsonAdapter<?>> typeAdapters) {
+    JsonImpl(final @Nonnull Class<T> clazz, final @Nonnull Map<Class<?>, JsonAdapter<?>> typeAdapters) {
         if (clazz == null) {
             throw new IllegalArgumentException(getBundle().getString("noClassProvided"));
         }
@@ -46,7 +46,7 @@ class JsonImpl<T> implements Json<T> {
     }
 
     @Override
-    public String toJson(final @NonNull T entity) {
+    public String toJson(final @Nonnull T entity) {
         if (entity == null) {
             throw new IllegalArgumentException(getBundle().getString("noEntityProvided"));
         }
@@ -54,7 +54,7 @@ class JsonImpl<T> implements Json<T> {
     }
 
     @Override
-    public void toJson(final @NonNull T entity, final @NonNull OutputStream outputStream) throws IOException {
+    public void toJson(final @Nonnull T entity, final @Nonnull OutputStream outputStream) throws IOException {
         if (entity == null) {
             throw new IllegalArgumentException(getBundle().getString("noEntityProvided"));
         }
@@ -66,7 +66,7 @@ class JsonImpl<T> implements Json<T> {
     }
 
     @Override
-    public T fromJson(final @NonNull String string) {
+    public T fromJson(final @Nonnull String string) {
         if (string == null) {
             throw new IllegalArgumentException(getBundle().getString("noJsonProvided"));
         }
@@ -74,7 +74,7 @@ class JsonImpl<T> implements Json<T> {
     }
 
     @Override
-    public T fromJson(final @NonNull InputStream inputStream) throws IOException {
+    public T fromJson(final @Nonnull InputStream inputStream) throws IOException {
         if (inputStream == null) {
             throw new IllegalArgumentException(getBundle().getString("noInputStreamProvided"));
         }
@@ -88,7 +88,7 @@ class JsonImpl<T> implements Json<T> {
     }
 
     @Override
-    public void fromJson(final @NonNull String string, final @NonNull T entity) {
+    public void fromJson(final @Nonnull String string, final @Nonnull T entity) {
         if (string == null) {
             throw new IllegalArgumentException(getBundle().getString("noJsonProvided"));
         }
@@ -99,7 +99,7 @@ class JsonImpl<T> implements Json<T> {
     }
 
     @Override
-    public void fromJson(final @NonNull InputStream inputStream, final @NonNull T entity) throws IOException {
+    public void fromJson(final @Nonnull InputStream inputStream, final @Nonnull T entity) throws IOException {
         if (inputStream == null) {
             throw new IllegalArgumentException(getBundle().getString("noInputStreamProvided"));
         }

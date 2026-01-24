@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.function.Supplier;
 
@@ -18,6 +18,6 @@ public interface SupplierWarnMessageHandler {
      *
      * @param warnMessageSupplier a supplier for a warning message to show to the user
      */
-    void handleWarnMessage(@NonNull Supplier<String> warnMessageSupplier);
+    void handleWarnMessage(final @Nonnull Supplier<String> warnMessageSupplier);
 
 }

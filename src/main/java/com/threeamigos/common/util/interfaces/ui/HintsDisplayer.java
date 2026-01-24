@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.ui;
 
-import org.jspecify.annotations.Nullable;
+import jakarta.annotation.Nullable;
 
 import java.awt.*;
 

@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.ui.effects.text;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -14,8 +14,8 @@ public class BorderedStringRenderer {
 
 	private BorderedStringRenderer() {}
 
-	public static void drawString(@NonNull final Graphics2D graphics, @NonNull final String s, final int x, final int y,
-								  @NonNull final Color borderColor, @NonNull final Color messageColor) {
+	public static void drawString(final @Nonnull Graphics2D graphics, final @Nonnull String s, final int x, final int y,
+								  final @Nonnull Color borderColor, final @Nonnull Color messageColor) {
 		Color previousColor = graphics.getColor();
 
 		graphics.setColor(borderColor);

@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.function.Supplier;
 
@@ -18,6 +18,6 @@ public interface SupplierInfoMessageHandler {
      *
      * @param infoMessageSupplier a supplier for an info message to show to the user
      */
-    void handleInfoMessage(@NonNull Supplier<String> infoMessageSupplier);
+    void handleInfoMessage(final @Nonnull Supplier<String> infoMessageSupplier);
 
 }

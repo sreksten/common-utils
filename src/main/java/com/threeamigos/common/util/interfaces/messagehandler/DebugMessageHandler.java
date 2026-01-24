@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 /**
  * An interface used to handle debug messages.<br/>
@@ -17,6 +17,6 @@ public interface DebugMessageHandler {
      *
      * @param debugMessage a debug message to show to the programmer
      */
-    void handleDebugMessage(@NonNull String debugMessage);
+    void handleDebugMessage(final @Nonnull String debugMessage);
 
 }

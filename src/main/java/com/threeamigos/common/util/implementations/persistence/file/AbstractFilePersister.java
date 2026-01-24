@@ -4,7 +4,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
 import com.threeamigos.common.util.interfaces.persistence.PersistResult;
 import com.threeamigos.common.util.interfaces.persistence.Persister;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.io.*;
 import java.util.ResourceBundle;
@@ -38,7 +38,7 @@ public abstract class AbstractFilePersister<T> implements Persister<T> {
      * @param rootPathProvider to know where to store the entity
      * @param exceptionHandler to inform the end user if any error arises
      */
-    protected AbstractFilePersister(final @NonNull RootPathProvider rootPathProvider, final @NonNull ExceptionHandler exceptionHandler) {
+    protected AbstractFilePersister(final @Nonnull RootPathProvider rootPathProvider, final @Nonnull ExceptionHandler exceptionHandler) {
         if (rootPathProvider == null) {
             throw new IllegalArgumentException(getBundle().getString("noRootPathProviderProvided"));
         }
@@ -73,7 +73,7 @@ public abstract class AbstractFilePersister<T> implements Persister<T> {
     protected abstract String getNamePart();
 
     @Override
-    public PersistResult load(final @NonNull T entity) {
+    public PersistResult load(final @Nonnull T entity) {
         if (entity == null) {
             throw new IllegalArgumentException(getBundle().getString("noEntityProvided"));
         }
@@ -106,14 +106,14 @@ public abstract class AbstractFilePersister<T> implements Persister<T> {
      * @param filename source file
      * @return InputStream bound to the source file
      */
-    protected InputStream createInputStream(final @NonNull String filename) throws IOException {
+    protected InputStream createInputStream(final @Nonnull String filename) throws IOException {
         return new FileInputStream(filename);
     }
 
-    protected abstract void load(final @NonNull InputStream inputStream, final @NonNull T entity) throws IOException, IllegalArgumentException;
+    protected abstract void load(final @Nonnull InputStream inputStream, final @Nonnull T entity) throws IOException, IllegalArgumentException;
 
     @Override
-    public PersistResult save(final @NonNull T entity) {
+    public PersistResult save(final @Nonnull T entity) {
         if (entity == null) {
             throw new IllegalArgumentException(getBundle().getString("noEntityProvided"));
         }
@@ -141,10 +141,10 @@ public abstract class AbstractFilePersister<T> implements Persister<T> {
      * @param filename destination file
      * @return OutputStream bound to a destination file
      */
-    protected OutputStream createOutputStream(final @NonNull String filename) throws IOException {
+    protected OutputStream createOutputStream(final @Nonnull String filename) throws IOException {
         return new FileOutputStream(filename);
     }
 
-    protected abstract void save(final @NonNull OutputStream outputStream, final @NonNull T entity) throws IOException;
+    protected abstract void save(final @Nonnull OutputStream outputStream, final @Nonnull T entity) throws IOException;
 
 }

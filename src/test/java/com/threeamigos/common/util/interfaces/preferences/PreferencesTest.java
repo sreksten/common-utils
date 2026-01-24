@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.preferences;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,15 +17,15 @@ class PreferencesTest {
         // Given
         Preferences preferences = new Preferences() {
             @Override
-            public void addPropertyChangeListener(@NonNull PropertyChangeListener pcl) {
+            public void addPropertyChangeListener(@Nonnull PropertyChangeListener pcl) {
             }
 
             @Override
-            public void removePropertyChangeListener(@NonNull PropertyChangeListener pcl) {
+            public void removePropertyChangeListener(@Nonnull PropertyChangeListener pcl) {
             }
 
             @Override
-            public @NonNull String getDescription() {
+            public @Nonnull String getDescription() {
                 return "Test preferences";
             }
 

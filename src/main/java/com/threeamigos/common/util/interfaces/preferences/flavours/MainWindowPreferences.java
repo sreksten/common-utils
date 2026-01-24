@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.preferences.flavours;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 /**
  * An interface that keeps track of the preferences for the main window of an application.
@@ -12,7 +12,7 @@ public interface MainWindowPreferences extends WindowPreferences {
     int MIN_WIDTH = 800;
     int MIN_HEIGHT = 600;
 
-    default @NonNull String getDescription() {
+    default @Nonnull String getDescription() {
         return "Main window preferences";
     }
 

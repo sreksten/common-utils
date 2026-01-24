@@ -1,21 +1,25 @@
 package com.threeamigos.common.util.implementations.collections;
 
 import com.threeamigos.common.util.interfaces.collections.PriorityDeque;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
+import jakarta.annotation.Nullable;
 
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * A thread-safe, blocking wrapper for PriorityDeque.
- * This class allows the PriorityDeque to be used as a standard BlockingQueue (e.g., in a ThreadPoolExecutor).
- * Note: standard BlockingQueue methods use the 'defaultPriority' provided in the constructor.
+ * A thread-safe, blocking wrapper for PriorityDeque.<br/>
+ * This class allows the PriorityDeque to be used as a standard BlockingQueue (e.g., in a ThreadPoolExecutor).<br/>
+ * <i>Note:</i> standard BlockingQueue methods use the 'defaultPriority' provided in the constructor.<br/>
  * Use {@link #add(T, int)} to add tasks with specific priorities.
+ * 
+ * @author Stefano Reksten
  */
 public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
 
@@ -26,7 +30,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition notEmpty = lock.newCondition();
 
-    public BlockingPriorityDequeWrapper(PriorityDeque<T> delegate) {
+    public BlockingPriorityDequeWrapper(final @Nonnull PriorityDeque<T> delegate) {
         if (delegate == null) {
             throw new IllegalArgumentException("Delegate cannot be null");
         }
@@ -34,7 +38,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
         this.defaultPriority = DEFAULT_PRIORITY;
     }
 
-    public BlockingPriorityDequeWrapper(PriorityDeque<T> delegate, int defaultPriority) {
+    public BlockingPriorityDequeWrapper(final @Nonnull PriorityDeque<T> delegate, final int defaultPriority) {
         if (delegate == null) {
             throw new IllegalArgumentException("Delegate cannot be null");
         }
@@ -50,7 +54,10 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
      * Non-standard method to add a task with a specific priority.
      * Signals any waiting threads that the queue is no longer empty.
      */
-    public void add(T T, int priority) {
+    public void add(final @Nonnull T T, final int priority) {
+        if (T == null) {
+            throw new IllegalArgumentException("Element to add cannot be null");
+        }
         lock.lock();
         try {
             delegate.add(T, priority);
@@ -63,43 +70,45 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     // --- BlockingQueue / Queue Implementation ---
 
     @Override
-    public boolean add(@NonNull T T) {
+    public boolean add(final @Nonnull T T) {
         add(T, defaultPriority);
         return true;
     }
 
     @Override
-    public boolean offer(@NonNull T T) {
-        // Our Deques are generally unbounded, so offer is the same as add
+    public boolean offer(final @Nonnull T T) {
+        // Our deques are generally unbounded, so offer is the same as add
         return add(T);
     }
 
     @Override
-    public void put(@NonNull T T) throws InterruptedException {
+    public void put(final @Nonnull T T) throws InterruptedException {
         // Since the internal deque is unbounded, this never actually blocks
         add(T);
     }
 
     @Override
-    public boolean offer(T T, long timeout, @NonNull TimeUnit unit) {
+    public boolean offer(final T T, final long timeout, final @Nonnull TimeUnit unit) {
+        validateTimeUnit(unit);
         return add(T);
     }
 
     @Override
-    public @NonNull T take() throws InterruptedException {
+    public @Nonnull T take() throws InterruptedException {
         lock.lockInterruptibly();
         try {
             while (delegate.isEmpty()) {
                 notEmpty.await();
             }
-            return delegate.poll();
+            return Objects.requireNonNull(delegate.poll());
         } finally {
             lock.unlock();
         }
     }
 
     @Override
-    public T poll(long timeout, TimeUnit unit) throws InterruptedException {
+    public @Nullable T poll(final long timeout, final @Nonnull TimeUnit unit) throws InterruptedException {
+        validateTimeUnit(unit);
         long nanos = unit.toNanos(timeout);
         lock.lockInterruptibly();
         try {
@@ -114,7 +123,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     }
 
     @Override
-    public T poll() {
+    public @Nullable T poll() {
         lock.lock();
         try {
             return delegate.poll();
@@ -124,7 +133,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     }
 
     @Override
-    public T peek() {
+    public @Nullable T peek() {
         lock.lock();
         try {
             return delegate.peek();
@@ -139,7 +148,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     }
 
     @Override
-    public T remove() {
+    public @Nonnull T remove() {
         T r = poll();
         if (r == null) {
             throw new NoSuchElementException();
@@ -149,7 +158,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public boolean remove(Object o) {
+    public boolean remove(final Object o) {
         lock.lock();
         try {
             return o != null && delegate.remove((T) o);
@@ -160,7 +169,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public boolean contains(Object o) {
+    public boolean contains(final Object o) {
         lock.lock();
         try {
             // PriorityDeque is typed, so we check if the object is a T
@@ -201,21 +210,22 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     }
 
     @Override
-    public T element() {
+    public @Nonnull T element() {
         T r = peek();
         if (r == null) {
             throw new NoSuchElementException();
-        };
+        }
         return r;
     }
 
     @Override
-    public int drainTo(@NonNull Collection<? super T> c) {
+    public int drainTo(final @Nonnull Collection<? super T> c) {
         return drainTo(c, Integer.MAX_VALUE);
     }
 
     @Override
-    public int drainTo(@NonNull Collection<? super T> c, int maxElements) {
+    public int drainTo(final @Nonnull Collection<? super T> c, int maxElements) {
+        validateCollection(c);
         lock.lock();
         try {
             int n = 0;
@@ -229,12 +239,15 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
         }
     }
 
+    /**
+     * <i>Note</i>: Caller must be careful as this doesn't hold the lock during iteration.
+     * 
+     * @return the delegate's iterator
+     */
     @Override
-    public @NonNull Iterator<T> iterator() {
+    public @Nonnull Iterator<T> iterator() {
         lock.lock();
         try {
-            // Returning the delegate's iterator.
-            // Note: Caller must be careful as this doesn't hold the lock during iteration.
             return delegate.iterator();
         } finally {
             lock.unlock();
@@ -242,7 +255,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     }
 
     @Override
-    public Object @NonNull [] toArray() {
+    public @Nonnull Object[] toArray() {
         lock.lock();
         try {
             return delegate.toList().toArray();
@@ -252,7 +265,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     }
 
     @Override
-    public <E> E @NonNull [] toArray(E @NonNull [] a) {
+    public @Nonnull <E> E[] toArray(@Nonnull E[] a) {
         lock.lock();
         try {
             return delegate.toList().toArray(a);
@@ -263,7 +276,8 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public boolean containsAll(@NonNull Collection<?> c) {
+    public boolean containsAll(@Nonnull Collection<?> c) {
+        validateCollection(c);
         lock.lock();
         try {
             // We cast to Collection<T> to match the PriorityDeque.containsAll(Iterable<T>) signature
@@ -274,7 +288,8 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     }
 
     @Override
-    public boolean addAll(Collection<? extends T> c) {
+    public boolean addAll(@Nonnull Collection<? extends T> c) {
+        validateCollection(c);
         for (T r : c) {
             add(r);
         }
@@ -283,7 +298,8 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public boolean removeAll(@NonNull Collection<?> c) {
+    public boolean removeAll(@Nonnull Collection<?> c) {
+        validateCollection(c);
         lock.lock();
         try {
             return delegate.removeAll((Collection<T>)c);
@@ -294,7 +310,8 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public boolean retainAll(@NonNull Collection<?> c) {
+    public boolean retainAll(@Nonnull Collection<?> c) {
+        validateCollection(c);
         lock.lock();
         try {
             return delegate.retainAll((Collection<T>)c);
@@ -303,4 +320,15 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
         }
     }
 
+    private void validateCollection(Collection<?> c) {
+        if (c == null) {
+            throw new IllegalArgumentException("Collection cannot be null");      
+        }
+    }
+
+    private void validateTimeUnit(@Nonnull TimeUnit unit) {
+        if (unit == null) {
+            throw new NullPointerException("TimeUnit cannot be null");
+        }
+    }
 }

@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
-import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
+
+import jakarta.annotation.Nonnull;
+import jakarta.annotation.Nullable;
 
 import javax.enterprise.inject.*;
 import javax.inject.Named;
@@ -97,7 +98,7 @@ class ClassResolver {
      * @param classpathScanner a custom ClasspathScanner implementation
      * @param typeChecker a custom TypeChecker implementation
      */
-    ClassResolver(@NonNull ClasspathScanner classpathScanner, @NonNull TypeChecker typeChecker) {
+    ClassResolver(@Nonnull ClasspathScanner classpathScanner, @Nonnull TypeChecker typeChecker) {
         if (classpathScanner == null) {
             throw new IllegalArgumentException("ClasspathScanner cannot be null");
         }
@@ -108,7 +109,7 @@ class ClassResolver {
         this.typeChecker = typeChecker;
     }
 
-    void bind(@NonNull Type type, @NonNull Collection<Annotation> qualifiers, @NonNull Class<?> implementation) {
+    void bind(@Nonnull Type type, @Nonnull Collection<Annotation> qualifiers, @Nonnull Class<?> implementation) {
         if (type == null) {
             throw new IllegalArgumentException("type cannot be null");
         }
@@ -136,7 +137,7 @@ class ClassResolver {
         this.bindingsOnly = bindingsOnly;
     }
 
-    void enableAlternative(@NonNull Class<?> alternativeClass) {
+    void enableAlternative(@Nonnull Class<?> alternativeClass) {
         if (alternativeClass == null) {
             throw new IllegalArgumentException("alternativeClass cannot be null");
         }
@@ -158,13 +159,13 @@ class ClassResolver {
      * @return the resolved class
      * @param <T> type of the class to resolve
      */
-    <T> Class<? extends T> resolveImplementation(@NonNull Type typeToResolve,
+    <T> Class<? extends T> resolveImplementation(@Nonnull Type typeToResolve,
                                                  @Nullable Collection<Annotation> qualifiers) {
         return resolveImplementation(Thread.currentThread().getContextClassLoader(), typeToResolve, qualifiers);
     }
 
     @SuppressWarnings("unchecked")
-    <T> Class<? extends T> resolveImplementation(@NonNull ClassLoader classLoader, @NonNull Type typeToResolve,
+    <T> Class<? extends T> resolveImplementation(@Nonnull ClassLoader classLoader, @Nonnull Type typeToResolve,
                                                  @Nullable Collection<Annotation> qualifiers) {
         if (classLoader == null) {
             throw new IllegalArgumentException("classLoader cannot be null");
@@ -254,7 +255,7 @@ class ClassResolver {
      * @return the resolved classes
      * @param <T> type of the class to resolve
      */
-    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve) {
+    <T> Collection<Class<? extends T>> resolveImplementations(@Nonnull Type typeToResolve) {
         return resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve);
     }
 
@@ -267,7 +268,7 @@ class ClassResolver {
      * @return the resolved classes
      * @param <T> type of the class to resolve
      */
-    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull Type typeToResolve,
+    <T> Collection<Class<? extends T>> resolveImplementations(@Nonnull Type typeToResolve,
                                                               @Nullable Collection<Annotation> qualifiers) {
         Collection<Class<? extends T>> resolvedClasses =
                 resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve);
@@ -286,7 +287,7 @@ class ClassResolver {
     }
 
     @SuppressWarnings("unchecked")
-    <T> Collection<Class<? extends T>> resolveImplementations(@NonNull ClassLoader classLoader, @NonNull Type typeToResolve) {
+    <T> Collection<Class<? extends T>> resolveImplementations(@Nonnull ClassLoader classLoader, @Nonnull Type typeToResolve) {
         if (classLoader == null) {
             throw new IllegalArgumentException("classLoader cannot be null");
         }

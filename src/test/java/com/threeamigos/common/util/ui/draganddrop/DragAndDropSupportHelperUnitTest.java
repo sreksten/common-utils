@@ -2,7 +2,7 @@ package com.threeamigos.common.util.ui.draganddrop;
 
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -77,6 +77,7 @@ class DragAndDropSupportHelperUnitTest {
     void shouldHandleException() {
         // Given
         Transferable transferable = new TransferableImpl(DataFlavor.javaFileListFlavor, null) {
+            @Nonnull
             @Override
             public Object getTransferData(DataFlavor flavor) throws IOException {
                 throw new IOException("Test I/O exception");
@@ -107,7 +108,7 @@ class DragAndDropSupportHelperUnitTest {
         }
 
         @Override
-        public void handleException(@NonNull Exception exception) {
+        public void handleException(@Nonnull Exception exception) {
             exceptionHandler.handleException(exception);
         }
 
@@ -142,7 +143,7 @@ class DragAndDropSupportHelperUnitTest {
         }
 
         @Override
-        public Object getTransferData(DataFlavor flavor) throws IOException {
+        public @Nonnull Object getTransferData(DataFlavor flavor) throws IOException {
             return object;
         }
     }

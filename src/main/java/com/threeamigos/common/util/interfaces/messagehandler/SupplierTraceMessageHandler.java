@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.function.Supplier;
 
@@ -18,6 +18,6 @@ public interface SupplierTraceMessageHandler {
      *
      * @param traceMessageSupplier a supplier for a trace message to show to the programmer
      */
-    void handleTraceMessage(@NonNull Supplier<String> traceMessageSupplier);
+    void handleTraceMessage(final @Nonnull Supplier<String> traceMessageSupplier);
 
 }

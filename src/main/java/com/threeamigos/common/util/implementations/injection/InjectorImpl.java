@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.RequestScoped;
@@ -213,7 +213,7 @@ public class InjectorImpl implements Injector {
      * @param classResolver the class resolver to use for finding implementations
      * @throws IllegalArgumentException if classResolver is null
      */
-    InjectorImpl(@NonNull final ClassResolver classResolver) {
+    InjectorImpl(final @Nonnull ClassResolver classResolver) {
         if (classResolver == null) {
             throw new IllegalArgumentException("Class resolver cannot be null");
         }
@@ -273,7 +273,7 @@ public class InjectorImpl implements Injector {
      * @see ScopeHandler
      */
     @Override
-    public void registerScope(@NonNull Class<? extends Annotation> scopeAnnotation, @NonNull ScopeHandler handler) {
+    public void registerScope(@Nonnull Class<? extends Annotation> scopeAnnotation, @Nonnull ScopeHandler handler) {
         if (scopeAnnotation == null) {
             throw new IllegalArgumentException("Scope annotation cannot be null");
         }
@@ -318,7 +318,7 @@ public class InjectorImpl implements Injector {
      * @param scopeAnnotation the scope annotation to unregister
      * @throws IllegalArgumentException if scopeAnnotation is null
      */
-    public void unregisterScope(@NonNull Class<? extends Annotation> scopeAnnotation) {
+    public void unregisterScope(@Nonnull Class<? extends Annotation> scopeAnnotation) {
         if (scopeAnnotation == null) {
             throw new IllegalArgumentException("Scope annotation cannot be null");
         }
@@ -338,7 +338,7 @@ public class InjectorImpl implements Injector {
      * @see javax.enterprise.inject.Alternative
      */
     @Override
-    public void enableAlternative(@NonNull Class<?> alternativeClass) {
+    public void enableAlternative(@Nonnull Class<?> alternativeClass) {
         // Non-null check done by classResolver
         classResolver.enableAlternative(alternativeClass);
     }
@@ -361,7 +361,7 @@ public class InjectorImpl implements Injector {
      * @see javax.inject.Qualifier
      */
     @Override
-    public void bind(@NonNull Type type, @NonNull Collection<Annotation> qualifiers, @NonNull Class<?> implementation) {
+    public void bind(@Nonnull Type type, @Nonnull Collection<Annotation> qualifiers, @Nonnull Class<?> implementation) {
         // Non-null checks done by classResolver
         classResolver.bind(type, qualifiers, implementation);
     }
@@ -390,7 +390,7 @@ public class InjectorImpl implements Injector {
      * @see javax.annotation.PostConstruct
      */
     @Override
-    public <T> T inject(@NonNull Class<T> classToInject) {
+    public <T> T inject(@Nonnull Class<T> classToInject) {
         if (classToInject == null) {
             throw new IllegalArgumentException("Class to inject cannot be null");
         }
@@ -422,7 +422,7 @@ public class InjectorImpl implements Injector {
      * @see javax.enterprise.util.TypeLiteral
      */
     @Override
-    public <T> T inject(@NonNull TypeLiteral<T> typeLiteral) {
+    public <T> T inject(@Nonnull TypeLiteral<T> typeLiteral) {
         if (typeLiteral == null) {
             throw new IllegalArgumentException("Type literal cannot be null");
         }
@@ -455,7 +455,7 @@ public class InjectorImpl implements Injector {
      * @see #performInjection(Type, Class, Stack)
      * @see java.util.Optional
      */
-    private <T> T inject(@NonNull Type typeToInject, Stack<Type> stack, Collection<Annotation> qualifiers) {
+    private <T> T inject(@Nonnull Type typeToInject, Stack<Type> stack, Collection<Annotation> qualifiers) {
         // Handle Optional<T> injection - JSR-330 optional dependency pattern
         if (typeToInject instanceof ParameterizedType) {
             ParameterizedType pt = (ParameterizedType) typeToInject;
@@ -636,7 +636,7 @@ public class InjectorImpl implements Injector {
      * @see javax.inject.Inject
      */
     @SuppressWarnings("unchecked")
-    <T> Constructor<T> getConstructor(@NonNull Class<T> clazz) {
+    <T> Constructor<T> getConstructor(@Nonnull Class<T> clazz) {
         List<Constructor<T>> constructors = Arrays.stream((Constructor<T>[])clazz.getDeclaredConstructors())
                 .filter(c -> c.isAnnotationPresent(Inject.class))
                 .collect(Collectors.toList());
@@ -1343,7 +1343,7 @@ public class InjectorImpl implements Injector {
             }
 
             @Override
-            public @NonNull Iterator<T> iterator() {
+            public @Nonnull Iterator<T> iterator() {
                 try {
                     Collection<Class<? extends T>> classes = classResolver.resolveImplementations(type, qualifiers);
 

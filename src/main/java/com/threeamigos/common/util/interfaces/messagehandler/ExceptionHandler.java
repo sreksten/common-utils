@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 /**
  * An interface used to handle exceptions.
@@ -15,6 +15,6 @@ public interface ExceptionHandler {
      *
      * @param exception an exception to handle
      */
-    void handleException(@NonNull Exception exception);
+    void handleException(final @Nonnull Exception exception);
 
 }

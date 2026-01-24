@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.ui.draganddrop;
 
 import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
@@ -26,17 +26,17 @@ public class DragAndDropSupportHelper {
     }
 
     public static <T extends Component & Consumer<List<File>> & ExceptionHandler> void addJavaFileListSupport(
-            @NonNull T component) {
+            @Nonnull T component) {
         addJavaFileListSupport(component, component);
     }
 
-    public static <T extends Component & Consumer<List<File>>> void addJavaFileListSupport(@NonNull T component,
-                                                                                           @NonNull ExceptionHandler exceptionHandler) {
+    public static <T extends Component & Consumer<List<File>>> void addJavaFileListSupport(@Nonnull T component,
+                                                                                           @Nonnull ExceptionHandler exceptionHandler) {
         component.setDropTarget(new DropTarget() {
             private static final long serialVersionUID = 1L;
 
             @Override
-            public synchronized void drop(@NonNull DropTargetDropEvent evt) {
+            public synchronized void drop(@Nonnull DropTargetDropEvent evt) {
                 try {
                     evt.acceptDrop(DnDConstants.ACTION_COPY);
                     if (evt.getTransferable().isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {

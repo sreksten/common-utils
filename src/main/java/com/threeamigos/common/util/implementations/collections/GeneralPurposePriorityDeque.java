@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.collections;
 
 import com.threeamigos.common.util.interfaces.collections.PriorityDeque;
+import jakarta.annotation.Nonnull;
 
 import java.util.*;
 import java.util.function.Function;
@@ -22,6 +23,8 @@ import java.util.function.Function;
  * </ul>
  *
  * @param <T> type of the objects stored in the deque
+ *
+ * @author Stefano Reksten
  */
 public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
@@ -34,11 +37,11 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         this.policy = Policy.FIFO;
     }
 
-    public GeneralPurposePriorityDeque(Policy policy) {
+    public GeneralPurposePriorityDeque(final Policy policy) {
         this.policy = policy;
     }
 
-    public void setPolicy(Policy policy) {
+    public void setPolicy(@Nonnull final Policy policy) {
         this.policy = policy;
     }
 
@@ -46,7 +49,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return policy;
     }
 
-    public synchronized void add(T task, int priority) {
+    public synchronized void add(@Nonnull final T task, final int priority) {
         ArrayDeque<T> q = byPriority.computeIfAbsent(priority, p -> {
             nonEmptyCount++;
             return new ArrayDeque<>();
@@ -91,7 +94,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public synchronized T pollFifo(int priority) {
+    public synchronized T pollFifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         if (q == null) {
             return null;
@@ -119,7 +122,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public synchronized T pollLifo(int priority) {
+    public synchronized T pollLifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         if (q == null) {
             return null;
@@ -136,11 +139,16 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return nonEmptyCount == 0;
     }
 
+    public synchronized boolean isEmpty(final int priority) {
+        ArrayDeque<T> q = byPriority.get(priority);
+        return q == null || q.isEmpty();
+    }
+
     public synchronized int size() {
         return byPriority.values().stream().mapToInt(ArrayDeque::size).sum();
     }
 
-    public synchronized int size(int priority) {
+    public synchronized int size(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         return q == null ? 0 : q.size();
     }
@@ -150,11 +158,11 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         nonEmptyCount = 0;
     }
 
-    public synchronized void clear(int priority) {
+    public synchronized void clear(final int priority) {
         byPriority.remove(priority);
     }
 
-    public synchronized void clear(Function<T, Boolean> filteringFunction) {
+    public synchronized void clear(@Nonnull final Function<T, Boolean> filteringFunction) {
         byPriority.values().forEach(q -> q.removeIf(filteringFunction::apply));
         nonEmptyCount = byPriority.values().stream().mapToInt(ArrayDeque::size).sum();
     }
@@ -167,7 +175,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean contains(T t) {
+    public synchronized boolean contains(@Nonnull final T t) {
         for (NavigableMap.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
             if (e.getValue().contains(t)) {
                 return true;
@@ -177,7 +185,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean containsAll(Collection<T> iterable) {
+    public synchronized boolean containsAll(final @Nonnull Collection<T> iterable) {
         for (T t : iterable) {
             if (!contains(t)) {
                 return false;
@@ -196,7 +204,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean remove(T t) {
+    public synchronized boolean remove(final @Nonnull T t) {
         for (NavigableMap.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
             if (e.getValue().contains(t)) {
                 e.getValue().remove(t);
@@ -207,7 +215,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean removeAll(Collection<T> iterable) {
+    public synchronized boolean removeAll(final @Nonnull Collection<T> iterable) {
         boolean result = true;
         for (T t : iterable) {
             if (!remove(t)) {
@@ -219,7 +227,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
 
     @Override
-    public synchronized boolean retainAll(Collection<T> iterable) {
+    public synchronized boolean retainAll(final @Nonnull Collection<T> iterable) {
         boolean result = false;
         for (NavigableMap.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
             if (e.getValue().retainAll(iterable)) {
@@ -230,7 +238,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized List<T> toList() {
+    public synchronized @Nonnull List<T> toList() {
         List<T> result = new ArrayList<>();
         // Use descendingMap to iterate from the highest priority to the lowest
         for (ArrayDeque<T> bucket : byPriority.descendingMap().values()) {
@@ -246,7 +254,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized Iterator<T> iterator() {
+    public synchronized @Nonnull Iterator<T> iterator() {
         return new PriorityIterator();
     }
 

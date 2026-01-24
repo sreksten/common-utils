@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.messagehandler;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.function.Supplier;
 
@@ -18,6 +18,6 @@ public interface SupplierErrorMessageHandler {
      *
      * @param errorMessageSupplier a supplier for an error message to show to the user
      */
-    void handleErrorMessage(@NonNull Supplier<String> errorMessageSupplier);
+    void handleErrorMessage(final @Nonnull Supplier<String> errorMessageSupplier);
 
 }

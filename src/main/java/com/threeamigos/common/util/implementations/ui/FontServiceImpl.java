@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.threeamigos.common.util.interfaces.ui.FontService;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 /**
  * An implementation of the {@link FontService} interface.
@@ -23,7 +23,7 @@ public class FontServiceImpl implements FontService {
 	 * @return a Font
 	 */
 	@Override
-	public Font getFont(@NonNull String fontName, int attributes, int fontHeight) {
+	public Font getFont(final @Nonnull String fontName, final int attributes, final int fontHeight) {
 		String key = fontName + "-" + attributes + "-" + fontHeight;
 		return fontMap.computeIfAbsent(key, h -> new Font(fontName, attributes, fontHeight));
 	}

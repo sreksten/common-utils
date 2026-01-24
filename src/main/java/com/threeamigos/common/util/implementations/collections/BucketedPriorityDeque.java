@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.collections;
 
 import com.threeamigos.common.util.interfaces.collections.PriorityDeque;
+import jakarta.annotation.Nonnull;
 
 import java.util.*;
 import java.util.function.Function;
@@ -36,27 +37,27 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     private int nonEmptyMask = 0; // bit i set => bucket i has items
 
     @SuppressWarnings("unchecked")
-    public BucketedPriorityDeque(int maxPriority) {
-        if (maxPriority < MIN_PRIORITY) {
-            throw new IllegalArgumentException("maxPriority must be non-negative");
-        }
-        if (maxPriority > MAX_PRIORITY) {
-            throw new IllegalArgumentException("maxPriority must be <= " + MAX_PRIORITY);
-        }
+    public BucketedPriorityDeque(final int maxPriority, final @Nonnull Policy policy) {
+        validatePriority(maxPriority);
+        validatePolicy(policy);
         this.maxPriority = maxPriority;
         this.buckets = new ArrayDeque[maxPriority + 1];
         for (int i = 0; i <= maxPriority; i++) {
             buckets[i] = new ArrayDeque<>();
         }
-        this.policy = Policy.FIFO;
-    }
-
-    public BucketedPriorityDeque(int maxPriority, Policy policy) {
-        this(maxPriority);
         this.policy = policy;
     }
 
-    public void setPolicy(Policy policy) {
+    public BucketedPriorityDeque(final int maxPriority) {
+        this(maxPriority, Policy.FIFO);
+    }
+
+    public BucketedPriorityDeque() {
+        this(MAX_PRIORITY);
+    }
+
+    public void setPolicy(@Nonnull Policy policy) {
+        validatePolicy(policy);
         this.policy = policy;
     }
 
@@ -64,7 +65,11 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return policy;
     }
 
-    public synchronized void add(T task, int priority) {
+    public synchronized void add(@Nonnull T task, int priority) {
+        if (task == null) {
+            throw new NullPointerException("Task cannot be null");
+        }
+        validatePriority(priority);
         ArrayDeque<T> q = buckets[priority];
         q.addLast(task);
         nonEmptyMask |= (1 << priority);
@@ -144,6 +149,10 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return nonEmptyMask == 0;
     }
 
+    public synchronized boolean isEmpty(final int priority) {
+        return buckets[priority].isEmpty();
+    }
+
     public synchronized int size() {
         int size = 0;
         for (int i = 0; i <= maxPriority; i++) {
@@ -167,7 +176,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         buckets[priority].clear();
     }
 
-    public synchronized void clear(Function<T, Boolean> filteringFunction) {
+    public synchronized void clear(@Nonnull Function<T, Boolean> filteringFunction) {
         for (int i = 0; i <= maxPriority; i++) {
             buckets[i].removeIf(filteringFunction::apply);
         }
@@ -179,7 +188,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean contains(T t) {
+    public synchronized boolean contains(@Nonnull T t) {
         for (ArrayDeque<T> q : buckets) {
             if (q.contains(t)) {
                 return true;
@@ -189,7 +198,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean containsAll(Collection<T> iterable) {
+    public synchronized boolean containsAll(@Nonnull Collection<T> iterable) {
         for (T t : iterable) {
             if (!contains(t)) {
                 return false;
@@ -208,7 +217,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean remove(T t) {
+    public synchronized boolean remove(@Nonnull T t) {
         for (ArrayDeque<T> q : buckets) {
             if (q.remove(t)) {
                 return true;
@@ -218,7 +227,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean removeAll(Collection<T> iterable) {
+    public synchronized boolean removeAll(@Nonnull Collection<T> iterable) {
         boolean result = true;
         for (T t : iterable) {
             if (!remove(t)) {
@@ -229,7 +238,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean retainAll(Collection<T> iterable) {
+    public synchronized boolean retainAll(@Nonnull Collection<T> iterable) {
         boolean result = false;
         for (int i = 0; i <= maxPriority; i++) {
             if (buckets[i].retainAll(iterable)) {
@@ -239,6 +248,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return result;
     }
 
+    @Nonnull
     public synchronized List<T> toList() {
         List<T> result = new ArrayList<>();
         // Iterate from maxPriority down to MIN_PRIORITY (highest first)
@@ -258,6 +268,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         return result;
     }
 
+    @Nonnull
     @Override
     public synchronized Iterator<T> iterator() {
         return new PriorityIterator();
@@ -317,4 +328,20 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
             }
         }
     }
+
+    private void validatePolicy(@Nonnull Policy policy) {
+        if (policy == null) {
+            throw new IllegalArgumentException("Policy cannot be null");
+        }
+    }
+
+    private void validatePriority(int maxPriority) {
+        if (maxPriority < MIN_PRIORITY) {
+            throw new IllegalArgumentException("maxPriority must be non-negative");
+        }
+        if (maxPriority > MAX_PRIORITY) {
+            throw new IllegalArgumentException("maxPriority must be <= " + MAX_PRIORITY);
+        }
+    }
+
 }

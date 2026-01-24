@@ -1,6 +1,6 @@
 package com.threeamigos.common.util;
 
-import org.jspecify.annotations.Nullable;
+import jakarta.annotation.Nullable;
 
 /**
  * A generic holder for objects of type T

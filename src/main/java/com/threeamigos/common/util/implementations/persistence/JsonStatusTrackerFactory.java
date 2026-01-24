@@ -3,7 +3,7 @@ package com.threeamigos.common.util.implementations.persistence;
 import com.threeamigos.common.util.interfaces.json.Json;
 import com.threeamigos.common.util.interfaces.persistence.StatusTracker;
 import com.threeamigos.common.util.interfaces.persistence.StatusTrackerFactory;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.ResourceBundle;
 
@@ -28,7 +28,7 @@ public class JsonStatusTrackerFactory<T> implements StatusTrackerFactory<T> {
 
     private final Json<T> json;
 
-    public JsonStatusTrackerFactory(final @NonNull Json<T> json) {
+    public JsonStatusTrackerFactory(final @Nonnull Json<T> json) {
         if (json == null) {
             throw new IllegalArgumentException(getBundle().getString("noJsonProvided"));
         }
@@ -36,7 +36,7 @@ public class JsonStatusTrackerFactory<T> implements StatusTrackerFactory<T> {
     }
 
     @Override
-    public StatusTracker<T> buildStatusTracker(final @NonNull T entity) {
+    public StatusTracker<T> buildStatusTracker(final @Nonnull T entity) {
         if (entity == null) {
             throw new IllegalArgumentException(getBundle().getString("noEntityProvided"));
         }

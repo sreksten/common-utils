@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.interfaces.json;
 
 import com.threeamigos.common.util.implementations.json.JsonColorAdapter;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.awt.*;
 
@@ -25,7 +25,7 @@ public interface JsonBuilder {
 	 * @param <C> class of the object to convert
 	 * @param <A> an adapter able to convert an instance of C.
 	 */
-	<C, A extends JsonAdapter<C>> JsonBuilder registerAdapter(@NonNull Class<C> clazz, @NonNull A adapter);
+	<C, A extends JsonAdapter<C>> JsonBuilder registerAdapter(@Nonnull Class<C> clazz, @Nonnull A adapter);
 
 	/**
 	 * Use to register an adapter able to convert a java.awt.Color from/to its JSON representation.
@@ -42,6 +42,6 @@ public interface JsonBuilder {
 	 * @return a JSON converter
 	 * @param <T> the class to convert
 	 */
-	<T> Json<T> build(@NonNull Class<T> tClass);
+	<T> Json<T> build(@Nonnull Class<T> tClass);
 
 }

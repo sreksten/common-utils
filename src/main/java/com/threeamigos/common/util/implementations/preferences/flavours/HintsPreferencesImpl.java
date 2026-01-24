@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.preferences.flavours;
 
 import com.threeamigos.common.util.implementations.BasicPropertyChangeAware;
 import com.threeamigos.common.util.interfaces.preferences.flavours.HintsPreferences;
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.util.ResourceBundle;
 
@@ -24,7 +24,7 @@ public class HintsPreferencesImpl extends BasicPropertyChangeAware implements Hi
     private int lastHintIndex = -1;
     private final String propertyName;
 
-    public HintsPreferencesImpl(@NonNull String propertyName) {
+    public HintsPreferencesImpl(@Nonnull String propertyName) {
         if (propertyName == null) {
             throw new IllegalArgumentException(getBundle().getString("noPropertyNameProvided"));
         }
@@ -32,7 +32,7 @@ public class HintsPreferencesImpl extends BasicPropertyChangeAware implements Hi
     }
 
     @Override
-    public @NonNull String getDescription() {
+    public @Nonnull String getDescription() {
         return "hints preferences";
     }
 

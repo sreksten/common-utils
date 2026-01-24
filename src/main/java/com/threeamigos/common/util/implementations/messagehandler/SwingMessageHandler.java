@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import com.threeamigos.common.util.ui.AWTCalls;
-import org.jspecify.annotations.NonNull;
 
 import javax.swing.*;
 import java.awt.*;
@@ -44,27 +43,27 @@ public class SwingMessageHandler extends AbstractMessageHandler {
         return parentComponent;
     }
 
-    protected void handleInfoMessageImpl(final @NonNull String message) {
+    protected void handleInfoMessageImpl(final String message) {
         AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("info"), JOptionPane.INFORMATION_MESSAGE);
     }
 
-    protected void handleWarnMessageImpl(final @NonNull String message) {
+    protected void handleWarnMessageImpl(final String message) {
         AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("warning"), JOptionPane.WARNING_MESSAGE);
     }
 
-    protected void handleErrorMessageImpl(final @NonNull String message) {
+    protected void handleErrorMessageImpl(final String message) {
         AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("error"), JOptionPane.ERROR_MESSAGE);
     }
 
-    protected void handleDebugMessageImpl(final @NonNull String message) {
+    protected void handleDebugMessageImpl(final String message) {
         AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("debug"), JOptionPane.INFORMATION_MESSAGE);
     }
 
-    protected void handleTraceMessageImpl(final @NonNull String message) {
+    protected void handleTraceMessageImpl(final String message) {
         AWTCalls.showOptionPane(parentComponent, message, getBundle().getString("trace"), JOptionPane.INFORMATION_MESSAGE);
     }
 
-    protected void handleExceptionImpl(final @NonNull Exception exception) {
+    protected void handleExceptionImpl(final Exception exception) {
         AWTCalls.showOptionPane(parentComponent, exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
 }

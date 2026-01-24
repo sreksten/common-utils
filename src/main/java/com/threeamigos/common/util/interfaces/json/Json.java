@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.interfaces.json;
 
-import org.jspecify.annotations.NonNull;
+import jakarta.annotation.Nonnull;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,7 +22,7 @@ public interface Json<T> {
      * @param entity the entity to represent in a JSON format
      * @return JSON entity representation as a string
      */
-    String toJson(@NonNull T entity);
+    String toJson(@Nonnull T entity);
 
     /**
      * Given an entity, writes its JSON representation to an OutputStream.
@@ -30,7 +30,7 @@ public interface Json<T> {
      * @param entity the entity to represent in a JSON format
      * @param outputStream destination
      */
-    void toJson(@NonNull T entity, @NonNull OutputStream outputStream) throws IOException;
+    void toJson(@Nonnull T entity, @Nonnull OutputStream outputStream) throws IOException;
 
     /**
      * Given a JSON string, returns an entity of type T populated using values in its JSON representation.
@@ -38,7 +38,7 @@ public interface Json<T> {
      * @param string the JSON representation of the entity
      * @return an instance of T populated using values in its JSON representation
      */
-    T fromJson(@NonNull String string);
+    T fromJson(@Nonnull String string);
 
     /**
      * Given an InputStream, retrieves an entity of type T populated using values in its JSON representation.
@@ -47,7 +47,7 @@ public interface Json<T> {
      * @param inputStream source of data
      * @return an entity populated using values in its JSON representation
      */
-    T fromJson(@NonNull InputStream inputStream) throws IOException;
+    T fromJson(@Nonnull InputStream inputStream) throws IOException;
 
     /**
      * Given an entity and a String, populates that entity fetching data
@@ -56,7 +56,7 @@ public interface Json<T> {
      * @param json source of data
      * @param entity entity to populate
      */
-    void fromJson(@NonNull String json, @NonNull T entity);
+    void fromJson(@Nonnull String json, @Nonnull T entity);
 
     /**
      * Given an entity and an InputStream, populates the entity fetching
@@ -65,6 +65,6 @@ public interface Json<T> {
      * @param inputStream source of data
      * @param entity      entity to populate
      */
-    void fromJson(@NonNull InputStream inputStream, @NonNull T entity) throws IOException;
+    void fromJson(@Nonnull InputStream inputStream, @Nonnull T entity) throws IOException;
 
 }
