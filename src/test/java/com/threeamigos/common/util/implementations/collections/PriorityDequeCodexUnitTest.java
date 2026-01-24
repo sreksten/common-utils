@@ -457,6 +457,23 @@ public class PriorityDequeCodexUnitTest {
             assertThrows(IllegalArgumentException.class, () -> sut.addAll(items, 1));
         }
 
+        @Test
+        @DisplayName("Bucketed iterator by priority should not include lower priorities")
+        void bucketedIteratorByPriorityDoesNotIncludeLowerPriorities() {
+            BucketedPriorityDeque<String> sut = new BucketedPriorityDeque<>(3);
+            sut.add("p2a", 2);
+            sut.add("p2b", 2);
+            sut.add("p1", 1);
+
+            List<String> results = new ArrayList<>();
+            Iterator<String> iterator = sut.iterator(2);
+            while (iterator.hasNext()) {
+                results.add(iterator.next());
+            }
+
+            assertEquals(Arrays.asList("p2a", "p2b"), results);
+        }
+
         @ParameterizedTest(name = "{0}")
         @DisplayName("pollFifo by priority should handle non-empty and empty buckets")
         @MethodSource("com.threeamigos.common.util.implementations.collections.PriorityDequeCodexUnitTest#createSut")

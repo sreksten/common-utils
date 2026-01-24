@@ -757,6 +757,19 @@ class BlockingPriorityDequeWrapperUnitTest {
         }
 
         @ParameterizedTest(name = "{0}")
+        @DisplayName("Should return false when addAll collection is empty")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldReturnFalseWhenAddAllCollectionIsEmpty(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            List<String> elements = new ArrayList<>();
+
+            boolean result = sut.addAll(elements);
+
+            assertFalse(result);
+            assertEquals(0, sut.size());
+        }
+
+        @ParameterizedTest(name = "{0}")
         @DisplayName("Should throw when addAll collection is null")
         @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
         void shouldThrowWhenAddAllCollectionIsNull(String sutName, PriorityDeque<String> priorityDeque) {

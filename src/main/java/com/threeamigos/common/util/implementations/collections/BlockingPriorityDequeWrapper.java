@@ -321,11 +321,13 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
         validateCollection(c);
         lock.lock();
         try {
+            boolean changed = false;
             for (T r : c) {
                 delegate.add(r, defaultPriority);
                 notEmpty.signal();
+                changed = true;
             }
-            return true;
+            return changed;
         } finally {
             lock.unlock();
         }

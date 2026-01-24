@@ -489,19 +489,37 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         private Iterator<T> currentDequeIterator;
         private ArrayDeque<T> currentDeque;
         private boolean canRemove = false;
+        private final boolean singlePriority;
+        private final int fixedPriority;
 
         PriorityIterator() {
             // bucket index will be decremented as the first thing
             this.currentBucketIndex = maxPriority + 1;
+            this.singlePriority = false;
+            this.fixedPriority = -1;
         }
 
         PriorityIterator(int fixedPriority) {
             // bucket index will be decremented as the first thing
-            this.currentBucketIndex = fixedPriority + 1;
+            this.currentBucketIndex = fixedPriority;
+            this.singlePriority = true;
+            this.fixedPriority = fixedPriority;
         }
 
         @Override
         public boolean hasNext() {
+            if (singlePriority) {
+                if (currentDequeIterator == null) {
+                    currentDeque = buckets[fixedPriority];
+                    if (currentDeque.isEmpty()) {
+                        return false;
+                    }
+                    currentDequeIterator = (policy == Policy.FIFO)
+                            ? currentDeque.iterator()
+                            : currentDeque.descendingIterator();
+                }
+                return currentDequeIterator.hasNext();
+            }
             while (currentDequeIterator == null || !currentDequeIterator.hasNext()) {
                 currentBucketIndex--;
                 if (currentBucketIndex < 0) {
