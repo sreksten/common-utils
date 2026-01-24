@@ -16,7 +16,7 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class InMemoryMessageHandler extends AbstractMessageHandler {
 
-    private static final int MAX_ENTRIES = 10_000;
+    private final int maxEntries;
 
     private final List<String> allMessages = new ArrayList<>();
     private final List<String> allInfoMessages = new ArrayList<>();
@@ -28,6 +28,17 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     private final List<Exception> allExceptions = new ArrayList<>();
     private final ReentrantLock lock = new ReentrantLock();
     private String lastMessage;
+
+    public InMemoryMessageHandler() {
+        this(10_000);
+    }
+
+    public InMemoryMessageHandler(int maxEntries) {
+        if (maxEntries <= 0) {
+            throw new IllegalArgumentException("maxEntries must be positive");
+        }
+        this.maxEntries = maxEntries;
+    }
 
     @Override
     protected void handleInfoMessageImpl(final String message) {
@@ -103,7 +114,7 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
     }
 
     private <E> void addWithLimit(List<E> list, E value) {
-        if (list.size() >= MAX_ENTRIES) {
+        if (list.size() >= maxEntries) {
             list.remove(0);
         }
         list.add(value);
@@ -119,6 +130,13 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * @return the configured maximum number of entries retained per list.
+     */
+    public int getMaxEntries() {
+        return maxEntries;
     }
 
     /**

@@ -181,7 +181,7 @@ public abstract class AbstractMessageHandler implements MessageHandler {
             throw new IllegalArgumentException(getBundle().getString("nullMessageSupplierProvided"));
         }
         if (isTraceEnabled) {
-            handleTraceMessageImpl(messageSupplier.get());
+            handleTraceMessage(messageSupplier.get());
         }
     }
 

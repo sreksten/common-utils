@@ -203,4 +203,25 @@ class InMemoryMessageHandlerUnitTest {
         assertEquals("My ClassNotFoundException", sut.getLastMessage(), "Wrong last message");
     }
 
+    @Test
+    @DisplayName("Should evict oldest when maxEntries exceeded")
+    void shouldEvictOldestWhenMaxEntriesExceeded() {
+        InMemoryMessageHandler handler = new InMemoryMessageHandler(2);
+
+        handler.handleInfoMessage("one");
+        handler.handleInfoMessage("two");
+        handler.handleInfoMessage("three");
+
+        assertEquals(2, handler.getAllMessages().size());
+        assertEquals("two", handler.getAllMessages().get(0));
+        assertEquals("three", handler.getAllMessages().get(1));
+        assertEquals(2, handler.getMaxEntries());
+    }
+
+    @Test
+    @DisplayName("Should reject non-positive maxEntries")
+    void shouldRejectNonPositiveMaxEntries() {
+        assertThrows(IllegalArgumentException.class, () -> new InMemoryMessageHandler(0));
+        assertThrows(IllegalArgumentException.class, () -> new InMemoryMessageHandler(-5));
+    }
 }
