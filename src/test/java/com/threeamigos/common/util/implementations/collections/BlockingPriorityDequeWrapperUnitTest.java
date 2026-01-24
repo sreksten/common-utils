@@ -617,6 +617,15 @@ class BlockingPriorityDequeWrapperUnitTest {
             assertThrows(IllegalArgumentException.class, () -> sut.drainTo(null));
             assertThrows(IllegalArgumentException.class, () -> sut.drainTo(null, 1));
         }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("Should throw when drainTo maxElements is negative")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldThrowWhenDrainToMaxElementsIsNegative(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            List<String> drainage = new ArrayList<>();
+            assertThrows(IllegalArgumentException.class, () -> sut.drainTo(drainage, -1));
+        }
     }
 
     @Nested

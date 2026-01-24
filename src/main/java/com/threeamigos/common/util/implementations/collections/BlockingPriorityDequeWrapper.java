@@ -236,6 +236,9 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     @Override
     public int drainTo(final @Nonnull Collection<? super T> c, int maxElements) {
         validateCollection(c);
+        if (maxElements < 0) {
+            throw new IllegalArgumentException("maxElements must be non-negative");
+        }
         lock.lock();
         try {
             int n = 0;

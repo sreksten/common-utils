@@ -539,6 +539,18 @@ public class PriorityDequeCodexUnitTest {
         }
 
         @Test
+        @DisplayName("GeneralPurpose remove by value should not throw when bucket is removed")
+        void generalPurposeRemoveByValueDoesNotThrowWhenBucketRemoved() {
+            GeneralPurposePriorityDeque<String> sut = new GeneralPurposePriorityDeque<>();
+            sut.add("p1", 1);
+            sut.add("p2", 2);
+
+            assertDoesNotThrow(() -> sut.remove("p1"));
+            assertEquals(1, sut.size());
+            assertEquals(2, sut.getHighestNotEmptyPriority());
+        }
+
+        @Test
         @DisplayName("Bucketed contains/remove by priority should return false for null values")
         void bucketedContainsRemoveByPriorityNullValue() {
             PriorityDeque<String> sut = new BucketedPriorityDeque<>(5);

@@ -314,11 +314,12 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         if (t == null) {
             return false;
         }
-        for (Map.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
+        for (Iterator<Map.Entry<Integer, ArrayDeque<T>>> it = byPriority.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<Integer, ArrayDeque<T>> e = it.next();
             if (e.getValue().remove(t)) {
                 elementCount--;
                 if (e.getValue().isEmpty()) {
-                    byPriority.remove(e.getKey());
+                    it.remove();
                     nonEmptyCount--;
                 }
                 return true;
