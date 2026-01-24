@@ -4,7 +4,7 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * An implementation of the {@link MessageHandler} interface that forwards
@@ -35,7 +35,8 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
 
     // End of static methods
 
-    private final CopyOnWriteArrayList<MessageHandler> messageHandlers = new CopyOnWriteArrayList<>();
+    private final List<MessageHandler> messageHandlers = new ArrayList<>();
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
      * Constructor.
@@ -63,12 +64,17 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         if (handlers == null) {
             throw new IllegalArgumentException(getBundle().getString("noMessageHandlersProvided"));
         }
-        for (MessageHandler handler : handlers) {
-            if (handler == null) {
-                throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
-            } else {
-                messageHandlers.add(handler);
+        lock.writeLock().lock();
+        try {
+            for (MessageHandler handler : handlers) {
+                if (handler == null) {
+                    throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
+                } else {
+                    messageHandlers.add(handler);
+                }
             }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -79,7 +85,12 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         if (messageHandler == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
         }
-        messageHandlers.add(messageHandler);
+        lock.writeLock().lock();
+        try {
+            messageHandlers.add(messageHandler);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     /**
@@ -89,43 +100,64 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         if (messageHandler == null) {
             throw new IllegalArgumentException(getBundle().getString("nullMessageHandlerProvided"));
         }
-        messageHandlers.remove(messageHandler);
+        lock.writeLock().lock();
+        try {
+            messageHandlers.remove(messageHandler);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     /**
      * @return an unmodifiable collection of the registered MessageHandlers
      */
     public Collection<MessageHandler> getMessageHandlers() {
-        return Collections.unmodifiableList(new ArrayList<>(messageHandlers));
+        lock.readLock().lock();
+        try {
+            return Collections.unmodifiableList(new ArrayList<>(messageHandlers));
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override
     protected void handleInfoMessageImpl(final String message) {
-        messageHandlers.forEach(mh -> mh.handleInfoMessage(message));
+        forEachHandler(mh -> mh.handleInfoMessage(message));
     }
 
     @Override
     protected void handleWarnMessageImpl(final String message) {
-        messageHandlers.forEach(mh -> mh.handleWarnMessage(message));
+        forEachHandler(mh -> mh.handleWarnMessage(message));
     }
 
     @Override
     protected void handleErrorMessageImpl(final String message) {
-        messageHandlers.forEach(mh -> mh.handleErrorMessage(message));
+        forEachHandler(mh -> mh.handleErrorMessage(message));
     }
 
     @Override
     protected void handleDebugMessageImpl(final String message) {
-        messageHandlers.forEach(mh -> mh.handleDebugMessage(message));
+        forEachHandler(mh -> mh.handleDebugMessage(message));
     }
 
     @Override
     protected void handleTraceMessageImpl(final String message) {
-        messageHandlers.forEach(mh -> mh.handleTraceMessage(message));
+        forEachHandler(mh -> mh.handleTraceMessage(message));
     }
 
     @Override
     protected void handleExceptionImpl(final Exception exception) {
-        messageHandlers.forEach(mh -> mh.handleException(exception));
+        forEachHandler(mh -> mh.handleException(exception));
+    }
+
+    private void forEachHandler(java.util.function.Consumer<MessageHandler> consumer) {
+        lock.readLock().lock();
+        try {
+            for (MessageHandler handler : messageHandlers) {
+                consumer.accept(handler);
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 }

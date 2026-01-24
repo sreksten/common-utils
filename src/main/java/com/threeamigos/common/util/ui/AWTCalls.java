@@ -28,6 +28,9 @@ public class AWTCalls {
      */
     public static void showOptionPane(final @Nullable Component parentComponent, final @Nonnull String message,
                                       final @Nonnull String title, final int icon) {
+        if (GraphicsEnvironment.isHeadless()) {
+            return;
+        }
         if (SwingUtilities.isEventDispatchThread()) {
             JOptionPane.showMessageDialog(parentComponent, message, title, icon);
         } else {

@@ -2,10 +2,7 @@ package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -19,14 +16,14 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
 
     private final int maxEntries;
 
-    private final List<String> allMessages = new LinkedList<>();
-    private final List<String> allInfoMessages = new LinkedList<>();
-    private final List<String> allWarnMessages = new LinkedList<>();
-    private final List<String> allErrorMessages = new LinkedList<>();
-    private final List<String> allDebugMessages = new LinkedList<>();
-    private final List<String> allTraceMessages = new LinkedList<>();
-    private final List<String> allExceptionMessages = new LinkedList<>();
-    private final List<Exception> allExceptions = new LinkedList<>();
+    private final ArrayDeque<String> allMessages = new ArrayDeque<>();
+    private final ArrayDeque<String> allInfoMessages = new ArrayDeque<>();
+    private final ArrayDeque<String> allWarnMessages = new ArrayDeque<>();
+    private final ArrayDeque<String> allErrorMessages = new ArrayDeque<>();
+    private final ArrayDeque<String> allDebugMessages = new ArrayDeque<>();
+    private final ArrayDeque<String> allTraceMessages = new ArrayDeque<>();
+    private final ArrayDeque<String> allExceptionMessages = new ArrayDeque<>();
+    private final ArrayDeque<Exception> allExceptions = new ArrayDeque<>();
     private final ReentrantLock lock = new ReentrantLock();
     private String lastMessage;
 
@@ -101,6 +98,9 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         lock.lock();
         try {
             String msg = exception.getMessage();
+            if (msg == null) {
+                msg = exception.toString();
+            }
             addWithLimit(allExceptionMessages, msg);
             addWithLimit(allExceptions, exception);
             handleImpl(msg);
@@ -114,11 +114,11 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         lastMessage = message;
     }
 
-    private <E> void addWithLimit(List<E> list, E value) {
-        if (list.size() >= maxEntries) {
-            list.remove(0);
+    private <E> void addWithLimit(ArrayDeque<E> messages, E value) {
+        if (messages.size() >= maxEntries) {
+            messages.removeFirst();
         }
-        list.add(value);
+        messages.add(value);
     }
 
     /**
