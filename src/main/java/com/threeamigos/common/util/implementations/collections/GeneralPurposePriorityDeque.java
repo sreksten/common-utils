@@ -40,10 +40,12 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     public GeneralPurposePriorityDeque(final Policy policy) {
+        validatePolicy(policy);
         this.policy = policy;
     }
 
     public void setPolicy(@Nonnull final Policy policy) {
+        validatePolicy(policy);
         this.policy = policy;
     }
 
@@ -51,12 +53,13 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return policy;
     }
 
-    public void add(@Nonnull final T task, final int priority) {
+    public void add(@Nonnull final T t, final int priority) {
+        validateObject(t);
         ArrayDeque<T> q = byPriority.computeIfAbsent(priority, p -> {
             nonEmptyCount++;
             return new ArrayDeque<>();
         });
-        q.addLast(task);
+        q.addLast(t);
     }
 
     public T peek() {
@@ -184,15 +187,13 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     public void clear(final int priority) {
         ArrayDeque<T> q = byPriority.remove(priority);
-        if (q != null && !q.isEmpty()) {
+        if (q != null) {
             nonEmptyCount--;
         }
     }
 
     public void clear(@Nonnull final Function<T, Boolean> filteringFunction) {
-        if (filteringFunction == null) {
-            throw new IllegalArgumentException("Filtering function cannot be null");
-        }
+        validateFilteringFunction(filteringFunction);
         List<Integer> emptyPriorities = new ArrayList<>();
         for (Map.Entry<Integer, ArrayDeque<T>> entry : byPriority.entrySet()) {
             entry.getValue().removeIf(filteringFunction::apply);
@@ -208,9 +209,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public void clear(@Nonnull final Function<T, Boolean> filteringFunction, final int priority) {
-        if (filteringFunction == null) {
-            throw new IllegalArgumentException("Filtering function cannot be null");
-        }
+        validateFilteringFunction(filteringFunction);
         ArrayDeque<T> q = byPriority.get(priority);
         if (q != null) {
             q.removeIf(filteringFunction::apply);
@@ -252,9 +251,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public boolean containsAll(final @Nonnull Collection<T> iterable) {
-        if (iterable == null) {
-            throw new NullPointerException("Collection cannot be null");
-        }
+        validateCollection(iterable);
         for (T t : iterable) {
             if (t == null || !contains(t)) {
                 return false;
@@ -265,9 +262,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public boolean containsAll(final @Nonnull Collection<T> iterable, final int priority) {
-        if (iterable == null) {
-            throw new NullPointerException("Collection cannot be null");
-        }
+        validateCollection(iterable);
         ArrayDeque<T> q = byPriority.get(priority);
         if (q == null) {
             return iterable.isEmpty();
@@ -328,13 +323,11 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public boolean removeAll(final @Nonnull Collection<T> iterable) {
-        if (iterable == null) {
-            throw new NullPointerException("Collection cannot be null");
-        }
-        boolean result = true;
+        validateCollection(iterable);
+        boolean result = false;
         for (T t : iterable) {
-            if (!remove(t)) {
-                result = false;
+            if (remove(t)) {
+                result = true;
             }
         }
         return result;
@@ -342,9 +335,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public boolean removeAll(final @Nonnull Collection<T> iterable, final int priority) {
-        if (iterable == null) {
-            throw new NullPointerException("Collection cannot be null");
-        }
+        validateCollection(iterable);
         ArrayDeque<T> q = byPriority.get(priority);
         if (q == null) {
             return false;
@@ -359,9 +350,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public boolean retainAll(final @Nonnull Collection<T> iterable) {
-        if (iterable == null) {
-            throw new NullPointerException("Collection cannot be null");
-        }
+        validateCollection(iterable);
         boolean result = false;
         List<Integer> emptyPriorities = new ArrayList<>();
         for (Map.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
@@ -381,9 +370,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public boolean retainAll(final @Nonnull Collection<T> iterable, final int priority) {
-        if (iterable == null) {
-            throw new NullPointerException("Collection cannot be null");
-        }
+        validateCollection(iterable);
         ArrayDeque<T> q = byPriority.get(priority);
         if (q == null) {
             return false;
@@ -483,10 +470,37 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
             }
             currentDequeIterator.remove();
             if (currentDeque.isEmpty()) {
-                byPriority.remove(currentPriority);
+                if (singlePriority) {
+                    byPriority.remove(currentPriority);
+                } else {
+                    bucketIterator.remove();
+                }
                 nonEmptyCount--;
             }
         }
     }
 
+    private void validatePolicy(@Nonnull Policy policy) {
+        if (policy == null) {
+            throw new IllegalArgumentException("Policy cannot be null");
+        }
+    }
+
+    void validateObject(T object) {
+        if (object == null) {
+            throw new IllegalArgumentException("Object cannot be null");
+        }
+    }
+
+    void validateCollection(Collection<T> collection) {
+        if (collection == null) {
+            throw new IllegalArgumentException("Collection cannot be null");
+        }
+    }
+
+    void validateFilteringFunction(Function<T, Boolean> filteringFunction) {
+        if (filteringFunction == null) {
+            throw new IllegalArgumentException("Filtering function cannot be null");
+        }
+    }
 }

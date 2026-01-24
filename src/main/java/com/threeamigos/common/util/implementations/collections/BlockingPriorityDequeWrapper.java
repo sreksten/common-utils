@@ -54,13 +54,13 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
      * Non-standard method to add a task with a specific priority.
      * Signals any waiting threads that the queue is no longer empty.
      */
-    public void add(final @Nonnull T T, final int priority) {
-        if (T == null) {
+    public void add(final @Nonnull T t, final int priority) {
+        if (t == null) {
             throw new IllegalArgumentException("Element to add cannot be null");
         }
         lock.lock();
         try {
-            delegate.add(T, priority);
+            delegate.add(t, priority);
             notEmpty.signal();
         } finally {
             lock.unlock();
@@ -159,9 +159,14 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     @Override
     @SuppressWarnings("unchecked")
     public boolean remove(final Object o) {
+        if (o == null) {
+            return false;
+        }
         lock.lock();
         try {
-            return o != null && delegate.remove((T) o);
+            return delegate.remove((T) o);
+        } catch (ClassCastException e) {
+            return false;
         } finally {
             lock.unlock();
         }
@@ -170,10 +175,15 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     @Override
     @SuppressWarnings("unchecked")
     public boolean contains(final Object o) {
+        if (o == null) {
+            return false;
+        }
         lock.lock();
         try {
             // PriorityDeque is typed, so we check if the object is a T
-            return o != null && delegate.contains((T) o);
+            return delegate.contains((T) o);
+        } catch (ClassCastException e) {
+            return false;
         } finally {
             lock.unlock();
         }
@@ -240,15 +250,34 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     }
 
     /**
-     * <i>Note</i>: Caller must be careful as this doesn't hold the lock during iteration.
-     * 
-     * @return the delegate's iterator
+     * Returns an iterator over the elements in this queue.
+     * <p><b>Implementation Note - Snapshot Iterator:</b>
+     * The returned iterator is a <i>snapshot</i> taken at the time of this call.
+     * It will not reflect subsequent modifications to the queue (additions, removals, or reordering).
+     * This ensures thread-safety without holding locks during iteration.
+     * <p><b>Pros:</b>
+     * <ul>
+     * <li>Thread-safe: No synchronization needed during iteration</li>
+     * <li>No deadlock risk: Lock is released before iteration begins</li>
+     * <li>Predictable: Iterator sees consistent point-in-time state</li>
+     * <li>Allows concurrent operations: Other threads can modify queue during iteration</li>
+     * </ul>
+     * <p><b>Cons:</b>
+     * <ul>
+     * <li>Memory overhead: Creates a copy of all elements</li>
+     * <li>Not a live view: Subsequent changes not visible to iterator</li>
+     * <li>Performance: O(n) time and space to create snapshot</li>
+     * </ul>
+     * <p>This is the standard pattern used by concurrent collections like
+     * {@link java.util.concurrent.CopyOnWriteArrayList}.
+     *
+     * @return a thread-safe snapshot iterator over the elements
      */
     @Override
     public @Nonnull Iterator<T> iterator() {
         lock.lock();
         try {
-            return delegate.iterator();
+            return delegate.toList().iterator();
         } finally {
             lock.unlock();
         }
@@ -290,10 +319,16 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
     @Override
     public boolean addAll(@Nonnull Collection<? extends T> c) {
         validateCollection(c);
-        for (T r : c) {
-            add(r);
+        lock.lock();
+        try {
+            for (T r : c) {
+                delegate.add(r, defaultPriority);
+                notEmpty.signal();
+            }
+            return true;
+        } finally {
+            lock.unlock();
         }
-        return true;
     }
 
     @Override
@@ -328,7 +363,7 @@ public class BlockingPriorityDequeWrapper<T> implements BlockingQueue<T> {
 
     private void validateTimeUnit(@Nonnull TimeUnit unit) {
         if (unit == null) {
-            throw new NullPointerException("TimeUnit cannot be null");
+            throw new IllegalArgumentException("TimeUnit cannot be null");
         }
     }
 }

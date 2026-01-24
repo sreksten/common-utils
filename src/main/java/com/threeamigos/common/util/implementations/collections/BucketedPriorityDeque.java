@@ -27,6 +27,8 @@ import java.util.function.Function;
  * </ul>
  *
  * @param <T> type of the objects stored in the deque
+ *
+ * @author Stefano Reksten
  */
 public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
 
@@ -41,7 +43,7 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
 
     @SuppressWarnings("unchecked")
     public BucketedPriorityDeque(final int maxPriority, final @Nonnull Policy policy) {
-        validatePriority(maxPriority);
+        validateConstructorPriority(maxPriority);
         validatePolicy(policy);
         this.maxPriority = maxPriority;
         this.buckets = new ArrayDeque[maxPriority + 1];
@@ -226,10 +228,10 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     @Override
     public boolean removeAll(final @Nonnull Collection<T> iterable) {
         validateCollection(iterable);
-        boolean result = true;
+        boolean result = false;
         for (T t : iterable) {
-            if (!remove(t)) {
-                result = false;
+            if (remove(t)) {
+                result = true;
             }
         }
         return result;
@@ -438,10 +440,12 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         private boolean canRemove = false;
 
         PriorityIterator() {
+            // bucket index will be decremented as the first thing
             this.currentBucketIndex = maxPriority + 1;
         }
 
         PriorityIterator(int fixedPriority) {
+            // bucket index will be decremented as the first thing
             this.currentBucketIndex = fixedPriority + 1;
         }
 
@@ -490,24 +494,33 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
         }
     }
 
-    private void validatePriority(int maxPriority) {
-        if (maxPriority < MIN_PRIORITY) {
-            throw new IllegalArgumentException("maxPriority must be non-negative");
+    private void validateConstructorPriority(int priority) {
+        if (priority < MIN_PRIORITY) {
+            throw new IllegalArgumentException("Priority must be non-negative, got: " + priority);
         }
-        if (maxPriority > MAX_PRIORITY) {
-            throw new IllegalArgumentException("maxPriority must be <= " + MAX_PRIORITY);
+        if (priority > MAX_PRIORITY) {
+            throw new IllegalArgumentException("Priority must be between " + MIN_PRIORITY + " and " + MAX_PRIORITY + ", got: " + priority);
+        }
+    }
+
+    private void validatePriority(int priority) {
+        if (priority < MIN_PRIORITY) {
+            throw new IllegalArgumentException("Priority must be non-negative, got: " + priority);
+        }
+        if (priority > maxPriority) {
+            throw new IllegalArgumentException("Priority must be between " + MIN_PRIORITY + " and " + maxPriority + ", got: " + priority);
         }
     }
 
     void validateObject(T object) {
         if (object == null) {
-            throw new NullPointerException("Object cannot be null");
+            throw new IllegalArgumentException("Object cannot be null");
         }
     }
 
     void validateCollection(Collection<T> collection) {
         if (collection == null) {
-            throw new NullPointerException("Collection cannot be null");
+            throw new IllegalArgumentException("Collection cannot be null");
         }
     }
 

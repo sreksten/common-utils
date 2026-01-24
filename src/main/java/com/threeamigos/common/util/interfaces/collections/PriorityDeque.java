@@ -57,14 +57,14 @@ public interface PriorityDeque<T> {
     /**
      * Retrieves, but does not remove, the head of the highest non-empty priority bucket using a FIFO policy.
      *
-     * @return the newest object of the highest non-empty priority bucket, or null if the deque is empty
+     * @return the oldest object (first added) of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T peekFifo();
 
     /**
      * Retrieves, but does not remove, the head of the highest non-empty priority bucket using a LIFO policy.
      *
-     * @return the oldest object of the highest non-empty priority bucket, or null if the deque is empty
+     * @return the newest object (last added) of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T peekLifo();
 
@@ -78,14 +78,14 @@ public interface PriorityDeque<T> {
     /**
      * Retrieves and removes the head of the highest non-empty priority bucket using a FIFO policy.
      *
-     * @return the newest object of the highest non-empty priority bucket, or null if the deque is empty
+     * @return the oldest object (first added) of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T pollFifo();
 
     /**
      * Retrieves and removes the head of the highest non-empty priority bucket using a LIFO policy.
      *
-     * @return the oldest object of the highest non-empty priority bucket, or null if the deque is empty
+     * @return the newest object (last added) of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T pollLifo();
 
@@ -181,7 +181,7 @@ public interface PriorityDeque<T> {
      * Retrieves, but does not remove, the head of the given priority bucket using a FIFO policy.
      *
      * @param priority priority of the bucket
-     * @return the newest object of the given priority bucket, or null if the bucket is empty
+     * @return the oldest object (first added) of the given priority bucket, or null if the bucket is empty
      */
     @Nullable T peekFifo(final int priority);
 
@@ -189,7 +189,7 @@ public interface PriorityDeque<T> {
      * Retrieves, but does not remove, the head of the given priority bucket using a LIFO policy.
      *
      * @param priority priority of the bucket
-     * @return the oldest object of the given priority bucket, or null if the bucket is empty
+     * @return the newest object (last added) of the given priority bucket, or null if the bucket is empty
      */
     @Nullable T peekLifo(final int priority);
 

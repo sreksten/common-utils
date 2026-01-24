@@ -98,6 +98,14 @@ class BlockingPriorityDequeWrapperUnitTest {
             // Then
             assertEquals("test", sut.poll());
         }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("Should throw when adding null with specified priority")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldThrowWhenAddingNullWithSpecifiedPriority(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            assertThrows(IllegalArgumentException.class, () -> sut.add(null, 1));
+        }
     }
 
     @Nested
@@ -126,6 +134,14 @@ class BlockingPriorityDequeWrapperUnitTest {
             sut.offer("test", 5, TimeUnit.SECONDS);
             // Then
             assertEquals("test", sut.poll());
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("Should throw when offering with null TimeUnit")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldThrowWhenOfferingWithNullTimeUnit(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            assertThrows(IllegalArgumentException.class, () -> sut.offer("test", 1, null));
         }
     }
 
@@ -252,6 +268,14 @@ class BlockingPriorityDequeWrapperUnitTest {
             String result = sut.poll(10, TimeUnit.MILLISECONDS);
             // Then
             assertNull(result);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("Should throw when polling with null TimeUnit")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldThrowWhenPollingWithNullTimeUnit(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            assertThrows(IllegalArgumentException.class, () -> sut.poll(1, null));
         }
     }
 
@@ -398,6 +422,27 @@ class BlockingPriorityDequeWrapperUnitTest {
             boolean result = sut.contains("test2");
             // Then
             assertFalse(result);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("Should return false for non-T inputs without throwing")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldReturnFalseForNonTInputs(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            Object nonT = Integer.valueOf(42);
+
+            assertDoesNotThrow(() -> assertFalse(sut.contains(nonT)));
+            assertDoesNotThrow(() -> assertFalse(sut.remove(nonT)));
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("contains should return false for non-T inputs without throwing")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void containsReturnsFalseForNonTInputs(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            Object nonT = Integer.valueOf(7);
+
+            assertDoesNotThrow(() -> assertFalse(sut.contains(nonT)));
         }
     }
 
@@ -563,6 +608,15 @@ class BlockingPriorityDequeWrapperUnitTest {
             assertEquals(expected, drainage);
             assertEquals(1, sut.size());
         }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("Should throw when drainTo collection is null")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldThrowWhenDrainToCollectionIsNull(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            assertThrows(IllegalArgumentException.class, () -> sut.drainTo(null));
+            assertThrows(IllegalArgumentException.class, () -> sut.drainTo(null, 1));
+        }
     }
 
     @Nested
@@ -656,6 +710,14 @@ class BlockingPriorityDequeWrapperUnitTest {
         }
 
         @ParameterizedTest(name = "{0}")
+        @DisplayName("Should throw when containsAll collection is null")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldThrowWhenContainsAllCollectionIsNull(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            assertThrows(IllegalArgumentException.class, () -> sut.containsAll(null));
+        }
+
+        @ParameterizedTest(name = "{0}")
         @DisplayName("Should not contain all elements")
         @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
         void shouldNotContainAllElements(String sutName, PriorityDeque<String> priorityDeque) {
@@ -693,6 +755,14 @@ class BlockingPriorityDequeWrapperUnitTest {
             assertTrue(result);
             assertEquals(2, sut.size());
         }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("Should throw when addAll collection is null")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldThrowWhenAddAllCollectionIsNull(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            assertThrows(IllegalArgumentException.class, () -> sut.addAll(null));
+        }
     }
 
     @Nested
@@ -717,6 +787,14 @@ class BlockingPriorityDequeWrapperUnitTest {
             assertTrue(result);
             assertEquals(1, sut.size());
             assertEquals("test3", sut.peek());
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("Should throw when removeAll collection is null")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldThrowWhenRemoveAllCollectionIsNull(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            assertThrows(IllegalArgumentException.class, () -> sut.removeAll(null));
         }
     }
 
@@ -743,6 +821,14 @@ class BlockingPriorityDequeWrapperUnitTest {
             assertEquals(2, sut.size());
             assertEquals("test", sut.poll());
             assertEquals("test2", sut.poll());
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @DisplayName("Should throw when retainAll collection is null")
+        @MethodSource("com.threeamigos.common.util.implementations.collections.BlockingPriorityDequeWrapperUnitTest#createSut")
+        void shouldThrowWhenRetainAllCollectionIsNull(String sutName, PriorityDeque<String> priorityDeque) {
+            BlockingPriorityDequeWrapper<String> sut = new BlockingPriorityDequeWrapper<>(priorityDeque);
+            assertThrows(IllegalArgumentException.class, () -> sut.retainAll(null));
         }
     }
 }

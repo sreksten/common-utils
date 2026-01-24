@@ -233,9 +233,39 @@ public class SynchronizedPriorityDequeWrapper<T> implements PriorityDeque<T> {
         }
     }
 
+    /**
+     * Returns an iterator over all elements in the deque.
+     * <p><b>Implementation Note - Snapshot Iterator:</b>
+     * The returned iterator is a <i>snapshot</i> taken at the time of this call.
+     * It will not reflect subsequent modifications to the deque (additions, removals, or reordering).
+     * This ensures thread-safety without holding locks during iteration.
+     * <p><b>Pros:</b>
+     * <ul>
+     * <li>Thread-safe: No synchronization needed during iteration</li>
+     * <li>No deadlock risk: Lock is released before iteration begins</li>
+     * <li>Predictable: Iterator sees consistent point-in-time state</li>
+     * <li>Allows concurrent operations: Other threads can modify deque during iteration</li>
+     * <li>Uses read lock: Multiple threads can create snapshots concurrently</li>
+     * </ul>
+     * <p><b>Cons:</b>
+     * <ul>
+     * <li>Memory overhead: Creates a copy of all elements</li>
+     * <li>Not a live view: Subsequent changes not visible to iterator</li>
+     * <li>Performance: O(n) time and space to create snapshot</li>
+     * </ul>
+     * <p>This is the standard pattern used by concurrent collections like
+     * {@link java.util.concurrent.CopyOnWriteArrayList}.
+     *
+     * @return a thread-safe snapshot iterator over all elements
+     */
     @Override
     public @Nonnull Iterator<T> iterator() {
-        return new LockedIterator(delegate.iterator());
+        read.lock();
+        try {
+            return delegate.toList().iterator();
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
@@ -418,55 +448,24 @@ public class SynchronizedPriorityDequeWrapper<T> implements PriorityDeque<T> {
         }
     }
 
+    /**
+     * Returns an iterator over elements in the specified priority bucket.
+     * <p><b>Implementation Note - Snapshot Iterator:</b>
+     * The returned iterator is a <i>snapshot</i> taken at the time of this call.
+     * It will not reflect later modifications to the priority bucket.
+     * This ensures thread-safety without holding locks during iteration.
+     * <p>See {@link #iterator()} for detailed pros and cons of the snapshot approach.
+     *
+     * @param priority the priority bucket to iterate over
+     * @return a thread-safe snapshot iterator over elements at the specified priority
+     */
     @Override
     public @Nonnull Iterator<T> iterator(int priority) {
-        return new LockedIterator(delegate.iterator(priority));
-    }
-
-    private class LockedIterator implements Iterator<T> {
-        private final Iterator<T> delegateIterator;
-        private boolean lockHeld = false;
-
-        LockedIterator(Iterator<T> delegateIterator) {
-            this.delegateIterator = delegateIterator;
-            write.lock();
-            lockHeld = true;
-        }
-
-        private void releaseWriteLockIfHeld() {
-            if (lockHeld) {
-                write.unlock();
-                lockHeld = false;
-            }
-        }
-
-        @Override
-        public boolean hasNext() {
-            try {
-                boolean hasNext = delegateIterator.hasNext();
-                if (!hasNext) {
-                    releaseWriteLockIfHeld();
-                }
-                return hasNext;
-            } catch (RuntimeException e) {
-                releaseWriteLockIfHeld();
-                throw e;
-            }
-        }
-
-        @Override
-        public T next() {
-            try {
-                return delegateIterator.next();
-            } catch (RuntimeException e) {
-                releaseWriteLockIfHeld();
-                throw e;
-            }
-        }
-
-        @Override
-        public void remove() {
-            delegateIterator.remove();
+        read.lock();
+        try {
+            return delegate.toList(priority).iterator();
+        } finally {
+            read.unlock();
         }
     }
 }

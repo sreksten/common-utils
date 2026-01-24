@@ -64,6 +64,20 @@ public class PriorityDequeCodexUnitTest {
             assertThrows(IllegalArgumentException.class, () -> new BucketedPriorityDeque<String>(-1));
             assertThrows(IllegalArgumentException.class, () -> new BucketedPriorityDeque<String>(BucketedPriorityDeque.MAX_PRIORITY + 1));
         }
+
+        @Test
+        @DisplayName("Bucketed constructor should accept MIN and MAX bounds")
+        void bucketedConstructorAcceptsBounds() {
+            assertDoesNotThrow(() -> new BucketedPriorityDeque<String>(BucketedPriorityDeque.MIN_PRIORITY));
+            assertDoesNotThrow(() -> new BucketedPriorityDeque<String>(BucketedPriorityDeque.MAX_PRIORITY));
+        }
+
+        @Test
+        @DisplayName("Bucketed constructor should enforce instance max priority")
+        void bucketedConstructorEnforcesInstanceMaxPriority() {
+            BucketedPriorityDeque<String> sut = new BucketedPriorityDeque<>(5);
+            assertThrows(IllegalArgumentException.class, () -> sut.add("x", 7));
+        }
     }
 
     @Nested
@@ -92,7 +106,7 @@ public class PriorityDequeCodexUnitTest {
         @MethodSource("com.threeamigos.common.util.implementations.collections.PriorityDequeCodexUnitTest#createSut")
         void addRejectsNull(String sutName, Supplier<PriorityDeque<String>> factory) {
             PriorityDeque<String> sut = newSut(factory);
-            assertThrows(NullPointerException.class, () -> sut.add(null, 1));
+            assertThrows(IllegalArgumentException.class, () -> sut.add(null, 1));
         }
 
         @ParameterizedTest(name = "{0}")
@@ -184,7 +198,7 @@ public class PriorityDequeCodexUnitTest {
             List<String> missing = Arrays.asList("a", "x");
             assertTrue(sut.containsAll(all));
             assertFalse(sut.containsAll(missing));
-            assertThrows(NullPointerException.class, () -> sut.containsAll(null));
+            assertThrows(IllegalArgumentException.class, () -> sut.containsAll(null));
         }
 
         @ParameterizedTest(name = "{0}")
@@ -225,6 +239,15 @@ public class PriorityDequeCodexUnitTest {
             assertEquals(1, sut.size());
         }
 
+        @Test
+        @DisplayName("Bucketed contains/remove should return false for null values")
+        void bucketedContainsRemoveNullValue() {
+            PriorityDeque<String> sut = new BucketedPriorityDeque<>(5);
+            sut.add("a", 1);
+            assertFalse(sut.contains(null));
+            assertFalse(sut.remove((String) null));
+        }
+
         @ParameterizedTest(name = "{0}")
         @DisplayName("removeAll and retainAll behaviors")
         @MethodSource("com.threeamigos.common.util.implementations.collections.PriorityDequeCodexUnitTest#createSut")
@@ -234,7 +257,7 @@ public class PriorityDequeCodexUnitTest {
             sut.add("b", 1);
             sut.add("c", 2);
 
-            assertFalse(sut.removeAll(Arrays.asList("a", "missing")));
+            assertTrue(sut.removeAll(Arrays.asList("a", "missing")));
             assertEquals(2, sut.size());
             sut.add("a", 1);
             assertTrue(sut.removeAll(Arrays.asList("a", "b", "c")));
@@ -247,8 +270,8 @@ public class PriorityDequeCodexUnitTest {
             assertEquals(1, sut.size());
             assertEquals("b", sut.peekFifo());
 
-            assertThrows(NullPointerException.class, () -> sut.removeAll(null));
-            assertThrows(NullPointerException.class, () -> sut.retainAll(null));
+            assertThrows(IllegalArgumentException.class, () -> sut.removeAll(null));
+            assertThrows(IllegalArgumentException.class, () -> sut.retainAll(null));
         }
 
         @ParameterizedTest(name = "{0}")
@@ -451,7 +474,7 @@ public class PriorityDequeCodexUnitTest {
             assertFalse(sut.contains("a", 2));
             assertFalse(sut.contains(null, 1));
             assertFalse(sut.containsAll(Arrays.asList("a", null), 1));
-            assertThrows(NullPointerException.class, () -> sut.containsAll(null, 1));
+            assertThrows(IllegalArgumentException.class, () -> sut.containsAll(null, 1));
         }
 
         @ParameterizedTest(name = "{0}")
@@ -468,6 +491,15 @@ public class PriorityDequeCodexUnitTest {
             assertTrue(sut.remove("b", 1));
             assertEquals(0, sut.size(1));
             assertTrue(sut.isEmpty(1));
+        }
+
+        @Test
+        @DisplayName("Bucketed contains/remove by priority should return false for null values")
+        void bucketedContainsRemoveByPriorityNullValue() {
+            PriorityDeque<String> sut = new BucketedPriorityDeque<>(5);
+            sut.add("a", 1);
+            assertFalse(sut.contains(null, 1));
+            assertFalse(sut.remove(null, 1));
         }
 
         @ParameterizedTest(name = "{0}")
@@ -529,8 +561,8 @@ public class PriorityDequeCodexUnitTest {
             assertFalse(sut.isEmpty());
             assertFalse(sut.isEmpty(2));
 
-            assertThrows(NullPointerException.class, () -> sut.removeAll(null, 1));
-            assertThrows(NullPointerException.class, () -> sut.retainAll(null, 1));
+            assertThrows(IllegalArgumentException.class, () -> sut.removeAll(null, 1));
+            assertThrows(IllegalArgumentException.class, () -> sut.retainAll(null, 1));
         }
 
         @ParameterizedTest(name = "{0}")
@@ -684,6 +716,28 @@ public class PriorityDequeCodexUnitTest {
                 Iterator<String> empty = sut.iterator(42);
                 assertThrows(IllegalStateException.class, empty::remove);
             }
+
+            @Test
+            @DisplayName("GeneralPurpose iterator remove should not trigger ConcurrentModificationException")
+            void generalPurposeIteratorRemoveDoesNotThrowConcurrentModification() {
+                PriorityDeque<String> sut = new GeneralPurposePriorityDeque<>();
+                sut.add("p2-a", 2);
+                sut.add("p2-b", 2);
+                sut.add("p1-a", 1);
+
+                assertDoesNotThrow(() -> {
+                    Iterator<String> iterator = sut.iterator();
+                    while (iterator.hasNext()) {
+                        String value = iterator.next();
+                        if (value.startsWith("p2-")) {
+                            iterator.remove();
+                        }
+                    }
+                });
+
+                assertEquals(1, sut.size());
+                assertTrue(sut.contains("p1-a"));
+            }
         }
     }
 
@@ -695,12 +749,7 @@ public class PriorityDequeCodexUnitTest {
         @MethodSource("com.threeamigos.common.util.implementations.collections.PriorityDequeCodexUnitTest#createSut")
         void policyNullHandlingMatchesImplementations(String sutName, Supplier<PriorityDeque<String>> factory) {
             PriorityDeque<String> sut = newSut(factory);
-            if (sut instanceof BucketedPriorityDeque) {
-                assertThrows(IllegalArgumentException.class, () -> sut.setPolicy(null));
-            } else {
-                sut.setPolicy(null);
-                assertNull(sut.getPolicy());
-            }
+            assertThrows(IllegalArgumentException.class, () -> sut.setPolicy(null));
         }
 
         @ParameterizedTest(name = "{0}")
@@ -785,14 +834,11 @@ public class PriorityDequeCodexUnitTest {
         @DisplayName("GeneralPurpose isEmpty and clear should handle empty bucket entries")
         void generalPurposeEmptyBucketBranches() throws Exception {
             GeneralPurposePriorityDeque<String> sut = new GeneralPurposePriorityDeque<>();
-            Field mapField = GeneralPurposePriorityDeque.class.getDeclaredField("byPriority");
-            mapField.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            Map<Integer, ArrayDeque<String>> map = (Map<Integer, ArrayDeque<String>>) mapField.get(sut);
-            map.put(1, new ArrayDeque<>());
+            sut.add("a", 1);
 
-            assertTrue(sut.isEmpty(1));
+            assertFalse(sut.isEmpty(1));
             sut.clear(1);
+            assertTrue(sut.isEmpty(1));
             assertTrue(sut.isEmpty());
         }
     }
