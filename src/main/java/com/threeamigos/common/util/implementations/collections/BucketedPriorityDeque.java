@@ -5,6 +5,8 @@ import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 
 /**
@@ -34,6 +36,10 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
     private final ArrayDeque<T>[] buckets;
     private final int maxPriority; // inclusive
 
+    private final ReentrantReadWriteLock rw = new ReentrantReadWriteLock();
+    private final Lock read = rw.readLock();
+    private final Lock write = rw.writeLock();
+
     private Policy policy;
     private int nonEmptyMask = 0; // bit i set => bucket i has items
 
@@ -59,384 +65,638 @@ public class BucketedPriorityDeque<T> implements PriorityDeque<T> {
 
     public void setPolicy(final @Nonnull Policy policy) {
         validatePolicy(policy);
-        this.policy = policy;
+        write.lock();
+        try {
+            this.policy = policy;
+        } finally {
+            write.unlock();
+        }
     }
 
     public Policy getPolicy() {
-        return policy;
+        read.lock();
+        try {
+            return policy;
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
-    public synchronized void add(final @Nonnull T t, final int priority) {
+    public void add(final @Nonnull T t, final int priority) {
         validateObject(t);
         validatePriority(priority);
-        ArrayDeque<T> q = buckets[priority];
-        q.addLast(t);
-        nonEmptyMask |= (1 << priority);
-    }
-
-    @Override
-    public synchronized T peek() {
-        return policy == Policy.FIFO ? peekFifo() : peekLifo();
-    }
-
-    @Override
-    public synchronized T peekFifo() {
-        if (nonEmptyMask == 0) {
-            return null;
-        }
-        return buckets[getHighestNotEmptyPriority()].peekFirst();
-    }
-
-    @Override
-    public synchronized T peekLifo() {
-        if (nonEmptyMask == 0) {
-            return null;
-        }
-        return buckets[getHighestNotEmptyPriority()].peekLast();
-    }
-
-    @Override
-    public synchronized T poll() {
-        if (policy == Policy.FIFO) {
-            return pollFifo();
-        } else {
-            return pollLifo();
+        write.lock();
+        try {
+            ArrayDeque<T> q = buckets[priority];
+            q.addLast(t);
+            nonEmptyMask |= (1 << priority);
+        } finally {
+            write.unlock();
         }
     }
 
     @Override
-    public synchronized T pollFifo() {
-        int p = getHighestNotEmptyPriority();
-        if (p < 0) {
-            return null;
+    public T peek() {
+        read.lock();
+        try {
+            return policy == Policy.FIFO ? peekFifo() : peekLifo();
+        } finally {
+            read.unlock();
         }
-        ArrayDeque<T> q = buckets[p];
-        T t = q.pollFirst();
-        if (q.isEmpty()) {
-            nonEmptyMask &= ~(1 << p);
-        }
-        return t;
     }
 
     @Override
-    public synchronized T pollLifo() {
-        int p = getHighestNotEmptyPriority();
-        if (p < 0) {
-            return null;
-        }
-        ArrayDeque<T> q = buckets[p];
-        T t = q.pollLast();
-        if (q.isEmpty()) {
-            nonEmptyMask &= ~(1 << p);
-        }
-        return t;
-    }
-
-    @Override
-    public synchronized boolean isEmpty() {
-        return nonEmptyMask == 0;
-    }
-
-    @Override
-    public synchronized int size() {
-        int size = 0;
-        for (int i = 0; i <= maxPriority; i++) {
-            size += buckets[i].size();
-        }
-        return size;
-    }
-
-    @Override
-    public synchronized boolean contains(final @Nonnull T t) {
-        if (t == null) {
-            return false;
-        }
-        for (ArrayDeque<T> q : buckets) {
-            if (q.contains(t)) {
-                return true;
+    public T peekFifo() {
+        read.lock();
+        try {
+            if (nonEmptyMask == 0) {
+                return null;
             }
+            return buckets[getHighestNotEmptyPriority()].peekFirst();
+        } finally {
+            read.unlock();
         }
-        return false;
     }
 
     @Override
-    public synchronized boolean containsAll(final @Nonnull Collection<T> iterable) {
-        validateCollection(iterable);
-        for (T t : iterable) {
-            if (!contains(t)) {
+    public T peekLifo() {
+        read.lock();
+        try {
+            if (nonEmptyMask == 0) {
+                return null;
+            }
+            return buckets[getHighestNotEmptyPriority()].peekLast();
+        } finally {
+            read.unlock();
+        }
+    }
+
+    @Override
+    public T poll() {
+        write.lock();
+        try {
+            return policy == Policy.FIFO ? pollFifo() : pollLifo();
+        } finally {
+            write.unlock();
+        }
+    }
+
+    @Override
+    public T pollFifo() {
+        write.lock();
+        try {
+            int p = getHighestNotEmptyPriority();
+            if (p < 0) {
+                return null;
+            }
+            ArrayDeque<T> q = buckets[p];
+            T t = q.pollFirst();
+            if (q.isEmpty()) {
+                nonEmptyMask &= ~(1 << p);
+            }
+            return t;
+        } finally {
+            write.unlock();
+        }
+    }
+
+    @Override
+    public T pollLifo() {
+        write.lock();
+        try {
+            int p = getHighestNotEmptyPriority();
+            if (p < 0) {
+                return null;
+            }
+            ArrayDeque<T> q = buckets[p];
+            T t = q.pollLast();
+            if (q.isEmpty()) {
+                nonEmptyMask &= ~(1 << p);
+            }
+            return t;
+        } finally {
+            write.unlock();
+        }
+    }
+
+    @Override
+    public boolean isEmpty() {
+        read.lock();
+        try {
+            return nonEmptyMask == 0;
+        } finally {
+            read.unlock();
+        }
+    }
+
+    @Override
+    public int size() {
+        read.lock();
+        try {
+            int size = 0;
+            for (int i = 0; i <= maxPriority; i++) {
+                size += buckets[i].size();
+            }
+            return size;
+        } finally {
+            read.unlock();
+        }
+    }
+
+    @Override
+    public boolean contains(final @Nonnull T t) {
+        read.lock();
+        try {
+            if (t == null) {
                 return false;
             }
-        }
-        return true;
-    }
-
-    @Override
-    public synchronized void clear() {
-        for (int i = 0; i <= maxPriority; i++) {
-            buckets[i].clear();
-        }
-        nonEmptyMask = 0;
-    }
-
-    @Override
-    public synchronized void clear(final @Nonnull Function<T, Boolean> filteringFunction) {
-        validateFilteringFunction(filteringFunction);
-        for (int i = 0; i <= maxPriority; i++) {
-            buckets[i].removeIf(filteringFunction::apply);
-        }
-    }
-
-    @Override
-    public synchronized boolean remove() {
-        T t = poll();
-        if (t == null) {
-            throw new NoSuchElementException();
-        }
-        return true;
-    }
-
-    @Override
-    public synchronized boolean remove(final @Nonnull T t) {
-        if (t != null) {
             for (ArrayDeque<T> q : buckets) {
-                if (q.remove(t)) {
+                if (q.contains(t)) {
                     return true;
                 }
             }
+            return false;
+        } finally {
+            read.unlock();
         }
-        return false;
     }
 
     @Override
-    public synchronized boolean removeAll(final @Nonnull Collection<T> iterable) {
+    public boolean containsAll(final @Nonnull Collection<T> iterable) {
         validateCollection(iterable);
-        boolean result = true;
-        for (T t : iterable) {
-            if (!remove(t)) {
-                result = false;
+        read.lock();
+        try {
+            for (T t : iterable) {
+                if (t == null) {
+                    return false;
+                }
+                boolean found = false;
+                for (ArrayDeque<T> q : buckets) {
+                    if (q.contains(t)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    return false;
+                }
             }
+            return true;
+        } finally {
+            read.unlock();
         }
-        return result;
     }
 
     @Override
-    public synchronized boolean retainAll(final @Nonnull Collection<T> iterable) {
+    public void clear() {
+        write.lock();
+        try {
+            for (int i = 0; i <= maxPriority; i++) {
+                buckets[i].clear();
+            }
+            nonEmptyMask = 0;
+        } finally {
+            write.unlock();
+        }
+    }
+
+    @Override
+    public void clear(final @Nonnull Function<T, Boolean> filteringFunction) {
+        validateFilteringFunction(filteringFunction);
+        write.lock();
+        try {
+            for (int i = 0; i <= maxPriority; i++) {
+                buckets[i].removeIf(filteringFunction::apply);
+                if (buckets[i].isEmpty()) {
+                    nonEmptyMask &= ~(1 << i);
+                }
+            }
+        } finally {
+            write.unlock();
+        }
+    }
+
+    @Override
+    public boolean remove() {
+        write.lock();
+        try {
+            T t = poll();
+            if (t == null) {
+                throw new NoSuchElementException();
+            }
+            return true;
+        } finally {
+            write.unlock();
+        }
+    }
+
+    @Override
+    public boolean remove(final @Nonnull T t) {
+        if (t == null) {
+            return false;
+        }
+        write.lock();
+        try {
+            for (int i = 0; i <= maxPriority; i++) {
+                if (buckets[i].remove(t)) {
+                    if (buckets[i].isEmpty()) {
+                        nonEmptyMask &= ~(1 << i);
+                    }
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            write.unlock();
+        }
+    }
+
+    @Override
+    public boolean removeAll(final @Nonnull Collection<T> iterable) {
         validateCollection(iterable);
-        boolean result = false;
-        for (int i = 0; i <= maxPriority; i++) {
-            if (buckets[i].retainAll(iterable)) {
-                result = true;
+        write.lock();
+        try {
+            boolean result = true;
+            for (T t : iterable) {
+                if (!remove(t)) {
+                    result = false;
+                }
             }
+            return result;
+        } finally {
+            write.unlock();
         }
-        return result;
     }
 
     @Override
-    public synchronized @Nonnull List<T> toList() {
-        List<T> result = new ArrayList<>();
-        // Iterate from maxPriority down to MIN_PRIORITY (highest first)
-        for (int i = maxPriority; i >= MIN_PRIORITY; i--) {
-            ArrayDeque<T> bucket = buckets[i];
-            if (bucket.isEmpty()) {
-                continue;
+    public boolean retainAll(final @Nonnull Collection<T> iterable) {
+        validateCollection(iterable);
+        write.lock();
+        try {
+            boolean result = false;
+            for (int i = 0; i <= maxPriority; i++) {
+                if (buckets[i].retainAll(iterable)) {
+                    result = true;
+                }
             }
-            if (policy == Policy.FIFO) {
-                // FIFO: elements in the order they were added
-                result.addAll(bucket);
-            } else {
-                // LIFO: elements in reverse order of addition
-                bucket.descendingIterator().forEachRemaining(result::add);
-            }
+            return result;
+        } finally {
+            write.unlock();
         }
-        return result;
     }
 
     @Override
-    public synchronized @Nonnull Iterator<T> iterator() {
+    public @Nonnull List<T> toList() {
+        read.lock();
+        try {
+            List<T> result = new ArrayList<>();
+            for (int i = maxPriority; i >= MIN_PRIORITY; i--) {
+                ArrayDeque<T> bucket = buckets[i];
+                if (bucket.isEmpty()) {
+                    continue;
+                }
+                if (policy == Policy.FIFO) {
+                    result.addAll(bucket);
+                } else {
+                    bucket.descendingIterator().forEachRemaining(result::add);
+                }
+            }
+            return result;
+        } finally {
+            read.unlock();
+        }
+    }
+
+    @Override
+    public @Nonnull Iterator<T> iterator() {
         return new PriorityIterator();
     }
 
     @Override
-    public synchronized int getHighestNotEmptyPriority() {
-        if (nonEmptyMask == 0) return -1;
-        return 31 - Integer.numberOfLeadingZeros(nonEmptyMask);
+    public int getHighestNotEmptyPriority() {
+        read.lock();
+        try {
+            if (nonEmptyMask == 0) return -1;
+            return 31 - Integer.numberOfLeadingZeros(nonEmptyMask);
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
     public @Nullable T peek(final int priority) {
-        ArrayDeque<T> q = buckets[priority];
-        return q.peekFirst();
+        validatePriority(priority);
+        read.lock();
+        try {
+            ArrayDeque<T> q = buckets[priority];
+            return q.peekFirst();
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
     public @Nullable T peekFifo(final int priority) {
-        ArrayDeque<T> q = buckets[priority];
-        return q.peekFirst();
+        validatePriority(priority);
+        read.lock();
+        try {
+            ArrayDeque<T> q = buckets[priority];
+            return q.peekFirst();
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
     public @Nullable T peekLifo(final int priority) {
-        ArrayDeque<T> q = buckets[priority];
-        return q.peekLast();
+        validatePriority(priority);
+        read.lock();
+        try {
+            ArrayDeque<T> q = buckets[priority];
+            return q.peekLast();
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
     public @Nullable T poll(final int priority) {
-        if (policy == Policy.FIFO) {
-            return pollFifo(priority);
-        } else {
-            return pollLifo(priority);
+        validatePriority(priority);
+        write.lock();
+        try {
+            return policy == Policy.FIFO ? pollFifo(priority) : pollLifo(priority);
+        } finally {
+            write.unlock();
         }
     }
 
     @Override
-    public synchronized T pollFifo(final int priority) {
-        ArrayDeque<T> q = buckets[priority];
-        T t = q.pollFirst();
-        if (q.isEmpty()) {
-            nonEmptyMask &= ~(1 << priority);
+    public T pollFifo(final int priority) {
+        validatePriority(priority);
+        write.lock();
+        try {
+            ArrayDeque<T> q = buckets[priority];
+            T t = q.pollFirst();
+            if (q.isEmpty()) {
+                nonEmptyMask &= ~(1 << priority);
+            }
+            return t;
+        } finally {
+            write.unlock();
         }
-        return t;
     }
 
     @Override
-    public synchronized T pollLifo(final int priority) {
-        ArrayDeque<T> q = buckets[priority];
-        T t = q.pollLast();
-        if (q.isEmpty()) {
-            nonEmptyMask &= ~(1 << priority);
+    public T pollLifo(final int priority) {
+        validatePriority(priority);
+        write.lock();
+        try {
+            ArrayDeque<T> q = buckets[priority];
+            T t = q.pollLast();
+            if (q.isEmpty()) {
+                nonEmptyMask &= ~(1 << priority);
+            }
+            return t;
+        } finally {
+            write.unlock();
         }
-        return t;
     }
 
     @Override
-    public synchronized boolean isEmpty(final int priority) {
-        return buckets[priority].isEmpty();
+    public boolean isEmpty(final int priority) {
+        validatePriority(priority);
+        read.lock();
+        try {
+            return buckets[priority].isEmpty();
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
-    public synchronized int size(int priority) {
-        return buckets[priority].size();
+    public int size(int priority) {
+        validatePriority(priority);
+        read.lock();
+        try {
+            return buckets[priority].size();
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
     public boolean contains(final @Nonnull T t, final int priority) {
-        if (t == null) {
-            return false;
+        validatePriority(priority);
+        read.lock();
+        try {
+            if (t == null) {
+                return false;
+            }
+            ArrayDeque<T> q = buckets[priority];
+            return q.contains(t);
+        } finally {
+            read.unlock();
         }
-        ArrayDeque<T> q = buckets[priority];
-        return q.contains(t);
     }
 
     @Override
     public boolean containsAll(final @Nonnull Collection<T> iterable, final int priority) {
         validateCollection(iterable);
-        ArrayDeque<T> q = buckets[priority];
-        return q.containsAll(iterable);
+        validatePriority(priority);
+        read.lock();
+        try {
+            ArrayDeque<T> q = buckets[priority];
+            return q.containsAll(iterable);
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
-    public synchronized void clear(final int priority) {
-        buckets[priority].clear();
+    public void clear(final int priority) {
+        validatePriority(priority);
+        write.lock();
+        try {
+            buckets[priority].clear();
+            nonEmptyMask &= ~(1 << priority);
+        } finally {
+            write.unlock();
+        }
     }
 
     @Override
-    public synchronized void clear(final @Nonnull Function<T, Boolean> filteringFunction, final int priority) {
+    public void clear(final @Nonnull Function<T, Boolean> filteringFunction, final int priority) {
         validateFilteringFunction(filteringFunction);
-        buckets[priority].removeIf(filteringFunction::apply);
+        validatePriority(priority);
+        write.lock();
+        try {
+            buckets[priority].removeIf(filteringFunction::apply);
+            if (buckets[priority].isEmpty()) {
+                nonEmptyMask &= ~(1 << priority);
+            }
+        } finally {
+            write.unlock();
+        }
     }
 
     @Override
     public boolean remove(final int priority) {
-        T t = poll(priority);
-        if (t == null) {
-            throw new NoSuchElementException();
+        validatePriority(priority);
+        write.lock();
+        try {
+            T t = poll(priority);
+            if (t == null) {
+                throw new NoSuchElementException();
+            }
+            return true;
+        } finally {
+            write.unlock();
         }
-        return true;
     }
 
     @Override
     public boolean remove(final @Nonnull T t, final int priority) {
-        if (t == null) {
-            return false;
+        validatePriority(priority);
+        write.lock();
+        try {
+            if (t == null) {
+                return false;
+            }
+            boolean removed = buckets[priority].remove(t);
+            if (removed && buckets[priority].isEmpty()) {
+                nonEmptyMask &= ~(1 << priority);
+            }
+            return removed;
+        } finally {
+            write.unlock();
         }
-        return buckets[priority].remove(t);
     }
 
     @Override
     public boolean removeAll(final @Nonnull Collection<T> iterable, final int priority) {
         validateCollection(iterable);
-        return buckets[priority].removeAll(iterable);
+        validatePriority(priority);
+        write.lock();
+        try {
+            boolean removed = buckets[priority].removeAll(iterable);
+            if (removed && buckets[priority].isEmpty()) {
+                nonEmptyMask &= ~(1 << priority);
+            }
+            return removed;
+        } finally {
+            write.unlock();
+        }
     }
 
     @Override
     public boolean retainAll(@Nonnull Collection<T> iterable, int priority) {
         validateCollection(iterable);
-        return buckets[priority].retainAll(iterable);
+        validatePriority(priority);
+        write.lock();
+        try {
+            boolean changed = buckets[priority].retainAll(iterable);
+            if (changed && buckets[priority].isEmpty()) {
+                nonEmptyMask &= ~(1 << priority);
+            }
+            return changed;
+        } finally {
+            write.unlock();
+        }
     }
 
     @Override
     public @Nonnull List<T> toList(int priority) {
-        return new ArrayList<>(buckets[priority]);
+        validatePriority(priority);
+        read.lock();
+        try {
+            return new ArrayList<>(buckets[priority]);
+        } finally {
+            read.unlock();
+        }
     }
 
     @Override
     public @Nonnull Iterator<T> iterator(int priority) {
-        return buckets[priority].iterator();
+        validatePriority(priority);
+        // Iterator will hold write lock for strong consistency + remove support.
+        return new PriorityIterator(priority);
     }
 
     private class PriorityIterator implements Iterator<T> {
         private int currentBucketIndex;
         private Iterator<T> currentDequeIterator;
         private ArrayDeque<T> currentDeque;
+        private boolean lockHeld;
+        private boolean canRemove = false;
 
         PriorityIterator() {
-            // Start from the highest possible priority
+            // Hold write lock for entire iteration to allow safe remove.
+            write.lock();
+            lockHeld = true;
             this.currentBucketIndex = maxPriority + 1;
+        }
+
+        PriorityIterator(int fixedPriority) {
+            write.lock();
+            lockHeld = true;
+            this.currentBucketIndex = fixedPriority + 1;
+        }
+
+        private void releaseWriteLockIfHeld() {
+            if (lockHeld) {
+                write.unlock();
+                lockHeld = false;
+            }
         }
 
         @Override
         public boolean hasNext() {
-            // If we don't have an iterator or the current one is exhausted
-            while (currentDequeIterator == null || !currentDequeIterator.hasNext()) {
-                currentBucketIndex--; // Move to the next bucket index
-
-                if (currentBucketIndex < 0) {
-                    return false; // No more buckets to check
+            try {
+                while (currentDequeIterator == null || !currentDequeIterator.hasNext()) {
+                    currentBucketIndex--;
+                    if (currentBucketIndex < 0) {
+                        releaseWriteLockIfHeld();
+                        return false;
+                    }
+                    currentDeque = buckets[currentBucketIndex];
+                    if (!currentDeque.isEmpty()) {
+                        currentDequeIterator = (policy == Policy.FIFO)
+                                ? currentDeque.iterator()
+                                : currentDeque.descendingIterator();
+                    }
                 }
-
-                currentDeque = buckets[currentBucketIndex];
-                // Only create an iterator if the bucket actually has items
-                if (!currentDeque.isEmpty()) {
-                    currentDequeIterator = (policy == Policy.FIFO)
-                            ? currentDeque.iterator()
-                            : currentDeque.descendingIterator();
-                }
+                return true;
+            } catch (Exception e) {
+                releaseWriteLockIfHeld();
+                throw e;
             }
-            return true;
         }
 
         @Override
         public T next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
+            try {
+                if (!hasNext()) {
+                    releaseWriteLockIfHeld();
+                    throw new NoSuchElementException();
+                }
+                canRemove = true;
+                return currentDequeIterator.next();
+            } catch (Exception e) {
+                releaseWriteLockIfHeld();
+                throw e;
             }
-            return currentDequeIterator.next();
         }
 
         @Override
         public void remove() {
-            if (currentDequeIterator == null) {
+            if (!canRemove || currentDequeIterator == null) {
                 throw new IllegalStateException();
             }
-
-            synchronized (BucketedPriorityDeque.this) {
-                currentDequeIterator.remove();
-                if (currentDeque.isEmpty()) {
-                    // Update the bitmask if the bucket is now empty
-                    nonEmptyMask &= ~(1 << currentBucketIndex);
-                }
+            currentDequeIterator.remove();
+            canRemove = false;
+            if (currentDeque.isEmpty()) {
+                nonEmptyMask &= ~(1 << currentBucketIndex);
             }
         }
     }

@@ -71,12 +71,34 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return integerArrayDequeEntry != null ? integerArrayDequeEntry.getValue().peekLast() : null;
     }
 
+    @Override
+    public synchronized T peek(final int priority) {
+        return policy == Policy.FIFO ? peekFifo(priority) : peekLifo(priority);
+    }
+
+    @Override
+    public synchronized T peekFifo(final int priority) {
+        ArrayDeque<T> q = byPriority.get(priority);
+        return q != null ? q.peekFirst() : null;
+    }
+
+    @Override
+    public synchronized T peekLifo(final int priority) {
+        ArrayDeque<T> q = byPriority.get(priority);
+        return q != null ? q.peekLast() : null;
+    }
+
     public synchronized T poll() {
         if (policy == Policy.FIFO) {
             return pollFifo();
         } else {
             return pollLifo();
         }
+    }
+
+    @Override
+    public synchronized T poll(final int priority) {
+        return policy == Policy.FIFO ? pollFifo(priority) : pollLifo(priority);
     }
 
     /** Take the next task preferring the highest priority, FIFO within that priority */
@@ -159,12 +181,42 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     public synchronized void clear(final int priority) {
-        byPriority.remove(priority);
+        ArrayDeque<T> q = byPriority.remove(priority);
+        if (q != null && !q.isEmpty()) {
+            nonEmptyCount--;
+        }
     }
 
     public synchronized void clear(@Nonnull final Function<T, Boolean> filteringFunction) {
-        byPriority.values().forEach(q -> q.removeIf(filteringFunction::apply));
-        nonEmptyCount = byPriority.values().stream().mapToInt(ArrayDeque::size).sum();
+        if (filteringFunction == null) {
+            throw new IllegalArgumentException("Filtering function cannot be null");
+        }
+        List<Integer> emptyPriorities = new ArrayList<>();
+        for (Map.Entry<Integer, ArrayDeque<T>> entry : byPriority.entrySet()) {
+            entry.getValue().removeIf(filteringFunction::apply);
+            if (entry.getValue().isEmpty()) {
+                emptyPriorities.add(entry.getKey());
+            }
+        }
+        for (Integer priority : emptyPriorities) {
+            byPriority.remove(priority);
+            nonEmptyCount--;
+        }
+    }
+
+    @Override
+    public synchronized void clear(@Nonnull final Function<T, Boolean> filteringFunction, final int priority) {
+        if (filteringFunction == null) {
+            throw new IllegalArgumentException("Filtering function cannot be null");
+        }
+        ArrayDeque<T> q = byPriority.get(priority);
+        if (q != null) {
+            q.removeIf(filteringFunction::apply);
+            if (q.isEmpty()) {
+                byPriority.remove(priority);
+                nonEmptyCount--;
+            }
+        }
     }
 
     public synchronized int getHighestNotEmptyPriority() {
@@ -176,6 +228,9 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public synchronized boolean contains(@Nonnull final T t) {
+        if (t == null) {
+            return false;
+        }
         for (NavigableMap.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
             if (e.getValue().contains(t)) {
                 return true;
@@ -185,13 +240,37 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
+    public synchronized boolean contains(@Nonnull final T t, final int priority) {
+        if (t == null) {
+            return false;
+        }
+        ArrayDeque<T> q = byPriority.get(priority);
+        return q != null && q.contains(t);
+    }
+
+    @Override
     public synchronized boolean containsAll(final @Nonnull Collection<T> iterable) {
+        if (iterable == null) {
+            throw new NullPointerException("Collection cannot be null");
+        }
         for (T t : iterable) {
-            if (!contains(t)) {
+            if (t == null || !contains(t)) {
                 return false;
             }
         }
         return true;
+    }
+
+    @Override
+    public synchronized boolean containsAll(final @Nonnull Collection<T> iterable, final int priority) {
+        if (iterable == null) {
+            throw new NullPointerException("Collection cannot be null");
+        }
+        ArrayDeque<T> q = byPriority.get(priority);
+        if (q == null) {
+            return iterable.isEmpty();
+        }
+        return q.containsAll(iterable);
     }
 
     @Override
@@ -205,9 +284,15 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
 
     @Override
     public synchronized boolean remove(final @Nonnull T t) {
-        for (NavigableMap.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
-            if (e.getValue().contains(t)) {
-                e.getValue().remove(t);
+        if (t == null) {
+            return false;
+        }
+        for (Map.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
+            if (e.getValue().remove(t)) {
+                if (e.getValue().isEmpty()) {
+                    byPriority.remove(e.getKey());
+                    nonEmptyCount--;
+                }
                 return true;
             }
         }
@@ -215,7 +300,35 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
+    public synchronized boolean remove(final int priority) {
+        T t = poll(priority);
+        if (t == null) {
+            throw new NoSuchElementException();
+        }
+        return true;
+    }
+
+    @Override
+    public synchronized boolean remove(final @Nonnull T t, final int priority) {
+        if (t == null) {
+            return false;
+        }
+        ArrayDeque<T> q = byPriority.get(priority);
+        if (q != null && q.remove(t)) {
+            if (q.isEmpty()) {
+                byPriority.remove(priority);
+                nonEmptyCount--;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    @Override
     public synchronized boolean removeAll(final @Nonnull Collection<T> iterable) {
+        if (iterable == null) {
+            throw new NullPointerException("Collection cannot be null");
+        }
         boolean result = true;
         for (T t : iterable) {
             if (!remove(t)) {
@@ -225,16 +338,60 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return result;
     }
 
+    @Override
+    public synchronized boolean removeAll(final @Nonnull Collection<T> iterable, final int priority) {
+        if (iterable == null) {
+            throw new NullPointerException("Collection cannot be null");
+        }
+        ArrayDeque<T> q = byPriority.get(priority);
+        if (q == null) {
+            return false;
+        }
+        boolean removed = q.removeAll(iterable);
+        if (removed && q.isEmpty()) {
+            byPriority.remove(priority);
+            nonEmptyCount--;
+        }
+        return removed;
+    }
 
     @Override
     public synchronized boolean retainAll(final @Nonnull Collection<T> iterable) {
+        if (iterable == null) {
+            throw new NullPointerException("Collection cannot be null");
+        }
         boolean result = false;
-        for (NavigableMap.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
+        List<Integer> emptyPriorities = new ArrayList<>();
+        for (Map.Entry<Integer, ArrayDeque<T>> e : byPriority.entrySet()) {
             if (e.getValue().retainAll(iterable)) {
                 result = true;
+                if (e.getValue().isEmpty()) {
+                    emptyPriorities.add(e.getKey());
+                }
             }
         }
+        for (Integer priority : emptyPriorities) {
+            byPriority.remove(priority);
+            nonEmptyCount--;
+        }
         return result;
+    }
+
+    @Override
+    public synchronized boolean retainAll(final @Nonnull Collection<T> iterable, final int priority) {
+        if (iterable == null) {
+            throw new NullPointerException("Collection cannot be null");
+        }
+        ArrayDeque<T> q = byPriority.get(priority);
+        if (q == null) {
+            return false;
+        }
+        boolean changed = q.retainAll(iterable);
+        if (changed && q.isEmpty()) {
+            byPriority.remove(priority);
+            nonEmptyCount--;
+        }
+        return changed;
     }
 
     @Override
@@ -254,8 +411,19 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
+    public synchronized @Nonnull List<T> toList(final int priority) {
+        ArrayDeque<T> q = byPriority.get(priority);
+        return q != null ? new ArrayList<>(q) : new ArrayList<>();
+    }
+
+    @Override
     public synchronized @Nonnull Iterator<T> iterator() {
         return new PriorityIterator();
+    }
+
+    @Override
+    public synchronized @Nonnull Iterator<T> iterator(final int priority) {
+        return new PriorityIterator(priority);
     }
 
     private class PriorityIterator implements Iterator<T> {
@@ -263,10 +431,24 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         private Iterator<T> currentDequeIterator;
         private ArrayDeque<T> currentDeque;
         private Integer currentPriority;
+        private final boolean singlePriority;
 
         PriorityIterator() {
             // Traverse in descending order to respect priority (highest first)
             this.bucketIterator = byPriority.descendingMap().entrySet().iterator();
+            this.singlePriority = false;
+        }
+
+        PriorityIterator(int priority) {
+            // Iterate over a single priority bucket
+            ArrayDeque<T> q = byPriority.get(priority);
+            if (q != null) {
+                Map<Integer, ArrayDeque<T>> singleMap = Collections.singletonMap(priority, q);
+                this.bucketIterator = singleMap.entrySet().iterator();
+            } else {
+                this.bucketIterator = Collections.emptyIterator();
+            }
+            this.singlePriority = true;
         }
 
         @Override

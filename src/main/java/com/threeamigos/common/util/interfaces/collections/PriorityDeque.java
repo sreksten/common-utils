@@ -10,7 +10,8 @@ import java.util.function.Function;
 
 /**
  * A prioritized Deque. When polling, objects with higher priority are returned first.<br/>
- * You can, however, filter objects with a given priority or poll them using FIFO or LIFO policies.
+ * The default policy is FIFO.<br/>
+ * You can, however, filter objects for a given priority or poll them using a specific policy.
  *
  * @param <T> type of the objects stored in the deque
  *
@@ -24,7 +25,7 @@ public interface PriorityDeque<T> {
     }
 
     /**
-     * Sets the policy for polling objects from the deque.
+     * Sets the default policy for polling objects from the deque.
      * The default policy is FIFO.
      *
      * @param policy the policy to set
@@ -39,7 +40,7 @@ public interface PriorityDeque<T> {
     Policy getPolicy();
 
     /**
-     * Adds an object to the deque.
+     * Adds an object to the deque with a given priority.
      *
      * @param t object to add
      * @param priority priority of the object
@@ -47,63 +48,46 @@ public interface PriorityDeque<T> {
     void add(final @Nonnull T t, final int priority);
 
     /**
-     * Retrieves, but does not remove, the head of this deque (with the highest priority).
+     * Retrieves, but does not remove, the head of the highest non-empty priority bucket using the default policy.
      *
-     * @return the head of this deque, or null if empty
+     * @return the head of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T peek();
 
     /**
-     * Retrieves, but does not remove, the head of the highest priority bucket (FIFO).
+     * Retrieves, but does not remove, the head of the highest non-empty priority bucket using a FIFO policy.
      *
-     * @return the head of the highest priority bucket, or null if empty
+     * @return the newest object of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T peekFifo();
 
     /**
-     * Retrieves, but does not remove, the head of the highest priority bucket (LIFO).
+     * Retrieves, but does not remove, the head of the highest non-empty priority bucket using a LIFO policy.
      *
-     * @return the head of the highest priority bucket, or null if empty
+     * @return the oldest object of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T peekLifo();
 
     /**
-     * Retrieves and removes an object with the highest priority from the deque.
-     * The default policy is FIFO.
+     * Retrieves and removes the head of the highest non-empty priority bucket using the default policy.
      *
-     * @return the oldest object with the highest priority, or null if empty
+     * @return the head of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T poll();
 
     /**
-     * Retrieves and removes an object with the highest priority from the deque using a FIFO policy.
+     * Retrieves and removes the head of the highest non-empty priority bucket using a FIFO policy.
      *
-     * @return the oldest object with the highest priority, or null if empty
+     * @return the newest object of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T pollFifo();
 
     /**
-     * Retrieves and removes an object with given priority from the deque using a FIFO policy.
+     * Retrieves and removes the head of the highest non-empty priority bucket using a LIFO policy.
      *
-     * @param priority priority of the object to retrieve
-     * @return the oldest object with the given priority, or null if empty
-     */
-    @Nullable T pollFifo(final int priority);
-
-    /**
-     * Retrieves and removes an object with the highest priority from the deque using a LIFO policy.
-     *
-     * @return the newest object with the highest priority, or null if empty
+     * @return the oldest object of the highest non-empty priority bucket, or null if the deque is empty
      */
     @Nullable T pollLifo();
-
-    /**
-     * Retrieves and removes an object with given priority from the deque using a LIFO policy.
-     *
-     * @param priority priority of the object to retrieve
-     * @return the newest object with a given priority, or null if empty
-     */
-    @Nullable T pollLifo(final int priority);
 
     /**
      * @return true if no objects are stored, false otherwise
@@ -111,20 +95,25 @@ public interface PriorityDeque<T> {
     boolean isEmpty();
 
     /**
-     * @return true if no objects are stored, false otherwise
-     */
-    boolean isEmpty(final int priority);
-
-    /**
      * @return total number of objects in the deque.
      */
     int size();
 
     /**
-     * @param priority priority of the objects to count
-     * @return the number of objects with given priority in the deque.
+     * Tells if the deque contains the given object at any priority.
+     *
+     * @param t object to check
+     * @return true if the deque contains the given object at any priority, false otherwise.
      */
-    int size(int priority);
+    boolean contains(final @Nonnull T t);
+
+    /**
+     * Tells if the deque contains all objects in the given iterable whatever the priority.
+     *
+     * @param iterable an iterable of objects to check
+     * @return true if the deque contains all objects in the iterable whatever the priority, false otherwise.
+     */
+    boolean containsAll(final @Nonnull Collection<T> iterable);
 
     /**
      * Clears the deque.
@@ -132,37 +121,191 @@ public interface PriorityDeque<T> {
     void clear();
 
     /**
-     * Clears all objects with given priority.
-     * @param priority priority of objects to be removed
-     */
-    void clear(int priority);
-
-    /**
      * Clears all objects that satisfy the given filtering function.
      *
      * @param filteringFunction filtering function; if true, then the object is removed
      */
-    void clear(@Nonnull Function<T, Boolean>filteringFunction);
+    void clear(final @Nonnull Function<T, Boolean>filteringFunction);
+
+    /**
+     * Removes an element from the highest non-empty priority bucket.
+     * @return true if the deque was modified as a result of the call, false otherwise.
+     */
+    boolean remove();
+
+    /**
+     * Removes the first occurrence of the specified element from this deque if it is present.
+     * @param t object to remove
+     * @return true if the deque contained the specified element.
+     */
+    boolean remove(final @Nonnull T t);
+
+    /**
+     * Removes all objects from the deque whatever the priority.
+     * @param iterable an iterable of objects to remove.
+     * @return true if this deque changed as a result of the call.
+     */
+    boolean removeAll(final @Nonnull Collection<T> iterable);
+
+    /**
+     * Retains only the elements in this deque that are contained in the given priority bucket.
+     * @param iterable an iterable of objects to retain.
+     * @return true if this deque changed as a result of the call.
+     */
+    boolean retainAll(final @Nonnull Collection<T> iterable);
+
+    /**
+     * @return a list of all objects in the deque whatever the priority.
+     */
+    @Nonnull List<T> toList();
+
+    /**
+     * @return an iterator over all objects in the deque whatever the priority.
+     */
+    @Nonnull Iterator<T> iterator();
 
     /**
      * @return the maximum priority between all objects in the deque.
      */
     int getHighestNotEmptyPriority();
 
-    boolean contains(@Nonnull T t);
+    /**
+     * Retrieves, but does not remove, the head of the given priority bucket using the default policy.
+     *
+     * @param priority priority of the bucket
+     * @return the head of the given priority bucket, or null if the bucket is empty
+     */
+    @Nullable T peek(final int priority);
 
-    boolean containsAll(@Nonnull Collection<T> iterable);
+    /**
+     * Retrieves, but does not remove, the head of the given priority bucket using a FIFO policy.
+     *
+     * @param priority priority of the bucket
+     * @return the newest object of the given priority bucket, or null if the bucket is empty
+     */
+    @Nullable T peekFifo(final int priority);
 
-    boolean remove();
+    /**
+     * Retrieves, but does not remove, the head of the given priority bucket using a LIFO policy.
+     *
+     * @param priority priority of the bucket
+     * @return the oldest object of the given priority bucket, or null if the bucket is empty
+     */
+    @Nullable T peekLifo(final int priority);
 
-    boolean remove(@Nonnull T t);
+    /**
+     * Retrieves and removes an object from the given priority bucket using the default policy.
+     *
+     * @param priority priority of the bucket
+     * @return the head of the given priority bucket, or null if the bucket is empty
+     */
+    @Nullable T poll(final int priority);
 
-    boolean removeAll(@Nonnull Collection<T> iterable);
+    /**
+     * Retrieves and removes an object from the given priority bucket using a FIFO policy.
+     *
+     * @param priority priority of the object to retrieve
+     * @return the oldest object in the given priority bucket, or null if the bucket is empty
+     */
+    @Nullable T pollFifo(final int priority);
 
-    boolean retainAll(@Nonnull Collection<T> iterable);
+    /**
+     * Retrieves and removes an object from the given priority bucket using a LIFO policy.
+     *
+     * @param priority priority of the object to retrieve
+     * @return the newest object in the given priority bucket, or null if the bucket is empty
+     */
+    @Nullable T pollLifo(final int priority);
 
-    @Nonnull List<T> toList();
+    /**
+     * Returns true if no objects are stored in the given priority bucket.
+     *
+     * @param priority priority of the objects to check
+     * @return true if no objects are stored in the given priority bucket, false otherwise
+     */
+    boolean isEmpty(final int priority);
 
-    @Nonnull Iterator<T> iterator();
+    /**
+     * Returns the number of objects in the given priority bucket.
+     *
+     * @param priority priority of the objects to count
+     * @return the number of objects in the given priority bucket
+     */
+    int size(final int priority);
 
+    /**
+     * Tells if the deque contains the given object at the given priority.
+     *
+     * @param t object to check
+     * @param priority priority of the object to check
+     * @return true if the deque contains the given object at the given priority, false otherwise.
+     */
+    boolean contains(final @Nonnull T t, final int priority);
+
+    /**
+     * Tells if the deque contains all objects in the given iterable at the given priority.
+     *
+     * @param iterable an iterable of objects to check
+     * @param priority priority of the objects to check
+     * @return true if the deque contains all objects in the iterable at the given priority, false otherwise.
+     */
+    boolean containsAll(final @Nonnull Collection<T> iterable, final int priority);
+
+    /**
+     * Clears all objects with given priority.
+     *
+     * @param priority priority of objects to be removed
+     */
+    void clear(final int priority);
+
+    /**
+     * Clears all objects that satisfy the given filtering function.
+     *
+     * @param filteringFunction filtering function; if true, then the object is removed
+     * @param priority priority of objects to be removed
+     */
+    void clear(final @Nonnull Function<T, Boolean>filteringFunction, final int priority);
+
+    /**
+     * Removes an element from the given priority bucket.
+     * @param priority priority of the object to remove
+     * @return true if the bucket was modified as a result of the call, false otherwise.
+     */
+    boolean remove(final int priority);
+
+    /**
+     * Removes the first occurrence of the specified element from this deque if it is present for a given priority.
+     * @param t object to remove
+     * @param priority priority of the object to remove
+     * @return true if the deque contained the specified element.
+     */
+    boolean remove(final @Nonnull T t, final int priority);
+
+    /**
+     * Removes all objects from the deque in the given priority bucket.
+     * @param iterable an iterable of objects to remove.
+     * @param priority priority of objects to remove.
+     * @return true if this deque changed as a result of the call.
+     */
+    boolean removeAll(final @Nonnull Collection<T> iterable, final int priority);
+
+    /**
+     * Retains only the elements in this deque that are contained in the given priority bucket.
+     * @param iterable an iterable of objects to retain.
+     * @param priority priority of objects to retain.
+     * @return true if this deque changed as a result of the call.
+     */
+    boolean retainAll(final @Nonnull Collection<T> iterable, final int priority);
+
+    /**
+     * @param priority priority of objects
+     * @return a list of all objects in the given priority bucket.
+     */
+    @Nonnull List<T> toList(final int priority);
+
+    /**
+     * @param priority priority of objects
+     * @return an iterator over all objects in the given priority bucket.
+     */
+    @Nonnull Iterator<T> iterator(final int priority);
 }
