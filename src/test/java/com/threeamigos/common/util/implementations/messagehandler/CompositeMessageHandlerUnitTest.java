@@ -217,6 +217,24 @@ class CompositeMessageHandlerUnitTest {
         verifyNoInteractions(supplier);
     }
 
+    @Test
+    @DisplayName("Should not hold lock during delegate execution (allows concurrent add)")
+    void shouldNotHoldLockDuringDelegateExecution() {
+        CompositeMessageHandler sut = new CompositeMessageHandler();
+        MessageHandler slowHandler = mock(MessageHandler.class);
+        doAnswer(invocation -> {
+            // While executing delegate, attempt to add another handler; should not deadlock
+            sut.addMessageHandler(firstMessageHandler);
+            return null;
+        }).when(slowHandler).handleInfoMessage(anyString());
+        sut.addMessageHandler(slowHandler);
+
+        sut.handleInfoMessage("msg");
+
+        verify(slowHandler, times(1)).handleInfoMessage("msg");
+        assertEquals(2, sut.getMessageHandlers().size());
+    }
+
     @ParameterizedTest
     @DisplayName("Should remember if warn level is active")
     @CsvSource({"true, true", "false, false"})

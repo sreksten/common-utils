@@ -148,13 +148,15 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
     }
 
     private void forEachHandler(java.util.function.Consumer<MessageHandler> consumer) {
+        List<MessageHandler> snapshot;
         lock.readLock().lock();
         try {
-            for (MessageHandler handler : messageHandlers) {
-                consumer.accept(handler);
-            }
+            snapshot = new ArrayList<>(messageHandlers);
         } finally {
             lock.readLock().unlock();
+        }
+        for (MessageHandler handler : snapshot) {
+            consumer.accept(handler);
         }
     }
 }
