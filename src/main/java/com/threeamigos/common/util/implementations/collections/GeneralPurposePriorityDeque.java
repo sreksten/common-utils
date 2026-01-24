@@ -7,8 +7,10 @@ import java.util.*;
 import java.util.function.Function;
 
 /**
- * General-purpose, thread-safe implementation of a {@link PriorityDeque} (arbitrary priority integers).
+ * General-purpose implementation of a {@link PriorityDeque} (arbitrary priority integers).
  * Works for any integer priorities, sparse ranges, dynamic inserts/removals.<br/>
+ * <b>NOTE:</b> This implementation is not thread-safe. For that, wrap this class with
+ * {@link SynchronizedPriorityDequeWrapper}.<br/>
  * <br/>
  * Complexity:
  * <ul>
@@ -49,7 +51,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return policy;
     }
 
-    public synchronized void add(@Nonnull final T task, final int priority) {
+    public void add(@Nonnull final T task, final int priority) {
         ArrayDeque<T> q = byPriority.computeIfAbsent(priority, p -> {
             nonEmptyCount++;
             return new ArrayDeque<>();
@@ -57,38 +59,38 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         q.addLast(task);
     }
 
-    public synchronized T peek() {
+    public T peek() {
         return policy == Policy.FIFO ? peekFifo() : peekLifo();
     }
 
-    public synchronized T peekFifo() {
+    public T peekFifo() {
         Map.Entry<Integer, ArrayDeque<T>> integerArrayDequeEntry = byPriority.lastEntry();
         return integerArrayDequeEntry != null ? integerArrayDequeEntry.getValue().peekFirst() : null;
     }
 
-    public synchronized T peekLifo() {
+    public T peekLifo() {
         Map.Entry<Integer, ArrayDeque<T>> integerArrayDequeEntry = byPriority.lastEntry();
         return integerArrayDequeEntry != null ? integerArrayDequeEntry.getValue().peekLast() : null;
     }
 
     @Override
-    public synchronized T peek(final int priority) {
+    public T peek(final int priority) {
         return policy == Policy.FIFO ? peekFifo(priority) : peekLifo(priority);
     }
 
     @Override
-    public synchronized T peekFifo(final int priority) {
+    public T peekFifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         return q != null ? q.peekFirst() : null;
     }
 
     @Override
-    public synchronized T peekLifo(final int priority) {
+    public T peekLifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         return q != null ? q.peekLast() : null;
     }
 
-    public synchronized T poll() {
+    public T poll() {
         if (policy == Policy.FIFO) {
             return pollFifo();
         } else {
@@ -97,12 +99,12 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized T poll(final int priority) {
+    public T poll(final int priority) {
         return policy == Policy.FIFO ? pollFifo(priority) : pollLifo(priority);
     }
 
     /** Take the next task preferring the highest priority, FIFO within that priority */
-    public synchronized T pollFifo() {
+    public T pollFifo() {
         Map.Entry<Integer, ArrayDeque<T>> e = byPriority.lastEntry();
         if (e == null) {
             return null;
@@ -116,7 +118,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public synchronized T pollFifo(final int priority) {
+    public T pollFifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         if (q == null) {
             return null;
@@ -130,7 +132,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     /** Take the next task preferring the highest priority, LIFO within that priority */
-    public synchronized T pollLifo() {
+    public T pollLifo() {
         Map.Entry<Integer, ArrayDeque<T>> e = byPriority.lastEntry();
         if (e == null) {
             return null;
@@ -144,7 +146,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public synchronized T pollLifo(final int priority) {
+    public T pollLifo(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         if (q == null) {
             return null;
@@ -157,37 +159,37 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         return t;
     }
 
-    public synchronized boolean isEmpty() {
+    public boolean isEmpty() {
         return nonEmptyCount == 0;
     }
 
-    public synchronized boolean isEmpty(final int priority) {
+    public boolean isEmpty(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         return q == null || q.isEmpty();
     }
 
-    public synchronized int size() {
+    public int size() {
         return byPriority.values().stream().mapToInt(ArrayDeque::size).sum();
     }
 
-    public synchronized int size(final int priority) {
+    public int size(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         return q == null ? 0 : q.size();
     }
 
-    public synchronized void clear() {
+    public void clear() {
         byPriority.clear();
         nonEmptyCount = 0;
     }
 
-    public synchronized void clear(final int priority) {
+    public void clear(final int priority) {
         ArrayDeque<T> q = byPriority.remove(priority);
         if (q != null && !q.isEmpty()) {
             nonEmptyCount--;
         }
     }
 
-    public synchronized void clear(@Nonnull final Function<T, Boolean> filteringFunction) {
+    public void clear(@Nonnull final Function<T, Boolean> filteringFunction) {
         if (filteringFunction == null) {
             throw new IllegalArgumentException("Filtering function cannot be null");
         }
@@ -205,7 +207,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized void clear(@Nonnull final Function<T, Boolean> filteringFunction, final int priority) {
+    public void clear(@Nonnull final Function<T, Boolean> filteringFunction, final int priority) {
         if (filteringFunction == null) {
             throw new IllegalArgumentException("Filtering function cannot be null");
         }
@@ -219,7 +221,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
         }
     }
 
-    public synchronized int getHighestNotEmptyPriority() {
+    public int getHighestNotEmptyPriority() {
         if (isEmpty()) {
             return -1;
         }
@@ -227,7 +229,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean contains(@Nonnull final T t) {
+    public boolean contains(@Nonnull final T t) {
         if (t == null) {
             return false;
         }
@@ -240,7 +242,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean contains(@Nonnull final T t, final int priority) {
+    public boolean contains(@Nonnull final T t, final int priority) {
         if (t == null) {
             return false;
         }
@@ -249,7 +251,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean containsAll(final @Nonnull Collection<T> iterable) {
+    public boolean containsAll(final @Nonnull Collection<T> iterable) {
         if (iterable == null) {
             throw new NullPointerException("Collection cannot be null");
         }
@@ -262,7 +264,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean containsAll(final @Nonnull Collection<T> iterable, final int priority) {
+    public boolean containsAll(final @Nonnull Collection<T> iterable, final int priority) {
         if (iterable == null) {
             throw new NullPointerException("Collection cannot be null");
         }
@@ -274,7 +276,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean remove() {
+    public boolean remove() {
         T t = poll();
         if (t == null) {
             throw new NoSuchElementException();
@@ -283,7 +285,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean remove(final @Nonnull T t) {
+    public boolean remove(final @Nonnull T t) {
         if (t == null) {
             return false;
         }
@@ -300,7 +302,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean remove(final int priority) {
+    public boolean remove(final int priority) {
         T t = poll(priority);
         if (t == null) {
             throw new NoSuchElementException();
@@ -309,7 +311,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean remove(final @Nonnull T t, final int priority) {
+    public boolean remove(final @Nonnull T t, final int priority) {
         if (t == null) {
             return false;
         }
@@ -325,7 +327,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean removeAll(final @Nonnull Collection<T> iterable) {
+    public boolean removeAll(final @Nonnull Collection<T> iterable) {
         if (iterable == null) {
             throw new NullPointerException("Collection cannot be null");
         }
@@ -339,7 +341,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean removeAll(final @Nonnull Collection<T> iterable, final int priority) {
+    public boolean removeAll(final @Nonnull Collection<T> iterable, final int priority) {
         if (iterable == null) {
             throw new NullPointerException("Collection cannot be null");
         }
@@ -356,7 +358,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean retainAll(final @Nonnull Collection<T> iterable) {
+    public boolean retainAll(final @Nonnull Collection<T> iterable) {
         if (iterable == null) {
             throw new NullPointerException("Collection cannot be null");
         }
@@ -378,7 +380,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized boolean retainAll(final @Nonnull Collection<T> iterable, final int priority) {
+    public boolean retainAll(final @Nonnull Collection<T> iterable, final int priority) {
         if (iterable == null) {
             throw new NullPointerException("Collection cannot be null");
         }
@@ -395,7 +397,7 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized @Nonnull List<T> toList() {
+    public @Nonnull List<T> toList() {
         List<T> result = new ArrayList<>();
         // Use descendingMap to iterate from the highest priority to the lowest
         for (ArrayDeque<T> bucket : byPriority.descendingMap().values()) {
@@ -411,18 +413,18 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
     }
 
     @Override
-    public synchronized @Nonnull List<T> toList(final int priority) {
+    public @Nonnull List<T> toList(final int priority) {
         ArrayDeque<T> q = byPriority.get(priority);
         return q != null ? new ArrayList<>(q) : new ArrayList<>();
     }
 
     @Override
-    public synchronized @Nonnull Iterator<T> iterator() {
+    public @Nonnull Iterator<T> iterator() {
         return new PriorityIterator();
     }
 
     @Override
-    public synchronized @Nonnull Iterator<T> iterator(final int priority) {
+    public @Nonnull Iterator<T> iterator(final int priority) {
         return new PriorityIterator(priority);
     }
 
@@ -479,14 +481,10 @@ public class GeneralPurposePriorityDeque<T> implements PriorityDeque<T> {
             if (currentDequeIterator == null) {
                 throw new IllegalStateException();
             }
-
-            synchronized (GeneralPurposePriorityDeque.this) {
-                currentDequeIterator.remove();
-                if (currentDeque.isEmpty()) {
-                    // Use the outer class reference to remove the bucket if empty
-                    byPriority.remove(currentPriority);
-                    nonEmptyCount--;
-                }
+            currentDequeIterator.remove();
+            if (currentDeque.isEmpty()) {
+                byPriority.remove(currentPriority);
+                nonEmptyCount--;
             }
         }
     }
