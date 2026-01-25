@@ -2,7 +2,13 @@ package com.threeamigos.common.util.implementations.messagehandler;
 
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 
-import java.io.PrintStream;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.BlockingQueue;
@@ -12,49 +18,65 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
- * An implementation of the {@link MessageHandler} interface that uses the
- * console to print info, warning, trace, and debug messages to System.out and errors and
- * exceptions to System.err.
- *
- * @author Stefano Reksten
+ * MessageHandler implementation that writes log messages to a file.
+ * Supports optional async dispatch with a background worker and shutdown hook.
  */
-public class ConsoleMessageHandler extends AbstractMessageHandler implements AutoCloseable {
+public class FileMessageHandler extends AbstractMessageHandler implements AutoCloseable {
 
-    private static final Object PRINT_LOCK = new Object();
+    private final PrintWriter writer;
     private final boolean async;
     private final BlockingQueue<Runnable> queue;
     private final ExecutorService worker;
     private final Thread shutdownHook;
+    private final Object writeLock = new Object();
 
-    public ConsoleMessageHandler() {
-        this(false, 0, false);
+    public FileMessageHandler(final String filename) {
+        this(filename, false, 0, false);
     }
 
-    /**
-     * @param async whether to dispatch logging to a background worker
-     * @param queueCapacity capacity for the async queue; 0 or negative => unbounded
-     */
-    public ConsoleMessageHandler(boolean async, int queueCapacity) {
-        this(async, queueCapacity, false);
+    public FileMessageHandler(final String filename, final boolean async, final int queueCapacity) {
+        this(filename, async, queueCapacity, false);
     }
 
-    /**
-     * @param async whether to dispatch logging to a background worker
-     * @param queueCapacity capacity for the async queue; 0 or negative => unbounded
-     * @param registerShutdownHook whether to register a JVM shutdown hook to close the handler
-     */
-    public ConsoleMessageHandler(boolean async, int queueCapacity, boolean registerShutdownHook) {
+    public FileMessageHandler(final String filename, final boolean async, final int queueCapacity, final boolean registerShutdownHook) {
+        if (filename == null || filename.trim().isEmpty()) {
+            throw new IllegalArgumentException("File path cannot be null or empty");
+        }
+        Path filePath = Paths.get(filename);
+        try {
+            Path parent = filePath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            if (Files.exists(filePath) && Files.isDirectory(filePath)) {
+                throw new IllegalArgumentException("Path points to a directory: " + filePath);
+            }
+            if (!Files.exists(filePath)) {
+                Files.createFile(filePath);
+            }
+            if (!Files.isWritable(filePath)) {
+                throw new IllegalArgumentException("File is not writable: " + filePath);
+            }
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Unable to prepare log file: " + filePath, e);
+        }
+        try {
+            this.writer = new PrintWriter(new BufferedWriter(new FileWriter(filePath.toFile(), true)));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Unable to open log file for writing: " + filePath, e);
+        }
+
         this.async = async;
         if (async) {
             this.queue = queueCapacity > 0 ? new LinkedBlockingQueue<>(queueCapacity) : new LinkedBlockingQueue<>();
             this.worker = Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "ConsoleMessageHandler-async");
+                Thread t = new Thread(r, "FileMessageHandler-async");
                 t.setDaemon(true);
                 return t;
             });
             this.worker.submit(this::drainLoop);
             if (registerShutdownHook) {
-                this.shutdownHook = new Thread(this::close, "ConsoleMessageHandler-shutdown");
+                this.shutdownHook = new Thread(this::close, "FileMessageHandler-shutdown");
                 Runtime.getRuntime().addShutdownHook(this.shutdownHook);
             } else {
                 this.shutdownHook = null;
@@ -68,38 +90,38 @@ public class ConsoleMessageHandler extends AbstractMessageHandler implements Aut
 
     @Override
     protected void handleInfoMessageImpl(final String message) {
-        print(System.out, format("INFO ", message));
+        writeLine(format("INFO ", message));
     }
 
     @Override
     protected void handleWarnMessageImpl(final String message) {
-        print(System.out, format("WARN ", message));
+        writeLine(format("WARN ", message));
     }
 
     @Override
     protected void handleErrorMessageImpl(final String message) {
-        print(System.err, format("ERROR", message));
+        writeLine(format("ERROR", message));
     }
 
     @Override
     protected void handleDebugMessageImpl(final String message) {
-        print(System.out, format("DEBUG", message));
+        writeLine(format("DEBUG", message));
     }
 
     @Override
     protected void handleTraceMessageImpl(final String message) {
-        print(System.out, format("TRACE", message));
+        writeLine(format("TRACE", message));
     }
 
     @Override
     protected void handleExceptionImpl(final Exception exception) {
-        Runnable task = () -> {
-            synchronized (PRINT_LOCK) {
-                System.err.println(format("EXCEP", exception.getMessage()));
-                exception.printStackTrace(System.err); //NOSONAR
+        writeLine(format("EXCEP", exception.getMessage()));
+        dispatch(() -> {
+            synchronized (writeLock) {
+                exception.printStackTrace(writer);
+                writer.flush();
             }
-        };
-        dispatch(task);
+        });
     }
 
     private String format(String level, String message) {
@@ -107,13 +129,13 @@ public class ConsoleMessageHandler extends AbstractMessageHandler implements Aut
         return String.format("[%s] [%s] %s", date, level, message);
     }
 
-    private void print(PrintStream stream, String formatted) {
-        Runnable task = () -> {
-            synchronized (PRINT_LOCK) {
-                stream.println(formatted);
+    private void writeLine(String line) {
+        dispatch(() -> {
+            synchronized (writeLock) {
+                writer.println(line);
+                writer.flush();
             }
-        };
-        dispatch(task);
+        });
     }
 
     private void dispatch(Runnable task) {
@@ -143,6 +165,7 @@ public class ConsoleMessageHandler extends AbstractMessageHandler implements Aut
         }
     }
 
+    @Override
     public void close() {
         if (worker != null) {
             if (shutdownHook != null) {
@@ -158,6 +181,10 @@ public class ConsoleMessageHandler extends AbstractMessageHandler implements Aut
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
             }
+        }
+        synchronized (writeLock) {
+            writer.flush();
+            writer.close();
         }
     }
 }

@@ -5,11 +5,15 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.mockito.ArgumentCaptor;
 
+import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.lang.reflect.Field;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.*;
 
@@ -178,6 +182,59 @@ class ConsoleMessageHandlerUnitTest {
         // Then
         assertFormattedLine(err, "EXCEP", "Boom");
         verify(exception, times(1)).printStackTrace(err);
+    }
+
+    @Test
+    @DisplayName("Should run synchronously when queue is full")
+    void shouldRunSynchronouslyWhenQueueIsFull() throws Exception {
+        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        System.setOut(new PrintStream(outContent));
+        try (ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 1)) {
+            CountDownLatch latch = new CountDownLatch(1);
+            // Enqueue one long-running task to fill the queue
+            handler.handleInfoMessage(() -> {
+                try {
+                    latch.await(500, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException ignored) {
+                }
+                return "background";
+            });
+            // This call should execute synchronously because queue is full
+            handler.handleInfoMessage("sync");
+            latch.countDown();
+            // Wait for async worker to finish
+            Thread.sleep(200);
+            String output = outContent.toString();
+            assertTrue(output.contains("sync"));
+            assertTrue(output.contains("background"));
+        } finally {
+            System.setOut(originalOut);
+        }
+    }
+
+    @Test
+    @DisplayName("Should register shutdown hook when requested")
+    void shouldRegisterShutdownHook() throws Exception {
+        ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 1, true);
+        Thread hook = getShutdownHook(handler);
+        assertNotNull(hook);
+        handler.close();
+    }
+
+    @Test
+    @DisplayName("Should not register shutdown hook when not requested")
+    void shouldNotRegisterShutdownHook() throws Exception {
+        ConsoleMessageHandler handler = new ConsoleMessageHandler(true, 1, false);
+        Thread hook = getShutdownHook(handler);
+        assertNull(hook);
+        handler.close();
+    }
+
+    private Thread getShutdownHook(ConsoleMessageHandler handler) throws Exception {
+        Field f = ConsoleMessageHandler.class.getDeclaredField("shutdownHook");
+        f.setAccessible(true);
+        return (Thread) f.get(handler);
     }
 
     private void assertFormattedLine(PrintStream stream, String level, String message) {

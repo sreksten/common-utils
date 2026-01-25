@@ -68,6 +68,15 @@ class CompositeMessageHandlerUnitTest {
     }
 
     @Test
+    @DisplayName("Collection constructor should throw exception if collection contains null")
+    void collectionConstructorShouldThrowExceptionIfCollectionContainsNull() {
+        Collection<MessageHandler> handlers = new ArrayList<>();
+        handlers.add(firstMessageHandler);
+        handlers.add(null);
+        assertThrows(IllegalArgumentException.class, () -> new CompositeMessageHandler(handlers));
+    }
+
+    @Test
     @DisplayName("Varargs constructor should keep track of arguments")
     void varargsConstructorShouldKeepTrackOfArguments() {
         // Given
