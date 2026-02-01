@@ -17,7 +17,7 @@ import java.util.function.Supplier;
  * <p>Null values are supported through an internal sentinel value. The cache
  * will correctly cache and return null values from suppliers.
  *
- * <p>The cache uses a Least Recently Used (LRU) eviction policy. When the
+ * <p>The cache uses the Least Recently Used (LRU) eviction policy. When the
  * cache exceeds maxCacheSize, the least recently accessed entry is evicted.
  * Note that the cache may temporarily contain maxCacheSize + 1 entries during
  * insertion before eviction occurs.
