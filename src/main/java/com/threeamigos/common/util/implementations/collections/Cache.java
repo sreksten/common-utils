@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.collections;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
