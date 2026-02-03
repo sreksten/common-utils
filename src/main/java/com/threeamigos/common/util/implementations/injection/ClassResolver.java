@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.collections.Cache;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
