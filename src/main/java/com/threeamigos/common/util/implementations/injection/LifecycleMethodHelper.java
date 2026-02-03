@@ -6,7 +6,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
-public class LifecycleMethodHelper {
+class LifecycleMethodHelper {
 
     static void invokeLifecycleMethod(Object instance, Class<? extends Annotation> annotation) throws InvocationTargetException, IllegalAccessException {
         // Collect all classes in the hierarchy, from parent to child

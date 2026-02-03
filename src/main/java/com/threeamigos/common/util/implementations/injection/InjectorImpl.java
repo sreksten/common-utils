@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 import jakarta.annotation.Nonnull;
@@ -201,6 +202,17 @@ public class InjectorImpl implements Injector {
      * @throws IllegalArgumentException if package scanning fails
      */
     public InjectorImpl(final String ... packageNames) {
+
+        KnowledgeBase knowledgeBase = new KnowledgeBase();
+        try (ParallelTaskExecutor parallelTaskExecutor = ParallelTaskExecutor.createExecutor()) {
+            ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase);
+            new ParallelClasspathScanner(
+                    Thread.currentThread().getContextClassLoader(), classProcessor, packageNames);
+            parallelTaskExecutor.awaitCompletion();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
         this.classResolver = new ClassResolver(packageNames);
         registerDefaultScopes();
         addShutdownHook();
