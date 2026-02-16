@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Inject;
@@ -20,14 +21,21 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Validates that a Java class is a CDI Managed Bean, according to CDI 4.1 rules
- * (implemented conservatively and annotation-name based to support both javax.* and jakarta.* APIs).
+ * Validates that a Java class is a CDI Managed Bean, according to CDI 4.1 rules.
+ *
+ * <p><b>IMPORTANT: Alternative Bean Enabling (CDI 4.1 Section 5.1.3)</b>
+ * <ul>
+ *   <li>Without beans.xml support, alternatives MUST have {@literal @}Priority to be enabled</li>
+ *   <li>Alternatives without {@literal @}Priority are NOT enabled and will be skipped</li>
+ *   <li>This matches CDI 4.1 spec: alternatives enabled via beans.xml OR {@literal @}Priority</li>
+ * </ul>
  *
  * <p>Responsibilities:
  * <ul>
  *   <li>Validate bean class eligibility and constructor rules</li>
  *   <li>Validate injection points (@Inject fields / initializer methods / parameters)</li>
  *   <li>Validate producer fields/methods (@Produces) and ensure illegal combinations are rejected</li>
+ *   <li>Check if alternatives are properly enabled (must have {@literal @}Priority without beans.xml)</li>
  *   <li>Report problems to {@link KnowledgeBase} as definition errors or injection errors</li>
  *   <li>Produce a {@link BeanImpl} and register it in the {@link KnowledgeBase} on success</li>
  * </ul>
@@ -153,9 +161,33 @@ public class CDI41BeanValidator {
             }
         }
 
-        // 6) Build and register Bean (even if invalid, to track all beans)
+        // 6) Check if this is an alternative bean and if it's properly enabled
         boolean alternative = hasAnnotation(clazz, Alternative.class);
-        BeanImpl<T> bean = new BeanImpl<>(clazz, alternative);
+        boolean alternativeEnabled = false;
+
+        if (alternative) {
+            // CDI 4.1 Section 5.1.3: Alternatives must be enabled via beans.xml OR @Priority
+            // Since we don't support beans.xml, alternatives MUST have @Priority to be enabled
+            Priority priority = clazz.getAnnotation(Priority.class);
+
+            if (priority != null) {
+                // Alternative is properly enabled with @Priority
+                alternativeEnabled = true;
+            } else {
+                // Alternative without @Priority is NOT enabled - log warning and skip
+                knowledgeBase.addError(
+                    "Alternative bean " + clazz.getName() + " is not enabled. " +
+                    "Without beans.xml support, alternatives must have @Priority annotation. " +
+                    "Add @Priority(value) to enable this alternative, or remove @Alternative if not needed."
+                );
+                // Return null - this bean should not be registered as it's not enabled
+                return null;
+            }
+        }
+
+        // 7) Build and register Bean (even if invalid, to track all beans)
+        // Note: Only alternatives with @Priority reach this point
+        BeanImpl<T> bean = new BeanImpl<>(clazz, alternativeEnabled);
 
         // Mark bean as having validation errors if validation failed
         if (!valid) {
