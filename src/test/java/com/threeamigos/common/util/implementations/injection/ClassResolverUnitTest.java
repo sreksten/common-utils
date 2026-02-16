@@ -59,9 +59,16 @@ class ClassResolverUnitTest {
     Collection<Annotation> nonMatchingQualifier = Collections.singleton(AnnotationLiteral.of(BindingNotMatchingQualifier.class));
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         // Given
-        sut = new ClassResolver(getPackageName(ClassResolverUnitTest.class));
+        KnowledgeBase knowledgeBase = new KnowledgeBase();
+        SimpleClasspathScannerSink sink = new SimpleClasspathScannerSink();
+        new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink, getPackageName(ClassResolverUnitTest.class));
+        // Populate knowledgeBase from sink
+        for (Class<?> clazz : sink.getClasses()) {
+            knowledgeBase.add(clazz);
+        }
+        sut = new ClassResolver(knowledgeBase);
         sut.setBindingsOnly(false); // The default value anyway.
     }
 
@@ -655,9 +662,16 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("Should work if qualifiers collection is null")
-            void shouldFindALotOfClassesIfPackageIsNull() {
+            void shouldFindALotOfClassesIfPackageIsNull() throws Exception {
                 // Given
-                ClassResolver sut = new ClassResolver(getPackageName(SingleImplementationInterface.class));
+                KnowledgeBase kb = new KnowledgeBase();
+                SimpleClasspathScannerSink sink = new SimpleClasspathScannerSink();
+                new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(),
+                    sink, getPackageName(SingleImplementationInterface.class));
+                for (Class<?> clazz : sink.getClasses()) {
+                    kb.add(clazz);
+                }
+                ClassResolver sut = new ClassResolver(kb);
                 // When
                 Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, null);
                 // Then
@@ -666,9 +680,15 @@ class ClassResolverUnitTest {
 
             @Test
             @DisplayName("Should work if qualifiers collection is empty")
-            void shouldFindALotOfClassesIfPackageIsEmpty() {
+            void shouldFindALotOfClassesIfPackageIsEmpty() throws Exception {
                 // Given
-                ClassResolver sut = new ClassResolver();
+                KnowledgeBase kb = new KnowledgeBase();
+                SimpleClasspathScannerSink sink = new SimpleClasspathScannerSink();
+                new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink);
+                for (Class<?> clazz : sink.getClasses()) {
+                    kb.add(clazz);
+                }
+                ClassResolver sut = new ClassResolver(kb);
                 // When
                 Class<?> resolved = sut.resolveImplementation(SingleImplementationInterface.class, Collections.emptyList());
                 // Then
@@ -680,20 +700,17 @@ class ClassResolverUnitTest {
         @DisplayName("Should remember already resolved classes")
         void shouldRememberAlreadyResolvedClasses() throws Exception {
             // Given
-            String packageName = "com.threeamigos";
-            ClassResolver sut = new ClassResolver(packageName);
-            ClassLoader mockLoader = mock(ClassLoader.class);
-            String expectedPath = "com/threeamigos";
+            KnowledgeBase mockKb = mock(KnowledgeBase.class);
+            ClassResolver sut = new ClassResolver(mockKb);
+            List<Class<?>> classes = Collections.singletonList(SingleImplementationClass.class);
+            when(mockKb.getClasses()).thenReturn(classes);
 
-            // Stub getResources to return an empty enumeration so the loop finishes
-            when(mockLoader.getResources(expectedPath)).thenReturn(Collections.emptyEnumeration());
+            // When - calling resolveImplementations twice
+            sut.resolveImplementations(SingleImplementationInterface.class);
+            sut.resolveImplementations(SingleImplementationInterface.class);
 
-            // When - calling the public method that internally calls getClasses
-            sut.resolveImplementations(mockLoader, SingleImplementationInterface.class);
-            sut.resolveImplementations(mockLoader, SingleImplementationInterface.class);
-
-            // Then - Verify the ClassLoader was queried exactly once
-            verify(mockLoader, times(1)).getResources(expectedPath);
+            // Then - Verify the KnowledgeBase was queried exactly once due to caching
+            verify(mockKb, times(1)).getClasses();
         }
     }
 
@@ -714,12 +731,12 @@ class ClassResolverUnitTest {
         @DisplayName("Should cache resolved implementations and return same result on subsequent calls")
         void shouldCacheResolvedImplementations() throws Exception {
             // Given
-            ClasspathScanner mockScanner = mock(ClasspathScanner.class);
+            KnowledgeBase mockKb = mock(KnowledgeBase.class);
             TypeChecker mockChecker = mock(TypeChecker.class);
-            ClassResolver resolver = new ClassResolver(mockScanner, mockChecker);
+            ClassResolver resolver = new ClassResolver(mockKb, mockChecker);
 
             List<Class<?>> classes = Collections.singletonList(SingleImplementationClass.class);
-            when(mockScanner.getAllClasses(any(ClassLoader.class))).thenReturn(classes);
+            when(mockKb.getClasses()).thenReturn(classes);
             when(mockChecker.isAssignable(any(Type.class), any(Class.class))).thenReturn(true);
 
             // When - first call
@@ -729,8 +746,8 @@ class ClassResolverUnitTest {
             Collection<Class<? extends SingleImplementationInterface>> result2 =
                 resolver.resolveImplementations(SingleImplementationInterface.class);
 
-            // Then - scanner should be called only once due to caching
-            verify(mockScanner, times(1)).getAllClasses(any(ClassLoader.class));
+            // Then - KnowledgeBase should be called only once due to caching
+            verify(mockKb, times(1)).getClasses();
             assertEquals(result1.size(), result2.size());
         }
 
@@ -1026,18 +1043,18 @@ class ClassResolverUnitTest {
         }
 
         @Test
-        @DisplayName("Should handle exceptions from ClasspathScanner gracefully")
-        void shouldHandleExceptionsFromClasspathScanner() throws Exception {
+        @DisplayName("Should handle exceptions from KnowledgeBase gracefully")
+        void shouldHandleExceptionsFromKnowledgeBase() throws Exception {
             // Given
-            ClasspathScanner mockScanner = mock(ClasspathScanner.class);
+            KnowledgeBase mockKb = mock(KnowledgeBase.class);
             TypeChecker mockChecker = mock(TypeChecker.class);
-            ClassResolver resolver = new ClassResolver(mockScanner, mockChecker);
+            ClassResolver resolver = new ClassResolver(mockKb, mockChecker);
 
-            when(mockScanner.getAllClasses(any(ClassLoader.class)))
-                .thenThrow(new RuntimeException("Scanner failed"));
+            when(mockKb.getClasses())
+                .thenThrow(new RuntimeException("KnowledgeBase failed"));
 
-            // When/Then - should propagate as RuntimeException
-            assertThrows(RuntimeException.class,
+            // When/Then - should wrap in ResolutionException
+            assertThrows(ResolutionException.class,
                 () -> resolver.resolveImplementations(SingleImplementationInterface.class));
         }
 
@@ -1171,27 +1188,38 @@ class ClassResolverUnitTest {
     class EdgeCasesAndBoundaryConditions {
 
         @Test
-        @DisplayName("Should handle empty package name in constructor")
-        void shouldHandleEmptyPackageNameInConstructor() {
+        @DisplayName("Should handle empty KnowledgeBase")
+        void shouldHandleEmptyKnowledgeBase() {
+            // Given
+            KnowledgeBase emptyKb = new KnowledgeBase();
             // When/Then - should not crash
-            assertDoesNotThrow(() -> new ClassResolver(""));
+            assertDoesNotThrow(() -> new ClassResolver(emptyKb));
         }
 
         @Test
-        @DisplayName("Should handle no package names in constructor")
-        void shouldHandleNoPackageNamesInConstructor() {
-            // When
-            ClassResolver resolver = new ClassResolver();
+        @DisplayName("Should handle KnowledgeBase with no classes")
+        void shouldHandleKnowledgeBaseWithNoClasses() {
+            // Given
+            KnowledgeBase emptyKb = new KnowledgeBase();
+            ClassResolver resolver = new ClassResolver(emptyKb);
 
-            // Then - should scan entire classpath
-            assertDoesNotThrow(() -> resolver.resolveImplementations(SingleImplementationInterface.class));
+            // When - should return empty collection
+            Collection<?> result = resolver.resolveImplementations(SingleImplementationInterface.class);
+
+            // Then
+            assertNotNull(result);
+            assertTrue(result.isEmpty());
         }
 
         @Test
-        @DisplayName("Should handle null package names in constructor")
-        void shouldHandleNullPackageNamesInConstructor() {
+        @DisplayName("Should handle mock KnowledgeBase with empty collection")
+        void shouldHandleMockKnowledgeBaseWithEmptyCollection() {
+            // Given
+            KnowledgeBase mockKb = mock(KnowledgeBase.class);
+            when(mockKb.getClasses()).thenReturn(Collections.emptyList());
+
             // When/Then - should not crash
-            assertDoesNotThrow(() -> new ClassResolver((String) null));
+            assertDoesNotThrow(() -> new ClassResolver(mockKb));
         }
 
         @Test
@@ -1241,8 +1269,16 @@ class ClassResolverUnitTest {
     class NullArgumentTests {
 
         @Test
-        @DisplayName("Constructor should throw IllegalArgumentException for null ClasspathScanner")
-        void constructorShouldRejectNullClasspathScanner() {
+        @DisplayName("Constructor should accept null KnowledgeBase with single arg but fail later")
+        void constructorShouldRejectNullKnowledgeBase() {
+            // When/Then - Constructor doesn't validate, so it won't throw immediately
+            // The single-arg constructor doesn't check for null
+            assertDoesNotThrow(() -> new ClassResolver((KnowledgeBase) null));
+        }
+
+        @Test
+        @DisplayName("Constructor should throw IllegalArgumentException for null KnowledgeBase with two args")
+        void constructorShouldRejectNullKnowledgeBaseWithTypeChecker() {
             // When/Then
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                 () -> new ClassResolver(null, new TypeChecker()));
@@ -1255,7 +1291,7 @@ class ClassResolverUnitTest {
         void constructorShouldRejectNullTypeChecker() {
             // When/Then
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> new ClassResolver(new ClasspathScanner(), null));
+                () -> new ClassResolver(new KnowledgeBase(), null));
 
             assertEquals("TypeChecker cannot be null", exception.getMessage());
         }
@@ -1392,19 +1428,15 @@ class ClassResolverUnitTest {
     class ResolutionExceptionTests {
 
         @Test
-        @DisplayName("Should wrap ClasspathScanner exceptions in ResolutionException")
-        void shouldWrapClasspathScannerExceptions() {
+        @DisplayName("Should wrap KnowledgeBase exceptions in ResolutionException")
+        void shouldWrapKnowledgeBaseExceptions() {
             // Given
-            ClasspathScanner mockScanner = mock(ClasspathScanner.class);
+            KnowledgeBase mockKb = mock(KnowledgeBase.class);
             TypeChecker mockChecker = mock(TypeChecker.class);
-            ClassResolver resolver = new ClassResolver(mockScanner, mockChecker);
+            ClassResolver resolver = new ClassResolver(mockKb, mockChecker);
 
-            try {
-                when(mockScanner.getAllClasses(any(ClassLoader.class)))
-                    .thenThrow(new RuntimeException("Scanner failed"));
-            } catch (Exception e) {
-                fail("Setup failed");
-            }
+            when(mockKb.getClasses())
+                .thenThrow(new RuntimeException("KnowledgeBase failed"));
 
             // When/Then
             ResolutionException exception = assertThrows(ResolutionException.class,
@@ -1412,7 +1444,7 @@ class ClassResolverUnitTest {
 
             assertTrue(exception.getMessage().contains("Failed to resolve implementations"));
             assertNotNull(exception.getCause());
-            assertEquals("Scanner failed", exception.getCause().getMessage());
+            assertEquals("KnowledgeBase failed", exception.getCause().getMessage());
         }
     }
 

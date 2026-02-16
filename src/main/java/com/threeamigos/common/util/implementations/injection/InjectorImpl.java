@@ -151,6 +151,8 @@ import java.util.stream.Collectors;
  */
 public class InjectorImpl implements Injector {
 
+    private final KnowledgeBase knowledgeBase;
+
     /**
      * Thread-local stack for tracking the current dependency resolution chain. Each thread maintains
      * its own stack to enable concurrent injection while detecting circular dependencies within
@@ -203,7 +205,7 @@ public class InjectorImpl implements Injector {
      */
     public InjectorImpl(final String ... packageNames) {
 
-        KnowledgeBase knowledgeBase = new KnowledgeBase();
+        knowledgeBase = new KnowledgeBase();
         try (ParallelTaskExecutor parallelTaskExecutor = ParallelTaskExecutor.createExecutor()) {
             ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase);
             new ParallelClasspathScanner(
@@ -213,7 +215,7 @@ public class InjectorImpl implements Injector {
             throw new RuntimeException(e);
         }
 
-        this.classResolver = new ClassResolver(packageNames);
+        this.classResolver = new ClassResolver(knowledgeBase);
         registerDefaultScopes();
         addShutdownHook();
     }
@@ -226,6 +228,7 @@ public class InjectorImpl implements Injector {
      * @throws IllegalArgumentException if classResolver is null
      */
     InjectorImpl(final @Nonnull ClassResolver classResolver) {
+        knowledgeBase = new KnowledgeBase();
         if (classResolver == null) {
             throw new IllegalArgumentException("Class resolver cannot be null");
         }

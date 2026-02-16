@@ -22,7 +22,7 @@ class DefaultLiteralUnitTest {
     @DisplayName("equals() should return true for instances of Default")
     void equalsShouldReturnTrueForDefaultInstances() {
         DefaultLiteral literal = new DefaultLiteral();
-        Default otherLiteral = new DefaultLiteral();
+        DefaultLiteral otherLiteral = new DefaultLiteral();
         
         // It should equal itself
         assertEquals(literal, literal);

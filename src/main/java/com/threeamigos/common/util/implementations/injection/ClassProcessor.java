@@ -8,10 +8,12 @@ class ClassProcessor implements ClasspathScannerSink {
 
     private final ParallelTaskExecutor taskExecutor;
     private final KnowledgeBase knowledgeBase;
+    private final JSR330Validator jsr330Validator;
 
     public ClassProcessor(ParallelTaskExecutor taskExecutor, KnowledgeBase knowledgeBase) {
         this.taskExecutor = Objects.requireNonNull(taskExecutor, "taskExecutor cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
+        this.jsr330Validator = new JSR330Validator(knowledgeBase);
     }
 
     public void add(Class<?> clazz) {
@@ -20,7 +22,8 @@ class ClassProcessor implements ClasspathScannerSink {
     }
 
     private void accept(Class<?> clazz) {
-        knowledgeBase.add(clazz);
-        System.out.println(clazz.getName());
+        if (jsr330Validator.isValid(clazz)) {
+            knowledgeBase.add(clazz);
+        }
     }
 }

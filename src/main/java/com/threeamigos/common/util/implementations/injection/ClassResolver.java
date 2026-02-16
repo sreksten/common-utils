@@ -66,7 +66,7 @@ import java.util.stream.Collectors;
  */
 class ClassResolver {
 
-    private final ClasspathScanner classpathScanner;
+    private final KnowledgeBase knowledgeBase;
     private final TypeChecker typeChecker;
     /**
      * Second cache - to avoid scanning the classes multiple times for the same interface or class
@@ -87,26 +87,26 @@ class ClassResolver {
 
     /**
      * Package-private because intended to be used by InjectorImpl only
-     * @param packageNames packages to scan for classes
+     * @param knowledgeBase a KnowledgeBase instance
      */
-    ClassResolver(String ... packageNames) {
-        classpathScanner = new ClasspathScanner(packageNames);
-        typeChecker = new TypeChecker();
+    ClassResolver(@Nonnull KnowledgeBase knowledgeBase) {
+        this.knowledgeBase = knowledgeBase;
+        this.typeChecker = new TypeChecker();
     }
 
     /**
      * Package-private because intended to be used by InjectorImpl only or unit testing
-     * @param classpathScanner a custom ClasspathScanner implementation
+     * @param knowledgeBase a KnowledgeBase instance
      * @param typeChecker a custom TypeChecker implementation
      */
-    ClassResolver(@Nonnull ClasspathScanner classpathScanner, @Nonnull TypeChecker typeChecker) {
-        if (classpathScanner == null) {
+    ClassResolver(@Nonnull KnowledgeBase knowledgeBase, @Nonnull TypeChecker typeChecker) {
+        if (knowledgeBase == null) {
             throw new IllegalArgumentException("ClasspathScanner cannot be null");
         }
         if (typeChecker == null) {
             throw new IllegalArgumentException("TypeChecker cannot be null");
         }
-        this.classpathScanner = classpathScanner;
+        this.knowledgeBase = knowledgeBase;
         this.typeChecker = typeChecker;
     }
 
@@ -299,7 +299,7 @@ class ClassResolver {
         Collection<Class<?>> cached = resolvedClasses.computeIfAbsent(typeToResolve, () -> {
             List<Class<?>> candidates = new ArrayList<>();
             try {
-                List<Class<?>> allClasses = classpathScanner.getAllClasses(classLoader);
+                Collection<Class<?>> allClasses = knowledgeBase.getClasses();
                 for (Class<?> candidate : allClasses) {
                     if (isNotInterfaceOrAbstract(candidate) && typeChecker.isAssignable(typeToResolve, candidate)) {
                         candidates.add(candidate);

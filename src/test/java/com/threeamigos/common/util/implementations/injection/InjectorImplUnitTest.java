@@ -1862,7 +1862,7 @@ class InjectorImplUnitTest {
             @DisplayName("If an exception is thrown, isUnsatisfied() is true")
             void ifExceptionThrownIsUnsatisfiedIsTrue() {
                 // Given
-                ClassResolver mockResolver = spy(new ClassResolver());
+                ClassResolver mockResolver = spy(new ClassResolver(new KnowledgeBase()));
                 // resolveImplementations throws an exception
                 // Use RuntimeException instead of checked Exception to avoid Mockito validation error
                 doThrow(new RuntimeException("Test exception"))
@@ -1914,7 +1914,7 @@ class InjectorImplUnitTest {
             @DisplayName("If an exception is thrown, isAmbiguous() is false")
             void ifExceptionThrownIsAmbiguousIsFalse() {
                 // Given
-                ClassResolver mockResolver = spy(new ClassResolver());
+                ClassResolver mockResolver = spy(new ClassResolver(new KnowledgeBase()));
                 // resolveImplementations throws an exception
                 // Use RuntimeException instead of checked Exception to avoid Mockito validation error
                 doThrow(new RuntimeException("Test exception"))
