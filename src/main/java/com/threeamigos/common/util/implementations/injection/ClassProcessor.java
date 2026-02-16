@@ -8,12 +8,12 @@ class ClassProcessor implements ClasspathScannerSink {
 
     private final ParallelTaskExecutor taskExecutor;
     private final KnowledgeBase knowledgeBase;
-    private final JSR330Validator jsr330Validator;
+    private final CDI41BeanValidator cdi41BeanValidator;
 
     public ClassProcessor(ParallelTaskExecutor taskExecutor, KnowledgeBase knowledgeBase) {
         this.taskExecutor = Objects.requireNonNull(taskExecutor, "taskExecutor cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
-        this.jsr330Validator = new JSR330Validator(knowledgeBase);
+        this.cdi41BeanValidator = new CDI41BeanValidator(knowledgeBase);
     }
 
     public void add(Class<?> clazz) {
@@ -22,8 +22,10 @@ class ClassProcessor implements ClasspathScannerSink {
     }
 
     private void accept(Class<?> clazz) {
-        if (jsr330Validator.isValid(clazz)) {
-            knowledgeBase.add(clazz);
-        }
+        // CDI41BeanValidator always registers beans (even invalid ones)
+        // and marks them with hasValidationErrors flag
+        cdi41BeanValidator.validateAndRegister(clazz);
+        // Always add to knowledge base for class resolution
+        knowledgeBase.add(clazz);
     }
 }

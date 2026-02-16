@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import jakarta.enterprise.inject.Vetoed;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -45,7 +47,12 @@ import java.util.jar.JarFile;
  *   <li>META-INF entries</li>
  *   <li>module-info.class files</li>
  *   <li>Classes that cannot be loaded (missing dependencies)</li>
+ *   <li>Classes in packages annotated with @Vetoed (CDI 4.1)</li>
  * </ul>
+ *
+ * <p><b>@Vetoed Package Support (CDI 4.1):</b>
+ * Packages can be vetoed by annotating their {@code package-info.java} with {@code @Vetoed}.
+ * All classes in vetoed packages and their subpackages are automatically excluded from bean discovery.
  *
  * <p>Checked and commented with Claude.
  *
@@ -56,6 +63,7 @@ class ClasspathScanner {
     private static final String CLASS_EXTENSION = ".class";
     private static final int CLASS_EXTENSION_LENGTH = 6;
     private static final String MODULE_INFO_CLASS = "module-info.class";
+    private static final String PACKAGE_INFO_CLASS = "package-info.class";
     private static final String META_INF = "META-INF";
     private static final String ROOT_PACKAGE = "";
     private static final String FILE_PROTOCOL = "file";
@@ -70,6 +78,12 @@ class ClasspathScanner {
     private List<Class<?>> classesCache = null;
 
     private ClassLoader cachedClassLoader;
+
+    /**
+     * Cache of vetoed packages.
+     * Key: package name, Value: true if vetoed
+     */
+    private final Map<String, Boolean> vetoedPackages = new HashMap<>();
 
     ClasspathScanner(String ... packageNames) {
         for (String pkg : packageNames) {
@@ -126,6 +140,11 @@ class ClasspathScanner {
             return Collections.emptyList();
         }
 
+        // Check if package is vetoed (skip entire package and subpackages)
+        if (isPackageVetoed(classLoader, packageName)) {
+            return Collections.emptyList();
+        }
+
         List<Class<?>> classes = new ArrayList<>();
         File[] files = directory.listFiles();
 
@@ -139,7 +158,7 @@ class ClasspathScanner {
             String prefix = packageName.isEmpty() ? "" : packageName + ".";
             if (file.isDirectory()) {
                 classes.addAll(findClassesInDirectory(classLoader, file, prefix + file.getName()));
-            } else if (file.getName().endsWith(CLASS_EXTENSION)) {
+            } else if (file.getName().endsWith(CLASS_EXTENSION) && !file.getName().equals(PACKAGE_INFO_CLASS)) {
                 String className = prefix + file.getName().substring(0, file.getName().length() - CLASS_EXTENSION_LENGTH);
                 Class<?> clazz = Class.forName(className, false, classLoader);
                 classes.add(clazz);
@@ -169,8 +188,16 @@ class ClasspathScanner {
                 JarEntry entry = entries.nextElement();
                 String name = entry.getName();
                 if (!name.startsWith(META_INF) && name.startsWith(packagePath) &&
-                        name.endsWith(CLASS_EXTENSION) && !name.endsWith(MODULE_INFO_CLASS)) {
+                        name.endsWith(CLASS_EXTENSION) && !name.endsWith(MODULE_INFO_CLASS) &&
+                        !name.endsWith(PACKAGE_INFO_CLASS)) {
                     String className = name.replace('/', '.').substring(0, name.length() - CLASS_EXTENSION_LENGTH);
+
+                    // Extract package from class name and check if vetoed
+                    String classPackage = getPackageFromClassName(className);
+                    if (isPackageVetoed(classLoader, classPackage)) {
+                        continue; // Skip classes in vetoed packages
+                    }
+
                     try {
                         classes.add(Class.forName(className, false, classLoader));
                     } catch (NoClassDefFoundError | ClassNotFoundException e) {
@@ -182,5 +209,80 @@ class ClasspathScanner {
             throw new IOException("Failed to read JAR file: " + jarFilePath, e);
         }
         return classes;
+    }
+
+    /**
+     * Checks if a package is vetoed by examining its package-info class.
+     * Results are cached to avoid repeated reflection calls.
+     *
+     * @param classLoader the class loader to use
+     * @param packageName the package name to check
+     * @return true if the package (or any parent package) is vetoed
+     */
+    private boolean isPackageVetoed(ClassLoader classLoader, String packageName) {
+        if (packageName == null || packageName.isEmpty()) {
+            return false;
+        }
+
+        // Check cache first
+        Boolean cached = vetoedPackages.get(packageName);
+        if (cached != null) {
+            return cached;
+        }
+
+        // Check if this package is directly vetoed
+        boolean vetoed = checkPackageAnnotation(classLoader, packageName);
+
+        // If not directly vetoed, check parent packages (CDI 4.1: @Vetoed on parent applies to children)
+        if (!vetoed) {
+            String parentPackage = getParentPackage(packageName);
+            if (parentPackage != null) {
+                vetoed = isPackageVetoed(classLoader, parentPackage);
+            }
+        }
+
+        // Cache result
+        vetoedPackages.put(packageName, vetoed);
+        return vetoed;
+    }
+
+    /**
+     * Checks if a specific package has @Vetoed annotation.
+     *
+     * @param classLoader the class loader to use
+     * @param packageName the package name to check
+     * @return true if the package-info is annotated with @Vetoed
+     */
+    private boolean checkPackageAnnotation(ClassLoader classLoader, String packageName) {
+        try {
+            String packageInfoClass = packageName + ".package-info";
+            Class<?> pkgInfo = Class.forName(packageInfoClass, false, classLoader);
+            return pkgInfo.isAnnotationPresent(Vetoed.class);
+        } catch (ClassNotFoundException e) {
+            // No package-info.java exists - package is not vetoed
+            return false;
+        }
+    }
+
+    /**
+     * Extracts the parent package name from a given package.
+     *
+     * @param packageName the package name
+     * @return the parent package name, or null if no parent exists
+     */
+    private String getParentPackage(String packageName) {
+        int lastDot = packageName.lastIndexOf('.');
+        return lastDot > 0 ? packageName.substring(0, lastDot) : null;
+    }
+
+    /**
+     * Extracts the package name from a fully qualified class name.
+     *
+     * @param className the fully qualified class name
+     * @return the package name, or empty string if in default package
+     */
+    private String getPackageFromClassName(String className) {
+        int lastDot = className.lastIndexOf('.');
+        return lastDot > 0 ? className.substring(0, lastDot) : "";
     }
 }

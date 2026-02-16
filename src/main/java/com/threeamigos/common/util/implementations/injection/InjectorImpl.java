@@ -215,6 +215,36 @@ public class InjectorImpl implements Injector {
             throw new RuntimeException(e);
         }
 
+        // After scanning completes, validate all injection points
+        CDI41InjectionValidator injectionValidator = new CDI41InjectionValidator(knowledgeBase);
+        injectionValidator.validateAllInjectionPoints();
+
+        // Check if there are any errors that would prevent application startup
+        if (knowledgeBase.hasErrors()) {
+            StringBuilder errorReport = new StringBuilder();
+            errorReport.append("Application cannot start due to validation/injection errors:\n\n");
+
+            if (!knowledgeBase.getDefinitionErrors().isEmpty()) {
+                errorReport.append("=== Definition Errors ===\n");
+                knowledgeBase.getDefinitionErrors().forEach(e -> errorReport.append("  - ").append(e).append("\n"));
+                errorReport.append("\n");
+            }
+
+            if (!knowledgeBase.getInjectionErrors().isEmpty()) {
+                errorReport.append("=== Injection Errors ===\n");
+                knowledgeBase.getInjectionErrors().forEach(e -> errorReport.append("  - ").append(e).append("\n"));
+                errorReport.append("\n");
+            }
+
+            if (!knowledgeBase.getErrors().isEmpty()) {
+                errorReport.append("=== General Errors ===\n");
+                knowledgeBase.getErrors().forEach(e -> errorReport.append("  - ").append(e).append("\n"));
+                errorReport.append("\n");
+            }
+
+            throw new RuntimeException(errorReport.toString());
+        }
+
         this.classResolver = new ClassResolver(knowledgeBase);
         registerDefaultScopes();
         addShutdownHook();
