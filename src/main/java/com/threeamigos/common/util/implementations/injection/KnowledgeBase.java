@@ -9,12 +9,20 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-class KnowledgeBase {
+public class KnowledgeBase {
 
     private final Collection<Class<?>> classes = new ConcurrentLinkedQueue<>();
     private final Collection<Bean<?>> beans = new ConcurrentLinkedQueue<>();
 
     private final Map<Class<?>, Constructor<?>> constructorsMap = new ConcurrentHashMap<>();
+
+    // Producer/Disposer tracking
+    // ProducerBeans are also added to the beans collection, but we keep separate reference for convenience
+    private final Collection<ProducerBean<?>> producerBeans = new ConcurrentLinkedQueue<>();
+
+    // Interceptor/Decorator tracking
+    private final Collection<Class<?>> interceptors = new ConcurrentLinkedQueue<>();
+    private final Collection<Class<?>> decorators = new ConcurrentLinkedQueue<>();
 
     private final List<String> warnings = new ArrayList<>();
     private final List<String> errors = new ArrayList<>();
@@ -119,5 +127,41 @@ class KnowledgeBase {
             }
         }
         return validBeans;
+    }
+
+    // Producer/Disposer methods
+
+    /**
+     * Adds a ProducerBean to the knowledge base.
+     * ProducerBeans are also added to the general beans collection.
+     */
+    void addProducerBean(ProducerBean<?> producerBean) {
+        producerBeans.add(producerBean);
+        beans.add(producerBean); // Also add to general bean collection
+    }
+
+    /**
+     * Returns all producer beans (convenience method).
+     */
+    Collection<ProducerBean<?>> getProducerBeans() {
+        return producerBeans;
+    }
+
+    // Interceptor/Decorator methods
+
+    void addInterceptor(Class<?> interceptorClass) {
+        interceptors.add(interceptorClass);
+    }
+
+    Collection<Class<?>> getInterceptors() {
+        return interceptors;
+    }
+
+    void addDecorator(Class<?> decoratorClass) {
+        decorators.add(decoratorClass);
+    }
+
+    Collection<Class<?>> getDecorators() {
+        return decorators;
     }
 }

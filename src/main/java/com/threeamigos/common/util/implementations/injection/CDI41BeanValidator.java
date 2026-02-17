@@ -1,6 +1,9 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Priority;
+import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Inject;
@@ -121,6 +124,8 @@ public class CDI41BeanValidator {
 
             if (produces) {
                 valid &= validateProducerField(field);
+                // Create and register ProducerBean for this producer field
+                createAndRegisterProducerBean(clazz, null, field);
             }
 
             // Disallow illegal combos proactively
@@ -133,6 +138,7 @@ public class CDI41BeanValidator {
         for (Method method : clazz.getDeclaredMethods()) {
             boolean inject = hasAnnotation(method, Inject.class);
             boolean produces = hasAnnotation(method, Produces.class);
+            boolean disposes = hasDisposesParameter(method);
 
             if (inject) {
                 hasInjectionPoints = true;
@@ -141,6 +147,14 @@ public class CDI41BeanValidator {
 
             if (produces) {
                 valid &= validateProducerMethod(method);
+                // Create and register ProducerBean for this producer method
+                createAndRegisterProducerBean(clazz, method, null);
+            }
+
+            if (disposes) {
+                // Disposers will be linked to ProducerBeans after all beans are created
+                // Store disposer info for later processing
+                // (handled in a separate pass after all producers are registered)
             }
 
             if (inject && produces) {
@@ -161,29 +175,25 @@ public class CDI41BeanValidator {
             }
         }
 
-        // 6) Check if this is an alternative bean and if it's properly enabled
-        boolean alternative = hasAnnotation(clazz, Alternative.class);
-        boolean alternativeEnabled = false;
+        // 6) Check for @Interceptor and @Decorator (not managed beans)
+        boolean isInterceptor = hasAnnotation(clazz, Interceptor.class);
+        boolean isDecorator = hasAnnotation(clazz, Decorator.class);
 
-        if (alternative) {
-            // CDI 4.1 Section 5.1.3: Alternatives must be enabled via beans.xml OR @Priority
-            // Since we don't support beans.xml, alternatives MUST have @Priority to be enabled
-            Priority priority = clazz.getAnnotation(Priority.class);
-
-            if (priority != null) {
-                // Alternative is properly enabled with @Priority
-                alternativeEnabled = true;
-            } else {
-                // Alternative without @Priority is NOT enabled - log warning and skip
-                knowledgeBase.addError(
-                    "Alternative bean " + clazz.getName() + " is not enabled. " +
-                    "Without beans.xml support, alternatives must have @Priority annotation. " +
-                    "Add @Priority(value) to enable this alternative, or remove @Alternative if not needed."
-                );
-                // Return null - this bean should not be registered as it's not enabled
-                return null;
-            }
+        if (isInterceptor) {
+            knowledgeBase.addInterceptor(clazz);
+            // Interceptors are not managed beans - return null (no bean to register)
+            return null;
         }
+
+        if (isDecorator) {
+            knowledgeBase.addDecorator(clazz);
+            // Decorators are not managed beans - return null (no bean to register)
+            return null;
+        }
+
+        // 7) Check if this is an alternative bean and if it's properly enabled
+        boolean alternative = hasAnnotation(clazz, Alternative.class);
+        boolean alternativeEnabled = isAlternativeEnabled(clazz, alternative);
 
         // 7) Build and register Bean (even if invalid, to track all beans)
         // Note: Only alternatives with @Priority reach this point
@@ -201,11 +211,13 @@ public class CDI41BeanValidator {
         bean.setTypes(extractBeanTypes(clazz));
         bean.setStereotypes(extractBeanStereotypes(clazz));
 
-        // Minimal injection point collection (best-effort, avoids hard dependency on a full CDI SPI implementation)
-        // If InjectionPointImpl exists and you want richer metadata later, this is the place to add it.
+        // Populate injection metadata for bean creation
+        populateInjectionMetadata(bean, clazz);
+
+        // Collect injection points with real metadata so CDI41InjectionValidator can resolve dependencies
         for (Field field : clazz.getDeclaredFields()) {
             if (hasAnnotation(field, Inject.class)) {
-                InjectionPoint ip = tryCreateInjectionPoint(field);
+                InjectionPoint ip = tryCreateInjectionPoint(field, bean);
                 if (ip != null) {
                     bean.addInjectionPoint(ip);
                 }
@@ -214,7 +226,7 @@ public class CDI41BeanValidator {
         for (Method method : clazz.getDeclaredMethods()) {
             if (hasAnnotation(method, Inject.class)) {
                 for (Parameter p : method.getParameters()) {
-                    InjectionPoint ip = tryCreateInjectionPoint(p);
+                    InjectionPoint ip = tryCreateInjectionPoint(p, bean);
                     if (ip != null) {
                         bean.addInjectionPoint(ip);
                     }
@@ -224,7 +236,7 @@ public class CDI41BeanValidator {
         for (Constructor<?> c : clazz.getDeclaredConstructors()) {
             if (hasAnnotation(c, Inject.class)) {
                 for (Parameter p : c.getParameters()) {
-                    InjectionPoint ip = tryCreateInjectionPoint(p);
+                    InjectionPoint ip = tryCreateInjectionPoint(p, bean);
                     if (ip != null) {
                         bean.addInjectionPoint(ip);
                     }
@@ -261,22 +273,30 @@ public class CDI41BeanValidator {
     }
 
     private Set<Annotation> extractBeanQualifiers(Class<?> clazz) {
-        // Minimal, practical approach:
+        // CDI 4.1 approach:
         // - Collect qualifier annotations from the class
-        // - If none exist, add @Default
+        // - If no qualifiers exist (other than @Named), add @Default
+        // - @Named is a special qualifier that doesn't replace @Default
         // - Always add @Any (CDI built-in)
         Set<Annotation> result = new HashSet<>();
+        boolean hasNonNamedQualifier = false;
 
         for (Annotation a : clazz.getAnnotations()) {
             if (isQualifierAnnotationType(a.annotationType())) {
                 result.add(a);
+                // Check if this is a qualifier other than @Named
+                if (!a.annotationType().equals(Named.class)) {
+                    hasNonNamedQualifier = true;
+                }
             }
         }
 
-        if (result.isEmpty()) {
+        // Add @Default if no qualifiers (other than @Named) exist
+        if (!hasNonNamedQualifier) {
             result.add(new DefaultLiteral());
         }
 
+        // Always add @Any
         result.add(new AnyLiteral());
 
         return result;
@@ -580,6 +600,25 @@ public class CDI41BeanValidator {
         return false;
     }
 
+    /**
+     * CDI 4.1 alternative enabling helper usable for bean classes and producer members.
+     */
+    private boolean isAlternativeEnabled(AnnotatedElement element, boolean annotatedAlternative) {
+        if (!annotatedAlternative) {
+            return false;
+        }
+
+        Priority priority = element.getAnnotation(Priority.class);
+        if (priority != null) {
+            return true; // enabled by @Priority
+        }
+
+        knowledgeBase.addError(
+                "Alternative " + element + " is not enabled. Without beans.xml support, alternatives must declare @Priority."
+        );
+        return false;
+    }
+
     // -----------------------
     // Type / annotation checks
     // -----------------------
@@ -708,35 +747,30 @@ public class CDI41BeanValidator {
     // -----------------------
 
     private boolean isCandidateBeanClass(Class<?> clazz) {
-        // Conservative: treat a class as "candidate" if it has CDI-relevant annotations (scope, inject, produces, named, alternative, stereotype)
-        // Otherwise, we return false to avoid logging errors for random classes on the classpath.
-        if (clazz == null) return false;
+        // CDI 4.1 annotated discovery: a bean-defining annotation is required in an implicit archive.
+        // We therefore accept only true bean-defining annotations and skip plain @Inject-only classes.
+        if (clazz == null || isVetoed(clazz)) return false;
 
-        if (isVetoed(clazz)) return false;
-
-        if (hasAnnotation(clazz, Inject.class)
-                || hasAnnotation(clazz, Produces.class)
-                || hasAnnotation(clazz, Named.class)
-                || hasAnnotation(clazz, Alternative.class)
-                || hasAnnotation(clazz, Stereotype.class)
-                || hasAnnotation(clazz, Decorator.class)
-                || hasAnnotation(clazz, Interceptor.class)) {
+        // Bean-defining annotations per CDI spec
+        if (hasAnnotation(clazz, ApplicationScoped.class) ||
+            hasAnnotation(clazz, SessionScoped.class) ||
+            hasAnnotation(clazz, RequestScoped.class) ||
+            hasAnnotation(clazz, ConversationScoped.class) ||
+            hasAnnotation(clazz, Dependent.class) ||
+            hasAnnotation(clazz, jakarta.inject.Singleton.class) ||
+            hasAnnotation(clazz, jakarta.inject.Singleton.class) ||
+            hasAnnotation(clazz, Interceptor.class) ||
+            hasAnnotation(clazz, Decorator.class) ||
+            hasAnnotation(clazz, Alternative.class) ||
+            hasAnnotation(clazz, Stereotype.class)) {
             return true;
         }
 
-        // scope presence makes it a candidate
+        // A scope meta-annotated type also counts
         for (Annotation a : clazz.getAnnotations()) {
             if (isScopeAnnotationType(a.annotationType())) {
                 return true;
             }
-        }
-
-        // having injection points/producers makes it a candidate
-        for (Field f : clazz.getDeclaredFields()) {
-            if (hasAnnotation(f, Inject.class) || hasAnnotation(f, Produces.class)) return true;
-        }
-        for (Method m : clazz.getDeclaredMethods()) {
-            if (hasAnnotation(m, Inject.class) || hasAnnotation(m, Produces.class)) return true;
         }
 
         return false;
@@ -791,35 +825,289 @@ public class CDI41BeanValidator {
         return annotationType.isAnnotationPresent(metaAnnotationType);
     }
 
-    // -----------------------
-    // InjectionPoint best-effort creation
-    // -----------------------
+    /**
+     * Creates and registers a ProducerBean for a producer method or field.
+     *
+     * @param declaringClass the class containing the producer
+     * @param producerMethod the producer method (null if this is a field producer)
+     * @param producerField the producer field (null if this is a method producer)
+     */
+    private void createAndRegisterProducerBean(Class<?> declaringClass, Method producerMethod, Field producerField) {
+        AnnotatedElement element = (producerMethod != null) ? producerMethod : producerField;
 
-    private InjectionPoint tryCreateInjectionPoint(AnnotatedElement element) {
-        // This project has InjectionPointImpl, but we keep this validator decoupled:
-        // return null if we can't safely construct it without assuming a constructor signature.
-        try {
-            Class<?> ipImpl = Class.forName("com.threeamigos.common.util.implementations.injection.InjectionPointImpl");
-            // Try common constructors reflectively (Field) or (Parameter)
+        // Determine alternative status at element level; require @Priority to enable in beans.xml-less mode
+        boolean annotatedAlternative = hasAnnotation(declaringClass, Alternative.class) || hasAnnotation(element, Alternative.class);
+        boolean alternativeEnabled = isAlternativeEnabled(element, annotatedAlternative);
+
+        // Create ProducerBean
+        ProducerBean<?> producerBean;
+        if (producerMethod != null) {
+            producerBean = new ProducerBean<>(declaringClass, producerMethod, alternativeEnabled);
+
+            // Set bean attributes from producer method annotations
+            producerBean.setName(extractProducerName(producerMethod));
+            producerBean.setQualifiers(extractQualifiers(producerMethod));
+            producerBean.setScope(extractScope(producerMethod, Dependent.class));
+            producerBean.setTypes(extractProducerTypes(producerMethod.getGenericReturnType()));
+        } else if (producerField != null) {
+            producerBean = new ProducerBean<>(declaringClass, producerField, alternativeEnabled);
+
+            // Set bean attributes from producer field annotations
+            producerBean.setName(extractProducerName(producerField));
+            producerBean.setQualifiers(extractQualifiers(producerField));
+            producerBean.setScope(extractScope(producerField, Dependent.class));
+            producerBean.setTypes(extractProducerTypes(producerField.getGenericType()));
+        } else {
+            throw new IllegalArgumentException("Either producerMethod or producerField must be non-null");
+        }
+
+        // Find and set disposer method if present
+        if (producerMethod != null) {
+            Method disposer = findDisposerForProducer(declaringClass, producerMethod);
+            if (disposer != null) {
+                producerBean.setDisposerMethod(disposer);
+            }
+        }
+
+        // Capture @Priority for enabled alternatives (used during resolution ordering)
+        Priority priority = element.getAnnotation(Priority.class);
+        if (priority != null) {
+            producerBean.setPriority(priority.value());
+        }
+
+        // Register in KnowledgeBase
+        knowledgeBase.addProducerBean(producerBean);
+    }
+
+    /**
+     * Extracts producer name from @Named annotation, or returns empty string.
+     */
+    private String extractProducerName(AnnotatedElement element) {
+        Named named = element.getAnnotation(Named.class);
+        if (named != null) {
+            String value = named.value();
+            if (value != null && !value.isEmpty()) {
+                return value;
+            }
+            // For fields/methods, default name is the member name
             if (element instanceof Field) {
-                Field f = (Field) element;
-                for (Constructor<?> c : ipImpl.getDeclaredConstructors()) {
-                    Class<?>[] p = c.getParameterTypes();
-                    if (p.length == 1 && p[0].equals(Field.class)) {
-                        c.setAccessible(true);
-                        return (InjectionPoint) c.newInstance(f);
+                return ((Field) element).getName();
+            } else if (element instanceof Method) {
+                String methodName = ((Method) element).getName();
+                // Strip "get" prefix if present (JavaBeans convention)
+                if (methodName.startsWith("get") && methodName.length() > 3) {
+                    return Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
+                }
+                return methodName;
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Extracts qualifiers from an annotated element.
+     */
+    private Set<Annotation> extractQualifiers(AnnotatedElement element) {
+        Set<Annotation> qualifiers = new HashSet<>();
+        for (Annotation ann : element.getAnnotations()) {
+            if (hasMetaAnnotation(ann.annotationType(), Qualifier.class)) {
+                qualifiers.add(ann);
+            }
+        }
+        // Add @Default if no qualifiers present
+        if (qualifiers.isEmpty()) {
+            qualifiers.add(new DefaultLiteral());
+        }
+        // Always add @Any
+        qualifiers.add(new AnyLiteral());
+        return qualifiers;
+    }
+
+    /**
+     * Extracts scope from an annotated element, or returns default scope.
+     */
+    private Class<? extends Annotation> extractScope(AnnotatedElement element, Class<? extends Annotation> defaultScope) {
+        for (Annotation ann : element.getAnnotations()) {
+            if (hasMetaAnnotation(ann.annotationType(), Scope.class) ||
+                hasMetaAnnotation(ann.annotationType(), jakarta.inject.Scope.class)) {
+                return ann.annotationType();
+            }
+        }
+        return defaultScope;
+    }
+
+    /**
+     * Extracts bean types for a producer (its return/field type and supertypes).
+     */
+    private Set<Type> extractProducerTypes(Type producerType) {
+        // Build full bean types per CDI: raw type, all superclasses, all interfaces
+        Set<Type> types = new LinkedHashSet<>();
+        Class<?> raw = RawTypeExtractor.getRawType(producerType);
+
+        // Add hierarchy
+        Class<?> c = raw;
+        while (c != null && c != Object.class) {
+            types.add(c);
+            types.addAll(Arrays.asList(c.getGenericInterfaces()));
+            c = c.getSuperclass();
+        }
+
+        // Include the declared generic type itself (keeps parameterization)
+        types.add(producerType);
+        types.add(Object.class);
+        return types;
+    }
+
+    /**
+     * Finds the disposer method for a given producer method.
+     */
+    private Method findDisposerForProducer(Class<?> clazz, Method producerMethod) {
+        Class<?> producedType = producerMethod.getReturnType();
+
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (hasDisposesParameter(method)) {
+                // Check if disposer parameter type matches producer return type
+                for (Parameter param : method.getParameters()) {
+                    if (hasAnnotation(param, Disposes.class)) {
+                        if (param.getType().equals(producedType)) {
+                            return method;
+                        }
                     }
                 }
             }
-            if (element instanceof Parameter) {
-                Parameter p0 = (Parameter)element;
-                for (Constructor<?> c : ipImpl.getDeclaredConstructors()) {
-                    Class<?>[] p = c.getParameterTypes();
-                    if (p.length == 1 && p[0].equals(Parameter.class)) {
-                        c.setAccessible(true);
-                        return (InjectionPoint) c.newInstance(p0);
-                    }
+        }
+        return null;
+    }
+
+    /**
+     * Checks if a method has a parameter annotated with @Disposes.
+     */
+    private boolean hasDisposesParameter(Method method) {
+        for (Parameter param : method.getParameters()) {
+            if (hasAnnotation(param, Disposes.class)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // -----------------------
+    /**
+     * Populates injection metadata in BeanImpl for use during bean creation.
+     * This includes:
+     * - @Inject constructor (or no-args constructor)
+     * - @Inject fields (from entire class hierarchy)
+     * - @Inject methods (from entire class hierarchy, excluding overridden)
+     * - @PostConstruct method
+     * - @PreDestroy method
+     */
+    private <T> void populateInjectionMetadata(BeanImpl<T> bean, Class<T> clazz) {
+        // 1. Find and set constructor per JSR-330 rules (only in the bean class itself)
+        // - If there's an @Inject constructor, use it
+        // - Otherwise, leave null (BeanImpl will use no-args constructor)
+        Constructor<T> injectConstructor = null;
+
+        // Look for @Inject constructor
+        for (Constructor<?> c : clazz.getDeclaredConstructors()) {
+            if (hasAnnotation(c, Inject.class)) {
+                @SuppressWarnings("unchecked")
+                Constructor<T> typedConstructor = (Constructor<T>) c;
+                injectConstructor = typedConstructor;
+                break;
+            }
+        }
+
+        bean.setInjectConstructor(injectConstructor);
+
+        // 2. Collect @Inject fields from entire hierarchy (superclass → subclass)
+        // Fields are inherited, so we need to collect from all classes in hierarchy
+        Class<?> currentClass = clazz;
+        while (currentClass != null && currentClass != Object.class) {
+            for (Field field : currentClass.getDeclaredFields()) {
+                if (hasAnnotation(field, Inject.class)) {
+                    bean.addInjectField(field);
                 }
+            }
+            currentClass = currentClass.getSuperclass();
+        }
+
+        // 3. Collect @Inject methods from entire hierarchy (superclass → subclass)
+        // Methods can be inherited and overridden, so collect from all classes
+        currentClass = clazz;
+        while (currentClass != null && currentClass != Object.class) {
+            for (Method method : currentClass.getDeclaredMethods()) {
+                if (hasAnnotation(method, Inject.class)) {
+                    bean.addInjectMethod(method);
+                }
+            }
+            currentClass = currentClass.getSuperclass();
+        }
+
+        // 4. Find @PostConstruct method (searches hierarchy automatically)
+        // CDI 4.1: At most one @PostConstruct method per class
+        Method postConstruct = findLifecycleMethod(clazz, PostConstruct.class);
+        if (postConstruct != null) {
+            bean.setPostConstructMethod(postConstruct);
+        }
+
+        // 5. Find @PreDestroy method (searches hierarchy automatically)
+        // CDI 4.1: At most one @PreDestroy method per class
+        Method preDestroy = findLifecycleMethod(clazz, PreDestroy.class);
+        if (preDestroy != null) {
+            bean.setPreDestroyMethod(preDestroy);
+        }
+    }
+
+    /**
+     * Finds a lifecycle method (@PostConstruct or @PreDestroy) in the class hierarchy.
+     * Returns the first method found with the specified annotation.
+     *
+     * @param clazz the bean class
+     * @param lifecycleAnnotation the lifecycle annotation class (@PostConstruct or @PreDestroy)
+     * @return the lifecycle method, or null if not found
+     */
+    private Method findLifecycleMethod(Class<?> clazz, Class<? extends Annotation> lifecycleAnnotation) {
+        // Search in current class and superclasses
+        Class<?> currentClass = clazz;
+        while (currentClass != null && currentClass != Object.class) {
+            for (Method method : currentClass.getDeclaredMethods()) {
+                if (hasAnnotation(method, lifecycleAnnotation)) {
+                    // Validate lifecycle method rules:
+                    // - Must have no parameters
+                    // - Must not be static
+                    // - Return type is ignored (can be void or any type)
+                    if (method.getParameterCount() != 0) {
+                        knowledgeBase.addDefinitionError(
+                            fmtMethod(method) + ": " + lifecycleAnnotation.getSimpleName() +
+                            " method must have no parameters"
+                        );
+                        return null;
+                    }
+                    if (Modifier.isStatic(method.getModifiers())) {
+                        knowledgeBase.addDefinitionError(
+                            fmtMethod(method) + ": " + lifecycleAnnotation.getSimpleName() +
+                            " method must not be static"
+                        );
+                        return null;
+                    }
+                    return method;
+                }
+            }
+            currentClass = currentClass.getSuperclass();
+        }
+        return null;
+    }
+
+    // InjectionPoint best-effort creation
+    // -----------------------
+
+    private InjectionPoint tryCreateInjectionPoint(AnnotatedElement element, Bean<?> owningBean) {
+        try {
+            if (element instanceof Field) {
+                return new InjectionPointImpl<>((Field) element, owningBean);
+            }
+            if (element instanceof Parameter) {
+                return new InjectionPointImpl<>((Parameter) element, owningBean);
             }
         } catch (Throwable ignored) {
             // Best-effort only. Bean can still be registered without concrete injection point objects.

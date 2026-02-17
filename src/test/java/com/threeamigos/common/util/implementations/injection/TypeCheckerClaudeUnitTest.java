@@ -4,8 +4,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import javax.enterprise.inject.spi.DefinitionException;
-import javax.enterprise.util.TypeLiteral;
+import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.util.TypeLiteral;
 import java.io.Serializable;
 import java.lang.reflect.*;
 import java.util.*;

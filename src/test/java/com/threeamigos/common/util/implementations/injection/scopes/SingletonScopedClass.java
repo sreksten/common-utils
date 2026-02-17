@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 @Singleton
 public class SingletonScopedClass {

@@ -4,9 +4,14 @@ import com.threeamigos.common.util.implementations.collections.Cache;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-import javax.enterprise.inject.*;
-import javax.inject.Named;
-import javax.inject.Qualifier;
+import jakarta.inject.Named;
+import jakarta.inject.Qualifier;
+import jakarta.enterprise.inject.AmbiguousResolutionException;
+import jakarta.enterprise.inject.UnsatisfiedResolutionException;
+import jakarta.enterprise.inject.Alternative;
+import jakarta.enterprise.inject.Default;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.ResolutionException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
@@ -59,9 +64,9 @@ import java.util.stream.Collectors;
  * <p>Checked and commented with Claude.
  *
  * @author Stefano Reksten
- * @see javax.inject.Named
- * @see javax.enterprise.inject.Alternative
- * @see javax.inject.Qualifier
+ * @see jakarta.inject.Named
+ * @see jakarta.enterprise.inject.Alternative
+ * @see jakarta.inject.Qualifier
  * @see Cache
  */
 class ClassResolver {
@@ -142,7 +147,7 @@ class ClassResolver {
         if (alternativeClass == null) {
             throw new IllegalArgumentException("alternativeClass cannot be null");
         }
-        if (!alternativeClass.isAnnotationPresent(Alternative.class)) {
+        if (!isAlternativeAnnotationPresent(alternativeClass)) {
             throw new IllegalArgumentException(alternativeClass.getName() + " is not annotated with @Alternative");
         }
         enabledAlternatives.add(alternativeClass);
@@ -205,7 +210,7 @@ class ClassResolver {
         // If we have a concrete class and the qualifier is Default, return that class.
         boolean isDefault = qualifiers == null ||
                 qualifiers.isEmpty() ||
-                qualifiers.stream().anyMatch(q -> q instanceof DefaultLiteral);
+                qualifiers.stream().anyMatch(q -> q.annotationType().equals(Default.class) || q instanceof DefaultLiteral);
 
         if (isDefault && (isNotInterfaceOrAbstract(rawType) || rawType.isArray())) {
             return (Class<? extends T>)rawType;
@@ -214,8 +219,17 @@ class ClassResolver {
         // Filter out alternatives
         List<Class<? extends T>> activeClasses = resolvedClasses
                 .stream()
-                .filter(clazz -> !clazz.isAnnotationPresent(Alternative.class))
+                .filter(clazz -> !isAlternativeAnnotationPresent(clazz))
                 .collect(Collectors.toList());
+
+        // If no qualifiers requested and every implementation is qualified, CDI should report unsatisfied
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            boolean hasUnqualified = activeClasses.stream()
+                    .anyMatch(c -> Arrays.stream(c.getAnnotations()).noneMatch(this::isQualifierAnnotation));
+            if (!hasUnqualified) {
+                throw new UnsatisfiedResolutionException(formatUnsatisfiedError(typeToResolve, qualifiers));
+            }
+        }
 
         // Check for @Qualifier / @Named annotations
         if (qualifiers != null && !qualifiers.isEmpty()) {
@@ -329,13 +343,38 @@ class ClassResolver {
             if (actual != null) {
                 return qualifier.equals(actual);
             }
-            if (qualifier instanceof Default) {
+
+            if (isDefaultQualifier(qualifier)) {
                 return Arrays.stream(clazz.getAnnotations())
-                        .noneMatch(a -> a.annotationType().isAnnotationPresent(Qualifier.class));
+                        .noneMatch(this::isQualifierAnnotation);
             }
-            // @Any matches everything
-            return qualifier instanceof Any;
+
+            if (isAnyQualifier(qualifier)) {
+                return true; // @Any matches everything
+            }
+
+            return false;
         });
+    }
+
+    private boolean isQualifierAnnotation(Annotation annotation) {
+        Class<? extends Annotation> at = annotation.annotationType();
+        return at.isAnnotationPresent(Qualifier.class)
+                || at.equals(Named.class);
+    }
+
+    private boolean isDefaultQualifier(Annotation annotation) {
+        return annotation instanceof Default
+                || annotation.annotationType().equals(Default.class);
+    }
+
+    private boolean isAnyQualifier(Annotation annotation) {
+        return annotation instanceof Any
+                || annotation.annotationType().equals(Any.class);
+    }
+
+    private boolean isAlternativeAnnotationPresent(Class<?> clazz) {
+        return clazz.isAnnotationPresent(Alternative.class);
     }
 
     /**

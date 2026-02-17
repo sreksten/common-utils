@@ -1,8 +1,8 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import javax.enterprise.inject.spi.DefinitionException;
-import javax.inject.Inject;
-import javax.inject.Qualifier;
+import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.inject.Inject;
+import jakarta.inject.Qualifier;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.Arrays;
@@ -186,7 +186,7 @@ public class JSR330Validator {
      * @param type the type to validate (can be a Class or ParameterizedType)
      * @throws IllegalArgumentException if the type violates any injection constraints
      * @see RawTypeExtractor#getRawType(Type)
-     * @see javax.inject.Inject
+     * @see jakarta.inject.Inject
      */
     void checkClassValidity(Type type) {
         if (type instanceof WildcardType) {

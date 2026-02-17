@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.parameters;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 public class TestClassWithInvalidParametersInConstructor {
 

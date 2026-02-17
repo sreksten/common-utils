@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
-import javax.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 public class ApplicationScopedClass {

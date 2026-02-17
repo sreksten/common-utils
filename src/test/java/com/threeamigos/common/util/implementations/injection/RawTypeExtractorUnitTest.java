@@ -3,7 +3,7 @@ package com.threeamigos.common.util.implementations.injection;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import javax.enterprise.util.TypeLiteral;
+import jakarta.enterprise.util.TypeLiteral;
 import java.lang.reflect.*;
 import java.util.List;
 

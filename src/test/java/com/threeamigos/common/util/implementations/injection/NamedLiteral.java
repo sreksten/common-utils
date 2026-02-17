@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.injection;
 
 import jakarta.annotation.Nonnull;
 
-import javax.inject.Named;
+import jakarta.inject.Named;
 import java.lang.annotation.Annotation;
 
 /**

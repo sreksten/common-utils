@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.misc;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import java.util.List;
 
 public class GenericService<T> {

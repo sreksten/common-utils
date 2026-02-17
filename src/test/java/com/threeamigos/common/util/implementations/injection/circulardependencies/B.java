@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.circulardependencies;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 public class B {
 

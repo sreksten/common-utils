@@ -1,6 +1,8 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import jakarta.annotation.Priority;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -199,7 +201,7 @@ class CDI41InjectionValidator {
     private boolean validateAlternatives(Collection<Bean<?>> validBeans) {
         boolean allValid = true;
 
-        // Group beans by their types to find alternatives
+        // Group beans by their types to find alternatives (includes producer beans)
         Map<Type, List<Bean<?>>> beansByType = new HashMap<>();
 
         for (Bean<?> bean : validBeans) {
@@ -331,18 +333,24 @@ class CDI41InjectionValidator {
             return false;
         }
 
-        // Check for ambiguous dependency
+        // Check for ambiguous dependency (respect alternative priorities if present)
         if (candidates.size() > 1) {
-            String candidateList = candidates.stream()
-                .map(b -> b.getBeanClass().getName())
-                .collect(Collectors.joining(", "));
+            // If one or more alternatives present with differing priorities, pick highest
+            Optional<Bean<?>> preferred = chooseByPriority(candidates);
+            if (preferred.isPresent()) {
+                candidates = Collections.singleton(preferred.get());
+            } else {
+                String candidateList = candidates.stream()
+                    .map(b -> b.getBeanClass().getName())
+                    .collect(Collectors.joining(", "));
 
-            knowledgeBase.addInjectionError(
-                formatInjectionPoint(injectionPoint, owningBean) +
-                ": ambiguous dependency - multiple beans found for type " +
-                formatType(requiredType) + ": [" + candidateList + "]"
-            );
-            return false;
+                knowledgeBase.addInjectionError(
+                    formatInjectionPoint(injectionPoint, owningBean) +
+                    ": ambiguous dependency - multiple beans found for type " +
+                    formatType(requiredType) + ": [" + candidateList + "]"
+                );
+                return false;
+            }
         }
 
         // Single candidate found - check if it has validation errors
@@ -358,6 +366,49 @@ class CDI41InjectionValidator {
 
         // Injection point is valid
         return true;
+    }
+
+    /**
+     * If candidates include alternatives with @Priority, prefer the highest priority.
+     * Returns empty when no clear single winner.
+     */
+    private Optional<Bean<?>> chooseByPriority(Set<Bean<?>> candidates) {
+        // Filter to alternatives with a known priority (ProducerBean stores it explicitly; BeanImpl reads @Priority on class)
+        List<BeanWithPriority> prioritized = new ArrayList<>();
+        for (Bean<?> bean : candidates) {
+            Integer priority = null;
+            if (bean instanceof ProducerBean) {
+                priority = ((ProducerBean<?>) bean).getPriority();
+            }
+            if (priority == null) {
+                Priority p = bean.getBeanClass().getAnnotation(Priority.class);
+                if (p != null) {
+                    priority = p.value();
+                }
+            }
+            if (bean.isAlternative() && priority != null) {
+                prioritized.add(new BeanWithPriority(bean, priority));
+            }
+        }
+
+        if (prioritized.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // Pick highest priority; if multiple share it, still ambiguous
+        prioritized.sort((a, b) -> Integer.compare(b.priority, a.priority));
+        BeanWithPriority top = prioritized.get(0);
+        boolean uniqueTop = prioritized.stream().filter(bp -> bp.priority == top.priority).count() == 1;
+        return uniqueTop ? Optional.of(top.bean) : Optional.empty();
+    }
+
+    private static class BeanWithPriority {
+        final Bean<?> bean;
+        final int priority;
+        BeanWithPriority(Bean<?> bean, int priority) {
+            this.bean = bean;
+            this.priority = priority;
+        }
     }
 
     /**
@@ -548,7 +599,7 @@ class CDI41InjectionValidator {
      */
     private boolean hasDefault(Set<Annotation> qualifiers) {
         return qualifiers.stream()
-            .anyMatch(q -> q.annotationType().getName().equals("jakarta.enterprise.inject.Default"));
+            .anyMatch(q -> q.annotationType().equals(Default.class));
     }
 
     /**
@@ -560,8 +611,8 @@ class CDI41InjectionValidator {
     private boolean hasOnlyDefault(Set<Annotation> qualifiers) {
         return qualifiers.stream()
             .filter(this::isQualifier)
-            .allMatch(q -> q.annotationType().getName().equals("jakarta.enterprise.inject.Default") ||
-                          q.annotationType().getName().equals("jakarta.enterprise.inject.Any"));
+            .allMatch(q -> q.annotationType().equals(Default.class) ||
+                          q.annotationType().equals(Any.class));
     }
 
     /**
@@ -572,7 +623,7 @@ class CDI41InjectionValidator {
      */
     private boolean hasAny(Set<Annotation> qualifiers) {
         return qualifiers.stream()
-            .anyMatch(q -> q.annotationType().getName().equals("jakarta.enterprise.inject.Any"));
+            .anyMatch(q -> q.annotationType().equals(Any.class));
     }
 
     /**

@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.interfaces.noimplementations;
 
-import javax.enterprise.inject.Instance;
-import javax.inject.Inject;
+import jakarta.enterprise.inject.Instance;
+import jakarta.inject.Inject;
 
 public class ClassWithFailingInstance {
 

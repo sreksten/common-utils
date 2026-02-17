@@ -160,8 +160,12 @@ class ClasspathScanner {
                 classes.addAll(findClassesInDirectory(classLoader, file, prefix + file.getName()));
             } else if (file.getName().endsWith(CLASS_EXTENSION) && !file.getName().equals(PACKAGE_INFO_CLASS)) {
                 String className = prefix + file.getName().substring(0, file.getName().length() - CLASS_EXTENSION_LENGTH);
-                Class<?> clazz = Class.forName(className, false, classLoader);
-                classes.add(clazz);
+                try {
+                    Class<?> clazz = Class.forName(className, false, classLoader);
+                    classes.add(clazz);
+                } catch (NoClassDefFoundError | ClassNotFoundException e) {
+                    // Skip classes with missing dependencies or those that can't be loaded; continue scanning
+                }
             }
         }
         return classes;

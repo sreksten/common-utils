@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
-import javax.annotation.PreDestroy;
-import javax.enterprise.context.SessionScoped;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.SessionScoped;
 import java.io.Serializable;
 
 @SessionScoped

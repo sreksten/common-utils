@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import javax.enterprise.inject.Default;
+import jakarta.enterprise.inject.Default;
 import java.lang.annotation.Annotation;
 
 /**

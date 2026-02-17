@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.collections.Cache;
 
-import javax.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.DefinitionException;
 import java.lang.reflect.*;
 
 /**
@@ -65,12 +65,12 @@ import java.lang.reflect.*;
  *
  * @author Stefano Reksten
  *
- * @see javax.enterprise.inject.spi.DefinitionException
+ * @see jakarta.enterprise.inject.spi.DefinitionException
  * @see java.lang.reflect.Type
  * @see java.lang.reflect.ParameterizedType
  * @see java.lang.reflect.GenericArrayType
  */
-class TypeChecker {
+public class TypeChecker {
 
     /**
      * A cache for storing the results of type assignability checks.

@@ -2,11 +2,11 @@ package com.threeamigos.common.util.interfaces.injection;
 
 import jakarta.annotation.Nonnull;
 
-import javax.enterprise.util.TypeLiteral;
-import javax.inject.Named;
-import javax.inject.Inject;
-import javax.enterprise.inject.Instance;
-import javax.enterprise.inject.Any;
+import jakarta.enterprise.util.TypeLiteral;
+import jakarta.inject.Named;
+import jakarta.inject.Inject;
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.Any;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.Collection;

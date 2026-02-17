@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.superclasses;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 public class GrandparentClass {
 

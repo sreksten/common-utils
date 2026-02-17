@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
-import javax.inject.Scope;
+import jakarta.inject.Scope;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 

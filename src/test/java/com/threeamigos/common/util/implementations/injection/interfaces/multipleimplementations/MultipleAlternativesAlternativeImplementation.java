@@ -1,7 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations;
 
-import javax.enterprise.inject.Alternative;
+import jakarta.annotation.Priority;
+import jakarta.enterprise.inject.Alternative;
 
 @Alternative
+@Priority(1)
 public class MultipleAlternativesAlternativeImplementation implements MultipleImplementationsInterface {
 }

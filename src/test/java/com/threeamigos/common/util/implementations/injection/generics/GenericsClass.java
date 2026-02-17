@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.injection.generics;
 
 import com.threeamigos.common.util.Holder;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 public class GenericsClass {
 

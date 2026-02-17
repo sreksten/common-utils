@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 
-import javax.annotation.PreDestroy;
+import jakarta.annotation.PreDestroy;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;

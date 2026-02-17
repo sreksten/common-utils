@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
 import jakarta.enterprise.inject.Vetoed;
 
 import java.io.File;
@@ -8,7 +7,6 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -124,8 +122,12 @@ class ParallelClasspathScanner {
                 findClassesInDirectory(classLoader, file, prefix + file.getName(), sink);
             } else if (file.getName().endsWith(CLASS_EXTENSION) && !file.getName().equals(PACKAGE_INFO_CLASS)) {
                 String className = prefix + file.getName().substring(0, file.getName().length() - CLASS_EXTENSION_LENGTH);
-                Class<?> clazz = Class.forName(className, false, classLoader);
-                sink.add(clazz);
+                try {
+                    Class<?> clazz = Class.forName(className, false, classLoader);
+                    sink.add(clazz);
+                } catch (NoClassDefFoundError | ClassNotFoundException e) {
+                    // Skip classes with missing dependencies or those that can't be loaded; continue scanning
+                }
             }
         }
     }

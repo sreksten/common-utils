@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.methods;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 public class ClassWithMethodWithInvalidParameter {
 

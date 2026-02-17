@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
-import javax.annotation.PreDestroy;
-import javax.enterprise.context.ConversationScoped;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ConversationScoped;
 
 @ConversationScoped
 public class ConversationScopedWithPreDestroy {

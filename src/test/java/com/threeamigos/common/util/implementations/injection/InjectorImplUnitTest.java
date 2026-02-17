@@ -51,13 +51,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import javax.enterprise.inject.InjectionException;
-import javax.enterprise.util.TypeLiteral;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
-import javax.enterprise.inject.Instance;
-import javax.enterprise.inject.Any;
+import jakarta.enterprise.inject.InjectionException;
+import jakarta.enterprise.util.TypeLiteral;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.inject.Singleton;
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.Any;
 import java.lang.reflect.ParameterizedType;
 import java.util.stream.Stream;
 
@@ -1109,7 +1109,7 @@ class InjectorImplUnitTest {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             SessionScopeHandler sessionHandler = new SessionScopeHandler();
-            sut.registerScope(javax.enterprise.context.SessionScoped.class, sessionHandler);
+            sut.registerScope(jakarta.enterprise.context.SessionScoped.class, sessionHandler);
 
             // When - session 1
             sessionHandler.setCurrentSession("session-1");
@@ -1148,7 +1148,7 @@ class InjectorImplUnitTest {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             SessionScopeHandler sessionHandler = new SessionScopeHandler();
-            sut.registerScope(javax.enterprise.context.SessionScoped.class, sessionHandler);
+            sut.registerScope(jakarta.enterprise.context.SessionScoped.class, sessionHandler);
 
             sessionHandler.setCurrentSession("test-session");
             SessionScopedWithPreDestroy instance = sut.inject(SessionScopedWithPreDestroy.class);
@@ -1170,7 +1170,7 @@ class InjectorImplUnitTest {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             SessionScopeHandler sessionHandler = new SessionScopeHandler();
-            sut.registerScope(javax.enterprise.context.SessionScoped.class, sessionHandler);
+            sut.registerScope(jakarta.enterprise.context.SessionScoped.class, sessionHandler);
 
             // When/Then - no session set
             // The IllegalStateException is wrapped in InjectionException
@@ -1191,7 +1191,7 @@ class InjectorImplUnitTest {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
-            sut.registerScope(javax.enterprise.context.ConversationScoped.class, conversationHandler);
+            sut.registerScope(jakarta.enterprise.context.ConversationScoped.class, conversationHandler);
 
             // When - conversation 1
             conversationHandler.beginConversation("conversation-1");
@@ -1228,7 +1228,7 @@ class InjectorImplUnitTest {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
-            sut.registerScope(javax.enterprise.context.ConversationScoped.class, conversationHandler);
+            sut.registerScope(jakarta.enterprise.context.ConversationScoped.class, conversationHandler);
 
             conversationHandler.beginConversation("test-conversation");
             ConversationScopedWithPreDestroy instance = sut.inject(ConversationScopedWithPreDestroy.class);
@@ -1250,7 +1250,7 @@ class InjectorImplUnitTest {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
-            sut.registerScope(javax.enterprise.context.ConversationScoped.class, conversationHandler);
+            sut.registerScope(jakarta.enterprise.context.ConversationScoped.class, conversationHandler);
 
             // When/Then - no conversation set
             // The IllegalStateException is wrapped in InjectionException
@@ -1271,7 +1271,7 @@ class InjectorImplUnitTest {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             ConversationScopeHandler conversationHandler = new ConversationScopeHandler();
-            sut.registerScope(javax.enterprise.context.ConversationScoped.class, conversationHandler);
+            sut.registerScope(jakarta.enterprise.context.ConversationScoped.class, conversationHandler);
 
             // When - main thread conversation
             conversationHandler.beginConversation("main-conversation");
@@ -1307,7 +1307,7 @@ class InjectorImplUnitTest {
             SessionScopeHandler sessionHandler = new SessionScopeHandler();
 
             sut.registerScope(RequestScoped.class, requestHandler);
-            sut.registerScope(javax.enterprise.context.SessionScoped.class, sessionHandler);
+            sut.registerScope(jakarta.enterprise.context.SessionScoped.class, sessionHandler);
 
             sessionHandler.setCurrentSession("session-1");
 
@@ -2220,7 +2220,7 @@ class InjectorImplUnitTest {
 
                 InjectorImpl sut = new InjectorImpl(mockResolver);
                 ClassWithInstanceOfTestInterface instanceWrapper = sut.inject(ClassWithInstanceOfTestInterface.class);
-                javax.enterprise.inject.Instance<TestInterface> instance = instanceWrapper.getTestInterfaceInstance();
+                jakarta.enterprise.inject.Instance<TestInterface> instance = instanceWrapper.getTestInterfaceInstance();
 
                 // When / Then
                 assertThrows(RuntimeException.class, instance::iterator);
@@ -3528,7 +3528,7 @@ class InjectorImplUnitTest {
     static class SingletonWithPreDestroy {
         private boolean preDestroyCalled = false;
 
-        @javax.annotation.PreDestroy
+        @jakarta.annotation.PreDestroy
         public void preDestroy() {
             preDestroyCalled = true;
         }
@@ -3542,7 +3542,7 @@ class InjectorImplUnitTest {
     static class AnotherSingletonWithPreDestroy {
         private boolean preDestroyCalled = false;
 
-        @javax.annotation.PreDestroy
+        @jakarta.annotation.PreDestroy
         public void preDestroy() {
             preDestroyCalled = true;
         }
@@ -3556,7 +3556,7 @@ class InjectorImplUnitTest {
     static class SingletonWithFailingPreDestroy {
         private boolean preDestroyCalled = false;
 
-        @javax.annotation.PreDestroy
+        @jakarta.annotation.PreDestroy
         public void preDestroy() {
             preDestroyCalled = true;
             throw new RuntimeException("PreDestroy failed intentionally");
@@ -3577,7 +3577,7 @@ class InjectorImplUnitTest {
             this.dependency = dependency;
         }
 
-        @javax.annotation.PreDestroy
+        @jakarta.annotation.PreDestroy
         public void preDestroy() {
             preDestroyCalled = true;
         }
@@ -3595,7 +3595,7 @@ class InjectorImplUnitTest {
     static class RequestScopedWithPreDestroy {
         private boolean preDestroyCalled = false;
 
-        @javax.annotation.PreDestroy
+        @jakarta.annotation.PreDestroy
         public void preDestroy() {
             preDestroyCalled = true;
         }
@@ -3671,7 +3671,7 @@ class InjectorImplUnitTest {
     static class ClassWithPostConstruct {
         private boolean postConstructCalled = false;
 
-        @javax.annotation.PostConstruct
+        @jakarta.annotation.PostConstruct
         public void postConstruct() {
             postConstructCalled = true;
         }
@@ -3686,7 +3686,7 @@ class InjectorImplUnitTest {
         private boolean parentPostConstructCalled = false;
         private int parentCallOrder = 0;
 
-        @javax.annotation.PostConstruct
+        @jakarta.annotation.PostConstruct
         public void parentPostConstruct() {
             parentPostConstructCalled = true;
             parentCallOrder = callCounter++;
@@ -3705,7 +3705,7 @@ class InjectorImplUnitTest {
         private boolean childPostConstructCalled = false;
         private int childCallOrder = 0;
 
-        @javax.annotation.PostConstruct
+        @jakarta.annotation.PostConstruct
         public void childPostConstruct() {
             childPostConstructCalled = true;
             childCallOrder = ParentWithPostConstruct.callCounter++;
@@ -3721,7 +3721,7 @@ class InjectorImplUnitTest {
     }
 
     static class ClassWithFailingPostConstruct {
-        @javax.annotation.PostConstruct
+        @jakarta.annotation.PostConstruct
         public void postConstruct() {
             throw new RuntimeException("PostConstruct failed intentionally");
         }
@@ -3733,7 +3733,7 @@ class InjectorImplUnitTest {
         private boolean parentPreDestroyCalled = false;
         private int parentDestroyOrder = 0;
 
-        @javax.annotation.PreDestroy
+        @jakarta.annotation.PreDestroy
         public void parentPreDestroy() {
             parentPreDestroyCalled = true;
             parentDestroyOrder = destroyCounter++;
@@ -3753,7 +3753,7 @@ class InjectorImplUnitTest {
         private boolean childPreDestroyCalled = false;
         private int childDestroyOrder = 0;
 
-        @javax.annotation.PreDestroy
+        @jakarta.annotation.PreDestroy
         public void childPreDestroy() {
             childPreDestroyCalled = true;
             childDestroyOrder = ParentWithPreDestroy.destroyCounter++;
@@ -3790,7 +3790,7 @@ class InjectorImplUnitTest {
 
     @Singleton
     static class ClassWithFailingPreDestroy {
-        @javax.annotation.PreDestroy
+        @jakarta.annotation.PreDestroy
         public void preDestroy() {
             throw new RuntimeException("PreDestroy intentionally fails");
         }

@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.interfaces.namedimplementationsonly;
 
-import javax.inject.Named;
+import jakarta.inject.Named;
 
 @Named("name2")
 @SuppressWarnings("unused")

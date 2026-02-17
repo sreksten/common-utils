@@ -1,7 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.alternatives;
 
-import javax.enterprise.inject.Alternative;
+import jakarta.annotation.Priority;
+import jakarta.enterprise.inject.Alternative;
 
 @Alternative
+@Priority(1)
 public class AlternativesAlternativeImplementation1 implements AlternativesInterface {
 }
