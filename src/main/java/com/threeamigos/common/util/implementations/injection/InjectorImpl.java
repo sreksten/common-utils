@@ -1338,127 +1338,37 @@ public class InjectorImpl implements Injector {
      * @see jakarta.annotation.PreDestroy
      */
     <T> Instance<T> createInstance(Class<T> type, Collection<Annotation> qualifiers) {
-        return new Instance<T>() {
+        // Create a resolution strategy that delegates to InjectorImpl's methods
+        InstanceWrapper.ResolutionStrategy<T> strategy = new InstanceWrapper.ResolutionStrategy<T>() {
             @Override
-            public T get() {
-                try {
-                    return inject(type, new Stack<>(), qualifiers);
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to inject " + type.getName(), e);
-                }
+            public T resolveInstance(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
+                return inject(typeToResolve, new Stack<>(), quals);
             }
 
             @Override
-            public Instance<T> select(Annotation... annotations) {
-                return createInstance(type, mergeQualifiers(qualifiers, annotations));
+            public Collection<Class<? extends T>> resolveImplementations(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
+                return classResolver.<T>resolveImplementations(typeToResolve, quals);
             }
 
             @Override
-            public <U extends T> Instance<U> select(Class<U> subtype, Annotation... annotations) {
-                return createInstance(subtype, mergeQualifiers(qualifiers, annotations));
-            }
-
-            @Override
-            public <U extends T> Instance<U> select(TypeLiteral<U> subtype, Annotation... annotations) {
-                // We extract the raw class from the TypeLiteral to maintain compatibility with createInstance
-                @SuppressWarnings("unchecked")
-                Class<U> rawType = (Class<U>) RawTypeExtractor.getRawType(subtype.getType());
-                return createInstance(rawType, mergeQualifiers(qualifiers, annotations));
-            }
-
-            @Override
-            public boolean isUnsatisfied() {
-                try {
-                    return classResolver.resolveImplementations(type).isEmpty();
-                } catch (Exception e) {
-                    return true; // treating an Exception as unsatisfied
-                }
-            }
-
-            @Override
-            public boolean isAmbiguous() {
-                try {
-                    return classResolver.resolveImplementations(type).size() > 1;
-                } catch (Exception e) {
-                    return false; // If we can't resolve the class, it's not ambiguous (it's unsatisfied)
-                }
-            }
-
-            @Override
-            public void destroy(T instance) {
-                try {
-                    if (instance != null) {
-                        invokePreDestroy(instance);
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to invoke @PreDestroy on " + type.getName(), e);
-                }
-            }
-
-            @Override
-            public Handle<T> getHandle() {
-                return null;
-            }
-
-            @Override
-            public Iterable<? extends Handle<T>> handles() {
-                return null;
-            }
-
-            @Override
-            public @Nonnull Iterator<T> iterator() {
-                try {
-                    Collection<Class<? extends T>> classes = classResolver.resolveImplementations(type, qualifiers);
-
-                    List<T> instances = new ArrayList<>();
-                    for (Class<? extends T> clazz : classes) {
-                        instances.add(inject(clazz));
-                    }
-                    return instances.iterator();
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to resolve implementations", e);
-                }
+            public void invokePreDestroy(T instance) throws InvocationTargetException, IllegalAccessException {
+                InjectorImpl.this.invokePreDestroy(instance);
             }
         };
-    }
 
-    /**
-     * Merges qualifier annotations, giving precedence to new annotations. This is used when
-     * {@link Instance#select(Annotation...)} is called to refine the qualifier set.
-     *
-     * <p>Merge Rules:
-     * <ul>
-     *   <li>New annotations override existing ones of the same type</li>
-     *   <li>If specific qualifiers are added, the {@link Default @Default} qualifier is removed</li>
-     *   <li>Returns the existing collection unchanged if no new annotations are provided</li>
-     * </ul>
-     *
-     * @param existing the existing qualifier annotations
-     * @param newAnnotations new qualifier annotations to add/override
-     * @return merged collection of qualifiers
-     * @see jakarta.enterprise.inject.Instance#select(Annotation...)
-     */
-    Collection<Annotation> mergeQualifiers(Collection<Annotation> existing, Annotation... newAnnotations) {
-        if (newAnnotations == null || newAnnotations.length == 0) {
-            return existing;
-        }
+        // Look up the Bean metadata from KnowledgeBase so Handle#getBean can return it
+        java.util.function.Function<Class<? extends T>, jakarta.enterprise.inject.spi.Bean<? extends T>> beanLookup = beanClass -> {
+            for (jakarta.enterprise.inject.spi.Bean<?> bean : knowledgeBase.getValidBeans()) {
+                if (bean.getBeanClass().equals(beanClass)) {
+                    @SuppressWarnings("unchecked")
+                    jakarta.enterprise.inject.spi.Bean<? extends T> cast = (jakarta.enterprise.inject.spi.Bean<? extends T>) bean;
+                    return cast;
+                }
+            }
+            return null;
+        };
 
-        Map<Class<? extends Annotation>, Annotation> merged = new HashMap<>();
-        // Start with existing
-        for (Annotation a : existing) {
-            merged.put(a.annotationType(), a);
-        }
-        // Overwrite/Add new ones
-        for (Annotation a : newAnnotations) {
-            merged.put(a.annotationType(), a);
-        }
-
-        // If we now have specific qualifiers, remove the @Default literal if it exists
-        if (merged.size() > 1) {
-            merged.remove(Default.class);
-        }
-
-        return new ArrayList<>(merged.values());
+        return new InstanceWrapper<>(type, qualifiers, strategy, beanLookup);
     }
 
     /**

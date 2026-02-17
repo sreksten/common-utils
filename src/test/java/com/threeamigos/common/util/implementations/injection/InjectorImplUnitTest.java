@@ -2347,63 +2347,6 @@ class InjectorImplUnitTest {
                 assertInstanceOf(DefaultLiteral.class, qualifiers.iterator().next());
             }
         }
-        @Nested
-        @DisplayName("mergeQualifiers")
-        class MergeQualifiersTests {
-
-            @Test
-            @DisplayName("mergeQualifiers should return existing if newAnnotations is null")
-            void mergeQualifiersShouldReturnExistingIfNewAnnotationsIsNull() {
-                // Given
-                Collection<Annotation> existing = Collections.singletonList(new NamedLiteral("test"));
-                Annotation[] newAnnotations = null;
-                // When
-                Collection<Annotation> merged = new InjectorImpl(TEST_PACKAGE_NAME).mergeQualifiers(existing, newAnnotations);
-                // Then
-                assertSame(existing, merged);
-            }
-
-            @Test
-            @DisplayName("mergeQualifiers should return existing if newAnnotations is empty")
-            void mergeQualifiersShouldReturnExistingIfNewAnnotationsIsEmpty() {
-                // Given
-                Collection<Annotation> existing = Collections.singletonList(new NamedLiteral("test"));
-                Annotation[] newAnnotations = {};
-                // When
-                Collection<Annotation> merged = new InjectorImpl(TEST_PACKAGE_NAME).mergeQualifiers(existing, newAnnotations);
-                // Then
-                assertSame(existing, merged);
-            }
-
-            @Test
-            @DisplayName("mergeQualifiers should merge existing qualifiers with new ones")
-            void mergeQualifiersShouldMergeExistingQualifiersWithNewOnes() {
-                // Given
-                Collection<Annotation> existing = Collections.singletonList(new NamedLiteral("test"));
-                Annotation[] newAnnotations = {new NamedLiteral("test2")};
-                // When
-                Collection<Annotation> merged = new InjectorImpl(TEST_PACKAGE_NAME).mergeQualifiers(existing, newAnnotations);
-                // Then
-                assertEquals(1, merged.size());
-                assertFalse(merged.contains(new NamedLiteral("test")));
-                assertTrue(merged.contains(new NamedLiteral("test2")));
-            }
-
-            @Test
-            @DisplayName("mergeQualifiers should remove Default")
-            void mergeQualifiersShouldRemoveDefault() {
-                // Given
-                Collection<Annotation> existing = Collections.singletonList(new DefaultLiteral());
-                Annotation[] newAnnotations = {new NamedLiteral("test2")};
-                // When
-                Collection<Annotation> merged = new InjectorImpl(TEST_PACKAGE_NAME).mergeQualifiers(existing, newAnnotations);
-                // Then
-                assertEquals(1, merged.size());
-                assertFalse(merged.contains(new DefaultLiteral()));
-                assertTrue(merged.contains(new NamedLiteral("test2")));
-            }
-
-        }
 
     }
 

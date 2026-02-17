@@ -1,10 +1,14 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.inject.Named;
+import jakarta.inject.Provider;
 import jakarta.inject.Qualifier;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -29,7 +33,24 @@ class BeanResolver implements ProducerBean.DependencyResolver {
 
     @Override
     public Object resolve(Type requiredType, Annotation[] qualifiers) {
-        // Find matching beans
+        // Handle Instance<T> and Provider<T> injection
+        // Since Instance<T> extends Provider<T>, one check handles both
+        if (requiredType instanceof ParameterizedType) {
+            ParameterizedType pt = (ParameterizedType) requiredType;
+            Class<?> rawType = (Class<?>) pt.getRawType();
+
+            // Check if it's Provider<T> (which includes Instance<T>)
+            if (Provider.class.isAssignableFrom(rawType)) {
+                Type actualType = pt.getActualTypeArguments()[0];
+                @SuppressWarnings("unchecked")
+                Class<?> actualClass = (Class<?>) RawTypeExtractor.getRawType(actualType);
+                Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
+
+                return createProviderWrapper(actualClass, new ArrayList<>(requiredQualifiers));
+            }
+        }
+
+        // Find matching beans for regular dependencies
         Collection<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
 
         if (candidates.isEmpty()) {
@@ -225,6 +246,63 @@ class BeanResolver implements ProducerBean.DependencyResolver {
         // Get or create instance (context handles caching for scoped beans)
         CreationalContext<T> creationalContext = new CreationalContextImpl<>();
         return context.get(bean, creationalContext);
+    }
+
+    /**
+     * Creates a Provider/Instance wrapper for lazy dependency resolution.
+     * Since Instance<T> extends Provider<T>, this single method handles both cases.
+     * The returned wrapper implements the full Instance<T> interface which includes Provider<T>.
+     *
+     * @param type the type of instances to provide
+     * @param qualifiers the qualifiers to use for resolution
+     * @return Instance wrapper (which also implements Provider)
+     */
+    @SuppressWarnings("unchecked")
+    private <T> Instance<T> createProviderWrapper(Class<T> type, Collection<Annotation> qualifiers) {
+        // Create a resolution strategy that delegates to BeanResolver
+        InstanceWrapper.ResolutionStrategy<T> strategy = new InstanceWrapper.ResolutionStrategy<T>() {
+            @Override
+            public T resolveInstance(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
+                // Convert qualifiers to array
+                Annotation[] qualArray = quals.toArray(new Annotation[0]);
+                Object resolved = resolve(typeToResolve, qualArray);
+                return (T) resolved;
+            }
+
+            @Override
+            public Collection<Class<? extends T>> resolveImplementations(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
+                // Find all matching beans
+                Annotation[] qualArray = quals.toArray(new Annotation[0]);
+                Collection<Bean<?>> beans = findMatchingBeans(typeToResolve, qualArray);
+
+                // Extract bean classes
+                List<Class<? extends T>> implementations = new ArrayList<>();
+                for (Bean<?> bean : beans) {
+                    implementations.add((Class<? extends T>) bean.getBeanClass());
+                }
+                return implementations;
+            }
+
+            @Override
+            public void invokePreDestroy(T instance) throws InvocationTargetException, IllegalAccessException {
+                // Invoke @PreDestroy via LifecycleMethodHelper
+                LifecycleMethodHelper.invokeLifecycleMethod(instance, jakarta.annotation.PreDestroy.class);
+            }
+        };
+
+        // Look up the Bean metadata from KnowledgeBase so Handle#getBean can return it
+        java.util.function.Function<Class<? extends T>, Bean<? extends T>> beanLookup = beanClass -> {
+            for (Bean<?> bean : knowledgeBase.getValidBeans()) {
+                if (bean.getBeanClass().equals(beanClass)) {
+                    @SuppressWarnings("unchecked")
+                    Bean<? extends T> cast = (Bean<? extends T>) bean;
+                    return cast;
+                }
+            }
+            return null;
+        };
+
+        return new InstanceWrapper<>(type, qualifiers, strategy, beanLookup);
     }
 
     /**
