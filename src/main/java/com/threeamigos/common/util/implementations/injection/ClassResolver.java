@@ -10,6 +10,7 @@ import jakarta.inject.Named;
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.ResolutionException;

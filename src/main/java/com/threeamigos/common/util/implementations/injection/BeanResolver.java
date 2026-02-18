@@ -246,7 +246,7 @@ class BeanResolver implements ProducerBean.DependencyResolver {
         // Get context for this scope
         ScopeContext context = contextManager.getContext(scope);
 
-        // Get or create instance (context handles caching for scoped beans)
+        // Get or create an instance (context handles caching for scoped beans)
         CreationalContext<T> creationalContext = new CreationalContextImpl<>();
         return context.get(bean, creationalContext);
     }
