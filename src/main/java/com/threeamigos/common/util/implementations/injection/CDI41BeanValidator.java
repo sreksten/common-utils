@@ -184,6 +184,10 @@ public class CDI41BeanValidator {
         }
 
         if (isDecorator) {
+            // Validate decorator-specific rules before registering
+            // Per CDI spec: A decorator must have exactly one @Delegate injection point
+            validateDecoratorDelegateInjectionPoints(clazz);
+
             knowledgeBase.addDecorator(clazz);
             // Decorators are not managed beans - return null (no bean to register)
             return null;
@@ -902,6 +906,96 @@ public class CDI41BeanValidator {
 
     private boolean hasMetaAnnotation(Class<? extends Annotation> annotationType, Class<? extends Annotation> metaAnnotationType) {
         return annotationType.isAnnotationPresent(metaAnnotationType);
+    }
+
+    /**
+     * Validates that a decorator has exactly one @Delegate injection point.
+     *
+     * <p><b>CDI 4.1 Decorator Rules (Section 8.3):</b>
+     * <ul>
+     *   <li>A decorator must have exactly one @Delegate injection point</li>
+     *   <li>The @Delegate injection point must be an @Inject field, initializer method parameter, or constructor parameter</li>
+     *   <li>The @Delegate injection point defines which types the decorator can decorate</li>
+     * </ul>
+     *
+     * <p><b>Example valid decorator:</b>
+     * <pre>{@code
+     * @Decorator
+     * public class LoggingDecorator implements MyService {
+     *     @Inject @Delegate
+     *     private MyService delegate; // Exactly one @Delegate injection point
+     *
+     *     public void doWork() {
+     *         log("Before");
+     *         delegate.doWork();
+     *         log("After");
+     *     }
+     * }
+     * }</pre>
+     *
+     * @param clazz the decorator class to validate
+     */
+    private void validateDecoratorDelegateInjectionPoints(Class<?> clazz) {
+        int delegateCount = 0;
+
+        // Check @Inject fields for @Delegate
+        for (Field field : clazz.getDeclaredFields()) {
+            if (hasInjectAnnotation(field)) {
+                if (hasDelegateAnnotation(field)) {
+                    delegateCount++;
+                }
+            }
+        }
+
+        // Check @Inject method parameters for @Delegate
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (hasInjectAnnotation(method)) {
+                for (Parameter param : method.getParameters()) {
+                    if (hasDelegateAnnotation(param)) {
+                        delegateCount++;
+                    }
+                }
+            }
+        }
+
+        // Check constructor parameters for @Delegate
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            if (hasInjectAnnotation(constructor)) {
+                for (Parameter param : constructor.getParameters()) {
+                    if (hasDelegateAnnotation(param)) {
+                        delegateCount++;
+                    }
+                }
+            }
+        }
+
+        // Validate exactly one @Delegate injection point
+        if (delegateCount == 0) {
+            knowledgeBase.addDefinitionError(clazz.getName() +
+                    ": Decorator must have exactly one @Delegate injection point (found 0). " +
+                    "Add @Inject @Delegate to a field, method parameter, or constructor parameter.");
+        } else if (delegateCount > 1) {
+            knowledgeBase.addDefinitionError(clazz.getName() +
+                    ": Decorator must have exactly one @Delegate injection point (found " + delegateCount + "). " +
+                    "Only one @Delegate injection point is allowed per decorator.");
+        }
+    }
+
+    /**
+     * Checks if an annotated element (field or parameter) has @Delegate annotation.
+     * @Delegate can be either jakarta.decorator.Delegate or javax.decorator.Delegate.
+     *
+     * @param element the field or parameter to check
+     * @return true if @Delegate annotation is present
+     */
+    private boolean hasDelegateAnnotation(java.lang.reflect.AnnotatedElement element) {
+        for (Annotation ann : element.getAnnotations()) {
+            String name = ann.annotationType().getName();
+            if (name.equals("jakarta.decorator.Delegate") || name.equals("javax.decorator.Delegate")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
