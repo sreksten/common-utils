@@ -2,6 +2,8 @@ package com.threeamigos.common.util.implementations.injection;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 
+import com.threeamigos.common.util.implementations.injection.literals.AnyLiteral;
+import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;

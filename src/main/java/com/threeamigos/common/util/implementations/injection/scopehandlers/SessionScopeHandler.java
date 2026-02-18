@@ -1,5 +1,6 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.scopehandlers;
 
+import com.threeamigos.common.util.implementations.injection.LifecycleMethodHelper;
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 
 import jakarta.annotation.PreDestroy;

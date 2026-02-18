@@ -24,6 +24,8 @@ import com.threeamigos.common.util.implementations.injection.interfaces.multiple
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.literals.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithInvalidParameter;
 import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithValidParameters;
 import com.threeamigos.common.util.implementations.injection.methods.FirstMethodParameter;
@@ -31,6 +33,9 @@ import com.threeamigos.common.util.implementations.injection.methods.SecondMetho
 import com.threeamigos.common.util.implementations.injection.optional.*;
 import com.threeamigos.common.util.implementations.injection.parameters.TestClassWithInvalidParametersInConstructor;
 import com.threeamigos.common.util.implementations.injection.scopes.*;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.ConversationScopeHandler;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.RequestScopeHandler;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.SessionScopeHandler;
 import com.threeamigos.common.util.implementations.injection.superclasses.MyClass;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;

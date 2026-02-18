@@ -1,23 +1,19 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.literals.AnyLiteral;
+import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.InjectionPoint;
-import jakarta.inject.Inject;
-import jakarta.enterprise.inject.Produces;
-import jakarta.enterprise.inject.Disposes;
 import jakarta.inject.Named;
-import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Qualifier;
 import jakarta.inject.Scope;
 import jakarta.enterprise.context.*;
 import jakarta.enterprise.inject.Stereotype;
-import jakarta.enterprise.inject.Vetoed;
-import jakarta.decorator.Decorator;
-import jakarta.interceptor.Interceptor;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;

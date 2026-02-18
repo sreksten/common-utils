@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.contexts;
 
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
@@ -10,7 +10,7 @@ import jakarta.enterprise.inject.spi.Bean;
  *
  * @author Stefano Reksten
  */
-class DependentContext implements ScopeContext {
+public class DependentContext implements ScopeContext {
 
     @Override
     public <T> T get(Bean<T> bean, CreationalContext<T> creationalContext) {

@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.contexts;
 
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
@@ -9,7 +9,7 @@ import jakarta.enterprise.inject.spi.Bean;
  *
  * @author Stefano Reksten
  */
-interface ScopeContext {
+public interface ScopeContext {
 
     /**
      * Gets an existing instance from this scope, or creates a new one if needed.

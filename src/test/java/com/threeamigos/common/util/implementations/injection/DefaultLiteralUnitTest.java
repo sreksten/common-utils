@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.literals.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import jakarta.enterprise.inject.Default;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

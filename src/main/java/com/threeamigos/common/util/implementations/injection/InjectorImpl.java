@@ -1,6 +1,8 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
+import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.SingletonScopeHandler;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 import jakarta.annotation.Nonnull;
@@ -100,6 +102,8 @@ import java.util.stream.Collectors;
  *
  * <pre>{@code
  * // For web applications - register request, session, and conversation scopes
+ * import com.threeamigos.common.util.implementations.injection.scopehandlers.*;
+ *
  * InjectorImpl injector = new InjectorImpl("com.myapp");
  *
  * // RequestScoped: One instance per thread (HTTP request)
@@ -306,6 +310,8 @@ public class InjectorImpl implements Injector {
      *
      * <p>Example custom scope registration:
      * <pre>{@code
+     * import com.threeamigos.common.util.implementations.injection.scopehandlers.RequestScopeHandler;
+     *
      * @Scope
      * @Retention(RUNTIME)
      * public @interface RequestScoped {}

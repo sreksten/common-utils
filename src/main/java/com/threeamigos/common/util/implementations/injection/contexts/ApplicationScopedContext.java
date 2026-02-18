@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.contexts;
 
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author Stefano Reksten
  */
-class ApplicationScopedContext implements ScopeContext {
+public class ApplicationScopedContext implements ScopeContext {
 
     private final Map<Bean<?>, Object> instances = new ConcurrentHashMap<>();
     private final Map<Bean<?>, CreationalContext<?>> creationalContexts = new ConcurrentHashMap<>();

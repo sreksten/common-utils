@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.literals;
 
 import jakarta.enterprise.inject.Default;
 import java.lang.annotation.Annotation;
@@ -7,7 +7,7 @@ import java.lang.annotation.Annotation;
  * Helper class to create instances of @Default.
  */
 @SuppressWarnings("all")
-class DefaultLiteral implements Default {
+public class DefaultLiteral implements Default {
 
     @Override
     public Class<? extends Annotation> annotationType() {

@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.contexts.ApplicationScopedContext;
+import com.threeamigos.common.util.implementations.injection.contexts.DependentContext;
+import com.threeamigos.common.util.implementations.injection.contexts.ScopeContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 

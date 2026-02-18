@@ -78,7 +78,7 @@ public class ConfigurationService {
 
 ```java
 import com.threeamigos.common.util.implementations.injection.InjectorImpl;
-import com.threeamigos.common.util.implementations.injection.RequestScopeHandler;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.RequestScopeHandler;
 import javax.enterprise.context.RequestScoped;
 
 InjectorImpl injector = new InjectorImpl("com.myapp");
@@ -145,7 +145,7 @@ t.start();
 #### Step 1: Register the scope handler
 
 ```java
-import com.threeamigos.common.util.implementations.injection.SessionScopeHandler;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.SessionScopeHandler;
 import javax.enterprise.context.SessionScoped;
 
 SessionScopeHandler sessionHandler = new SessionScopeHandler();
@@ -220,7 +220,7 @@ Conversations are longer-lived than requests but shorter than sessions, typicall
 #### Step 1: Register the scope handler
 
 ```java
-import com.threeamigos.common.util.implementations.injection.ConversationScopeHandler;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.ConversationScopeHandler;
 import javax.enterprise.context.ConversationScoped;
 
 ConversationScopeHandler conversationHandler = new ConversationScopeHandler();

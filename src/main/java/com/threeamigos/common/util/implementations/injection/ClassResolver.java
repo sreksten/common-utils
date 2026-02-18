@@ -1,16 +1,15 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.collections.Cache;
+import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
 import jakarta.inject.Named;
-import jakarta.inject.Qualifier;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
-import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.ResolutionException;

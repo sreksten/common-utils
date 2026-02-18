@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.literals;
 
 import jakarta.enterprise.inject.Any;
 import java.lang.annotation.Annotation;
@@ -7,7 +7,7 @@ import java.lang.annotation.Annotation;
  * Helper class to create instances of @Any.
  */
 @SuppressWarnings("all")
-class AnyLiteral implements Any {
+public class AnyLiteral implements Any {
 
     @Override
     public Class<? extends Annotation> annotationType() {
