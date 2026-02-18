@@ -6,12 +6,14 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class KnowledgeBase {
 
-    private final Collection<Class<?>> classes = new ConcurrentLinkedQueue<>();
+    // Use Set to prevent duplicate class registrations
+    private final Set<Class<?>> classes = ConcurrentHashMap.newKeySet();
     private final Collection<Bean<?>> beans = new ConcurrentLinkedQueue<>();
 
     private final Map<Class<?>, Constructor<?>> constructorsMap = new ConcurrentHashMap<>();

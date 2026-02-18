@@ -152,7 +152,7 @@ class InstanceWrapperUnitTest {
 
             // When/Then
             RuntimeException thrown = assertThrows(RuntimeException.class, wrapper::get);
-            assertTrue(thrown.getMessage().contains("Failed to inject String"));
+            assertTrue(thrown.getMessage().contains("Failed to inject java.lang.String"));
         }
     }
 

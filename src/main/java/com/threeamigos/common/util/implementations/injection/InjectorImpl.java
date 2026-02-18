@@ -14,6 +14,8 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 
 import java.lang.annotation.Annotation;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -572,16 +574,35 @@ public class InjectorImpl implements Injector {
      * @see jakarta.inject.Singleton
      */
     Class<? extends Annotation> getScopeType(Class<?> clazz) {
-        return Arrays.stream(clazz.getAnnotations())
+        Class<? extends Annotation> scopeAnnotation = Arrays.stream(clazz.getAnnotations())
                 .map(Annotation::annotationType)
-                .filter(at -> at.isAnnotationPresent(Scope.class)
-                        || at.equals(Singleton.class)
-                        || at.equals(ApplicationScoped.class)
-                        || at.equals(RequestScoped.class)
-                        || at.equals(jakarta.enterprise.context.SessionScoped.class)
-                        || at.equals(jakarta.enterprise.context.ConversationScoped.class))
+                .filter(at -> hasScopeAnnotation(at) // For custom scopes meta-annotated with @Scope
+                        || AnnotationsEnum.SINGLETON.matches(at)
+                        || AnnotationsEnum.APPLICATION_SCOPED.matches(at)
+                        || AnnotationsEnum.REQUEST_SCOPED.matches(at)
+                        || AnnotationsEnum.SESSION_SCOPED.matches(at)
+                        || AnnotationsEnum.CONVERSATION_SCOPED.matches(at)
+                        || AnnotationsEnum.DEPENDENT.matches(at))
                 .findFirst()
                 .orElse(null);
+
+        // Normalize javax annotations to jakarta equivalents for scope registry lookup
+        if (scopeAnnotation != null) {
+            if (scopeAnnotation.equals(javax.inject.Singleton.class)) {
+                return Singleton.class;
+            } else if (scopeAnnotation.equals(javax.enterprise.context.ApplicationScoped.class)) {
+                return ApplicationScoped.class;
+            } else if (scopeAnnotation.equals(javax.enterprise.context.RequestScoped.class)) {
+                return RequestScoped.class;
+            } else if (scopeAnnotation.equals(javax.enterprise.context.SessionScoped.class)) {
+                return jakarta.enterprise.context.SessionScoped.class;
+            } else if (scopeAnnotation.equals(javax.enterprise.context.ConversationScoped.class)) {
+                return jakarta.enterprise.context.ConversationScoped.class;
+            } else if (scopeAnnotation.equals(javax.enterprise.context.Dependent.class)) {
+                return jakarta.enterprise.context.Dependent.class;
+            }
+        }
+        return scopeAnnotation;
     }
 
     /**
@@ -686,7 +707,7 @@ public class InjectorImpl implements Injector {
 
         // First, look for @Inject annotated constructors
         List<Constructor<T>> injectConstructors = Arrays.stream(allConstructors)
-                .filter(c -> c.isAnnotationPresent(Inject.class))
+                .filter(c -> hasInjectAnnotation(c))
                 .collect(Collectors.toList());
 
         if (injectConstructors.size() > 1) {
@@ -862,7 +883,7 @@ public class InjectorImpl implements Injector {
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
 
         for (Field field : fields) {
-            if (field.isAnnotationPresent(Inject.class)) {
+            if (hasInjectAnnotation(field)) {
                 boolean isStatic = Modifier.isStatic(field.getModifiers());
 
                 if (onlyStatic != isStatic) {
@@ -921,7 +942,7 @@ public class InjectorImpl implements Injector {
         boolean isStaticAlreadyInjected = injectedStaticClasses.contains(clazz);
 
         for (Method method : methods) {
-            if (method.isAnnotationPresent(Inject.class)) {
+            if (hasInjectAnnotation(method)) {
                 boolean isStatic = Modifier.isStatic(method.getModifiers());
 
                 if (onlyStatic != isStatic) {

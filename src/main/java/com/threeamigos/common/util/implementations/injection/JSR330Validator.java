@@ -2,6 +2,8 @@ package com.threeamigos.common.util.implementations.injection;
 
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.inject.Inject;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import jakarta.inject.Qualifier;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
@@ -41,7 +43,7 @@ public class JSR330Validator {
         boolean hasInjectedElements = false;
 
         for (Field field : clazz.getDeclaredFields()) {
-            if (field.isAnnotationPresent(Inject.class)) {
+            if (hasInjectAnnotation(field)) {
                 hasInjectedElements = true;
 
                 if (Modifier.isFinal(field.getModifiers())) {
@@ -74,7 +76,7 @@ public class JSR330Validator {
         }
 
         for (Method method : clazz.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(Inject.class)) {
+            if (hasInjectAnnotation(method)) {
                 hasInjectedElements = true;
 
                 if (strict && clazz.isInterface() && !Modifier.isAbstract(method.getModifiers())) {
@@ -238,7 +240,7 @@ public class JSR330Validator {
     void checkAnnotations(Annotation[] annotations) {
         if (strict) {
             List<Annotation> qualifiers = Arrays.stream(annotations)
-                    .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
+                    .filter(a -> hasQualifierAnnotation(a.annotationType()))
                     .collect(Collectors.toList());
             if (qualifiers.size() > 1) {
                 String qualifierNames = qualifiers.stream()
@@ -251,7 +253,7 @@ public class JSR330Validator {
 
     Constructor<?> findConstructor(Class<?> clazz) {
         List<Constructor<?>> constructors = Arrays.stream(clazz.getDeclaredConstructors())
-                .filter(c -> c.isAnnotationPresent(Inject.class))
+                .filter(c -> hasInjectAnnotation(c))
                 .collect(Collectors.toList());
         if (constructors.size() > 1) {
             knowledgeBase.addInjectionError(clazz.getName() + ": more than one constructor annotated with @Inject");
@@ -338,7 +340,7 @@ public class JSR330Validator {
                 Method superMethod = currentClass.getDeclaredMethod(method.getName(), method.getParameterTypes());
 
                 // If the superclass method has @Inject, warn about the override
-                if (superMethod.isAnnotationPresent(Inject.class)) {
+                if (hasInjectAnnotation(superMethod)) {
                     knowledgeBase.addWarning(fmtMethod(method) +
                         ": overrides @Inject method from " + currentClass.getName() +
                         " but is not annotated - injection will NOT occur");

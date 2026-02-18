@@ -10,6 +10,8 @@ import jakarta.inject.Provider;
 import jakarta.inject.Qualifier;
 
 import java.lang.annotation.Annotation;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -588,7 +590,7 @@ class CDI41InjectionValidator {
      * @return true if it's a qualifier
      */
     private boolean isQualifier(Annotation annotation) {
-        return annotation.annotationType().isAnnotationPresent(Qualifier.class);
+        return hasQualifierAnnotation(annotation.annotationType());
     }
 
     /**

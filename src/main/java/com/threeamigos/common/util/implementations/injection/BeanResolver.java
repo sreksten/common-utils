@@ -13,6 +13,8 @@ import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+
 /**
  * Resolves dependencies by finding matching beans from the KnowledgeBase.
  * This is the core dependency resolution engine for the CDI container.
@@ -137,8 +139,7 @@ class BeanResolver implements ProducerBean.DependencyResolver {
     private Set<Annotation> extractQualifiers(Annotation[] annotations) {
         Set<Annotation> qualifiers = new HashSet<>();
         for (Annotation ann : annotations) {
-            if (ann.annotationType().isAnnotationPresent(Qualifier.class) ||
-                ann.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)) {
+            if (hasQualifierAnnotation(ann.annotationType())) {
                 qualifiers.add(ann);
             }
         }

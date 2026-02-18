@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -36,7 +38,7 @@ public class InjectionPointImpl<T> implements InjectionPoint {
 
     private void collectQualifiers(Annotation[] annotations) {
         for (Annotation ann : annotations) {
-            if (ann.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)) {
+            if (hasQualifierAnnotation(ann.annotationType())) {
                 qualifiers.add(ann);
             }
         }

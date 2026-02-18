@@ -6,6 +6,8 @@ import jakarta.annotation.Nullable;
 
 import jakarta.inject.Named;
 import jakarta.inject.Qualifier;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.Alternative;
@@ -244,7 +246,7 @@ class ClassResolver {
         // Filter out @Qualifier / @Named classes
         Function<Class<? extends T>, Boolean> noQualifierFilteringFunction =
                 clazz -> Arrays.stream(clazz.getAnnotations())
-                        .noneMatch(a -> a.annotationType().isAnnotationPresent(Qualifier.class));
+                        .noneMatch(a -> hasQualifierAnnotation(a.annotationType()));
 
         List<Class<? extends T>> candidates = activeClasses
                 .stream()
@@ -289,7 +291,7 @@ class ClassResolver {
                 resolveImplementations(Thread.currentThread().getContextClassLoader(), typeToResolve);
 
         List<Class<? extends T>> activeClasses = resolvedClasses.stream()
-                .filter(clazz -> enabledAlternatives.contains(clazz) || !clazz.isAnnotationPresent(Alternative.class))
+                .filter(clazz -> enabledAlternatives.contains(clazz) || !hasAlternativeAnnotation(clazz))
                 .collect(Collectors.toList());
 
         if (qualifiers == null || qualifiers.isEmpty()) {
@@ -359,7 +361,7 @@ class ClassResolver {
 
     private boolean isQualifierAnnotation(Annotation annotation) {
         Class<? extends Annotation> at = annotation.annotationType();
-        return at.isAnnotationPresent(Qualifier.class)
+        return hasQualifierAnnotation(at)
                 || at.equals(Named.class);
     }
 
@@ -374,7 +376,7 @@ class ClassResolver {
     }
 
     private boolean isAlternativeAnnotationPresent(Class<?> clazz) {
-        return clazz.isAnnotationPresent(Alternative.class);
+        return hasAlternativeAnnotation(clazz);
     }
 
     /**

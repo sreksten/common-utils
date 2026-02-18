@@ -23,6 +23,8 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+
 /**
  * Validates that a Java class is a CDI Managed Bean, according to CDI 4.1 rules.
  *
@@ -75,7 +77,7 @@ public class CDI41BeanValidator {
             return null;
         }
 
-        if (isVetoed(clazz)) {
+        if (hasVetoedAnnotation(clazz)) {
             return null;
         }
 
@@ -114,8 +116,8 @@ public class CDI41BeanValidator {
         boolean hasInjectionPoints = false;
 
         for (Field field : clazz.getDeclaredFields()) {
-            boolean inject = hasAnnotation(field, Inject.class);
-            boolean produces = hasAnnotation(field, Produces.class);
+            boolean inject = hasInjectAnnotation(field);
+            boolean produces = hasProducesAnnotation(field);
 
             if (inject) {
                 hasInjectionPoints = true;
@@ -136,8 +138,8 @@ public class CDI41BeanValidator {
         }
 
         for (Method method : clazz.getDeclaredMethods()) {
-            boolean inject = hasAnnotation(method, Inject.class);
-            boolean produces = hasAnnotation(method, Produces.class);
+            boolean inject = hasInjectAnnotation(method);
+            boolean produces = hasProducesAnnotation(method);
             boolean disposes = hasDisposesParameter(method);
 
             if (inject) {
@@ -176,8 +178,8 @@ public class CDI41BeanValidator {
         }
 
         // 6) Check for @Interceptor and @Decorator (not managed beans)
-        boolean isInterceptor = hasAnnotation(clazz, Interceptor.class);
-        boolean isDecorator = hasAnnotation(clazz, Decorator.class);
+        boolean isInterceptor = hasInterceptorAnnotation(clazz);
+        boolean isDecorator = hasDecoratorAnnotation(clazz);
 
         if (isInterceptor) {
             knowledgeBase.addInterceptor(clazz);
@@ -192,7 +194,7 @@ public class CDI41BeanValidator {
         }
 
         // 7) Check if this is an alternative bean and if it's properly enabled
-        boolean alternative = hasAnnotation(clazz, Alternative.class);
+        boolean alternative = hasAlternativeAnnotation(clazz);
         boolean alternativeEnabled = isAlternativeEnabled(clazz, alternative);
 
         // 7) Build and register Bean (even if invalid, to track all beans)
@@ -216,7 +218,7 @@ public class CDI41BeanValidator {
 
         // Collect injection points with real metadata so CDI41InjectionValidator can resolve dependencies
         for (Field field : clazz.getDeclaredFields()) {
-            if (hasAnnotation(field, Inject.class)) {
+            if (hasInjectAnnotation(field)) {
                 InjectionPoint ip = tryCreateInjectionPoint(field, bean);
                 if (ip != null) {
                     bean.addInjectionPoint(ip);
@@ -224,7 +226,7 @@ public class CDI41BeanValidator {
             }
         }
         for (Method method : clazz.getDeclaredMethods()) {
-            if (hasAnnotation(method, Inject.class)) {
+            if (hasInjectAnnotation(method)) {
                 for (Parameter p : method.getParameters()) {
                     InjectionPoint ip = tryCreateInjectionPoint(p, bean);
                     if (ip != null) {
@@ -234,7 +236,7 @@ public class CDI41BeanValidator {
             }
         }
         for (Constructor<?> c : clazz.getDeclaredConstructors()) {
-            if (hasAnnotation(c, Inject.class)) {
+            if (hasInjectAnnotation(c)) {
                 for (Parameter p : c.getParameters()) {
                     InjectionPoint ip = tryCreateInjectionPoint(p, bean);
                     if (ip != null) {
@@ -355,7 +357,7 @@ public class CDI41BeanValidator {
 
     private Constructor<?> findBeanConstructor(Class<?> clazz) {
         List<Constructor<?>> injectCtors = Arrays.stream(clazz.getDeclaredConstructors())
-                .filter(c -> hasAnnotation(c, Inject.class))
+                .filter(AnnotationsEnum::hasInjectAnnotation)
                 .collect(Collectors.toList());
 
         if (injectCtors.size() > 1) {
@@ -455,11 +457,11 @@ public class CDI41BeanValidator {
         }
 
         // CDI forbids combining initializer methods with certain roles
-        if (hasAnnotation(method, Produces.class)) {
+        if (hasProducesAnnotation(method)) {
             knowledgeBase.addDefinitionError(fmtMethod(method) + ": initializer method may not be annotated @Produces");
             valid = false;
         }
-        if (hasAnyParameterAnnotated(method, Disposes.class)) {
+        if (hasAnyParameterWithDisposesAnnotation(method)) {
             knowledgeBase.addDefinitionError(fmtMethod(method) + ": initializer method may not declare a @Disposes parameter");
             valid = false;
         }
@@ -475,7 +477,7 @@ public class CDI41BeanValidator {
         boolean valid = true;
         for (Parameter p : parameters) {
             // @Disposes/@Observes etc. are not "injection" parameters; if present in wrong place, handled elsewhere.
-            if (hasAnnotation(p, Disposes.class)) {
+            if (hasDisposesAnnotation(p)) {
                 // handled at producer validation
                 continue;
             }
@@ -514,7 +516,7 @@ public class CDI41BeanValidator {
         }
 
         // Disallow @Inject on producer fields (handled also by combo check)
-        if (hasAnnotation(field, Inject.class)) {
+        if (hasInjectAnnotation(field)) {
             knowledgeBase.addDefinitionError(fmtField(field) + ": producer field may not be annotated @Inject");
             valid = false;
         }
@@ -544,7 +546,7 @@ public class CDI41BeanValidator {
         }
 
         // Important rule you explicitly asked for:
-        if (hasAnnotation(method, Inject.class)) {
+        if (hasInjectAnnotation(method)) {
             knowledgeBase.addDefinitionError(fmtMethod(method) + ": producer method must not be annotated @Inject");
             valid = false;
         }
@@ -560,7 +562,7 @@ public class CDI41BeanValidator {
         // Parameters: at most one @Disposes, and only valid within producer methods.
         int disposesCount = 0;
         for (Parameter p : method.getParameters()) {
-            if (hasAnnotation(p, Disposes.class)) {
+            if (hasDisposesAnnotation(p)) {
                 disposesCount++;
             } else {
                 // normal injection parameter of a producer method
@@ -592,10 +594,10 @@ public class CDI41BeanValidator {
 
     private boolean hasAnyProducer(Class<?> clazz) {
         for (Field f : clazz.getDeclaredFields()) {
-            if (hasAnnotation(f, Produces.class)) return true;
+            if (hasProducesAnnotation(f)) return true;
         }
         for (Method m : clazz.getDeclaredMethods()) {
-            if (hasAnnotation(m, Produces.class)) return true;
+            if (hasProducesAnnotation(m)) return true;
         }
         return false;
     }
@@ -749,20 +751,19 @@ public class CDI41BeanValidator {
     private boolean isCandidateBeanClass(Class<?> clazz) {
         // CDI 4.1 annotated discovery: a bean-defining annotation is required in an implicit archive.
         // We therefore accept only true bean-defining annotations and skip plain @Inject-only classes.
-        if (clazz == null || isVetoed(clazz)) return false;
+        if (clazz == null || hasVetoedAnnotation(clazz)) return false;
 
         // Bean-defining annotations per CDI spec
-        if (hasAnnotation(clazz, ApplicationScoped.class) ||
-            hasAnnotation(clazz, SessionScoped.class) ||
-            hasAnnotation(clazz, RequestScoped.class) ||
-            hasAnnotation(clazz, ConversationScoped.class) ||
-            hasAnnotation(clazz, Dependent.class) ||
-            hasAnnotation(clazz, jakarta.inject.Singleton.class) ||
-            hasAnnotation(clazz, jakarta.inject.Singleton.class) ||
-            hasAnnotation(clazz, Interceptor.class) ||
-            hasAnnotation(clazz, Decorator.class) ||
-            hasAnnotation(clazz, Alternative.class) ||
-            hasAnnotation(clazz, Stereotype.class)) {
+        if (hasApplicationScopedAnnotation(clazz) ||
+            hasSessionScopedAnnotation(clazz) ||
+            hasRequestScopedAnnotation(clazz) ||
+            hasConversationScopedAnnotation(clazz) ||
+            hasDependentAnnotation(clazz) ||
+            hasSingletonAnnotation(clazz) ||
+            hasInterceptorAnnotation(clazz) ||
+            hasDecoratorAnnotation(clazz) ||
+            hasAlternativeAnnotation(clazz) ||
+            hasStereotypeAnnotation(clazz)) {
             return true;
         }
 
@@ -774,10 +775,6 @@ public class CDI41BeanValidator {
         }
 
         return false;
-    }
-
-    private boolean isVetoed(Class<?> clazz) {
-        return hasAnnotation(clazz, Vetoed.class);
     }
 
     // -----------------------
@@ -810,13 +807,9 @@ public class CDI41BeanValidator {
     // Annotation utilities
     // -----------------------
 
-    private boolean hasAnnotation(AnnotatedElement element, Class<? extends Annotation> annotationType) {
-        return element.isAnnotationPresent(annotationType);
-    }
-
-    private boolean hasAnyParameterAnnotated(Method method, Class<? extends Annotation> annotationType) {
+    private boolean hasAnyParameterWithDisposesAnnotation(Method method) {
         for (Parameter p : method.getParameters()) {
-            if (hasAnnotation(p, annotationType)) return true;
+            if (hasDisposesAnnotation(p)) return true;
         }
         return false;
     }
@@ -836,7 +829,7 @@ public class CDI41BeanValidator {
         AnnotatedElement element = (producerMethod != null) ? producerMethod : producerField;
 
         // Determine alternative status at element level; require @Priority to enable in beans.xml-less mode
-        boolean annotatedAlternative = hasAnnotation(declaringClass, Alternative.class) || hasAnnotation(element, Alternative.class);
+        boolean annotatedAlternative = hasAlternativeAnnotation(declaringClass) || hasAlternativeAnnotation(element);
         boolean alternativeEnabled = isAlternativeEnabled(element, annotatedAlternative);
 
         // Create ProducerBean
@@ -942,10 +935,9 @@ public class CDI41BeanValidator {
     private Set<Type> extractProducerTypes(Type producerType) {
         // Build full bean types per CDI: raw type, all superclasses, all interfaces
         Set<Type> types = new LinkedHashSet<>();
-        Class<?> raw = RawTypeExtractor.getRawType(producerType);
 
         // Add hierarchy
-        Class<?> c = raw;
+        Class<?> c = RawTypeExtractor.getRawType(producerType);
         while (c != null && c != Object.class) {
             types.add(c);
             types.addAll(Arrays.asList(c.getGenericInterfaces()));
@@ -968,7 +960,7 @@ public class CDI41BeanValidator {
             if (hasDisposesParameter(method)) {
                 // Check if disposer parameter type matches producer return type
                 for (Parameter param : method.getParameters()) {
-                    if (hasAnnotation(param, Disposes.class)) {
+                    if (hasDisposesAnnotation(param)) {
                         if (param.getType().equals(producedType)) {
                             return method;
                         }
@@ -984,7 +976,7 @@ public class CDI41BeanValidator {
      */
     private boolean hasDisposesParameter(Method method) {
         for (Parameter param : method.getParameters()) {
-            if (hasAnnotation(param, Disposes.class)) {
+            if (hasDisposesAnnotation(param)) {
                 return true;
             }
         }
@@ -1009,7 +1001,7 @@ public class CDI41BeanValidator {
 
         // Look for @Inject constructor
         for (Constructor<?> c : clazz.getDeclaredConstructors()) {
-            if (hasAnnotation(c, Inject.class)) {
+            if (hasInjectAnnotation(c)) {
                 @SuppressWarnings("unchecked")
                 Constructor<T> typedConstructor = (Constructor<T>) c;
                 injectConstructor = typedConstructor;
@@ -1024,7 +1016,7 @@ public class CDI41BeanValidator {
         Class<?> currentClass = clazz;
         while (currentClass != null && currentClass != Object.class) {
             for (Field field : currentClass.getDeclaredFields()) {
-                if (hasAnnotation(field, Inject.class)) {
+                if (hasInjectAnnotation(field)) {
                     bean.addInjectField(field);
                 }
             }
@@ -1036,7 +1028,7 @@ public class CDI41BeanValidator {
         currentClass = clazz;
         while (currentClass != null && currentClass != Object.class) {
             for (Method method : currentClass.getDeclaredMethods()) {
-                if (hasAnnotation(method, Inject.class)) {
+                if (hasInjectAnnotation(method)) {
                     bean.addInjectMethod(method);
                 }
             }
@@ -1067,11 +1059,17 @@ public class CDI41BeanValidator {
      * @return the lifecycle method, or null if not found
      */
     private Method findLifecycleMethod(Class<?> clazz, Class<? extends Annotation> lifecycleAnnotation) {
+        // Determine which static checker to use
+        boolean isPostConstruct = lifecycleAnnotation.equals(PostConstruct.class) ||
+                                   lifecycleAnnotation.equals(javax.annotation.PostConstruct.class);
+
         // Search in current class and superclasses
         Class<?> currentClass = clazz;
         while (currentClass != null && currentClass != Object.class) {
             for (Method method : currentClass.getDeclaredMethods()) {
-                if (hasAnnotation(method, lifecycleAnnotation)) {
+                boolean hasLifecycle = isPostConstruct ? hasPostConstructAnnotation(method) : hasPreDestroyAnnotation(method);
+
+                if (hasLifecycle) {
                     // Validate lifecycle method rules:
                     // - Must have no parameters
                     // - Must not be static

@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
@@ -259,7 +261,7 @@ public class ProducerBean<T> implements Bean<T> {
 
         for (int i = 0; i < parameters.length; i++) {
             // The @Disposes parameter gets the instance being disposed
-            if (parameters[i].isAnnotationPresent(jakarta.enterprise.inject.Disposes.class)) {
+            if (hasDisposesAnnotation(parameters[i])) {
                 args[i] = instance;
             } else {
                 // Other parameters are normal injection points
