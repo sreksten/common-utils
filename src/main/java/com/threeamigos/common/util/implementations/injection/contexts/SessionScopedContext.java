@@ -106,6 +106,14 @@ public class SessionScopedContext implements ScopeContext {
         return active && currentSessionId.get() != null;
     }
 
+    @Override
+    public boolean isPassivationCapable() {
+        // SessionScoped beans CAN be passivated (serialized to disk/database)
+        // when the HTTP session is passivated by the servlet container
+        // Therefore, beans in this scope MUST be Serializable
+        return true;
+    }
+
     @SuppressWarnings("unchecked")
     private void destroySession(String sessionId) {
         Map<Bean<?>, Object> instances = sessionInstances.remove(sessionId);

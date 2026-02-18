@@ -62,4 +62,11 @@ public class ApplicationScopedContext implements ScopeContext {
     public boolean isActive() {
         return active;
     }
+
+    @Override
+    public boolean isPassivationCapable() {
+        // ApplicationScoped beans live for the entire application lifetime
+        // They are never passivated, so no serialization requirement
+        return false;
+    }
 }

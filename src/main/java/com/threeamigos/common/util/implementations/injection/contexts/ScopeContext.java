@@ -39,4 +39,22 @@ public interface ScopeContext {
      * @return true if the scope is currently active
      */
     boolean isActive();
+
+    /**
+     * Checks if this scope supports passivation.
+     *
+     * Passivation capable scopes in CDI:
+     * - @SessionScoped - beans can be serialized when session is passivated
+     * - @ConversationScoped - beans can be serialized when conversation is passivated
+     *
+     * Non-passivating scopes:
+     * - @ApplicationScoped - lives for entire application lifetime, no passivation needed
+     * - @RequestScoped - short-lived, destroyed at end of request
+     * - @Dependent - pseudo-scope, lifecycle tied to parent bean
+     *
+     * Beans in passivation capable scopes MUST be Serializable.
+     *
+     * @return true if beans in this scope must support serialization
+     */
+    boolean isPassivationCapable();
 }

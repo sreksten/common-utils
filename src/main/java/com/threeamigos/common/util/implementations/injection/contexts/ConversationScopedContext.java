@@ -111,6 +111,14 @@ public class ConversationScopedContext implements ScopeContext {
         return active && currentConversationId.get() != null;
     }
 
+    @Override
+    public boolean isPassivationCapable() {
+        // ConversationScoped beans CAN be passivated (serialized to disk/database)
+        // when long-running conversations are passivated by the servlet container
+        // Therefore, beans in this scope MUST be Serializable
+        return true;
+    }
+
     @SuppressWarnings("unchecked")
     private void destroyConversation(String conversationId) {
         Map<Bean<?>, Object> instances = conversationInstances.remove(conversationId);

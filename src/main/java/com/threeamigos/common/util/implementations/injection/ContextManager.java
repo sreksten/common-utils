@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
+import jakarta.enterprise.inject.spi.Bean;
 
 import java.lang.annotation.Annotation;
 import java.util.Map;
@@ -17,12 +18,13 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author Stefano Reksten
  */
-class ContextManager {
+public class ContextManager {
 
     private final Map<Class<? extends Annotation>, ScopeContext> contexts = new ConcurrentHashMap<>();
     private final ConversationScopedContext conversationContext;
     private final SessionScopedContext sessionContext;
     private final RequestScopedContext requestContext;
+    private final ClientProxyGenerator proxyGenerator;
 
     ContextManager() {
         // Initialize built-in contexts
@@ -37,6 +39,9 @@ class ContextManager {
         contexts.put(ConversationScoped.class, conversationContext);
         contexts.put(SessionScoped.class, sessionContext);
         contexts.put(RequestScoped.class, requestContext);
+
+        // Initialize proxy generator
+        proxyGenerator = new ClientProxyGenerator(this);
     }
 
     /**
@@ -153,5 +158,47 @@ class ContextManager {
      */
     void deactivateRequest() {
         requestContext.deactivateRequest();
+    }
+
+    // === Proxy Management ===
+
+    /**
+     * Checks if a scope annotation represents a normal scope (requires proxies).
+     *
+     * Normal scopes in CDI:
+     * - @ApplicationScoped
+     * - @RequestScoped
+     * - @SessionScoped
+     * - @ConversationScoped
+     *
+     * Pseudo-scopes (no proxies needed):
+     * - @Dependent
+     *
+     * @param scopeAnnotation the scope annotation to check
+     * @return true if this is a normal scope that requires proxies
+     */
+    boolean isNormalScope(Class<? extends Annotation> scopeAnnotation) {
+        // Dependent is a pseudo-scope, not a normal scope
+        if (scopeAnnotation == Dependent.class) {
+            return false;
+        }
+
+        // All other registered scopes are normal scopes
+        return contexts.containsKey(scopeAnnotation);
+    }
+
+    /**
+     * Creates a client proxy for a bean.
+     *
+     * This is called during bean creation for normal-scoped beans.
+     * The proxy will delegate all method calls to the contextual instance
+     * from the appropriate scope.
+     *
+     * @param bean the bean to create a proxy for
+     * @param <T> the bean type
+     * @return a client proxy instance
+     */
+    <T> T createClientProxy(Bean<T> bean) {
+        return proxyGenerator.createProxy(bean);
     }
 }

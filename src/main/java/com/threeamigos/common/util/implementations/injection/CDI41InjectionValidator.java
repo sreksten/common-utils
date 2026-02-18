@@ -86,6 +86,9 @@ class CDI41InjectionValidator {
         // Enhancement 3: Validate alternative beans (only one alternative per type)
         allValid &= validateAlternatives(validBeans);
 
+        // Enhancement 4: Validate passivation capability for beans in passivating scopes
+        allValid &= validatePassivation(validBeans);
+
         // Validate each bean's injection points
         for (Bean<?> bean : validBeans) {
             for (InjectionPoint injectionPoint : bean.getInjectionPoints()) {
@@ -289,6 +292,78 @@ class CDI41InjectionValidator {
         }
 
         return allValid;
+    }
+
+    // ============================================
+    // Enhancement 4: Passivation Validation
+    // ============================================
+
+    /**
+     * Validates that beans in passivation-capable scopes are serializable.
+     *
+     * <p>CDI 4.1 Passivation Requirements:
+     * <ul>
+     *   <li>@SessionScoped beans MUST implement Serializable (session can be passivated)</li>
+     *   <li>@ConversationScoped beans MUST implement Serializable (conversation can be passivated)</li>
+     *   <li>@ApplicationScoped beans do NOT need to be Serializable (never passivated)</li>
+     *   <li>@RequestScoped beans do NOT need to be Serializable (short-lived)</li>
+     *   <li>@Dependent beans do NOT need to be Serializable (lifecycle tied to parent)</li>
+     * </ul>
+     *
+     * <p>When a bean is in a passivation-capable scope, it must be passivation capable:
+     * - The bean class must implement {@link java.io.Serializable}
+     * - All interceptors and decorators must be serializable (checked in future phases)
+     * - Note: Member variables are NOT validated by CDI (developer responsibility)
+     *
+     * <p>Important: Client proxies are ALWAYS Serializable, so injecting non-passivating
+     * beans into passivating beans is allowed (the proxy is serialized, not the actual bean).
+     *
+     * @param validBeans collection of valid beans to validate
+     * @return true if all beans satisfy passivation requirements, false otherwise
+     */
+    private boolean validatePassivation(Collection<Bean<?>> validBeans) {
+        boolean allValid = true;
+
+        // Get context manager to check if scope is passivation-capable
+        // Note: We need access to ContextManager here
+        // For now, we'll check the scope annotation directly
+        for (Bean<?> bean : validBeans) {
+            Class<? extends Annotation> scopeAnnotation = bean.getScope();
+
+            // Check if this is a passivation-capable scope
+            if (isPassivationCapableScope(scopeAnnotation)) {
+                // Bean must be Serializable
+                if (!java.io.Serializable.class.isAssignableFrom(bean.getBeanClass())) {
+                    knowledgeBase.addError(
+                            "Bean " + bean.getBeanClass().getName() +
+                            " has passivation-capable scope @" + scopeAnnotation.getSimpleName() +
+                            " but does not implement java.io.Serializable. " +
+                            "Beans in @SessionScoped or @ConversationScoped must be Serializable " +
+                            "because the container may passivate (serialize) them to disk or database."
+                    );
+                    allValid = false;
+                }
+            }
+        }
+
+        return allValid;
+    }
+
+    /**
+     * Checks if a scope annotation represents a passivation-capable scope.
+     *
+     * <p>In CDI 4.1, only @SessionScoped and @ConversationScoped are passivation-capable.
+     *
+     * @param scopeAnnotation the scope annotation to check
+     * @return true if the scope is passivation-capable
+     */
+    private boolean isPassivationCapableScope(Class<? extends Annotation> scopeAnnotation) {
+        // SessionScoped and ConversationScoped are passivation-capable
+        String scopeName = scopeAnnotation.getName();
+        return scopeName.equals("jakarta.enterprise.context.SessionScoped") ||
+               scopeName.equals("jakarta.enterprise.context.ConversationScoped") ||
+               scopeName.equals("javax.enterprise.context.SessionScoped") ||
+               scopeName.equals("javax.enterprise.context.ConversationScoped");
     }
 
     // ============================================

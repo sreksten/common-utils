@@ -81,6 +81,13 @@ public class RequestScopedContext implements ScopeContext {
         return active && requestActive.get();
     }
 
+    @Override
+    public boolean isPassivationCapable() {
+        // RequestScoped beans are short-lived (destroyed at end of request)
+        // They are never passivated, so no serialization requirement
+        return false;
+    }
+
     @SuppressWarnings("unchecked")
     private void destroyRequest() {
         Map<Bean<?>, Object> instances = requestInstances.get();

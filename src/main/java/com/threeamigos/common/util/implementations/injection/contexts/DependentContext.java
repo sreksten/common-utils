@@ -35,4 +35,11 @@ public class DependentContext implements ScopeContext {
         // Dependent scope is always active
         return true;
     }
+
+    @Override
+    public boolean isPassivationCapable() {
+        // Dependent is a pseudo-scope with no independent lifecycle
+        // Passivation is determined by the bean that owns the dependent instance
+        return false;
+    }
 }

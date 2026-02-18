@@ -238,17 +238,34 @@ class BeanResolver implements ProducerBean.DependencyResolver {
 
     /**
      * Gets or creates an instance from the appropriate scope.
+     *
+     * For normal scopes (ApplicationScoped, RequestScoped, SessionScoped, ConversationScoped),
+     * this returns a CLIENT PROXY instead of the actual instance. The proxy will delegate
+     * all method calls to the current contextual instance from the scope.
+     *
+     * Why proxies are needed:
+     * - Allows injecting short-lived beans (RequestScoped) into long-lived beans (ApplicationScoped)
+     * - The proxy ensures each method call gets the correct contextual instance
+     * - Without proxies, you'd get the wrong instance (e.g., same RequestScoped instance for all requests)
+     *
+     * For pseudo-scopes (Dependent), this returns the actual instance directly since
+     * Dependent beans are created fresh for each injection point and don't need proxies.
      */
     @SuppressWarnings("unchecked")
     private <T> T getInstanceFromScope(Bean<T> bean) {
         Class<? extends Annotation> scope = bean.getScope();
 
-        // Get context for this scope
-        ScopeContext context = contextManager.getContext(scope);
-
-        // Get or create an instance (context handles caching for scoped beans)
-        CreationalContext<T> creationalContext = new CreationalContextImpl<>();
-        return context.get(bean, creationalContext);
+        // Check if this is a normal scope that requires a client proxy
+        if (contextManager.isNormalScope(scope)) {
+            // For normal scopes, return a client proxy
+            // The proxy will delegate to the contextual instance on each method call
+            return contextManager.createClientProxy(bean);
+        } else {
+            // For pseudo-scopes like @Dependent, return the actual instance
+            ScopeContext context = contextManager.getContext(scope);
+            CreationalContext<T> creationalContext = new CreationalContextImpl<>();
+            return context.get(bean, creationalContext);
+        }
     }
 
     /**
