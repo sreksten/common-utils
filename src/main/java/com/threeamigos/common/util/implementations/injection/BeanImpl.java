@@ -1,15 +1,11 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
-import jakarta.inject.Inject;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class BeanImpl<T> implements Bean<T> {
 
@@ -177,7 +173,7 @@ public class BeanImpl<T> implements Bean<T> {
     }
 
     /**
-     * Creates instance via constructor injection.
+     * Creates an instance via constructor injection.
      * Uses @Inject constructor if present, otherwise uses no-args constructor.
      */
     private T createInstance(CreationalContext<T> creationalContext) throws Exception {

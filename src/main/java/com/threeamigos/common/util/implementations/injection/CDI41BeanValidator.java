@@ -273,18 +273,36 @@ public class CDI41BeanValidator {
     private Set<Annotation> extractBeanQualifiers(Class<?> clazz) {
         // CDI 4.1 approach:
         // - Collect qualifier annotations from the class
+        // - Inherit qualifiers from stereotypes
         // - If no qualifiers exist (other than @Named), add @Default
         // - @Named is a special qualifier that doesn't replace @Default
         // - Always add @Any (CDI built-in)
         Set<Annotation> result = new HashSet<>();
         boolean hasNonNamedQualifier = false;
 
+        // First, collect qualifiers directly on the class
         for (Annotation a : clazz.getAnnotations()) {
             if (isQualifierAnnotationType(a.annotationType())) {
                 result.add(a);
                 // Check if this is a qualifier other than @Named
                 if (!a.annotationType().equals(Named.class)) {
                     hasNonNamedQualifier = true;
+                }
+            }
+        }
+
+        // Then, inherit qualifiers from stereotypes
+        for (Annotation a : clazz.getAnnotations()) {
+            if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
+                Set<Annotation> stereotypeQualifiers = extractQualifiersFromStereotype(a.annotationType());
+                result.addAll(stereotypeQualifiers);
+                if (!stereotypeQualifiers.isEmpty()) {
+                    // Check if stereotype defines non-@Named qualifiers
+                    for (Annotation sq : stereotypeQualifiers) {
+                        if (!sq.annotationType().equals(Named.class)) {
+                            hasNonNamedQualifier = true;
+                        }
+                    }
                 }
             }
         }
@@ -301,6 +319,7 @@ public class CDI41BeanValidator {
     }
 
     private Class<? extends Annotation> extractBeanScope(Class<?> clazz) {
+        // CDI 4.1: Check for scope directly on the class first
         // If a scope exists, it's already validated as at-most-one in validateScopeAnnotations.
         for (Annotation a : clazz.getAnnotations()) {
             Class<? extends Annotation> at = a.annotationType();
@@ -308,6 +327,19 @@ public class CDI41BeanValidator {
                 return at;
             }
         }
+
+        // If no direct scope, inherit from stereotypes
+        // If multiple stereotypes define different scopes, CDI requires explicit scope on the bean
+        // For now, we take the first stereotype's scope (CDI validation would catch conflicts)
+        for (Annotation a : clazz.getAnnotations()) {
+            if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
+                Class<? extends Annotation> stereotypeScope = extractScopeFromStereotype(a.annotationType());
+                if (stereotypeScope != null) {
+                    return stereotypeScope;
+                }
+            }
+        }
+
         // Default scope for managed beans is @Dependent.
         return Dependent.class;
     }
@@ -344,6 +376,64 @@ public class CDI41BeanValidator {
             return s;
         }
         return Character.toLowerCase(s.charAt(0)) + s.substring(1);
+    }
+
+    /**
+     * Extracts scope from a stereotype annotation.
+     * Stereotypes can define a default scope. This method recursively checks for scope annotations
+     * on the stereotype itself, supporting nested stereotypes.
+     *
+     * @param stereotypeClass the stereotype annotation class
+     * @return the scope annotation class, or null if no scope is defined
+     */
+    private Class<? extends Annotation> extractScopeFromStereotype(Class<? extends Annotation> stereotypeClass) {
+        // First check if stereotype directly has a scope annotation
+        for (Annotation a : stereotypeClass.getAnnotations()) {
+            Class<? extends Annotation> at = a.annotationType();
+            if (isScopeAnnotationType(at)) {
+                return at;
+            }
+        }
+
+        // Then check nested stereotypes (stereotype can be annotated with another stereotype)
+        for (Annotation a : stereotypeClass.getAnnotations()) {
+            if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
+                Class<? extends Annotation> nestedScope = extractScopeFromStereotype(a.annotationType());
+                if (nestedScope != null) {
+                    return nestedScope;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extracts qualifiers from a stereotype annotation.
+     * Stereotypes can define default qualifiers. This method recursively collects qualifiers
+     * from the stereotype and any nested stereotypes.
+     *
+     * @param stereotypeClass the stereotype annotation class
+     * @return set of qualifier annotations
+     */
+    private Set<Annotation> extractQualifiersFromStereotype(Class<? extends Annotation> stereotypeClass) {
+        Set<Annotation> qualifiers = new HashSet<>();
+
+        // Collect qualifiers directly on the stereotype
+        for (Annotation a : stereotypeClass.getAnnotations()) {
+            if (isQualifierAnnotationType(a.annotationType())) {
+                qualifiers.add(a);
+            }
+        }
+
+        // Recursively collect from nested stereotypes
+        for (Annotation a : stereotypeClass.getAnnotations()) {
+            if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
+                qualifiers.addAll(extractQualifiersFromStereotype(a.annotationType()));
+            }
+        }
+
+        return qualifiers;
     }
 
 

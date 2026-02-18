@@ -102,7 +102,7 @@ public enum AnnotationsEnum {
     ANY(javax.enterprise.inject.Any.class, jakarta.enterprise.inject.Any.class),
 
     /**
-     * Default qualifier applied when no other qualifier is present.
+     * The default qualifier applied when no other qualifier is present.
      * Maps: {@code javax.enterprise.inject.Default}, {@code jakarta.enterprise.inject.Default}
      */
     DEFAULT(javax.enterprise.inject.Default.class, jakarta.enterprise.inject.Default.class),

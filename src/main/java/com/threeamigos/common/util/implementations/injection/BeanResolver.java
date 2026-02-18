@@ -43,7 +43,7 @@ class BeanResolver implements ProducerBean.DependencyResolver {
             ParameterizedType pt = (ParameterizedType) requiredType;
             Class<?> rawType = (Class<?>) pt.getRawType();
 
-            // Check if it's Provider<T> (which includes Instance<T>)
+            // Check if it's a Provider<T> (which includes Instance<T>)
             if (Provider.class.isAssignableFrom(rawType)) {
                 Type actualType = pt.getActualTypeArguments()[0];
                 @SuppressWarnings("unchecked")
@@ -76,7 +76,7 @@ class BeanResolver implements ProducerBean.DependencyResolver {
 
         Bean<?> bean = candidates.iterator().next();
 
-        // Get or create instance from appropriate scope
+        // Get or create an instance from the appropriate scope
         return getInstanceFromScope(bean);
     }
 
