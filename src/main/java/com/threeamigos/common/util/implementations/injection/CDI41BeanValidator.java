@@ -179,6 +179,8 @@ public class CDI41BeanValidator {
 
         if (isInterceptor) {
             knowledgeBase.addInterceptor(clazz);
+            // Validate and register interceptor metadata
+            validateAndRegisterInterceptor(clazz);
             // Interceptors are not managed beans - return null (no bean to register)
             return null;
         }
@@ -189,6 +191,8 @@ public class CDI41BeanValidator {
             validateDecoratorDelegateInjectionPoints(clazz);
 
             knowledgeBase.addDecorator(clazz);
+            // Validate and register decorator metadata
+            validateAndRegisterDecorator(clazz);
             // Decorators are not managed beans - return null (no bean to register)
             return null;
         }
@@ -1291,6 +1295,240 @@ public class CDI41BeanValidator {
             // Best-effort only. Bean can still be registered without concrete injection point objects.
         }
         return null;
+    }
+
+    // -----------------------
+    // Interceptor Validation
+    // -----------------------
+
+    /**
+     * Validates and registers interceptor metadata.
+     *
+     * <p><b>CDI 4.1 Interceptor Requirements (Section 9):</b>
+     * <ul>
+     *   <li>Must have @Interceptor annotation</li>
+     *   <li>Must have at least one interceptor binding annotation</li>
+     *   <li>Must have exactly one @AroundInvoke, @AroundConstruct, @PostConstruct, or @PreDestroy method</li>
+     *   <li>Can optionally have @Priority for ordering (defaults to Integer.MAX_VALUE)</li>
+     * </ul>
+     *
+     * @param clazz the interceptor class to validate
+     */
+    private void validateAndRegisterInterceptor(Class<?> clazz) {
+        boolean valid = true;
+
+        // Extract interceptor bindings
+        Set<Annotation> interceptorBindings = extractInterceptorBindings(clazz);
+        if (interceptorBindings.isEmpty()) {
+            knowledgeBase.addDefinitionError(clazz.getName() + ": @Interceptor must have at least one interceptor binding annotation");
+            valid = false;
+        }
+
+        // Extract priority
+        int priority = Integer.MAX_VALUE;
+        Priority priorityAnnotation = clazz.getAnnotation(Priority.class);
+        if (priorityAnnotation != null) {
+            priority = priorityAnnotation.value();
+        }
+
+        // Find interceptor methods
+        Method aroundInvokeMethod = findAroundInvokeMethod(clazz);
+        Method aroundConstructMethod = findAroundConstructMethod(clazz);
+        Method postConstructMethod = findPostConstructMethod(clazz);
+        Method preDestroyMethod = findPreDestroyMethod(clazz);
+
+        // Validate that at least one interceptor method exists
+        if (aroundInvokeMethod == null && aroundConstructMethod == null &&
+            postConstructMethod == null && preDestroyMethod == null) {
+            knowledgeBase.addDefinitionError(clazz.getName() +
+                ": @Interceptor must have at least one interceptor method (@AroundInvoke, @AroundConstruct, @PostConstruct, or @PreDestroy)");
+            valid = false;
+        }
+
+        // Only register if valid
+        if (valid) {
+            InterceptorInfo info = new InterceptorInfo(
+                clazz,
+                interceptorBindings,
+                priority,
+                aroundInvokeMethod,
+                aroundConstructMethod,
+                postConstructMethod,
+                preDestroyMethod
+            );
+            knowledgeBase.addInterceptorInfo(info);
+        }
+    }
+
+    /**
+     * Extracts interceptor binding annotations from the class.
+     * An interceptor binding is an annotation that is itself annotated with @InterceptorBinding.
+     */
+    private Set<Annotation> extractInterceptorBindings(Class<?> clazz) {
+        Set<Annotation> bindings = new HashSet<>();
+        for (Annotation annotation : clazz.getAnnotations()) {
+            if (isInterceptorBinding(annotation.annotationType())) {
+                bindings.add(annotation);
+            }
+        }
+        return bindings;
+    }
+
+    /**
+     * Checks if an annotation type is an interceptor binding.
+     */
+    private boolean isInterceptorBinding(Class<? extends Annotation> annotationType) {
+        return annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class);
+    }
+
+    /**
+     * Finds the @AroundInvoke method in the interceptor class.
+     * CDI spec: must have signature Object method(InvocationContext) throws Exception
+     */
+    private Method findAroundInvokeMethod(Class<?> clazz) {
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the @AroundConstruct method in the interceptor class.
+     * CDI spec: must have signature void method(InvocationContext) throws Exception
+     */
+    private Method findAroundConstructMethod(Class<?> clazz) {
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(jakarta.interceptor.AroundConstruct.class)) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the @PostConstruct method in the interceptor class (lifecycle callback).
+     */
+    private Method findPostConstructMethod(Class<?> clazz) {
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(PostConstruct.class)) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the @PreDestroy method in the interceptor class (lifecycle callback).
+     */
+    private Method findPreDestroyMethod(Class<?> clazz) {
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(PreDestroy.class)) {
+                return method;
+            }
+        }
+        return null;
+    }
+
+    // -----------------------
+    // Decorator Validation
+    // -----------------------
+
+    /**
+     * Validates and registers decorator metadata.
+     *
+     * <p><b>CDI 4.1 Decorator Requirements (Section 8):</b>
+     * <ul>
+     *   <li>Must have @Decorator annotation</li>
+     *   <li>Must have exactly ONE @Delegate injection point</li>
+     *   <li>Must implement or extend the decorated types</li>
+     *   <li>Can optionally have @Priority for ordering (defaults to Integer.MAX_VALUE)</li>
+     * </ul>
+     *
+     * @param clazz the decorator class to validate
+     */
+    private void validateAndRegisterDecorator(Class<?> clazz) {
+        // Extract priority
+        int priority = Integer.MAX_VALUE;
+        Priority priorityAnnotation = clazz.getAnnotation(Priority.class);
+        if (priorityAnnotation != null) {
+            priority = priorityAnnotation.value();
+        }
+
+        // Find the @Delegate injection point
+        InjectionPoint delegateInjectionPoint = findDelegateInjectionPoint(clazz);
+        if (delegateInjectionPoint == null) {
+            // Error already reported by validateDecoratorDelegateInjectionPoints
+            return;
+        }
+
+        // Extract decorated types from @Delegate injection point
+        Set<Type> decoratedTypes = extractDecoratedTypes(clazz, delegateInjectionPoint);
+
+        // Register decorator info
+        DecoratorInfo info = new DecoratorInfo(
+            clazz,
+            decoratedTypes,
+            priority,
+            delegateInjectionPoint
+        );
+        knowledgeBase.addDecoratorInfo(info);
+    }
+
+    /**
+     * Finds the @Delegate injection point in the decorator class.
+     */
+    private InjectionPoint findDelegateInjectionPoint(Class<?> clazz) {
+        // Check fields
+        for (Field field : clazz.getDeclaredFields()) {
+            if (field.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                return tryCreateInjectionPoint(field, null);
+            }
+        }
+
+        // Check constructor parameters
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            for (Parameter parameter : constructor.getParameters()) {
+                if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                    return tryCreateInjectionPoint(parameter, null);
+                }
+            }
+        }
+
+        // Check method parameters
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (hasInjectAnnotation(method)) {
+                for (Parameter parameter : method.getParameters()) {
+                    if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                        return tryCreateInjectionPoint(parameter, null);
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extracts decorated types from the decorator class.
+     * The decorated types are the interfaces/classes that the decorator implements/extends.
+     */
+    private Set<Type> extractDecoratedTypes(Class<?> clazz, InjectionPoint delegateInjectionPoint) {
+        Set<Type> decoratedTypes = new HashSet<>();
+
+        // Add all interfaces
+        for (Type interfaceType : clazz.getGenericInterfaces()) {
+            decoratedTypes.add(interfaceType);
+        }
+
+        // Add superclass (if not Object)
+        Type superclass = clazz.getGenericSuperclass();
+        if (superclass != null && superclass != Object.class) {
+            decoratedTypes.add(superclass);
+        }
+
+        return decoratedTypes;
     }
 
 

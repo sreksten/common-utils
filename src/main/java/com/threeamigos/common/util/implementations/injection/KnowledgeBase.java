@@ -22,9 +22,14 @@ public class KnowledgeBase {
     // ProducerBeans are also added to the beans collection, but we keep separate reference for convenience
     private final Collection<ProducerBean<?>> producerBeans = new ConcurrentLinkedQueue<>();
 
-    // Interceptor/Decorator tracking
+    // Interceptor/Decorator tracking (legacy - for backward compatibility)
     private final Collection<Class<?>> interceptors = new ConcurrentLinkedQueue<>();
     private final Collection<Class<?>> decorators = new ConcurrentLinkedQueue<>();
+
+    // Enhanced tracking with full metadata
+    private final Collection<InterceptorInfo> interceptorInfos = new ConcurrentLinkedQueue<>();
+    private final Collection<DecoratorInfo> decoratorInfos = new ConcurrentLinkedQueue<>();
+    private final Collection<ObserverMethodInfo> observerMethodInfos = new ConcurrentLinkedQueue<>();
 
     private final List<String> warnings = new ArrayList<>();
     private final List<String> errors = new ArrayList<>();
@@ -149,7 +154,7 @@ public class KnowledgeBase {
         return producerBeans;
     }
 
-    // Interceptor/Decorator methods
+    // Interceptor/Decorator methods (legacy)
 
     void addInterceptor(Class<?> interceptorClass) {
         interceptors.add(interceptorClass);
@@ -165,5 +170,67 @@ public class KnowledgeBase {
 
     Collection<Class<?>> getDecorators() {
         return decorators;
+    }
+
+    // Enhanced Interceptor/Decorator/Observer methods
+
+    /**
+     * Adds fully validated interceptor metadata to the knowledge base.
+     * This should be called after validating the interceptor class.
+     *
+     * @param interceptorInfo the validated interceptor metadata
+     */
+    void addInterceptorInfo(InterceptorInfo interceptorInfo) {
+        interceptorInfos.add(interceptorInfo);
+    }
+
+    /**
+     * Returns all validated interceptors with full metadata.
+     * Use this for building interceptor chains.
+     *
+     * @return collection of interceptor metadata
+     */
+    Collection<InterceptorInfo> getInterceptorInfos() {
+        return interceptorInfos;
+    }
+
+    /**
+     * Adds fully validated decorator metadata to the knowledge base.
+     * This should be called after validating the decorator class.
+     *
+     * @param decoratorInfo the validated decorator metadata
+     */
+    void addDecoratorInfo(DecoratorInfo decoratorInfo) {
+        decoratorInfos.add(decoratorInfo);
+    }
+
+    /**
+     * Returns all validated decorators with full metadata.
+     * Use this for building decorator chains.
+     *
+     * @return collection of decorator metadata
+     */
+    Collection<DecoratorInfo> getDecoratorInfos() {
+        return decoratorInfos;
+    }
+
+    /**
+     * Adds fully validated observer method metadata to the knowledge base.
+     * This should be called after validating the observer method.
+     *
+     * @param observerMethodInfo the validated observer method metadata
+     */
+    void addObserverMethodInfo(ObserverMethodInfo observerMethodInfo) {
+        observerMethodInfos.add(observerMethodInfo);
+    }
+
+    /**
+     * Returns all validated observer methods with full metadata.
+     * Use this for event firing and observer invocation.
+     *
+     * @return collection of observer method metadata
+     */
+    Collection<ObserverMethodInfo> getObserverMethodInfos() {
+        return observerMethodInfos;
     }
 }

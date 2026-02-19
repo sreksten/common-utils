@@ -89,6 +89,9 @@ class CDI41InjectionValidator {
         // Enhancement 4: Validate passivation capability for beans in passivating scopes
         allValid &= validatePassivation(validBeans);
 
+        // Enhancement 5: Scan and validate observer methods
+        allValid &= scanAndValidateObserverMethods(validBeans);
+
         // Validate each bean's injection points
         for (Bean<?> bean : validBeans) {
             for (InjectionPoint injectionPoint : bean.getInjectionPoints()) {
@@ -741,5 +744,157 @@ class CDI41InjectionValidator {
         return qualifiers.stream()
             .map(q -> "@" + q.annotationType().getSimpleName())
             .collect(Collectors.joining(", ", "[", "]"));
+    }
+
+    // ============================================
+    // Enhancement 5: Observer Method Validation
+    // ============================================
+
+    /**
+     * Scans all beans for observer methods and validates them.
+     *
+     * <p><b>CDI 4.1 Observer Method Requirements (Section 10.4):</b>
+     * <ul>
+     *   <li>Must have exactly one parameter annotated with @Observes or @ObservesAsync</li>
+     *   <li>The observed parameter defines the event type</li>
+     *   <li>Cannot have both @Observes and @ObservesAsync on same method</li>
+     *   <li>Can have additional injection points as other parameters</li>
+     *   <li>May have qualifiers on observed parameter for event filtering</li>
+     *   <li>Conditional observers (@Observes(notifyObserver=IF_EXISTS)) only notified if bean exists</li>
+     * </ul>
+     *
+     * @param validBeans the beans to scan for observer methods
+     * @return true if all observer methods are valid
+     */
+    private boolean scanAndValidateObserverMethods(Collection<Bean<?>> validBeans) {
+        boolean allValid = true;
+
+        for (Bean<?> bean : validBeans) {
+            if (!(bean instanceof BeanImpl)) {
+                continue; // Producer beans don't have observer methods
+            }
+
+            BeanImpl<?> beanImpl = (BeanImpl<?>) bean;
+            Class<?> beanClass = beanImpl.getBeanClass();
+
+            // Scan all methods for @Observes and @ObservesAsync
+            for (java.lang.reflect.Method method : beanClass.getDeclaredMethods()) {
+                boolean valid = validateObserverMethod(method, bean);
+                allValid &= valid;
+            }
+        }
+
+        return allValid;
+    }
+
+    /**
+     * Validates a single observer method and registers it if valid.
+     *
+     * @param method the method to validate
+     * @param declaringBean the bean that declares this method
+     * @return true if valid
+     */
+    private boolean validateObserverMethod(java.lang.reflect.Method method, Bean<?> declaringBean) {
+        // Count @Observes and @ObservesAsync parameters
+        int observesCount = 0;
+        int observesAsyncCount = 0;
+        java.lang.reflect.Parameter observedParameter = null;
+
+        for (java.lang.reflect.Parameter parameter : method.getParameters()) {
+            if (parameter.isAnnotationPresent(jakarta.enterprise.event.Observes.class)) {
+                observesCount++;
+                observedParameter = parameter;
+            }
+            if (parameter.isAnnotationPresent(jakarta.enterprise.event.ObservesAsync.class)) {
+                observesAsyncCount++;
+                observedParameter = parameter;
+            }
+        }
+
+        // No observer annotations - not an observer method
+        if (observesCount == 0 && observesAsyncCount == 0) {
+            return true;
+        }
+
+        // Validate exactly one observer annotation
+        if (observesCount + observesAsyncCount > 1) {
+            knowledgeBase.addError(
+                "Observer method " + method.getName() + " in " + declaringBean.getBeanClass().getName() +
+                " must have exactly one parameter with @Observes or @ObservesAsync, found " +
+                (observesCount + observesAsyncCount)
+            );
+            return false;
+        }
+
+        // Cannot mix @Observes and @ObservesAsync
+        if (observesCount > 0 && observesAsyncCount > 0) {
+            knowledgeBase.addError(
+                "Observer method " + method.getName() + " in " + declaringBean.getBeanClass().getName() +
+                " cannot have both @Observes and @ObservesAsync"
+            );
+            return false;
+        }
+
+        // Extract observer metadata
+        boolean async = observesAsyncCount > 0;
+        Type eventType = observedParameter.getParameterizedType();
+        Set<Annotation> qualifiers = extractQualifiers(observedParameter);
+
+        // Extract reception and transaction phase
+        jakarta.enterprise.event.Reception reception = jakarta.enterprise.event.Reception.ALWAYS;
+        jakarta.enterprise.event.TransactionPhase transactionPhase = jakarta.enterprise.event.TransactionPhase.IN_PROGRESS;
+
+        if (async) {
+            // Extract from @ObservesAsync
+            jakarta.enterprise.event.ObservesAsync observesAsync =
+                observedParameter.getAnnotation(jakarta.enterprise.event.ObservesAsync.class);
+            reception = observesAsync.notifyObserver();
+        } else {
+            // Extract from @Observes
+            jakarta.enterprise.event.Observes observes =
+                observedParameter.getAnnotation(jakarta.enterprise.event.Observes.class);
+            reception = observes.notifyObserver();
+            transactionPhase = observes.during();
+        }
+
+        // Extract priority
+        int priority = 0;
+        jakarta.annotation.Priority priorityAnnotation = method.getAnnotation(jakarta.annotation.Priority.class);
+        if (priorityAnnotation != null) {
+            priority = priorityAnnotation.value();
+        }
+
+        // Create and register observer method info
+        ObserverMethodInfo observerMethodInfo = new ObserverMethodInfo(
+            method,
+            eventType,
+            qualifiers,
+            reception,
+            transactionPhase,
+            async,
+            declaringBean,
+            priority
+        );
+
+        knowledgeBase.addObserverMethodInfo(observerMethodInfo);
+        return true;
+    }
+
+    /**
+     * Extracts qualifiers from a parameter.
+     * Qualifiers are annotations annotated with @Qualifier.
+     */
+    private Set<Annotation> extractQualifiers(java.lang.reflect.Parameter parameter) {
+        Set<Annotation> qualifiers = new HashSet<>();
+        for (Annotation annotation : parameter.getAnnotations()) {
+            if (annotation.annotationType().isAnnotationPresent(Qualifier.class)) {
+                qualifiers.add(annotation);
+            }
+        }
+        // If no explicit qualifiers, add @Default
+        if (qualifiers.isEmpty()) {
+            qualifiers.add(new com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral());
+        }
+        return qualifiers;
     }
 }
