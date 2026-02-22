@@ -53,25 +53,16 @@ public class CDI41BeanValidator {
     }
 
     /**
-     * Validates the class and, if valid as a CDI bean, registers a corresponding Bean in the KnowledgeBase.
-     *
-     * @return true if valid and registered, false otherwise.
-     */
-    <T> boolean isValid(Class<T> clazz) {
-        return validateAndRegister(clazz) != null;
-    }
-
-    /**
      * Validates the class and returns a Bean if valid, otherwise returns null.
      * If valid, the Bean is registered in the KnowledgeBase.
      */
-    <T> BeanImpl<T> validateAndRegister(Class<T> clazz) {
+    <T> BeanImpl<T> validateAndRegister(Class<T> clazz, BeanArchiveMode beanArchiveMode) {
         Objects.requireNonNull(clazz, "Class cannot be null");
 
         boolean valid = true;
 
         // 1) Bean class eligibility (managed bean type)
-        if (!isCandidateBeanClass(clazz)) {
+        if (!isCandidateBeanClass(clazz, beanArchiveMode)) {
             // Not necessarily an error; just not a bean (CDI scans lots of classes).
             return null;
         }
@@ -845,9 +836,7 @@ public class CDI41BeanValidator {
     // "Is it a bean?" helpers
     // -----------------------
 
-    private boolean isCandidateBeanClass(Class<?> clazz) {
-        // CDI 4.1 annotated discovery: a bean-defining annotation is required in an implicit archive.
-        // We therefore accept only true bean-defining annotations and skip plain @Inject-only classes.
+    private boolean isCandidateBeanClass(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
         if (clazz == null || hasVetoedAnnotation(clazz)) return false;
 
         // Bean-defining annotations per CDI spec
@@ -871,7 +860,40 @@ public class CDI41BeanValidator {
             }
         }
 
+        // CDI 4.1 Bean Archive Modes:
+        // - IMPLICIT: Bean-defining annotation is REQUIRED (annotated discovery mode)
+        // - EXPLICIT: ALL classes with suitable constructors are beans (all discovery mode)
+        if (beanArchiveMode == BeanArchiveMode.EXPLICIT) {
+            // In explicit bean archives, a class is a bean if it has a no-args constructor
+            // (or an @Inject-annotated constructor, but that's checked elsewhere)
+            return hasNoArgsConstructor(clazz);
+        }
+
+        // In implicit mode, bean-defining annotation is required
         return false;
+    }
+
+    /**
+     * Checks if the class has a no-args constructor (public, protected, package-private, or private).
+     *
+     * @param clazz the class to check
+     * @return true if the class has a no-args constructor
+     */
+    private boolean hasNoArgsConstructor(Class<?> clazz) {
+        try {
+            // Try to get any no-args constructor (public, protected, package, or private)
+            Constructor<?>[] constructors = clazz.getDeclaredConstructors();
+            for (Constructor<?> constructor : constructors) {
+                if (constructor.getParameterCount() == 0) {
+                    return true;
+                }
+            }
+            // If no explicit constructors are defined, Java provides a default no-args constructor
+            return constructors.length == 0;
+        } catch (SecurityException e) {
+            // If we can't access constructors due to security restrictions, assume no no-args constructor
+            return false;
+        }
     }
 
     // -----------------------

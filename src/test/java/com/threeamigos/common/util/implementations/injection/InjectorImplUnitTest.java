@@ -2453,14 +2453,14 @@ class InjectorImplUnitTest {
         }
 
         @Test
-        @DisplayName("Should return null from getScopeType when no annotation present")
-        void shouldReturnNullFromGetScopeTypeWhenDependentAnnotation() {
+        @DisplayName("Should return Dependent from getScopeType when @Dependent annotation is present")
+        void shouldReturnDependentFromGetScopeTypeWhenDependentAnnotation() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When
             Class<? extends Annotation> scopeType = sut.getScopeType(TestClass.class);
             // Then
-            assertNull(scopeType);
+            assertEquals(Dependent.class, scopeType);
         }
 
         @Test

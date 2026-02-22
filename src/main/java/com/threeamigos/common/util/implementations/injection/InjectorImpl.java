@@ -216,7 +216,9 @@ public class InjectorImpl implements Injector {
 
         knowledgeBase = new KnowledgeBase();
         try (ParallelTaskExecutor parallelTaskExecutor = ParallelTaskExecutor.createExecutor()) {
-            ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase);
+            // Default to IMPLICIT bean archive mode (annotated discovery)
+            // Classes require bean-defining annotations to be discovered as beans
+            ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase, BeanArchiveMode.IMPLICIT);
             new ParallelClasspathScanner(
                     Thread.currentThread().getContextClassLoader(), classProcessor, packageNames);
             parallelTaskExecutor.awaitCompletion();
