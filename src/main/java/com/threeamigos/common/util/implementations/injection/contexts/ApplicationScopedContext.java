@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.contexts;
 
+import com.threeamigos.common.util.implementations.injection.BeanImpl;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
@@ -9,6 +10,10 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Implementation of ApplicationScoped context.
  * Maintains a single instance per bean for the entire application lifecycle.
+ *
+ * <p><b>PHASE 2 - Interceptor Support:</b> This context automatically wraps beans that
+ * have interceptors with interceptor-aware proxies. This ensures that interceptor chains
+ * are executed before business methods are called.
  *
  * @author Stefano Reksten
  */
@@ -27,7 +32,24 @@ public class ApplicationScopedContext implements ScopeContext {
 
         return (T) instances.computeIfAbsent(bean, b -> {
             creationalContexts.put(bean, creationalContext);
-            return bean.create(creationalContext);
+
+            // Step 1: Create the actual bean instance (with full dependency injection and lifecycle callbacks)
+            T instance = bean.create(creationalContext);
+
+            // Step 2: PHASE 2 - Wrap with interceptor-aware proxy if bean has interceptors
+            // Check if this is a BeanImpl (our managed beans) and if it has interceptors configured
+            if (bean instanceof BeanImpl) {
+                BeanImpl<T> beanImpl = (BeanImpl<T>) bean;
+
+                // If the bean has interceptors, wrap the instance with an interceptor-aware proxy
+                // The proxy will intercept method calls and execute the interceptor chain before
+                // delegating to the actual bean instance
+                if (beanImpl.hasInterceptors()) {
+                    instance = beanImpl.createInterceptorAwareProxy(instance);
+                }
+            }
+
+            return instance;
         });
     }
 

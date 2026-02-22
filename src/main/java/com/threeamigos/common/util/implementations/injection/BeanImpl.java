@@ -1,11 +1,15 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.enterprise.inject.spi.InterceptionType;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class BeanImpl<T> implements Bean<T> {
 
@@ -33,6 +37,72 @@ public class BeanImpl<T> implements Bean<T> {
 
     // Dependency resolver (set during container initialization)
     private ProducerBean.DependencyResolver dependencyResolver;
+
+    // ====================================================================================
+    // PHASE 2: Interceptor Support - Business Method Interception (@AroundInvoke)
+    // ====================================================================================
+
+    /**
+     * InterceptorResolver - resolves which interceptors apply to this bean's methods.
+     * Set during container initialization by InjectorImpl.
+     */
+    private InterceptorResolver interceptorResolver;
+
+    /**
+     * KnowledgeBase - provides access to interceptor metadata.
+     * Set during container initialization by InjectorImpl.
+     */
+    private KnowledgeBase knowledgeBase;
+
+    /**
+     * Map of methods to their interceptor chains.
+     * Built once during bean initialization and cached for performance.
+     * Key: Method object from beanClass
+     * Value: Pre-built InterceptorChain for that method
+     *
+     * Only contains entries for methods that have interceptors.
+     * Methods without interceptors are not in this map (for memory efficiency).
+     */
+    private Map<Method, InterceptorChain> methodInterceptorChains;
+
+    /**
+     * PHASE 3: Constructor interceptor chain (@AroundConstruct).
+     * Built once during bean initialization if the bean has constructor interceptors.
+     * Null if no constructor interceptors are present.
+     */
+    private InterceptorChain constructorInterceptorChain;
+
+    /**
+     * PHASE 4: @PostConstruct interceptor chain.
+     * Built once during bean initialization if the bean has @PostConstruct interceptors.
+     * Null if no @PostConstruct interceptors are present.
+     */
+    private InterceptorChain postConstructInterceptorChain;
+
+    /**
+     * PHASE 4: @PreDestroy interceptor chain.
+     * Built once during bean initialization if the bean has @PreDestroy interceptors.
+     * Null if no @PreDestroy interceptors are present.
+     */
+    private InterceptorChain preDestroyInterceptorChain;
+
+    /**
+     * Cache of interceptor instances.
+     * Key: Interceptor class
+     * Value: Interceptor instance
+     *
+     * Interceptor instances are created once per bean and reused for all method calls.
+     * This is per CDI spec: interceptors are stateful and bound to the bean instance.
+     *
+     * Thread-safety: ConcurrentHashMap ensures thread-safe lazy initialization of interceptor instances.
+     */
+    private final Map<Class<?>, Object> interceptorInstanceCache = new ConcurrentHashMap<>();
+
+    /**
+     * InterceptorAwareProxyGenerator - creates proxies that execute interceptor chains.
+     * Shared across all beans (stateless).
+     */
+    private InterceptorAwareProxyGenerator interceptorAwareProxyGenerator;
 
     public BeanImpl(Class<T> beanClass, boolean alternative) {
         this.beanClass = beanClass;
@@ -147,10 +217,52 @@ public class BeanImpl<T> implements Bean<T> {
             // 4. Call @PostConstruct if present
             invokePostConstruct(instance);
 
+            // 5. PHASE 2 - Wrap with interceptor-aware proxy if needed
+            // IMPORTANT: This wrapping is ONLY for @Dependent scoped beans!
+            //
+            // Normal-scoped beans (@ApplicationScoped, @RequestScoped, etc.) are wrapped by their
+            // contexts (ApplicationScopedContext, RequestScopedContext, etc.) which call
+            // createInterceptorAwareProxy() in their get() methods.
+            //
+            // @Dependent scoped beans don't go through contexts - they're created directly via
+            // bean.create() and returned immediately. So we need to wrap them here.
+            //
+            // How to tell if this is a @Dependent bean?
+            // - Check if scope is null (CDI spec: @Dependent beans have no scope annotation)
+            // - Or check if scope is jakarta.enterprise.context.Dependent.class
+            if (hasInterceptors() && isDependent()) {
+                instance = createInterceptorAwareProxy(instance);
+            }
+
             return instance;
         } catch (Exception e) {
             throw new RuntimeException("Failed to create bean instance of " + beanClass.getName(), e);
         }
+    }
+
+    /**
+     * Checks if this bean is @Dependent scoped.
+     * <p>
+     * @Dependent is the default scope in CDI and is represented by either:
+     * - null scope (no scope annotation)
+     * - jakarta.enterprise.context.Dependent.class
+     * <p>
+     * @Dependent beans are special because they:
+     * - Don't go through scope contexts (no context.get() call)
+     * - Are created directly via bean.create()
+     * - Have the same lifecycle as their injection point
+     * - Need to be wrapped with interceptors HERE, not in contexts
+     *
+     * @return true if this bean is @Dependent scoped
+     */
+    private boolean isDependent() {
+        // If scope is null, it's @Dependent (default scope)
+        if (scope == null) {
+            return true;
+        }
+
+        // Check if scope is explicitly @Dependent
+        return scope.equals(jakarta.enterprise.context.Dependent.class);
     }
 
     @Override
@@ -175,6 +287,9 @@ public class BeanImpl<T> implements Bean<T> {
     /**
      * Creates an instance via constructor injection.
      * Uses @Inject constructor if present, otherwise uses no-args constructor.
+     * <p>
+     * PHASE 3: Supports @AroundConstruct interceptors.
+     * If constructor interceptors are present, they are invoked before the actual construction.
      */
     private T createInstance(CreationalContext<T> creationalContext) throws Exception {
         Constructor<T> constructor = injectConstructor;
@@ -195,7 +310,16 @@ public class BeanImpl<T> implements Bean<T> {
                     parameters[i].getAnnotations(), creationalContext);
         }
 
-        return constructor.newInstance(args);
+        // PHASE 3: Check for @AroundConstruct interceptors
+        if (constructorInterceptorChain != null) {
+            // Invoke constructor interceptor chain
+            // The chain will execute all @AroundConstruct interceptors, then invoke the actual constructor
+            Object result = constructorInterceptorChain.invoke(null, constructor, args);
+            return (T) result;
+        } else {
+            // No constructor interceptors, invoke directly
+            return constructor.newInstance(args);
+        }
     }
 
     /**
@@ -304,9 +428,20 @@ public class BeanImpl<T> implements Bean<T> {
 
     /**
      * Invokes @PostConstruct method if present.
+     * <p>
+     * PHASE 4: Supports @PostConstruct lifecycle interceptors.
+     * If lifecycle interceptors are present, they are invoked before the target @PostConstruct method.
+     * The chain executes: [Interceptor 1 @PostConstruct] → [Interceptor 2 @PostConstruct] → [Target @PostConstruct]
      */
     private void invokePostConstruct(T instance) throws Exception {
-        if (postConstructMethod != null) {
+        // PHASE 4: Check for @PostConstruct interceptors
+        if (postConstructInterceptorChain != null) {
+            // Invoke lifecycle interceptor chain
+            // The chain will execute all interceptor @PostConstruct methods, then the target @PostConstruct
+            // The target @PostConstruct method is passed to the chain and invoked as the final step
+            postConstructInterceptorChain.invokeLifecycle(instance, postConstructMethod);
+        } else if (postConstructMethod != null) {
+            // No interceptors, invoke target @PostConstruct directly
             postConstructMethod.setAccessible(true);
             postConstructMethod.invoke(instance);
         }
@@ -314,9 +449,20 @@ public class BeanImpl<T> implements Bean<T> {
 
     /**
      * Invokes @PreDestroy method if present.
+     * <p>
+     * PHASE 4: Supports @PreDestroy lifecycle interceptors.
+     * If lifecycle interceptors are present, they are invoked before the target @PreDestroy method.
+     * The chain executes: [Interceptor 1 @PreDestroy] → [Interceptor 2 @PreDestroy] → [Target @PreDestroy]
      */
     private void invokePreDestroy(T instance) throws Exception {
-        if (preDestroyMethod != null) {
+        // PHASE 4: Check for @PreDestroy interceptors
+        if (preDestroyInterceptorChain != null) {
+            // Invoke lifecycle interceptor chain
+            // The chain will execute all interceptor @PreDestroy methods, then the target @PreDestroy
+            // The target @PreDestroy method is passed to the chain and invoked as the final step
+            preDestroyInterceptorChain.invokeLifecycle(instance, preDestroyMethod);
+        } else if (preDestroyMethod != null) {
+            // No interceptors, invoke target @PreDestroy directly
             preDestroyMethod.setAccessible(true);
             preDestroyMethod.invoke(instance);
         }
@@ -409,5 +555,445 @@ public class BeanImpl<T> implements Bean<T> {
 
     public void setDependencyResolver(ProducerBean.DependencyResolver dependencyResolver) {
         this.dependencyResolver = dependencyResolver;
+    }
+
+    // ====================================================================================
+    // Interceptor Support Methods (Phase 2)
+    // ====================================================================================
+
+    /**
+     * Sets the interceptor resolver for this bean.
+     * Called during container initialization by InjectorImpl.
+     *
+     * @param interceptorResolver the interceptor resolver to use
+     */
+    public void setInterceptorResolver(InterceptorResolver interceptorResolver) {
+        this.interceptorResolver = interceptorResolver;
+    }
+
+    /**
+     * Sets the knowledge base for this bean.
+     * Called during container initialization by InjectorImpl.
+     *
+     * @param knowledgeBase the knowledge base containing interceptor metadata
+     */
+    public void setKnowledgeBase(KnowledgeBase knowledgeBase) {
+        this.knowledgeBase = knowledgeBase;
+    }
+
+    /**
+     * Sets the interceptor-aware proxy generator for this bean.
+     * Called during container initialization by InjectorImpl.
+     *
+     * @param interceptorAwareProxyGenerator the proxy generator
+     */
+    public void setInterceptorAwareProxyGenerator(InterceptorAwareProxyGenerator interceptorAwareProxyGenerator) {
+        this.interceptorAwareProxyGenerator = interceptorAwareProxyGenerator;
+    }
+
+    /**
+     * Builds interceptor chains for all methods that have interceptor bindings.
+     * <p>
+     * This method is called once during bean initialization to analyze all methods
+     * and build interceptor chains for those that require interception.
+     * <p>
+     * PHASE 3 & 4: Also builds constructor and lifecycle interceptor chains.
+     * <p>
+     * <h3>Process:</h3>
+     * <ol>
+     * <li>Iterate through all declared methods in the bean class</li>
+     * <li>For each method, use InterceptorResolver to find applicable interceptors</li>
+     * <li>If interceptors are found, build an InterceptorChain and cache it</li>
+     * <li>Methods without interceptors are not added to the map (memory optimization)</li>
+     * <li>Build constructor interceptor chain if @AroundConstruct interceptors exist</li>
+     * <li>Build @PostConstruct interceptor chain if lifecycle interceptors exist</li>
+     * <li>Build @PreDestroy interceptor chain if lifecycle interceptors exist</li>
+     * </ol>
+     *
+     * <h3>Example:</h3>
+     * <pre>
+     * {@literal @}ApplicationScoped
+     * public class OrderService {
+     *     {@literal @}Transactional  // Method-level binding
+     *     public void createOrder(Order order) { ... }  // Will have interceptors
+     *
+     *     public Order getOrder(String id) { ... }      // No interceptors
+     * }
+     *
+     * // Result:
+     * methodInterceptorChains = {
+     *     createOrder() → [TransactionalInterceptor chain],
+     *     // getOrder() not in map - no interceptors
+     * }
+     * </pre>
+     *
+     * @throws IllegalStateException if interceptorResolver or knowledgeBase not set
+     */
+    public void buildMethodInterceptorChains() {
+        // If no interceptor support configured, skip chain building
+        if (interceptorResolver == null || knowledgeBase == null) {
+            this.methodInterceptorChains = Collections.emptyMap();
+            this.constructorInterceptorChain = null;
+            this.postConstructInterceptorChain = null;
+            this.preDestroyInterceptorChain = null;
+            return;
+        }
+
+        // ========================================================================
+        // PHASE 2: Build business method interceptor chains (@AroundInvoke)
+        // ========================================================================
+        Map<Method, InterceptorChain> chains = new HashMap<>();
+
+        // Iterate through all declared methods in the bean class
+        // We only process declared methods (not inherited) to avoid duplicates
+        for (Method method : beanClass.getDeclaredMethods()) {
+            // Skip non-public methods - CDI only intercepts public business methods
+            if (!Modifier.isPublic(method.getModifiers())) {
+                continue;
+            }
+
+            // Skip static methods - CDI doesn't intercept static methods
+            if (Modifier.isStatic(method.getModifiers())) {
+                continue;
+            }
+
+            // Use InterceptorResolver to find applicable interceptors for this method
+            // This considers:
+            // 1. Class-level interceptor bindings (e.g., @Transactional on the class)
+            // 2. Method-level interceptor bindings (e.g., @Transactional on the method)
+            // 3. Stereotype bindings (e.g., @Transactional inherited from a stereotype)
+            // 4. Method-level bindings OVERRIDE class-level bindings (CDI spec)
+            List<InterceptorInfo> interceptors = interceptorResolver.resolve(
+                beanClass,
+                method,
+                InterceptionType.AROUND_INVOKE
+            );
+
+            // If interceptors were found for this method, build a chain
+            if (!interceptors.isEmpty()) {
+                InterceptorChain chain = buildInterceptorChain(interceptors, InterceptionType.AROUND_INVOKE);
+                chains.put(method, chain);
+            }
+            // If no interceptors, we don't add an entry (memory optimization)
+        }
+
+        // Store the chains map (immutable after this point)
+        this.methodInterceptorChains = chains;
+
+        // ========================================================================
+        // PHASE 3: Build constructor interceptor chain (@AroundConstruct)
+        // ========================================================================
+        List<InterceptorInfo> constructorInterceptors = interceptorResolver.resolve(
+            beanClass,
+            null,  // null method = constructor interception
+            InterceptionType.AROUND_CONSTRUCT
+        );
+
+        if (!constructorInterceptors.isEmpty()) {
+            this.constructorInterceptorChain = buildInterceptorChain(
+                constructorInterceptors,
+                InterceptionType.AROUND_CONSTRUCT
+            );
+        } else {
+            this.constructorInterceptorChain = null;
+        }
+
+        // ========================================================================
+        // PHASE 4: Build lifecycle callback interceptor chains
+        // ========================================================================
+
+        // @PostConstruct interceptor chain
+        List<InterceptorInfo> postConstructInterceptors = interceptorResolver.resolve(
+            beanClass,
+            null,  // null method = lifecycle callback
+            InterceptionType.POST_CONSTRUCT
+        );
+
+        if (!postConstructInterceptors.isEmpty()) {
+            this.postConstructInterceptorChain = buildLifecycleInterceptorChain(
+                postConstructInterceptors,
+                InterceptionType.POST_CONSTRUCT
+            );
+        } else {
+            this.postConstructInterceptorChain = null;
+        }
+
+        // @PreDestroy interceptor chain
+        List<InterceptorInfo> preDestroyInterceptors = interceptorResolver.resolve(
+            beanClass,
+            null,  // null method = lifecycle callback
+            InterceptionType.PRE_DESTROY
+        );
+
+        if (!preDestroyInterceptors.isEmpty()) {
+            this.preDestroyInterceptorChain = buildLifecycleInterceptorChain(
+                preDestroyInterceptors,
+                InterceptionType.PRE_DESTROY
+            );
+        } else {
+            this.preDestroyInterceptorChain = null;
+        }
+    }
+
+    /**
+     * Builds an InterceptorChain from a list of InterceptorInfo objects.
+     * <p>
+     * This method:
+     * <ol>
+     * <li>Creates interceptor instances for each InterceptorInfo (with caching)</li>
+     * <li>Retrieves the appropriate interceptor method based on interception type</li>
+     * <li>Builds a chain using the InterceptorChain.Builder</li>
+     * <li>Returns the immutable, thread-safe chain</li>
+     * </ol>
+     *
+     * <h3>Interceptor Instance Creation:</h3>
+     * Interceptors are created with dependency injection (same as beans).
+     * Instances are cached per-bean to maintain interceptor state across invocations.
+     * <p>
+     * Example: A {@code @Transactional} interceptor might maintain transaction state
+     * between multiple method calls on the same bean instance.
+     *
+     * <h3>Chain Ordering:</h3>
+     * The interceptors list is already sorted by priority (lower value = earlier execution).
+     * This sorting is done by InterceptorResolver using KnowledgeBase query methods.
+     *
+     * @param interceptors list of interceptor metadata, sorted by priority
+     * @param interceptionType the type of interception (AROUND_INVOKE, AROUND_CONSTRUCT, etc.)
+     * @return an immutable InterceptorChain ready for execution
+     * @throws RuntimeException if interceptor instance creation fails
+     */
+    private InterceptorChain buildInterceptorChain(List<InterceptorInfo> interceptors, InterceptionType interceptionType) {
+        // Use the Builder pattern to construct the chain
+        InterceptorChain.Builder builder = InterceptorChain.builder();
+
+        // Add each interceptor to the chain in order (already sorted by priority)
+        for (InterceptorInfo interceptorInfo : interceptors) {
+            // Get or create the interceptor instance (cached)
+            Object interceptorInstance = getOrCreateInterceptorInstance(interceptorInfo);
+
+            // Get the appropriate interceptor method based on interception type
+            Method interceptorMethod = getInterceptorMethod(interceptorInfo, interceptionType);
+
+            if (interceptorMethod != null) {
+                // Add this interceptor to the chain
+                // The chain will invoke: interceptorMethod.invoke(interceptorInstance, invocationContext)
+                builder.addInterceptor(interceptorInstance, interceptorMethod);
+            }
+        }
+
+        // Build and return the immutable chain
+        return builder.build();
+    }
+
+    /**
+     * Builds a lifecycle interceptor chain that includes both interceptor callbacks and the target callback.
+     * <p>
+     * PHASE 4: Lifecycle interceptor chains include:
+     * <ol>
+     * <li>All interceptor lifecycle methods (@PostConstruct or @PreDestroy from interceptors)</li>
+     * <li>The target bean's lifecycle method (@PostConstruct or @PreDestroy from the bean itself)</li>
+     * </ol>
+     * <p>
+     * Example chain for @PostConstruct:
+     * [Interceptor1.postConstruct] → [Interceptor2.postConstruct] → [TargetBean.postConstruct]
+     *
+     * @param interceptors list of interceptor metadata, sorted by priority
+     * @param interceptionType POST_CONSTRUCT or PRE_DESTROY
+     * @return an immutable InterceptorChain ready for execution
+     */
+    private InterceptorChain buildLifecycleInterceptorChain(
+            List<InterceptorInfo> interceptors,
+            InterceptionType interceptionType) {
+
+        // Use the Builder pattern to construct the chain
+        InterceptorChain.Builder builder = InterceptorChain.builder();
+
+        // Add interceptor lifecycle methods
+        for (InterceptorInfo interceptorInfo : interceptors) {
+            Object interceptorInstance = getOrCreateInterceptorInstance(interceptorInfo);
+            Method interceptorMethod = getInterceptorMethod(interceptorInfo, interceptionType);
+
+            if (interceptorMethod != null) {
+                builder.addInterceptor(interceptorInstance, interceptorMethod);
+            }
+        }
+
+        // Add the target bean's lifecycle method at the end of the chain
+        // This ensures interceptors run before the target method (per CDI spec)
+        Method targetLifecycleMethod = interceptionType == InterceptionType.POST_CONSTRUCT
+                ? postConstructMethod
+                : preDestroyMethod;
+
+        if (targetLifecycleMethod != null) {
+            // Add a special invocation that will invoke the target's lifecycle method
+            // We can't add it directly because the target instance is not available yet during chain building
+            // Instead, we'll handle this in the invoke methods (invokePostConstruct/invokePreDestroy)
+            // by ensuring the target method is called as part of the chain's final proceed()
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Gets the appropriate interceptor method for a given interception type.
+     *
+     * @param interceptorInfo the interceptor metadata
+     * @param interceptionType the type of interception
+     * @return the interceptor method, or null if not present
+     */
+    private Method getInterceptorMethod(InterceptorInfo interceptorInfo, InterceptionType interceptionType) {
+        if (interceptionType == InterceptionType.AROUND_INVOKE) {
+            return interceptorInfo.getAroundInvokeMethod();
+        } else if (interceptionType == InterceptionType.AROUND_CONSTRUCT) {
+            return interceptorInfo.getAroundConstructMethod();
+        } else if (interceptionType == InterceptionType.POST_CONSTRUCT) {
+            return interceptorInfo.getPostConstructMethod();
+        } else if (interceptionType == InterceptionType.PRE_DESTROY) {
+            return interceptorInfo.getPreDestroyMethod();
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Gets or creates an interceptor instance, with per-bean caching.
+     * <p>
+     * <h3>Why Cache Interceptor Instances?</h3>
+     * Per CDI specification, interceptor instances are:
+     * <ul>
+     * <li><b>Stateful</b>: They can maintain state between invocations</li>
+     * <li><b>Bean-scoped</b>: One instance per bean (not shared across beans)</li>
+     * <li><b>Lifecycle-bound</b>: Created with the bean, destroyed with the bean</li>
+     * </ul>
+     *
+     * <h3>Example - Stateful Interceptor:</h3>
+     * <pre>
+     * {@literal @}Interceptor
+     * {@literal @}Logged
+     * public class InvocationCounterInterceptor {
+     *     private int invocationCount = 0;  // State maintained across calls
+     *
+     *     {@literal @}AroundInvoke
+     *     public Object count(InvocationContext ctx) {
+     *         invocationCount++;
+     *         System.out.println("Invocation #" + invocationCount);
+     *         return ctx.proceed();
+     *     }
+     * }
+     * </pre>
+     *
+     * <h3>Creation Process:</h3>
+     * <ol>
+     * <li>Check if instance exists in cache (thread-safe lookup)</li>
+     * <li>If not, create new instance via reflection</li>
+     * <li>Perform dependency injection on the interceptor (if it has @Inject fields/methods)</li>
+     * <li>Call @PostConstruct on the interceptor (if present)</li>
+     * <li>Cache and return the instance</li>
+     * </ol>
+     *
+     * <h3>Thread Safety:</h3>
+     * Uses ConcurrentHashMap.computeIfAbsent for atomic cache-if-absent semantics.
+     * Multiple threads calling this simultaneously will result in only one instance being created.
+     *
+     * @param interceptorInfo the interceptor metadata
+     * @return the interceptor instance (cached)
+     * @throws RuntimeException if instance creation or injection fails
+     */
+    private Object getOrCreateInterceptorInstance(InterceptorInfo interceptorInfo) {
+        Class<?> interceptorClass = interceptorInfo.getInterceptorClass();
+
+        // Atomic get-or-create using ConcurrentHashMap
+        // If the key exists, return the cached value
+        // If not, compute the value (create instance) and cache it atomically
+        return interceptorInstanceCache.computeIfAbsent(interceptorClass, clazz -> {
+            try {
+                // Step 1: Create instance via no-arg constructor
+                // TODO: In a full implementation, this would:
+                // - Check for @Inject constructor
+                // - Resolve constructor parameters via dependency injection
+                // - Use the injector to create the instance properly
+                //
+                // For now, we use simple no-arg constructor instantiation
+                Constructor<?> constructor = clazz.getDeclaredConstructor();
+                constructor.setAccessible(true);
+                Object instance = constructor.newInstance();
+
+                // Step 2: Perform dependency injection (if needed)
+                // TODO: In a full implementation, this would:
+                // - Inject @Inject fields
+                // - Call @Inject methods
+                // - Call @PostConstruct
+                //
+                // For now, we skip injection (interceptors should have no dependencies)
+                // This is acceptable for Phase 2 - simple interceptors without dependencies
+
+                return instance;
+            } catch (Exception e) {
+                throw new RuntimeException(
+                    "Failed to create interceptor instance of " + clazz.getName() +
+                    " for bean " + beanClass.getName(), e
+                );
+            }
+        });
+    }
+
+    /**
+     * Checks if this bean has any interceptors configured.
+     * <p>
+     * This is used to determine whether to create a regular proxy or an interceptor-aware proxy.
+     *
+     * @return true if this bean has at least one method with interceptors, false otherwise
+     */
+    public boolean hasInterceptors() {
+        return methodInterceptorChains != null && !methodInterceptorChains.isEmpty();
+    }
+
+    /**
+     * Gets the method interceptor chains for this bean.
+     * <p>
+     * This map is used by the InterceptorAwareProxyGenerator to create proxies that
+     * execute interceptors before business methods.
+     *
+     * @return the method interceptor chains map (may be empty, never null)
+     */
+    public Map<Method, InterceptorChain> getMethodInterceptorChains() {
+        return methodInterceptorChains != null ? methodInterceptorChains : Collections.emptyMap();
+    }
+
+    /**
+     * Creates an interceptor-aware proxy for this bean instance.
+     * <p>
+     * This method is called by normal-scoped contexts when they need to create a client proxy
+     * that also supports interceptors.
+     * <p>
+     * <h3>Usage:</h3>
+     * <pre>
+     * // In RequestScopeContext.get():
+     * T instance = bean.create(context);
+     *
+     * // If bean has interceptors, wrap with interceptor-aware proxy
+     * if (bean instanceof BeanImpl && ((BeanImpl) bean).hasInterceptors()) {
+     *     instance = ((BeanImpl) bean).createInterceptorAwareProxy(instance);
+     * }
+     * </pre>
+     *
+     * @param targetInstance the actual bean instance to wrap
+     * @return a proxy that executes interceptors before delegating to targetInstance
+     * @throws IllegalStateException if interceptor support not configured
+     */
+    public T createInterceptorAwareProxy(T targetInstance) {
+        if (interceptorAwareProxyGenerator == null) {
+            throw new IllegalStateException(
+                "InterceptorAwareProxyGenerator not set for bean: " + beanClass.getName()
+            );
+        }
+
+        if (methodInterceptorChains == null || methodInterceptorChains.isEmpty()) {
+            // No interceptors, return the instance as-is
+            return targetInstance;
+        }
+
+        // Create and return an interceptor-aware proxy
+        return interceptorAwareProxyGenerator.createProxy(this, targetInstance, methodInterceptorChains);
     }
 }

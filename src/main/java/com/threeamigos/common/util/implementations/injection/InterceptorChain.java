@@ -107,6 +107,40 @@ public class InterceptorChain {
     }
 
     /**
+     * Invokes the interceptor chain for a constructor interception (@AroundConstruct).
+     *
+     * <p>This creates an InvocationContext for constructor interception and starts the chain execution.
+     * After all @AroundConstruct interceptors execute, the actual constructor is invoked.
+     * The target instance is set after construction completes.
+     *
+     * @param target initially null (will be set after construction)
+     * @param constructor the constructor being intercepted
+     * @param args the constructor arguments
+     * @return the newly constructed instance
+     * @throws Exception any exception thrown by interceptors or constructor
+     */
+    public Object invoke(Object target, java.lang.reflect.Constructor<?> constructor, Object[] args) throws Exception {
+        // Create target invocation (final step in the chain - invoke the actual constructor)
+        InvocationContextImpl.TargetInvocation targetInvocation = ctx -> {
+            constructor.setAccessible(true);
+            Object instance = constructor.newInstance(ctx.getParameters());
+            // Set the target on the context after construction
+            if (ctx instanceof InvocationContextImpl) {
+                ((InvocationContextImpl) ctx).setTarget(instance);
+            }
+            return instance;
+        };
+
+        // Create invocation context for constructor interception
+        InvocationContextImpl context = new InvocationContextImpl(
+                constructor, args, this, targetInvocation
+        );
+
+        // Start chain execution
+        return context.proceed();
+    }
+
+    /**
      * Invokes the interceptor chain for a lifecycle callback interception.
      *
      * <p>This is used for @PostConstruct and @PreDestroy callbacks, which have no parameters

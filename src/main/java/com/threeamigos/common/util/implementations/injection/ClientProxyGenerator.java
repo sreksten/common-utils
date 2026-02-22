@@ -70,7 +70,41 @@ import java.util.concurrent.ConcurrentHashMap;
  * }
  * </pre>
  *
+ * <h2>PHASE 2 - Interceptor Integration</h2>
+ * This generator works seamlessly with the interceptor infrastructure:
+ * <ul>
+ * <li>When {@code context.get(bean)} is called, the context returns either:
+ *     <ul>
+ *     <li>An {@link InterceptorAwareProxyGenerator interceptor-aware proxy} (if bean has interceptors)</li>
+ *     <li>The raw bean instance (if no interceptors)</li>
+ *     </ul>
+ * </li>
+ * <li>The interceptor-aware proxy is created by the context automatically based on {@link BeanImpl#hasInterceptors()}</li>
+ * <li>This means the client proxy TRANSPARENTLY invokes interceptor chains without any special handling</li>
+ * </ul>
+ *
+ * <h3>Call Flow With Interceptors:</h3>
+ * <pre>
+ * {@literal @}ApplicationScoped
+ * {@literal @}Transactional  // Interceptor binding
+ * class OrderService {
+ *     public void createOrder(Order order) { ... }
+ * }
+ *
+ * // At runtime:
+ * orderService.createOrder(order);
+ *   → ClientProxy.createOrder(order)
+ *     → context.get(bean) returns InterceptorAwareProxy
+ *     → InterceptorAwareProxy.createOrder(order)
+ *       → InterceptorChain.invoke()
+ *         → [TransactionalInterceptor] begins transaction
+ *         → [RealOrderService].createOrder(order)
+ *         → [TransactionalInterceptor] commits transaction
+ * </pre>
+ *
  * @author Stefano Reksten
+ * @see InterceptorAwareProxyGenerator
+ * @see BeanImpl#createInterceptorAwareProxy(Object)
  */
 public class ClientProxyGenerator {
 
@@ -293,6 +327,16 @@ public class ClientProxyGenerator {
             // - For ConversationScoped: returns the instance for the CURRENT conversation
             //
             // If no instance exists yet, the context will create one.
+            //
+            // PHASE 2 - INTERCEPTOR INTEGRATION:
+            // The context.get() call will return either:
+            // a) An interceptor-aware proxy (if the bean has interceptors) - already wrapping the real instance
+            // b) The raw bean instance (if no interceptors)
+            //
+            // This is handled automatically by the contexts (ApplicationScopedContext, RequestScopedContext, etc.)
+            // which check bean.hasInterceptors() and call bean.createInterceptorAwareProxy() when needed.
+            //
+            // So the contextualInstance we get here is ALREADY interceptor-aware if needed!
             Object contextualInstance = context.get(bean, null);
 
             if (contextualInstance == null) {
@@ -302,8 +346,21 @@ public class ClientProxyGenerator {
                 );
             }
 
-            // Step 5: Invoke the method on the actual contextual instance
-            // This is the real bean instance that will process the call
+            // Step 5: Invoke the method on the contextual instance
+            // This is the real bean instance (or interceptor-aware proxy wrapping it) that will process the call
+            //
+            // PHASE 2 - INTERCEPTOR FLOW:
+            // If the bean has interceptors, the call flow is:
+            // ClientProxy.method(args)
+            //   → context.get(bean) returns InterceptorAwareProxy
+            //   → method.invoke(InterceptorAwareProxy, args)
+            //   → InterceptorAwareProxy.method(args)
+            //     → Check if method has interceptors
+            //     → If yes: InterceptorChain.invoke()
+            //       → [Interceptor 1] → [Interceptor 2] → RealInstance.method()
+            //     → If no: RealInstance.method()
+            //
+            // So interceptors are invoked TRANSPARENTLY through the contextual instance!
             return method.invoke(contextualInstance, args);
         }
     }

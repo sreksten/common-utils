@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.contexts;
 
+import com.threeamigos.common.util.implementations.injection.BeanImpl;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
@@ -10,6 +11,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * Implementation of ConversationScoped context.
  * Maintains instances for the duration of a conversation, which spans multiple requests
  * and must be explicitly started and ended.
+ *
+ * <p><b>PHASE 2 - Interceptor Support:</b> This context automatically wraps beans that
+ * have interceptors with interceptor-aware proxies. This ensures that interceptor chains
+ * are executed before business methods are called.
  *
  * @author Stefano Reksten
  */
@@ -80,7 +85,19 @@ public class ConversationScopedContext implements ScopeContext {
 
         return (T) instances.computeIfAbsent(bean, b -> {
             contexts.put(bean, creationalContext);
-            return bean.create(creationalContext);
+
+            // Step 1: Create the actual bean instance
+            T instance = bean.create(creationalContext);
+
+            // Step 2: PHASE 2 - Wrap with interceptor-aware proxy if bean has interceptors
+            if (bean instanceof BeanImpl) {
+                BeanImpl<T> beanImpl = (BeanImpl<T>) bean;
+                if (beanImpl.hasInterceptors()) {
+                    instance = beanImpl.createInterceptorAwareProxy(instance);
+                }
+            }
+
+            return instance;
         });
     }
 
