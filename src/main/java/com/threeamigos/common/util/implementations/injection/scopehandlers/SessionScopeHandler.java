@@ -1,13 +1,13 @@
 package com.threeamigos.common.util.implementations.injection.scopehandlers;
 
 import com.threeamigos.common.util.implementations.injection.LifecycleMethodHelper;
-import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 
 import jakarta.annotation.PreDestroy;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+@Deprecated
 public class SessionScopeHandler implements ScopeHandler {
     private final Map<String, Map<Class<?>, Object>> sessionBeans = new ConcurrentHashMap<>();
     private final ThreadLocal<String> currentSessionId = new ThreadLocal<>();

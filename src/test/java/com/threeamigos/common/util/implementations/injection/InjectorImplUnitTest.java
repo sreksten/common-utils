@@ -24,6 +24,7 @@ import com.threeamigos.common.util.implementations.injection.interfaces.multiple
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.literals.AnnotationLiteral;
 import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithInvalidParameter;
@@ -38,7 +39,8 @@ import com.threeamigos.common.util.implementations.injection.scopehandlers.Reque
 import com.threeamigos.common.util.implementations.injection.scopehandlers.SessionScopeHandler;
 import com.threeamigos.common.util.implementations.injection.superclasses.MyClass;
 import com.threeamigos.common.util.interfaces.injection.Injector;
-import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.ScopeHandler;
+import jakarta.enterprise.context.Dependent;
 import org.atinject.tck.auto.*;
 import org.atinject.tck.auto.accessories.SpareTire;
 import org.junit.jupiter.api.*;
@@ -2451,8 +2453,8 @@ class InjectorImplUnitTest {
         }
 
         @Test
-        @DisplayName("Should return null from getScopeType when no scope annotation present")
-        void shouldReturnNullFromGetScopeTypeWhenNoScopeAnnotation() {
+        @DisplayName("Should return null from getScopeType when no annotation present")
+        void shouldReturnNullFromGetScopeTypeWhenDependentAnnotation() {
             // Given
             InjectorImpl sut = new InjectorImpl(TEST_PACKAGE_NAME);
             // When
@@ -3291,10 +3293,12 @@ class InjectorImplUnitTest {
     // Valid classes
     interface TestInterface{}
 
+    @Dependent
     static class TestClass implements TestInterface { }
 
     static abstract class AbstractClass { }
 
+    @Dependent
     static class ConcreteClass extends AbstractClass { }
 
     // Invalid classes
@@ -3302,15 +3306,18 @@ class InjectorImplUnitTest {
 
     // Constructor tests
 
+    @Dependent
     static class TestClassWithAnnotatedNoArgsConstructor {
         @Inject
         public TestClassWithAnnotatedNoArgsConstructor() { }
     }
 
+    @Dependent
     static class TestClassWithNoArgsConstructor {
         public TestClassWithNoArgsConstructor() { }
     }
 
+    @Dependent
     static class TestClassWithAnnotatedConstructorAndConcreteDependency {
         private final TestClass testClass;
         @Inject
@@ -3322,6 +3329,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class TestClassWithAnnotatedConstructorAndAbstractDependency {
         private final TestInterface testInterface;
         @Inject
@@ -3333,6 +3341,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsDefault {
         private final MultipleImplementationsInterface testInterface;
         @Inject
@@ -3345,6 +3354,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class TestClassWithAnnotatedConstructorAndAbstractDependencyWithMultipleImplementationsAlternative {
         private final MultipleImplementationsInterface testInterface;
         @Inject
@@ -3357,7 +3367,7 @@ class InjectorImplUnitTest {
     }
 
     /*
-     * Warning: Inner class "NonStaticInnerClass" bay be static.
+     * Warning: Inner class "NonStaticInnerClass" may be static.
      * But if we do, that would not be any longer a NON-STATIC inner class, and we need one for our tests.
      * LEAVE IT AS IS!
      */
@@ -3366,6 +3376,7 @@ class InjectorImplUnitTest {
 
     @Singleton static class SingletonClass { }
 
+    @Dependent
     static class ClassWithInstanceOfTestInterface {
         private final Instance<TestInterface> testInterfaceInstance;
         @Inject
@@ -3377,6 +3388,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class ClassWithAnyInstanceAndSingleImplementation {
         private final Instance<SingleImplementationAbstractClass> instance;
         @Inject
@@ -3388,6 +3400,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class ClassWithAnyInstanceAndMultipleImplementations {
         private final Instance<MultipleConcreteClassesAbstractClass> instance;
         @Inject
@@ -3399,6 +3412,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class ClassWithInstanceAndMultipleImplementationsDefault{
         private final Instance<MultipleConcreteClassesAbstractClass> instance;
         @Inject
@@ -3410,6 +3424,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class ClassWithInstanceAndMultipleImplementationsAlternative {
         private final Instance<MultipleConcreteClassesAbstractClass> instance;
         @Inject
@@ -3421,7 +3436,7 @@ class InjectorImplUnitTest {
         }
     }
 
-
+    @Dependent
     static class ClassWithAnyInstanceButNoImplementation {
         private final Instance<NoConcreteClassesAbstractClass> instance;
         @Inject
@@ -3433,6 +3448,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class ClassWithInstanceButNoImplementation {
         private final Instance<NoConcreteClassesAbstractClass> instance;
         @Inject
@@ -3444,6 +3460,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class ClassWithPrivateConstructorWithDependencies {
         private final AbstractClass abstractClass;
         @Inject
@@ -3455,6 +3472,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class TestClassWithAnnotatedConstructorAndAlternativeDependency {
         private final AlternativesInterface testInterface;
         @Inject
@@ -3466,6 +3484,7 @@ class InjectorImplUnitTest {
         }
     }
 
+    @Dependent
     static class ClassWithPrivateConstructor {
         @Inject
         private ClassWithPrivateConstructor() { }

@@ -1,13 +1,13 @@
 package com.threeamigos.common.util.implementations.injection.scopehandlers;
 
 import com.threeamigos.common.util.implementations.injection.LifecycleMethodHelper;
-import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 
 import jakarta.annotation.PreDestroy;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
+@Deprecated
 public class RequestScopeHandler implements ScopeHandler {
     private final ThreadLocal<Map<Class<?>, Object>> requestBeans = new ThreadLocal<>();
 

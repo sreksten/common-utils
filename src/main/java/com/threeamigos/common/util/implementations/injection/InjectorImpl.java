@@ -1,10 +1,12 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
+import com.threeamigos.common.util.implementations.injection.contexts.ContextManager;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.SingletonScopeHandler;
 import com.threeamigos.common.util.interfaces.injection.Injector;
-import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.ScopeHandler;
 import jakarta.annotation.Nonnull;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -155,6 +157,7 @@ import java.util.stream.Collectors;
  * @see jakarta.annotation.PostConstruct JSR-250: Common Annotations for the Java Platform
  * @see jakarta.enterprise.inject.Instance CDI: Contexts and Dependency Injection
  */
+@Deprecated
 public class InjectorImpl implements Injector {
 
     private final KnowledgeBase knowledgeBase;
@@ -221,35 +224,35 @@ public class InjectorImpl implements Injector {
             throw new RuntimeException(e);
         }
 
-//        // After scanning completes, validate all injection points
-//        CDI41InjectionValidator injectionValidator = new CDI41InjectionValidator(knowledgeBase);
-//        injectionValidator.validateAllInjectionPoints();
-//
-//        // Check if there are any errors that would prevent application startup
-//        if (knowledgeBase.hasErrors()) {
-//            StringBuilder errorReport = new StringBuilder();
-//            errorReport.append("Application cannot start due to validation/injection errors:\n\n");
-//
-//            if (!knowledgeBase.getDefinitionErrors().isEmpty()) {
-//                errorReport.append("=== Definition Errors ===\n");
-//                knowledgeBase.getDefinitionErrors().forEach(e -> errorReport.append("  - ").append(e).append("\n"));
-//                errorReport.append("\n");
-//            }
-//
-//            if (!knowledgeBase.getInjectionErrors().isEmpty()) {
-//                errorReport.append("=== Injection Errors ===\n");
-//                knowledgeBase.getInjectionErrors().forEach(e -> errorReport.append("  - ").append(e).append("\n"));
-//                errorReport.append("\n");
-//            }
-//
-//            if (!knowledgeBase.getErrors().isEmpty()) {
-//                errorReport.append("=== General Errors ===\n");
-//                knowledgeBase.getErrors().forEach(e -> errorReport.append("  - ").append(e).append("\n"));
-//                errorReport.append("\n");
-//            }
-//
-//            throw new RuntimeException(errorReport.toString());
-//        }
+        // After scanning completes, validate all injection points
+        CDI41InjectionValidator injectionValidator = new CDI41InjectionValidator(knowledgeBase);
+        injectionValidator.validateAllInjectionPoints();
+
+        // Check if there are any errors that would prevent application startup
+        if (knowledgeBase.hasErrors()) {
+            StringBuilder errorReport = new StringBuilder();
+            errorReport.append("Application cannot start due to validation/injection errors:\n\n");
+
+            if (!knowledgeBase.getDefinitionErrors().isEmpty()) {
+                errorReport.append("=== Definition Errors ===\n");
+                knowledgeBase.getDefinitionErrors().forEach(e -> errorReport.append("  - ").append(e).append("\n"));
+                errorReport.append("\n");
+            }
+
+            if (!knowledgeBase.getInjectionErrors().isEmpty()) {
+                errorReport.append("=== Injection Errors ===\n");
+                knowledgeBase.getInjectionErrors().forEach(e -> errorReport.append("  - ").append(e).append("\n"));
+                errorReport.append("\n");
+            }
+
+            if (!knowledgeBase.getErrors().isEmpty()) {
+                errorReport.append("=== General Errors ===\n");
+                knowledgeBase.getErrors().forEach(e -> errorReport.append("  - ").append(e).append("\n"));
+                errorReport.append("\n");
+            }
+
+            throw new RuntimeException(errorReport.toString());
+        }
 
         this.classResolver = new ClassResolver(knowledgeBase);
         registerDefaultScopes();
@@ -797,6 +800,8 @@ public class InjectorImpl implements Injector {
             Parameter param = parameters[i];
             if (Provider.class.isAssignableFrom(param.getType())) {
                 args[i] = createInstanceWrapper(param);
+            } else if (jakarta.enterprise.event.Event.class.isAssignableFrom(param.getType())) {
+                args[i] = createEventWrapper(param);
             } else {
                 Type paramType = resolveType(param.getParameterizedType(), typeContext);
                 checkClassValidity(paramType);
@@ -907,6 +912,8 @@ public class InjectorImpl implements Injector {
                 field.setAccessible(true);
                 if (Provider.class.isAssignableFrom(field.getType())) {
                     field.set(t, createInstanceWrapper(field));
+                } else if (jakarta.enterprise.event.Event.class.isAssignableFrom(field.getType())) {
+                    field.set(t, createEventWrapper(field));
                 } else {
                     Type fieldType = resolveType(field.getGenericType(), typeContext);
                     checkClassValidity(fieldType);
@@ -1366,7 +1373,7 @@ public class InjectorImpl implements Injector {
      */
     <T> Instance<T> createInstance(Class<T> type, Collection<Annotation> qualifiers) {
         // Create a resolution strategy that delegates to InjectorImpl's methods
-        InstanceWrapper.ResolutionStrategy<T> strategy = new InstanceWrapper.ResolutionStrategy<T>() {
+        InstanceImpl.ResolutionStrategy<T> strategy = new InstanceImpl.ResolutionStrategy<T>() {
             @Override
             public T resolveInstance(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
                 return inject(typeToResolve, new Stack<>(), quals);
@@ -1395,7 +1402,68 @@ public class InjectorImpl implements Injector {
             return null;
         };
 
-        return new InstanceWrapper<>(type, qualifiers, strategy, beanLookup);
+        return new InstanceImpl<>(type, qualifiers, strategy, beanLookup);
+    }
+
+    /**
+     * Creates an {@link jakarta.enterprise.event.Event} wrapper for a field injection point.
+     * Extracts the generic type argument (e.g., {@code String} from {@code Event<String>})
+     * and the field's qualifiers to create the appropriate Event implementation.
+     *
+     * @param field the field requiring an Event wrapper
+     * @return Event implementation that can fire events
+     * @see jakarta.enterprise.event.Event
+     */
+    jakarta.enterprise.event.Event<?> createEventWrapper(Field field) {
+        ParameterizedType type = (ParameterizedType) field.getGenericType();
+        Type genericType = type.getActualTypeArguments()[0];
+        Collection<Annotation> qualifiers = getQualifiers(field);
+        return createEvent(genericType, qualifiers);
+    }
+
+    /**
+     * Creates an {@link jakarta.enterprise.event.Event} wrapper for a parameter injection point.
+     * Extracts the generic type argument (e.g., {@code String} from {@code Event<String>})
+     * and the parameter's qualifiers to create the appropriate Event implementation.
+     *
+     * @param param the parameter requiring an Event wrapper
+     * @return Event implementation that can fire events
+     * @see jakarta.enterprise.event.Event
+     */
+    jakarta.enterprise.event.Event<?> createEventWrapper(Parameter param) {
+        ParameterizedType type = (ParameterizedType) param.getParameterizedType();
+        Type genericType = type.getActualTypeArguments()[0];
+        Collection<Annotation> qualifiers = getQualifiers(param);
+        return createEvent(genericType, qualifiers);
+    }
+
+    /**
+     * Creates an {@link jakarta.enterprise.event.Event} implementation per CDI specification (JSR-299/346).
+     * Event provides synchronous and asynchronous event firing to registered observer methods.
+     *
+     * <p>The returned Event supports:
+     * <ul>
+     *   <li>{@link jakarta.enterprise.event.Event#fire(Object)} - Fires synchronous event to @Observes methods</li>
+     *   <li>{@link jakarta.enterprise.event.Event#fireAsync(Object)} - Fires async event to @ObservesAsync methods</li>
+     *   <li>{@link jakarta.enterprise.event.Event#select(Annotation...)} - Refines selection with additional qualifiers</li>
+     * </ul>
+     *
+     * @param <T> the type of events this Event instance can fire
+     * @param eventType the type of events to fire
+     * @param qualifiers the qualifiers to use for observer matching
+     * @return Event implementation for the specified type and qualifiers
+     * @see jakarta.enterprise.event.Event
+     * @see jakarta.enterprise.event.Observes
+     * @see jakarta.enterprise.event.ObservesAsync
+     */
+    <T> jakarta.enterprise.event.Event<T> createEvent(Type eventType, Collection<Annotation> qualifiers) {
+        // Get or create ContextManager and BeanResolver
+        // For simplicity, create new instances (in full CDI these would be container-managed)
+        ContextManager contextManager = new ContextManager();
+        BeanResolver beanResolver = new BeanResolver(knowledgeBase, contextManager);
+
+        Set<Annotation> qualifierSet = new HashSet<>(qualifiers);
+        return new EventImpl<>(eventType, qualifierSet, knowledgeBase, beanResolver, contextManager);
     }
 
     /**

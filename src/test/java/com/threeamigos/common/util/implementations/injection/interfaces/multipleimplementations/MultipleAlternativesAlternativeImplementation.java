@@ -4,6 +4,6 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Alternative;
 
 @Alternative
-@Priority(1)
+@Priority(5)
 public class MultipleAlternativesAlternativeImplementation implements MultipleImplementationsInterface {
 }

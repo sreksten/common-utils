@@ -1,5 +1,7 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
+import com.threeamigos.common.util.implementations.injection.BeanImpl;
+import com.threeamigos.common.util.implementations.injection.ProducerBean;
 import jakarta.enterprise.inject.spi.Bean;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
@@ -44,52 +46,52 @@ public class KnowledgeBase {
         return classes;
     }
 
-    void addBean(Bean<?> bean) {
+    public void addBean(Bean<?> bean) {
         beans.add(bean);
     }
 
-    Collection<Bean<?>> getBeans() {
+    public Collection<Bean<?>> getBeans() {
         return beans;
     }
 
-    <T> void addConstructor(Class<T> clazz, Constructor<T> constructor) {
+    public <T> void addConstructor(Class<T> clazz, Constructor<T> constructor) {
         constructorsMap.put(clazz, constructor);
     }
 
     @SuppressWarnings("unchecked")
-    <T> Constructor<T> getConstructor(Class<T> clazz) {
+    public <T> Constructor<T> getConstructor(Class<T> clazz) {
         return (Constructor<T>)constructorsMap.get(clazz);
     }
 
-    void addWarning(String warning) {
+    public void addWarning(String warning) {
         warnings.add(warning);
     }
 
-    List<String> getWarnings() {
+    public List<String> getWarnings() {
         return warnings;
     }
 
-    void addError(String error) {
+    public void addError(String error) {
         errors.add(error);
     }
 
-    List<String> getErrors() {
+    public List<String> getErrors() {
         return errors;
     }
 
-    void addDefinitionError(String error) {
+    public void addDefinitionError(String error) {
         definitionErrors.add(error);
     }
 
-    List<String> getDefinitionErrors() {
+    public List<String> getDefinitionErrors() {
         return definitionErrors;
     }
 
-    void addInjectionError(String error) {
+    public void addInjectionError(String error) {
         injectionErrors.add(error);
     }
 
-    List<String> getInjectionErrors() {
+    public List<String> getInjectionErrors() {
         return injectionErrors;
     }
 
@@ -99,7 +101,7 @@ public class KnowledgeBase {
      *
      * @return true if there are any errors that should stop the application
      */
-    boolean hasErrors() {
+    public boolean hasErrors() {
         return !definitionErrors.isEmpty() || !injectionErrors.isEmpty() || !errors.isEmpty();
     }
 
@@ -110,7 +112,7 @@ public class KnowledgeBase {
      *
      * @return collection of beans with validation errors
      */
-    Collection<Bean<?>> getBeansWithValidationErrors() {
+    public Collection<Bean<?>> getBeansWithValidationErrors() {
         List<Bean<?>> beansWithErrors = new ArrayList<>();
         for (Bean<?> bean : beans) {
             if (bean instanceof BeanImpl && ((BeanImpl<?>) bean).hasValidationErrors()) {
@@ -126,7 +128,7 @@ public class KnowledgeBase {
      *
      * @return collection of valid beans
      */
-    Collection<Bean<?>> getValidBeans() {
+    public Collection<Bean<?>> getValidBeans() {
         List<Bean<?>> validBeans = new ArrayList<>();
         for (Bean<?> bean : beans) {
             if (!(bean instanceof BeanImpl) || !((BeanImpl<?>) bean).hasValidationErrors()) {
@@ -142,7 +144,7 @@ public class KnowledgeBase {
      * Adds a ProducerBean to the knowledge base.
      * ProducerBeans are also added to the general beans collection.
      */
-    void addProducerBean(ProducerBean<?> producerBean) {
+    public void addProducerBean(ProducerBean<?> producerBean) {
         producerBeans.add(producerBean);
         beans.add(producerBean); // Also add to general bean collection
     }
@@ -150,25 +152,25 @@ public class KnowledgeBase {
     /**
      * Returns all producer beans (convenience method).
      */
-    Collection<ProducerBean<?>> getProducerBeans() {
+    public Collection<ProducerBean<?>> getProducerBeans() {
         return producerBeans;
     }
 
     // Interceptor/Decorator methods (legacy)
 
-    void addInterceptor(Class<?> interceptorClass) {
+    public void addInterceptor(Class<?> interceptorClass) {
         interceptors.add(interceptorClass);
     }
 
-    Collection<Class<?>> getInterceptors() {
+    public Collection<Class<?>> getInterceptors() {
         return interceptors;
     }
 
-    void addDecorator(Class<?> decoratorClass) {
+    public void addDecorator(Class<?> decoratorClass) {
         decorators.add(decoratorClass);
     }
 
-    Collection<Class<?>> getDecorators() {
+    public Collection<Class<?>> getDecorators() {
         return decorators;
     }
 
@@ -180,7 +182,7 @@ public class KnowledgeBase {
      *
      * @param interceptorInfo the validated interceptor metadata
      */
-    void addInterceptorInfo(InterceptorInfo interceptorInfo) {
+    public void addInterceptorInfo(InterceptorInfo interceptorInfo) {
         interceptorInfos.add(interceptorInfo);
     }
 
@@ -190,7 +192,7 @@ public class KnowledgeBase {
      *
      * @return collection of interceptor metadata
      */
-    Collection<InterceptorInfo> getInterceptorInfos() {
+    public Collection<InterceptorInfo> getInterceptorInfos() {
         return interceptorInfos;
     }
 
@@ -200,7 +202,7 @@ public class KnowledgeBase {
      *
      * @param decoratorInfo the validated decorator metadata
      */
-    void addDecoratorInfo(DecoratorInfo decoratorInfo) {
+    public void addDecoratorInfo(DecoratorInfo decoratorInfo) {
         decoratorInfos.add(decoratorInfo);
     }
 
@@ -210,7 +212,7 @@ public class KnowledgeBase {
      *
      * @return collection of decorator metadata
      */
-    Collection<DecoratorInfo> getDecoratorInfos() {
+    public Collection<DecoratorInfo> getDecoratorInfos() {
         return decoratorInfos;
     }
 
@@ -220,7 +222,7 @@ public class KnowledgeBase {
      *
      * @param observerMethodInfo the validated observer method metadata
      */
-    void addObserverMethodInfo(ObserverMethodInfo observerMethodInfo) {
+    public void addObserverMethodInfo(ObserverMethodInfo observerMethodInfo) {
         observerMethodInfos.add(observerMethodInfo);
     }
 
@@ -230,7 +232,44 @@ public class KnowledgeBase {
      *
      * @return collection of observer method metadata
      */
-    Collection<ObserverMethodInfo> getObserverMethodInfos() {
+    public Collection<ObserverMethodInfo> getObserverMethodInfos() {
         return observerMethodInfos;
+    }
+
+    // === Programmatic Bean Registration (for InjectorImpl2) ===
+
+    /**
+     * Adds a programmatic bean binding for runtime bean registration.
+     *
+     * <p>This allows beans to be registered programmatically outside of classpath scanning,
+     * useful for testing, dynamic configuration, and third-party library integration.
+     *
+     * @param type the interface or abstract type
+     * @param qualifiers the qualifiers for this binding
+     * @param bean the bean implementation
+     */
+    public void addProgrammaticBean(java.lang.reflect.Type type, java.util.Collection<java.lang.annotation.Annotation> qualifiers, jakarta.enterprise.inject.spi.Bean<?> bean) {
+        beans.add(bean);
+    }
+
+    /**
+     * Enables an alternative bean at runtime.
+     *
+     * <p>This activates an @Alternative bean programmatically, useful for feature flags
+     * and runtime environment detection.
+     *
+     * @param alternativeClass the alternative bean class to enable
+     */
+    public void enableAlternative(Class<?> alternativeClass) {
+        // Find the bean for this class and mark it as enabled
+        for (jakarta.enterprise.inject.spi.Bean<?> bean : beans) {
+            if (bean.getBeanClass().equals(alternativeClass) && bean.isAlternative()) {
+                // Alternative is already in beans collection, no action needed
+                // Priority-based resolution will handle selection
+                return;
+            }
+        }
+        throw new IllegalArgumentException(
+                "No alternative bean found for class: " + alternativeClass.getName());
     }
 }

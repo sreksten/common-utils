@@ -1,13 +1,13 @@
 package com.threeamigos.common.util.implementations.injection.scopehandlers;
 
 import com.threeamigos.common.util.implementations.injection.LifecycleMethodHelper;
-import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
 
 import jakarta.annotation.PreDestroy;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+@Deprecated
 public class SingletonScopeHandler implements ScopeHandler {
 
     private final Map<Class<?>, Object> instances = new ConcurrentHashMap<>();

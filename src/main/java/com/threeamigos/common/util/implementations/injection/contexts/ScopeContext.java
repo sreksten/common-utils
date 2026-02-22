@@ -12,7 +12,7 @@ import jakarta.enterprise.inject.spi.Bean;
 public interface ScopeContext {
 
     /**
-     * Gets an existing instance from this scope, or creates a new one if needed.
+     * Gets an existing instance from this scope or creates a new one if needed.
      *
      * @param bean the bean to get/create
      * @param creationalContext the creation context for dependency injection
@@ -42,17 +42,17 @@ public interface ScopeContext {
 
     /**
      * Checks if this scope supports passivation.
-     *
-     * Passivation capable scopes in CDI:
-     * - @SessionScoped - beans can be serialized when session is passivated
+     * <p>
+     * Passivation-capable scopes in CDI:
+     * - @SessionScoped - beans can be serialized when the session is passivated
      * - @ConversationScoped - beans can be serialized when conversation is passivated
-     *
+     * <p>
      * Non-passivating scopes:
-     * - @ApplicationScoped - lives for entire application lifetime, no passivation needed
-     * - @RequestScoped - short-lived, destroyed at end of request
+     * - @ApplicationScoped - lives for the entire application lifetime, no passivation needed
+     * - @RequestScoped - short-lived, destroyed at the end of request
      * - @Dependent - pseudo-scope, lifecycle tied to parent bean
-     *
-     * Beans in passivation capable scopes MUST be Serializable.
+     * <p>
+     * Beans in passivation-capable scopes MUST be Serializable.
      *
      * @return true if beans in this scope must support serialization
      */

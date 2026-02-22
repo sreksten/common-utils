@@ -16,8 +16,8 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-@DisplayName("InstanceWrapper unit tests")
-class InstanceWrapperUnitTest {
+@DisplayName("InstanceImpl unit tests")
+class InstanceImplUnitTest {
 
     @Nested
     @DisplayName("mergeQualifiers tests")
@@ -27,24 +27,24 @@ class InstanceWrapperUnitTest {
          * Helper method to invoke the private mergeQualifiers method via reflection
          */
         @SuppressWarnings("unchecked")
-        private Collection<Annotation> invokeMergeQualifiers(InstanceWrapper<?> wrapper,
-                                                              Collection<Annotation> existing,
-                                                              Annotation... newAnnotations) throws Exception {
-            Method method = InstanceWrapper.class.getDeclaredMethod("mergeQualifiers", Collection.class, Annotation[].class);
+        private Collection<Annotation> invokeMergeQualifiers(InstanceImpl<?> wrapper,
+                                                             Collection<Annotation> existing,
+                                                             Annotation... newAnnotations) throws Exception {
+            Method method = InstanceImpl.class.getDeclaredMethod("mergeQualifiers", Collection.class, Annotation[].class);
             method.setAccessible(true);
             return (Collection<Annotation>) method.invoke(wrapper, existing, newAnnotations);
         }
 
-        private InstanceWrapper<String> createTestWrapper() {
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
-            return new InstanceWrapper<>(String.class, Collections.singletonList(new DefaultLiteral()), mockStrategy);
+        private InstanceImpl<String> createTestWrapper() {
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
+            return new InstanceImpl<>(String.class, Collections.singletonList(new DefaultLiteral()), mockStrategy);
         }
 
         @Test
         @DisplayName("mergeQualifiers should return existing if newAnnotations is null")
         void mergeQualifiersShouldReturnExistingIfNewAnnotationsIsNull() throws Exception {
             // Given
-            InstanceWrapper<String> wrapper = createTestWrapper();
+            InstanceImpl<String> wrapper = createTestWrapper();
             Collection<Annotation> existing = Collections.singletonList(new NamedLiteral("test"));
             Annotation[] newAnnotations = null;
 
@@ -59,7 +59,7 @@ class InstanceWrapperUnitTest {
         @DisplayName("mergeQualifiers should return existing if newAnnotations is empty")
         void mergeQualifiersShouldReturnExistingIfNewAnnotationsIsEmpty() throws Exception {
             // Given
-            InstanceWrapper<String> wrapper = createTestWrapper();
+            InstanceImpl<String> wrapper = createTestWrapper();
             Collection<Annotation> existing = Collections.singletonList(new NamedLiteral("test"));
             Annotation[] newAnnotations = {};
 
@@ -74,7 +74,7 @@ class InstanceWrapperUnitTest {
         @DisplayName("mergeQualifiers should merge existing qualifiers with new ones")
         void mergeQualifiersShouldMergeExistingQualifiersWithNewOnes() throws Exception {
             // Given
-            InstanceWrapper<String> wrapper = createTestWrapper();
+            InstanceImpl<String> wrapper = createTestWrapper();
             Collection<Annotation> existing = Collections.singletonList(new NamedLiteral("test"));
             Annotation[] newAnnotations = {new NamedLiteral("test2")};
 
@@ -91,7 +91,7 @@ class InstanceWrapperUnitTest {
         @DisplayName("mergeQualifiers should remove Default when adding specific qualifiers")
         void mergeQualifiersShouldRemoveDefault() throws Exception {
             // Given
-            InstanceWrapper<String> wrapper = createTestWrapper();
+            InstanceImpl<String> wrapper = createTestWrapper();
             Collection<Annotation> existing = Collections.singletonList(new DefaultLiteral());
             Annotation[] newAnnotations = {new NamedLiteral("test2")};
 
@@ -113,26 +113,26 @@ class InstanceWrapperUnitTest {
         @DisplayName("Constructor should require non-null parameters")
         void constructorShouldRequireNonNullParameters() {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
 
             // Then
             assertThrows(NullPointerException.class,
-                () -> new InstanceWrapper<>(null, qualifiers, mockStrategy));
+                () -> new InstanceImpl<>(null, qualifiers, mockStrategy));
             assertThrows(NullPointerException.class,
-                () -> new InstanceWrapper<>(String.class, null, mockStrategy));
+                () -> new InstanceImpl<>(String.class, null, mockStrategy));
             assertThrows(NullPointerException.class,
-                () -> new InstanceWrapper<>(String.class, qualifiers, null));
+                () -> new InstanceImpl<>(String.class, qualifiers, null));
         }
 
         @Test
         @DisplayName("get() should delegate to resolution strategy")
         void getShouldDelegateToResolutionStrategy() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveInstance(any(), any())).thenReturn("test-instance");
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             String result = wrapper.get();
@@ -146,10 +146,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("get() should throw RuntimeException on failure")
         void getShouldThrowRuntimeExceptionOnFailure() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveInstance(any(), any())).thenThrow(new Exception("resolution failed"));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When/Then
             RuntimeException thrown = assertThrows(RuntimeException.class, wrapper::get);
@@ -165,10 +165,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("select(Annotation...) should create new wrapper with merged qualifiers")
         void selectShouldCreateNewWrapperWithMergedQualifiers() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveInstance(any(), any())).thenReturn("test-instance");
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             Instance<String> selected = wrapper.select(new NamedLiteral("specific"));
@@ -185,10 +185,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("select(Class, Annotation...) should create wrapper for subtype")
         void selectClassShouldCreateWrapperForSubtype() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveInstance(any(Class.class), any())).thenReturn("test-string");
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<CharSequence> wrapper = new InstanceWrapper<>(CharSequence.class, qualifiers, mockStrategy);
+            InstanceImpl<CharSequence> wrapper = new InstanceImpl<>(CharSequence.class, qualifiers, mockStrategy);
 
             // When
             Instance<String> selected = wrapper.select(String.class, new NamedLiteral("specific"));
@@ -211,10 +211,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("isUnsatisfied() should return true when no implementations exist")
         void isUnsatisfiedShouldReturnTrueWhenNoImplementations() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.emptyList());
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When/Then
             assertTrue(wrapper.isUnsatisfied());
@@ -224,10 +224,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("isUnsatisfied() should return false when implementations exist")
         void isUnsatisfiedShouldReturnFalseWhenImplementationsExist() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When/Then
             assertFalse(wrapper.isUnsatisfied());
@@ -237,10 +237,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("isUnsatisfied() should return true on exception")
         void isUnsatisfiedShouldReturnTrueOnException() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenThrow(new Exception("error"));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When/Then
             assertTrue(wrapper.isUnsatisfied());
@@ -250,10 +250,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("isAmbiguous() should return false when one implementation exists")
         void isAmbiguousShouldReturnFalseWhenOneImplementation() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When/Then
             assertFalse(wrapper.isAmbiguous());
@@ -263,10 +263,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("isAmbiguous() should return true when multiple implementations exist")
         void isAmbiguousShouldReturnTrueWhenMultipleImplementations() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Arrays.asList(String.class, StringBuilder.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<CharSequence> wrapper = new InstanceWrapper<>(CharSequence.class, qualifiers, mockStrategy);
+            InstanceImpl<CharSequence> wrapper = new InstanceImpl<>(CharSequence.class, qualifiers, mockStrategy);
 
             // When/Then
             assertTrue(wrapper.isAmbiguous());
@@ -276,10 +276,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("isAmbiguous() should return false on exception")
         void isAmbiguousShouldReturnFalseOnException() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenThrow(new Exception("error"));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When/Then
             assertFalse(wrapper.isAmbiguous());
@@ -294,9 +294,9 @@ class InstanceWrapperUnitTest {
         @DisplayName("destroy() should invoke preDestroy on instance")
         void destroyShouldInvokePreDestroy() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
             String instance = "test-instance";
 
             // When
@@ -310,9 +310,9 @@ class InstanceWrapperUnitTest {
         @DisplayName("destroy() should handle null instance gracefully")
         void destroyShouldHandleNullInstance() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             wrapper.destroy(null);
@@ -325,11 +325,11 @@ class InstanceWrapperUnitTest {
         @DisplayName("destroy() should throw RuntimeException on failure")
         void destroyShouldThrowRuntimeExceptionOnFailure() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             doThrow(new InvocationTargetException(new Exception("destroy failed")))
                 .when(mockStrategy).invokePreDestroy(any());
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When/Then
             RuntimeException thrown = assertThrows(RuntimeException.class,
@@ -346,11 +346,11 @@ class InstanceWrapperUnitTest {
         @DisplayName("getHandle() should return handle for single implementation")
         void getHandleShouldReturnHandleForSingleImplementation() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
             when(mockStrategy.resolveInstance(any(), any())).thenReturn("test-instance");
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             Instance.Handle<String> handle = wrapper.getHandle();
@@ -364,10 +364,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("getHandle() should throw UnsatisfiedResolutionException when no implementations")
         void getHandleShouldThrowWhenNoImplementations() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.emptyList());
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When/Then
             assertThrows(UnsatisfiedResolutionException.class, wrapper::getHandle);
@@ -377,10 +377,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("getHandle() should throw AmbiguousResolutionException when multiple implementations")
         void getHandleShouldThrowWhenMultipleImplementations() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Arrays.asList(String.class, StringBuilder.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<CharSequence> wrapper = new InstanceWrapper<>(CharSequence.class, qualifiers, mockStrategy);
+            InstanceImpl<CharSequence> wrapper = new InstanceImpl<>(CharSequence.class, qualifiers, mockStrategy);
 
             // When/Then
             assertThrows(AmbiguousResolutionException.class, wrapper::getHandle);
@@ -390,14 +390,14 @@ class InstanceWrapperUnitTest {
         @DisplayName("handles() should return handles for all implementations")
         void handlesShouldReturnHandlesForAllImplementations() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             List<Class<? extends CharSequence>> implementations = new ArrayList<>();
             implementations.add(String.class);
             implementations.add(StringBuilder.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(implementations);
             when(mockStrategy.resolveInstance(any(Class.class), any())).thenReturn("string-instance", new StringBuilder("builder-instance"));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<CharSequence> wrapper = new InstanceWrapper<>(CharSequence.class, qualifiers, mockStrategy);
+            InstanceImpl<CharSequence> wrapper = new InstanceImpl<>(CharSequence.class, qualifiers, mockStrategy);
 
             // When
             Iterable<? extends Instance.Handle<CharSequence>> handles = wrapper.handles();
@@ -412,11 +412,11 @@ class InstanceWrapperUnitTest {
         @DisplayName("Handle.get() should lazily create instance")
         void handleGetShouldLazilyCreateInstance() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
             when(mockStrategy.resolveInstance(any(), any())).thenReturn("test-instance");
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             Instance.Handle<String> handle = wrapper.getHandle();
@@ -438,11 +438,11 @@ class InstanceWrapperUnitTest {
         @DisplayName("Handle.destroy() should invoke preDestroy")
         void handleDestroyShouldInvokePreDestroy() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
             when(mockStrategy.resolveInstance(any(), any())).thenReturn("test-instance");
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             Instance.Handle<String> handle = wrapper.getHandle();
@@ -457,11 +457,11 @@ class InstanceWrapperUnitTest {
         @DisplayName("Handle.destroy() should be idempotent")
         void handleDestroyShouldBeIdempotent() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
             when(mockStrategy.resolveInstance(any(), any())).thenReturn("test-instance");
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             Instance.Handle<String> handle = wrapper.getHandle();
@@ -477,11 +477,11 @@ class InstanceWrapperUnitTest {
         @DisplayName("Handle.get() should throw after destroy()")
         void handleGetShouldThrowAfterDestroy() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
             when(mockStrategy.resolveInstance(any(), any())).thenReturn("test-instance");
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             Instance.Handle<String> handle = wrapper.getHandle();
@@ -496,11 +496,11 @@ class InstanceWrapperUnitTest {
         @DisplayName("Handle.close() should delegate to destroy()")
         void handleCloseShouldDelegateToDestroy() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
             when(mockStrategy.resolveInstance(any(), any())).thenReturn("test-instance");
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             Instance.Handle<String> handle = wrapper.getHandle();
@@ -516,14 +516,14 @@ class InstanceWrapperUnitTest {
         @DisplayName("Handle.getBean() should return bean when beanLookup is provided")
         void handleGetBeanShouldReturnBeanWhenLookupProvided() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
 
             Bean<String> mockBean = mock(Bean.class);
             Function<Class<? extends String>, Bean<? extends String>> beanLookup = clazz -> mockBean;
 
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy, beanLookup);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy, beanLookup);
 
             // When
             Instance.Handle<String> handle = wrapper.getHandle();
@@ -537,10 +537,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("Handle.getBean() should return fallback BeanImpl when beanLookup is null")
         void handleGetBeanShouldReturnFallbackWhenLookupNull() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.singletonList(String.class));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             Instance.Handle<String> handle = wrapper.getHandle();
@@ -560,14 +560,14 @@ class InstanceWrapperUnitTest {
         @DisplayName("iterator() should return instances for all implementations")
         void iteratorShouldReturnInstancesForAllImplementations() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<CharSequence> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             List<Class<? extends CharSequence>> implementations = new ArrayList<>();
             implementations.add(String.class);
             implementations.add(StringBuilder.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(implementations);
             when(mockStrategy.resolveInstance(any(Class.class), any())).thenReturn("string-instance", new StringBuilder("builder"));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<CharSequence> wrapper = new InstanceWrapper<>(CharSequence.class, qualifiers, mockStrategy);
+            InstanceImpl<CharSequence> wrapper = new InstanceImpl<>(CharSequence.class, qualifiers, mockStrategy);
 
             // When
             Iterator<CharSequence> iterator = wrapper.iterator();
@@ -588,10 +588,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("iterator() should return empty iterator when no implementations")
         void iteratorShouldReturnEmptyIteratorWhenNoImplementations() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenReturn(Collections.emptyList());
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
             Iterator<String> iterator = wrapper.iterator();
@@ -604,10 +604,10 @@ class InstanceWrapperUnitTest {
         @DisplayName("iterator() should throw RuntimeException on resolution failure")
         void iteratorShouldThrowRuntimeExceptionOnFailure() throws Exception {
             // Given
-            InstanceWrapper.ResolutionStrategy<String> mockStrategy = mock(InstanceWrapper.ResolutionStrategy.class);
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
             when(mockStrategy.resolveImplementations(any(), any())).thenThrow(new Exception("resolution failed"));
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
-            InstanceWrapper<String> wrapper = new InstanceWrapper<>(String.class, qualifiers, mockStrategy);
+            InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When/Then
             assertThrows(RuntimeException.class, wrapper::iterator);

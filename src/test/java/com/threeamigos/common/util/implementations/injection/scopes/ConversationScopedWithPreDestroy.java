@@ -3,8 +3,10 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ConversationScoped;
 
+import java.io.Serializable;
+
 @ConversationScoped
-public class ConversationScopedWithPreDestroy {
+public class ConversationScopedWithPreDestroy implements Serializable {
     private boolean preDestroyCalled = false;
 
     @PreDestroy

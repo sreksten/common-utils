@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;

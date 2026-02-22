@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.ObserverMethodInfo;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
@@ -286,7 +288,7 @@ class CDI41InjectionValidator {
 
                 // CDI 4.1: ERROR if mix of priority and no-priority (ambiguous)
                 if (!priorities.isEmpty() && !noPriorityAlternatives.isEmpty()) {
-                    // This is technically allowed but potentially confusing
+                    // This is technically allowed, but potentially confusing
                     // No-priority alternatives have implicit priority of 0 (lowest)
                     // So prioritized alternatives will win - this is VALID per CDI 4.1
                     // No error needed here

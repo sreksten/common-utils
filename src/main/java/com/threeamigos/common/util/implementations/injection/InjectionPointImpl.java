@@ -22,7 +22,7 @@ import java.util.Set;
  * Represents an injection point in a bean - a field, method parameter, or constructor parameter
  * that will receive an injected value.
  *
- * <p>This class tracks metadata about the injection point including:
+ * <p>This class tracks metadata about the injection point, including:
  * <ul>
  *   <li>The type to be injected</li>
  *   <li>Qualifiers that disambiguate which bean to inject</li>

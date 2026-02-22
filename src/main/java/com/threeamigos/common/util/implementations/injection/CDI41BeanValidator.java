@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.literals.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import jakarta.annotation.PostConstruct;
@@ -849,15 +852,15 @@ public class CDI41BeanValidator {
 
         // Bean-defining annotations per CDI spec
         if (hasApplicationScopedAnnotation(clazz) ||
-            hasSessionScopedAnnotation(clazz) ||
-            hasRequestScopedAnnotation(clazz) ||
-            hasConversationScopedAnnotation(clazz) ||
-            hasDependentAnnotation(clazz) ||
-            hasSingletonAnnotation(clazz) ||
-            hasInterceptorAnnotation(clazz) ||
-            hasDecoratorAnnotation(clazz) ||
-            hasAlternativeAnnotation(clazz) ||
-            hasStereotypeAnnotation(clazz)) {
+                hasSessionScopedAnnotation(clazz) ||
+                hasRequestScopedAnnotation(clazz) ||
+                hasConversationScopedAnnotation(clazz) ||
+                hasDependentAnnotation(clazz) ||
+                hasSingletonAnnotation(clazz) ||
+                hasInterceptorAnnotation(clazz) ||
+                hasDecoratorAnnotation(clazz) ||
+                hasAlternativeAnnotation(clazz) ||
+                hasStereotypeAnnotation(clazz)) {
             return true;
         }
 
@@ -987,7 +990,7 @@ public class CDI41BeanValidator {
 
     /**
      * Checks if an annotated element (field or parameter) has @Delegate annotation.
-     * @Delegate can be either jakarta.decorator.Delegate or javax.decorator.Delegate.
+     * A @Delegate can be either a jakarta.decorator.Delegate or a javax.decorator.Delegate.
      *
      * @param element the field or parameter to check
      * @return true if @Delegate annotation is present
@@ -1038,7 +1041,7 @@ public class CDI41BeanValidator {
             throw new IllegalArgumentException("Either producerMethod or producerField must be non-null");
         }
 
-        // Find and set disposer method if present
+        // Find and set the disposer method if present
         if (producerMethod != null) {
             Method disposer = findDisposerForProducer(declaringClass, producerMethod);
             if (disposer != null) {
@@ -1195,8 +1198,8 @@ public class CDI41BeanValidator {
 
         bean.setInjectConstructor(injectConstructor);
 
-        // 2. Collect @Inject fields from entire hierarchy (superclass → subclass)
-        // Fields are inherited, so we need to collect from all classes in hierarchy
+        // 2. Collect @Inject fields from the entire hierarchy (superclass → subclass)
+        // Fields are inherited, so we need to collect from all classes in the hierarchy
         Class<?> currentClass = clazz;
         while (currentClass != null && currentClass != Object.class) {
             for (Field field : currentClass.getDeclaredFields()) {
@@ -1207,7 +1210,7 @@ public class CDI41BeanValidator {
             currentClass = currentClass.getSuperclass();
         }
 
-        // 3. Collect @Inject methods from entire hierarchy (superclass → subclass)
+        // 3. Collect @Inject methods from the entire hierarchy (superclass → subclass)
         // Methods can be inherited and overridden, so collect from all classes
         currentClass = clazz;
         while (currentClass != null && currentClass != Object.class) {
@@ -1515,12 +1518,9 @@ public class CDI41BeanValidator {
      * The decorated types are the interfaces/classes that the decorator implements/extends.
      */
     private Set<Type> extractDecoratedTypes(Class<?> clazz, InjectionPoint delegateInjectionPoint) {
-        Set<Type> decoratedTypes = new HashSet<>();
 
         // Add all interfaces
-        for (Type interfaceType : clazz.getGenericInterfaces()) {
-            decoratedTypes.add(interfaceType);
-        }
+        Set<Type> decoratedTypes = new HashSet<>(Arrays.asList(clazz.getGenericInterfaces()));
 
         // Add superclass (if not Object)
         Type superclass = clazz.getGenericSuperclass();

@@ -21,6 +21,7 @@ import com.threeamigos.common.util.implementations.injection.abstractclasses.mul
 import com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation.SingleImplementationClass;
 import com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation.SingleImplementationInterface;
 import com.threeamigos.common.util.implementations.injection.interfaces.multiplenotannotatedimplementations.MultipleNotAnnotatedImplementationsInterface;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.literals.AnnotationLiteral;
 import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,7 +64,7 @@ class ClassResolverUnitTest {
     void setUp() throws Exception {
         // Given
         KnowledgeBase knowledgeBase = new KnowledgeBase();
-        SimpleClasspathScannerSink sink = new SimpleClasspathScannerSink();
+        SimpleClassConsumer sink = new SimpleClassConsumer();
         new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink, getPackageName(ClassResolverUnitTest.class));
         // Populate knowledgeBase from sink
         for (Class<?> clazz : sink.getClasses()) {
@@ -666,7 +667,7 @@ class ClassResolverUnitTest {
             void shouldFindALotOfClassesIfPackageIsNull() throws Exception {
                 // Given
                 KnowledgeBase kb = new KnowledgeBase();
-                SimpleClasspathScannerSink sink = new SimpleClasspathScannerSink();
+                SimpleClassConsumer sink = new SimpleClassConsumer();
                 new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(),
                     sink, getPackageName(SingleImplementationInterface.class));
                 for (Class<?> clazz : sink.getClasses()) {
@@ -684,7 +685,7 @@ class ClassResolverUnitTest {
             void shouldFindALotOfClassesIfPackageIsEmpty() throws Exception {
                 // Given
                 KnowledgeBase kb = new KnowledgeBase();
-                SimpleClasspathScannerSink sink = new SimpleClasspathScannerSink();
+                SimpleClassConsumer sink = new SimpleClassConsumer();
                 new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink);
                 for (Class<?> clazz : sink.getClasses()) {
                     kb.add(clazz);

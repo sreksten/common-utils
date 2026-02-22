@@ -1,10 +1,14 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.contexts.ContextManager;
 import com.threeamigos.common.util.implementations.injection.contexts.ScopeContext;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Named;
 import jakarta.inject.Provider;
 
@@ -21,13 +25,24 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
  * Resolves dependencies by finding matching beans from the KnowledgeBase.
  * This is the core dependency resolution engine for the CDI container.
  *
+ * <p>Special handling for built-in beans:
+ * <ul>
+ *   <li><b>InjectionPoint</b> - Contextual metadata about current injection point</li>
+ *   <li><b>Instance&lt;T&gt;</b> - Programmatic bean lookup</li>
+ *   <li><b>Provider&lt;T&gt;</b> - Lazy dependency resolution</li>
+ *   <li><b>Event&lt;T&gt;</b> - Programmatic event firing</li>
+ * </ul>
+ *
  * @author Stefano Reksten
  */
-class BeanResolver implements ProducerBean.DependencyResolver {
+public class BeanResolver implements ProducerBean.DependencyResolver {
 
     private final KnowledgeBase knowledgeBase;
     private final ContextManager contextManager;
     private final TypeChecker typeChecker;
+
+    // ThreadLocal to pass injection point context during resolution
+    private final ThreadLocal<InjectionPoint> currentInjectionPoint = new ThreadLocal<>();
 
     BeanResolver(KnowledgeBase knowledgeBase, ContextManager contextManager) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
@@ -37,17 +52,37 @@ class BeanResolver implements ProducerBean.DependencyResolver {
 
     @Override
     public Object resolve(Type requiredType, Annotation[] qualifiers) {
-        // Handle Instance<T> and Provider<T> injection
-        // Since Instance<T> extends Provider<T>, one check handles both
+        // Special handling for InjectionPoint built-in bean
+        if (requiredType instanceof Class &&
+            jakarta.enterprise.inject.spi.InjectionPoint.class.equals(requiredType)) {
+            // Return the current injection point context
+            jakarta.enterprise.inject.spi.InjectionPoint ip = currentInjectionPoint.get();
+            if (ip == null) {
+                throw new IllegalStateException(
+                    "InjectionPoint can only be injected during dependency resolution. " +
+                    "It cannot be injected into @ApplicationScoped or other normal-scoped beans " +
+                    "because it is contextual to the current injection point.");
+            }
+            return ip;
+        }
+
+        // Handle Event<T>, Instance<T> and Provider<T> injection
         if (requiredType instanceof ParameterizedType) {
             ParameterizedType pt = (ParameterizedType) requiredType;
             Class<?> rawType = (Class<?>) pt.getRawType();
 
+            // Check if it's Event<T>
+            if (Event.class.isAssignableFrom(rawType)) {
+                Type eventType = pt.getActualTypeArguments()[0];
+                Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
+
+                return createEventWrapper(eventType, requiredQualifiers);
+            }
+
             // Check if it's a Provider<T> (which includes Instance<T>)
             if (Provider.class.isAssignableFrom(rawType)) {
                 Type actualType = pt.getActualTypeArguments()[0];
-                @SuppressWarnings("unchecked")
-                Class<?> actualClass = (Class<?>) RawTypeExtractor.getRawType(actualType);
+                Class<?> actualClass = RawTypeExtractor.getRawType(actualType);
                 Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
 
                 return createProviderWrapper(actualClass, new ArrayList<>(requiredQualifiers));
@@ -238,20 +273,19 @@ class BeanResolver implements ProducerBean.DependencyResolver {
 
     /**
      * Gets or creates an instance from the appropriate scope.
-     *
+     * <p>
      * For normal scopes (ApplicationScoped, RequestScoped, SessionScoped, ConversationScoped),
      * this returns a CLIENT PROXY instead of the actual instance. The proxy will delegate
      * all method calls to the current contextual instance from the scope.
-     *
+     * <p>
      * Why proxies are needed:
      * - Allows injecting short-lived beans (RequestScoped) into long-lived beans (ApplicationScoped)
      * - The proxy ensures each method call gets the correct contextual instance
      * - Without proxies, you'd get the wrong instance (e.g., same RequestScoped instance for all requests)
-     *
+     * <p>
      * For pseudo-scopes (Dependent), this returns the actual instance directly since
      * Dependent beans are created fresh for each injection point and don't need proxies.
      */
-    @SuppressWarnings("unchecked")
     private <T> T getInstanceFromScope(Bean<T> bean) {
         Class<? extends Annotation> scope = bean.getScope();
 
@@ -280,7 +314,7 @@ class BeanResolver implements ProducerBean.DependencyResolver {
     @SuppressWarnings("unchecked")
     private <T> Instance<T> createProviderWrapper(Class<T> type, Collection<Annotation> qualifiers) {
         // Create a resolution strategy that delegates to BeanResolver
-        InstanceWrapper.ResolutionStrategy<T> strategy = new InstanceWrapper.ResolutionStrategy<T>() {
+        InstanceImpl.ResolutionStrategy<T> strategy = new InstanceImpl.ResolutionStrategy<T>() {
             @Override
             public T resolveInstance(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
                 // Convert qualifiers to array
@@ -322,7 +356,20 @@ class BeanResolver implements ProducerBean.DependencyResolver {
             return null;
         };
 
-        return new InstanceWrapper<>(type, qualifiers, strategy, beanLookup);
+        return new InstanceImpl<>(type, qualifiers, strategy, beanLookup);
+    }
+
+    /**
+     * Creates an Event wrapper for programmatic event firing.
+     * This allows injection of Event&lt;T&gt; with appropriate type parameters and qualifiers.
+     *
+     * @param eventType the type of events to fire
+     * @param qualifiers the qualifiers for event filtering
+     * @return Event instance configured for the specified type and qualifiers
+     */
+    @SuppressWarnings("unchecked")
+    private <T> Event<T> createEventWrapper(Type eventType, Set<Annotation> qualifiers) {
+        return new EventImpl<>(eventType, qualifiers, knowledgeBase, this, contextManager);
     }
 
     /**
@@ -346,5 +393,39 @@ class BeanResolver implements ProducerBean.DependencyResolver {
         public void addDependentInstance(Object instance) {
             dependentInstances.add(instance);
         }
+    }
+
+    // ==================== InjectionPoint Context Management ====================
+
+    /**
+     * Sets the current injection point context for InjectionPoint bean resolution.
+     *
+     * <p>This method must be called by BeanImpl before resolving dependencies
+     * to provide the correct contextual InjectionPoint metadata.
+     *
+     * <p><b>Thread Safety:</b> Uses ThreadLocal, safe for concurrent injection.
+     *
+     * @param injectionPoint the current injection point being resolved
+     */
+    void setCurrentInjectionPoint(jakarta.enterprise.inject.spi.InjectionPoint injectionPoint) {
+        currentInjectionPoint.set(injectionPoint);
+    }
+
+    /**
+     * Clears the current injection point context after resolution completes.
+     *
+     * <p>This prevents memory leaks in thread pools and ensures clean state.
+     */
+    void clearCurrentInjectionPoint() {
+        currentInjectionPoint.remove();
+    }
+
+    /**
+     * Gets the current injection point context (for testing/debugging).
+     *
+     * @return the current injection point, or null if not set
+     */
+    jakarta.enterprise.inject.spi.InjectionPoint getCurrentInjectionPoint() {
+        return currentInjectionPoint.get();
     }
 }

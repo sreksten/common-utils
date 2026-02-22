@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * the classes loaded by the test URLClassLoader are not visible to the classes loaded by the application classloader.
  * This class should not be included in the final .jar file.
  */
-public class SimpleClasspathScannerSink implements ClasspathScannerSink {
+public class SimpleClassConsumer implements ClassConsumer {
 
     private final Collection<Class<?>> classes = new ConcurrentLinkedQueue<>();
 

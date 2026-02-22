@@ -42,7 +42,7 @@ public class ProducerBean<T> implements Bean<T> {
     private final Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
     private final Set<Type> types = new HashSet<>();
     private final boolean alternative;
-    private Integer priority; // @Priority value when alternative is enabled
+    private Integer priority; // @Priority value when the alternative is enabled
 
     // Injection points (for producer method parameters)
     private final Set<InjectionPoint> injectionPoints = new HashSet<>();
@@ -165,7 +165,6 @@ public class ProducerBean<T> implements Bean<T> {
     // Accessors are provided later in the class; keep single-source of truth to avoid duplicates
 
     @Override
-    @SuppressWarnings("unchecked")
     public T create(CreationalContext<T> creationalContext) {
         try {
             if (dependencyResolver == null) {
@@ -198,7 +197,7 @@ public class ProducerBean<T> implements Bean<T> {
         }
 
         try {
-            // Invoke disposer method if present
+            // Invoke the disposer method if present
             if (disposerMethod != null) {
                 invokeDisposerMethod(instance);
             }

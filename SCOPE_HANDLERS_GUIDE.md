@@ -300,7 +300,8 @@ You can create custom scope handlers for application-specific needs by implement
 ### Example: Custom TenantScopeHandler
 
 ```java
-import com.threeamigos.common.util.interfaces.injection.ScopeHandler;
+import com.threeamigos.common.util.implementations.injection.scopehandlers.ScopeHandler;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.contexts.ContextManager;
 import com.threeamigos.common.util.implementations.injection.contexts.ScopeContext;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
@@ -7,7 +8,6 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
 import net.bytebuddy.implementation.FieldAccessor;
 import net.bytebuddy.implementation.MethodDelegation;
-import net.bytebuddy.implementation.SuperMethodCall;
 import net.bytebuddy.implementation.bind.annotation.AllArguments;
 import net.bytebuddy.implementation.bind.annotation.FieldValue;
 import net.bytebuddy.implementation.bind.annotation.Origin;
@@ -41,7 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * </pre>
  *
  * Without a proxy, the ApplicationScoped bean would get ONE instance of RequestData
- * injected at creation time, and use that same instance for ALL requests - WRONG!
+ * injected at creation time and use that same instance for ALL requests - WRONG!
  *
  * <h3>Solution With Proxies:</h3>
  * Instead of injecting the actual RequestData instance, CDI injects a PROXY that:
@@ -85,7 +85,7 @@ public class ClientProxyGenerator {
 
     /**
      * Creates a client proxy for a normal-scoped bean.
-     *
+     * <p>
      * The proxy lifecycle:
      * 1. Proxy is created once and injected into dependent beans
      * 2. Proxy lives as long as the dependent bean (could be the entire application)
@@ -93,10 +93,10 @@ public class ClientProxyGenerator {
      *    a. Looks up the current contextual instance from the scope's context
      *    b. Delegates the call to that instance
      *    c. Returns the result
-     *
+     * <p>
      * This ensures that even if the proxy is held by a long-lived bean,
      * it always accesses the correct contextual instance for the current scope.
-     *
+     * <p>
      * IMPORTANT - Constructor Handling:
      * The bean class may have an @Inject constructor with parameters, like:
      *
@@ -144,7 +144,7 @@ public class ClientProxyGenerator {
 
     /**
      * Generates a proxy class using ByteBuddy.
-     *
+     * <p>
      * The generated class:
      * 1. Extends the target bean class (so it's type-compatible)
      * 2. Adds a DEFAULT (no-arg) constructor
@@ -157,7 +157,7 @@ public class ClientProxyGenerator {
      * 4. Implements Serializable (required by CDI spec for passivation)
      * 5. Adds fields for storing the bean and contextManager
      * 6. Overrides all public methods to delegate to contextual instance
-     *
+     * <p>
      * Note: The proxy shell is never actually "used" as a bean - it's just a delegation wrapper.
      * All business logic runs on the real contextual instances retrieved from the scope.
      *
@@ -293,7 +293,7 @@ public class ClientProxyGenerator {
             // - For ConversationScoped: returns the instance for the CURRENT conversation
             //
             // If no instance exists yet, the context will create one.
-            Object contextualInstance = context.get(bean, (CreationalContext) null);
+            Object contextualInstance = context.get(bean, null);
 
             if (contextualInstance == null) {
                 throw new IllegalStateException(
@@ -310,11 +310,11 @@ public class ClientProxyGenerator {
 
     /**
      * Interceptor for proxy serialization.
-     *
-     * When a proxy is serialized (e.g., when HTTP session is passivated), we don't want to
+     * <p>
+     * When a proxy is serialized (e.g., when an HTTP session is passivated), we don't want to
      * serialize the proxy itself - instead, we serialize a minimal marker object that knows
      * how to recreate the proxy on deserialization.
-     *
+     * <p>
      * This is the standard CDI proxy serialization pattern.
      */
     public static class SerializationInterceptor {
@@ -338,10 +338,10 @@ public class ClientProxyGenerator {
 
     /**
      * Serialization marker for CDI client proxies.
-     *
+     * <p>
      * This small object is what actually gets serialized when a proxy is passivated.
      * On deserialization (via readResolve), it recreates the proxy.
-     *
+     * <p>
      * Why this pattern?
      * - Proxies contain references to Bean and ContextManager (not serializable)
      * - We only need the bean class to recreate the proxy

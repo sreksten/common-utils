@@ -35,7 +35,7 @@ import java.util.function.Function;
  * @author Stefano Reksten
  * @see jakarta.enterprise.inject.Instance
  */
-class InstanceWrapper<T> implements Instance<T> {
+public class InstanceImpl<T> implements Instance<T> {
 
     private final Class<T> type;
     private final Collection<Annotation> qualifiers;
@@ -59,7 +59,7 @@ class InstanceWrapper<T> implements Instance<T> {
      *
      * @param <T> the type being resolved
      */
-    interface ResolutionStrategy<T> {
+    public interface ResolutionStrategy<T> {
         /**
          * Resolves and creates a single instance of the specified type with qualifiers.
          *
@@ -97,16 +97,16 @@ class InstanceWrapper<T> implements Instance<T> {
      * @param qualifiers the qualifiers to use for instance resolution
      * @param resolutionStrategy the strategy for resolving beans
      */
-    InstanceWrapper(Class<T> type,
-                    Collection<Annotation> qualifiers,
-                    ResolutionStrategy<T> resolutionStrategy) {
+    public InstanceImpl(Class<T> type,
+                 Collection<Annotation> qualifiers,
+                 ResolutionStrategy<T> resolutionStrategy) {
         this(type, qualifiers, resolutionStrategy, null);
     }
 
-    InstanceWrapper(Class<T> type,
-                    Collection<Annotation> qualifiers,
-                    ResolutionStrategy<T> resolutionStrategy,
-                    Function<Class<? extends T>, Bean<? extends T>> beanLookup) {
+    public InstanceImpl(Class<T> type,
+                 Collection<Annotation> qualifiers,
+                 ResolutionStrategy<T> resolutionStrategy,
+                 Function<Class<? extends T>, Bean<? extends T>> beanLookup) {
         this.type = Objects.requireNonNull(type, "type cannot be null");
         this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
         this.resolutionStrategy = Objects.requireNonNull(resolutionStrategy, "resolutionStrategy cannot be null");
@@ -124,14 +124,14 @@ class InstanceWrapper<T> implements Instance<T> {
 
     @Override
     public Instance<T> select(Annotation... annotations) {
-        return new InstanceWrapper<>(type, mergeQualifiers(qualifiers, annotations), resolutionStrategy, beanLookup);
+        return new InstanceImpl<>(type, mergeQualifiers(qualifiers, annotations), resolutionStrategy, beanLookup);
     }
 
     @Override
     public <U extends T> Instance<U> select(Class<U> subtype, Annotation... annotations) {
         @SuppressWarnings("unchecked")
         ResolutionStrategy<U> castStrategy = (ResolutionStrategy<U>) resolutionStrategy;
-        return new InstanceWrapper<>(subtype, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup());
+        return new InstanceImpl<>(subtype, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup());
     }
 
     @Override
@@ -141,7 +141,7 @@ class InstanceWrapper<T> implements Instance<T> {
         Class<U> rawType = (Class<U>) RawTypeExtractor.getRawType(subtype.getType());
         @SuppressWarnings("unchecked")
         ResolutionStrategy<U> castStrategy = (ResolutionStrategy<U>) resolutionStrategy;
-        return new InstanceWrapper<>(rawType, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup());
+        return new InstanceImpl<>(rawType, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup());
     }
 
     @Override

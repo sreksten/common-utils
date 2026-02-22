@@ -37,12 +37,12 @@ class ParallelClasspathScannerUnitTest {
     Path tempDir;
 
     private ClassLoader classLoader;
-    private SimpleClasspathScannerSink sink;
+    private SimpleClassConsumer sink;
 
     @BeforeEach
     void setUp() {
         classLoader = Thread.currentThread().getContextClassLoader();
-        sink = new SimpleClasspathScannerSink();
+        sink = new SimpleClassConsumer();
     }
 
     @Nested
@@ -375,7 +375,7 @@ class ParallelClasspathScannerUnitTest {
                     try {
                         startLatch.await(); // Wait for all threads to be ready
                         ClassLoader loader = Thread.currentThread().getContextClassLoader();
-                        SimpleClasspathScannerSink localSink = new SimpleClasspathScannerSink();
+                        SimpleClassConsumer localSink = new SimpleClassConsumer();
 
                         new ParallelClasspathScanner(loader, localSink, "com.threeamigos.common.util.implementations.injection");
 
@@ -423,9 +423,9 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should handle repeated scans with different sinks")
         void shouldHandleRepeatedScans() throws Exception {
             // Given
-            SimpleClasspathScannerSink sink1 = new SimpleClasspathScannerSink();
-            SimpleClasspathScannerSink sink3 = new SimpleClasspathScannerSink();
-            SimpleClasspathScannerSink sink2 = new SimpleClasspathScannerSink();
+            SimpleClassConsumer sink1 = new SimpleClassConsumer();
+            SimpleClassConsumer sink3 = new SimpleClassConsumer();
+            SimpleClassConsumer sink2 = new SimpleClassConsumer();
 
             // When - Call multiple times
             new ParallelClasspathScanner(classLoader, sink1, "com.threeamigos.common.util.implementations.injection");
@@ -509,7 +509,7 @@ class ParallelClasspathScannerUnitTest {
             // 3. Create a custom ClassLoader WITH parent delegation
             URL[] urls = {jarPath.toUri().toURL()};
             try (URLClassLoader testLoader = createURLClassLoader(urls, packageName, baseEntryName)) {
-                SimpleClasspathScannerSink jarSink = new SimpleClasspathScannerSink();
+                SimpleClassConsumer jarSink = new SimpleClassConsumer();
 
                 new ParallelClasspathScanner(testLoader, jarSink, packageNameToFilter);
 

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.interfaces.injection;
 
+import com.threeamigos.common.util.implementations.injection.scopehandlers.ScopeHandler;
 import jakarta.annotation.Nonnull;
 
 import jakarta.enterprise.util.TypeLiteral;

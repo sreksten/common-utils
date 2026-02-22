@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.collections.Cache;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
@@ -71,6 +72,7 @@ import java.util.stream.Collectors;
  * @see jakarta.inject.Qualifier
  * @see Cache
  */
+@Deprecated
 class ClassResolver {
 
     private final KnowledgeBase knowledgeBase;

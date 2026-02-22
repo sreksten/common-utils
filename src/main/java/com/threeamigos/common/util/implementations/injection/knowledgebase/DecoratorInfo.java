@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import java.lang.reflect.Type;

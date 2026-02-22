@@ -15,7 +15,7 @@ import java.util.jar.JarFile;
  *
  * <p>Discovers all .class files from both filesystem directories and JAR files within the specified package(s).
  * If no packages are specified, scans the entire classpath.</p>
- * Scan results are passed to a {@link ClasspathScannerSink} for further processing (e.g., JSR-330 compliance checks).</p>
+ * Scan results are passed to a {@link ClassConsumer} for further processing (e.g., JSR-330 compliance checks).</p>
  *
  * <p><b>Filtering:</b> Automatically excludes:
  * <ul>
@@ -49,7 +49,7 @@ class ParallelClasspathScanner {
     private final Map<String, Boolean> vetoedPackages = new ConcurrentHashMap<>();
 
     ParallelClasspathScanner(ClassLoader classLoader,
-                     ClasspathScannerSink sink,
+                     ClassConsumer sink,
                      String... packageNames) throws IOException, ClassNotFoundException {
         Objects.requireNonNull(sink, "sink cannot be null");
         Objects.requireNonNull(packageNames, "packageNames cannot be null");
@@ -87,7 +87,7 @@ class ParallelClasspathScanner {
     }
 
     void getClassesFromResource(ClassLoader classLoader, URL resource, String packageName,
-                                ClasspathScannerSink sink) throws ClassNotFoundException, IOException {
+                                ClassConsumer sink) throws ClassNotFoundException, IOException {
         if (resource.getProtocol().equals(FILE_PROTOCOL)) {
             findClassesInDirectory(classLoader, new File(resource.getFile()), packageName, sink);
         } else if (resource.getProtocol().equals(JAR_PROTOCOL)) {
@@ -98,7 +98,7 @@ class ParallelClasspathScanner {
     }
 
     void findClassesInDirectory(ClassLoader classLoader, File directory, String packageName,
-                                ClasspathScannerSink sink) throws ClassNotFoundException {
+                                ClassConsumer sink) throws ClassNotFoundException {
         if (!directory.exists() || !directory.isDirectory()) {
             return;
         }
@@ -132,7 +132,7 @@ class ParallelClasspathScanner {
         }
     }
 
-    void findClassesInJar(ClassLoader classLoader, URL jarUrl, String packageName, ClasspathScannerSink sink) throws IOException {
+    void findClassesInJar(ClassLoader classLoader, URL jarUrl, String packageName, ClassConsumer sink) throws IOException {
         // Extract the file path properly handling 'jar:file': and '!'
         String urlString = jarUrl.toString();
         String jarFilePath = urlString.substring(urlString.indexOf("file:"), urlString.indexOf("!"));

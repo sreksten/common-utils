@@ -1,6 +1,6 @@
-package com.threeamigos.common.util.implementations.injection;
+package com.threeamigos.common.util.implementations.injection.contexts;
 
-import com.threeamigos.common.util.implementations.injection.contexts.*;
+import com.threeamigos.common.util.implementations.injection.ClientProxyGenerator;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.Dependent;
@@ -26,7 +26,7 @@ public class ContextManager {
     private final RequestScopedContext requestContext;
     private final ClientProxyGenerator proxyGenerator;
 
-    ContextManager() {
+    public ContextManager() {
         // Initialize built-in contexts
         contexts.put(ApplicationScoped.class, new ApplicationScopedContext());
         contexts.put(Dependent.class, new DependentContext());
@@ -51,7 +51,7 @@ public class ContextManager {
      * @return the corresponding context
      * @throws IllegalArgumentException if the scope is not supported
      */
-    ScopeContext getContext(Class<? extends Annotation> scopeAnnotation) {
+    public ScopeContext getContext(Class<? extends Annotation> scopeAnnotation) {
         ScopeContext context = contexts.get(scopeAnnotation);
         if (context == null) {
             throw new IllegalArgumentException("Unsupported scope: " + scopeAnnotation.getName());
@@ -62,7 +62,7 @@ public class ContextManager {
     /**
      * Destroys all contexts and their instances.
      */
-    void destroyAll() {
+    public void destroyAll() {
         for (ScopeContext context : contexts.values()) {
             try {
                 context.destroy();
@@ -79,14 +79,14 @@ public class ContextManager {
      *
      * @param conversationId the unique identifier for this conversation
      */
-    void beginConversation(String conversationId) {
+    public void beginConversation(String conversationId) {
         conversationContext.beginConversation(conversationId);
     }
 
     /**
      * Ends the current conversation.
      */
-    void endConversation() {
+    public void endConversation() {
         conversationContext.endConversation();
     }
 
@@ -95,7 +95,7 @@ public class ContextManager {
      *
      * @param conversationId the conversation to end
      */
-    void endConversation(String conversationId) {
+    public void endConversation(String conversationId) {
         conversationContext.endConversation(conversationId);
     }
 
@@ -104,7 +104,7 @@ public class ContextManager {
      *
      * @return the current conversation ID, or null if no conversation is active
      */
-    String getCurrentConversationId() {
+    public String getCurrentConversationId() {
         return conversationContext.getCurrentConversationId();
     }
 
@@ -115,14 +115,14 @@ public class ContextManager {
      *
      * @param sessionId the session identifier
      */
-    void activateSession(String sessionId) {
+    public void activateSession(String sessionId) {
         sessionContext.activateSession(sessionId);
     }
 
     /**
      * Deactivates the session from the current thread.
      */
-    void deactivateSession() {
+    public void deactivateSession() {
         sessionContext.deactivateSession();
     }
 
@@ -131,7 +131,7 @@ public class ContextManager {
      *
      * @param sessionId the session to invalidate
      */
-    void invalidateSession(String sessionId) {
+    public void invalidateSession(String sessionId) {
         sessionContext.invalidateSession(sessionId);
     }
 
@@ -140,7 +140,7 @@ public class ContextManager {
      *
      * @return the current session ID, or null if no session is active
      */
-    String getCurrentSessionId() {
+    public String getCurrentSessionId() {
         return sessionContext.getCurrentSessionId();
     }
 
@@ -149,14 +149,14 @@ public class ContextManager {
     /**
      * Activates the request scope for the current thread.
      */
-    void activateRequest() {
+    public void activateRequest() {
         requestContext.activateRequest();
     }
 
     /**
      * Deactivates the request scope for the current thread.
      */
-    void deactivateRequest() {
+    public void deactivateRequest() {
         requestContext.deactivateRequest();
     }
 
@@ -164,20 +164,20 @@ public class ContextManager {
 
     /**
      * Checks if a scope annotation represents a normal scope (requires proxies).
-     *
+     * <p>
      * Normal scopes in CDI:
      * - @ApplicationScoped
      * - @RequestScoped
      * - @SessionScoped
      * - @ConversationScoped
-     *
+     * <p>
      * Pseudo-scopes (no proxies needed):
      * - @Dependent
      *
      * @param scopeAnnotation the scope annotation to check
      * @return true if this is a normal scope that requires proxies
      */
-    boolean isNormalScope(Class<? extends Annotation> scopeAnnotation) {
+    public boolean isNormalScope(Class<? extends Annotation> scopeAnnotation) {
         // Dependent is a pseudo-scope, not a normal scope
         if (scopeAnnotation == Dependent.class) {
             return false;
@@ -189,7 +189,7 @@ public class ContextManager {
 
     /**
      * Creates a client proxy for a bean.
-     *
+     * <p>
      * This is called during bean creation for normal-scoped beans.
      * The proxy will delegate all method calls to the contextual instance
      * from the appropriate scope.
@@ -198,7 +198,31 @@ public class ContextManager {
      * @param <T> the bean type
      * @return a client proxy instance
      */
-    <T> T createClientProxy(Bean<T> bean) {
+    public <T> T createClientProxy(Bean<T> bean) {
         return proxyGenerator.createProxy(bean);
+    }
+
+    /**
+     * Registers a custom scope context programmatically.
+     *
+     * <p>This allows runtime registration of custom scopes, useful for:
+     * <ul>
+     *   <li>Testing with custom scopes</li>
+     *   <li>Legacy ScopeHandler adaptation</li>
+     *   <li>Dynamic scope registration</li>
+     * </ul>
+     *
+     * @param scopeAnnotation the scope annotation class
+     * @param context the scope context implementation
+     * @throws IllegalArgumentException if any parameter is null
+     */
+    public void registerContext(Class<? extends Annotation> scopeAnnotation, ScopeContext context) {
+        if (scopeAnnotation == null) {
+            throw new IllegalArgumentException("Scope annotation cannot be null");
+        }
+        if (context == null) {
+            throw new IllegalArgumentException("Context cannot be null");
+        }
+        contexts.put(scopeAnnotation, context);
     }
 }

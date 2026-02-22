@@ -8,6 +8,7 @@ import java.util.*;
  * Represents a key for mapping types to their implementations in the dependency injection system.
  * Used by ClassResolver.
  */
+@Deprecated
 class MappingKey {
     private final Type type;
     private final Set<Annotation> qualifiers;
