@@ -179,7 +179,22 @@ public enum AnnotationsEnum {
      * Normal scope meta-annotation.
      * Maps: {@code javax.enterprise.context.NormalScope}, {@code jakarta.enterprise.context.NormalScope}
      */
-    NORMAL_SCOPE(javax.enterprise.context.NormalScope.class, jakarta.enterprise.context.NormalScope.class);
+    NORMAL_SCOPE(javax.enterprise.context.NormalScope.class, jakarta.enterprise.context.NormalScope.class),
+
+    // ==================== CDI Event Annotations ====================
+
+    /**
+     * Marks a method parameter that observes CDI events (synchronous).
+     * Maps: {@code javax.enterprise.event.Observes}, {@code jakarta.enterprise.event.Observes}
+     */
+    OBSERVES(javax.enterprise.event.Observes.class, jakarta.enterprise.event.Observes.class),
+
+    /**
+     * Marks a method parameter that observes CDI events (asynchronous).
+     * Note: Only available in jakarta.enterprise (CDI 2.0+), not in older javax.enterprise (CDI 1.2).
+     * Maps: {@code jakarta.enterprise.event.ObservesAsync}
+     */
+    OBSERVES_ASYNC(jakarta.enterprise.event.ObservesAsync.class);
 
     // ==================== Implementation ====================
 
@@ -390,5 +405,19 @@ public enum AnnotationsEnum {
      */
     public static boolean hasNormalScopeAnnotation(AnnotatedElement element) {
         return NORMAL_SCOPE.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has an @Observes annotation (javax or jakarta).
+     */
+    public static boolean hasObservesAnnotation(AnnotatedElement element) {
+        return OBSERVES.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has an @ObservesAsync annotation (javax or jakarta).
+     */
+    public static boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
+        return OBSERVES_ASYNC.isPresent(element);
     }
 }

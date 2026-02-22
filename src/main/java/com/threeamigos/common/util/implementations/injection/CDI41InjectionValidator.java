@@ -803,11 +803,11 @@ class CDI41InjectionValidator {
         java.lang.reflect.Parameter observedParameter = null;
 
         for (java.lang.reflect.Parameter parameter : method.getParameters()) {
-            if (parameter.isAnnotationPresent(jakarta.enterprise.event.Observes.class)) {
+            if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
                 observesCount++;
                 observedParameter = parameter;
             }
-            if (parameter.isAnnotationPresent(jakarta.enterprise.event.ObservesAsync.class)) {
+            if (AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
                 observesAsyncCount++;
                 observedParameter = parameter;
             }

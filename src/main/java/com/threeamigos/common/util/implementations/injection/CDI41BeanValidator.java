@@ -837,7 +837,9 @@ public class CDI41BeanValidator {
     // -----------------------
 
     private boolean isCandidateBeanClass(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
-        if (clazz == null || hasVetoedAnnotation(clazz)) return false;
+        if (clazz == null || hasVetoedAnnotation(clazz) || beanArchiveMode == BeanArchiveMode.NONE) {
+            return false;
+        }
 
         // Bean-defining annotations per CDI spec
         if (hasApplicationScopedAnnotation(clazz) ||

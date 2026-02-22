@@ -13,7 +13,8 @@ public class SimpleClassConsumer implements ClassConsumer {
     private final Collection<Class<?>> classes = new ConcurrentLinkedQueue<>();
 
     @Override
-    public void add(Class<?> clazz) {
+    public void add(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
+        // For testing purposes, we just collect classes regardless of bean archive mode
         classes.add(clazz);
     }
 

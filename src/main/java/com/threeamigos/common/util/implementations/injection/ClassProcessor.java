@@ -13,7 +13,6 @@ class ClassProcessor implements ClassConsumer {
     private final ParallelTaskExecutor taskExecutor;
     private final KnowledgeBase knowledgeBase;
     private final CDI41BeanValidator cdi41BeanValidator;
-    private final BeanArchiveMode beanArchiveMode;
 
     /**
      * Track classes that have been processed to prevent duplicate bean registration.
@@ -22,26 +21,27 @@ class ClassProcessor implements ClassConsumer {
      */
     private final Set<Class<?>> processedClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    public ClassProcessor(ParallelTaskExecutor taskExecutor, KnowledgeBase knowledgeBase, BeanArchiveMode beanArchiveMode) {
+    public ClassProcessor(ParallelTaskExecutor taskExecutor, KnowledgeBase knowledgeBase) {
         this.taskExecutor = Objects.requireNonNull(taskExecutor, "taskExecutor cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
-        this.beanArchiveMode = Objects.requireNonNull(beanArchiveMode, "beanArchiveMode cannot be null");
         this.cdi41BeanValidator = new CDI41BeanValidator(knowledgeBase);
     }
 
-    public void add(Class<?> clazz) {
+    @Override
+    public void add(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
         Objects.requireNonNull(clazz, "Class cannot be null");
+        Objects.requireNonNull(beanArchiveMode, "beanArchiveMode cannot be null");
         // Only schedule processing if we haven't seen this class before
         if (processedClasses.add(clazz)) {
-            taskExecutor.schedulePlatformThread(() -> accept(clazz));
+            taskExecutor.schedulePlatformThread(() -> accept(clazz, beanArchiveMode));
         }
     }
 
-    private void accept(Class<?> clazz) {
+    private void accept(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
         // CDI41BeanValidator always registers beans (even invalid ones)
         // and marks them with hasValidationErrors flag
         cdi41BeanValidator.validateAndRegister(clazz, beanArchiveMode);
-        // Always add to knowledge base for class resolution
+        // Always add to the knowledge base for class resolution
         knowledgeBase.add(clazz);
     }
 }

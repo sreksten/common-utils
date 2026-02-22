@@ -216,9 +216,9 @@ public class InjectorImpl implements Injector {
 
         knowledgeBase = new KnowledgeBase();
         try (ParallelTaskExecutor parallelTaskExecutor = ParallelTaskExecutor.createExecutor()) {
-            // Default to IMPLICIT bean archive mode (annotated discovery)
-            // Classes require bean-defining annotations to be discovered as beans
-            ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase, BeanArchiveMode.IMPLICIT);
+            // ClassProcessor now receives BeanArchiveMode per-class from ParallelClasspathScanner
+            // which detects the mode for each JAR/directory by examining META-INF/beans.xml
+            ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase);
             new ParallelClasspathScanner(
                     Thread.currentThread().getContextClassLoader(), classProcessor, packageNames);
             parallelTaskExecutor.awaitCompletion();

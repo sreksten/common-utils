@@ -455,8 +455,8 @@ public class EventImpl<T> implements Event<T> {
                 Parameter param = parameters[i];
 
                 // The @Observes or @ObservesAsync parameter gets the event
-                if (param.isAnnotationPresent(jakarta.enterprise.event.Observes.class) ||
-                    param.isAnnotationPresent(jakarta.enterprise.event.ObservesAsync.class)) {
+                if (AnnotationsEnum.hasObservesAnnotation(param) ||
+                    AnnotationsEnum.hasObservesAsyncAnnotation(param)) {
                     args[i] = event;
                 } else {
                     // Other parameters are injection points - resolve them

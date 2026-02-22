@@ -48,6 +48,19 @@ class ParallelClasspathScanner {
      */
     private final Map<String, Boolean> vetoedPackages = new ConcurrentHashMap<>();
 
+    /**
+     * Set to track already-scanned classes to avoid duplicates.
+     * This prevents the same class from being added multiple times when it appears
+     * in multiple JARs (e.g., javax.inject-tck and jakarta.inject-tck both contain
+     * the same org.atinject.tck classes).
+     */
+    private final Set<String> scannedClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
+    /**
+     * Detector for bean archive modes (EXPLICIT/IMPLICIT/NONE based on beans.xml).
+     */
+    private final BeanArchiveDetector beanArchiveDetector = new BeanArchiveDetector();
+
     ParallelClasspathScanner(ClassLoader classLoader,
                      ClassConsumer sink,
                      String... packageNames) throws IOException, ClassNotFoundException {
@@ -103,10 +116,13 @@ class ParallelClasspathScanner {
             return;
         }
 
-        // Check if package is vetoed (skip entire package and subpackages)
+        // Check if the package is vetoed (skip the entire package and subpackages)
         if (isPackageVetoed(classLoader, packageName)) {
             return;
         }
+
+        // Detect bean archive mode for this directory (check for META-INF/beans.xml)
+        BeanArchiveMode archiveMode = beanArchiveDetector.detectArchiveMode(findArchiveRoot(directory));
 
         File[] files = directory.listFiles();
 
@@ -122,14 +138,41 @@ class ParallelClasspathScanner {
                 findClassesInDirectory(classLoader, file, prefix + file.getName(), sink);
             } else if (file.getName().endsWith(CLASS_EXTENSION) && !file.getName().equals(PACKAGE_INFO_CLASS)) {
                 String className = prefix + file.getName().substring(0, file.getName().length() - CLASS_EXTENSION_LENGTH);
-                try {
-                    Class<?> clazz = Class.forName(className, false, classLoader);
-                    sink.add(clazz);
-                } catch (NoClassDefFoundError | ClassNotFoundException e) {
-                    // Skip classes with missing dependencies or those that can't be loaded; continue scanning
+                // Only process if we haven't seen this class before (avoid duplicates from multiple JARs)
+                if (scannedClasses.add(className)) {
+                    try {
+                        Class<?> clazz = Class.forName(className, false, classLoader);
+                        sink.add(clazz, archiveMode);
+                    } catch (NoClassDefFoundError | ClassNotFoundException e) {
+                        // Skip classes with missing dependencies or those that can't be loaded; continue scanning
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Finds the archive root (where META-INF would be located) by navigating up from a directory.
+     *
+     * @param directory a directory within the classpath
+     * @return the archive root directory
+     */
+    private File findArchiveRoot(File directory) {
+        File current = directory;
+        // Navigate up to find where META-INF exists or use the original directory
+        while (current != null && current.getParentFile() != null) {
+            File metaInf = new File(current, "META-INF");
+            if (metaInf.exists() && metaInf.isDirectory()) {
+                return current;
+            }
+            File parentMetaInf = new File(current.getParentFile(), "META-INF");
+            if (parentMetaInf.exists() && parentMetaInf.isDirectory()) {
+                return current.getParentFile();
+            }
+            current = current.getParentFile();
+        }
+        // If we can't find META-INF, return the original directory
+        return directory;
     }
 
     void findClassesInJar(ClassLoader classLoader, URL jarUrl, String packageName, ClassConsumer sink) throws IOException {
@@ -144,6 +187,10 @@ class ParallelClasspathScanner {
             // Fallback for non-standard URI formats
             jarFile = new File(jarFilePath.replace("file:", ""));
         }
+
+        // Detect bean archive mode for this JAR (check for META-INF/beans.xml inside JAR)
+        BeanArchiveMode archiveMode = beanArchiveDetector.detectArchiveMode(jarFile);
+
         String packagePath = packageName.replace('.', '/');
 
         try (JarFile jar = new JarFile(jarFile)) {
@@ -156,16 +203,19 @@ class ParallelClasspathScanner {
                         !name.endsWith(PACKAGE_INFO_CLASS)) {
                     String className = name.replace('/', '.').substring(0, name.length() - CLASS_EXTENSION_LENGTH);
 
-                    // Extract package from class name and check if vetoed
+                    // Extract the package from the class name and check if vetoed
                     String classPackage = getPackageFromClassName(className);
                     if (isPackageVetoed(classLoader, classPackage)) {
                         continue; // Skip classes in vetoed packages
                     }
 
-                    try {
-                        sink.add(Class.forName(className, false, classLoader));
-                    } catch (NoClassDefFoundError | ClassNotFoundException e) {
-                        // Skip classes with missing dependencies or those that can't be loaded
+                    // Only process if we haven't seen this class before (avoid duplicates from multiple JARs)
+                    if (scannedClasses.add(className)) {
+                        try {
+                            sink.add(Class.forName(className, false, classLoader), archiveMode);
+                        } catch (NoClassDefFoundError | ClassNotFoundException e) {
+                            // Skip classes with missing dependencies or those that can't be loaded
+                        }
                     }
                 }
             }

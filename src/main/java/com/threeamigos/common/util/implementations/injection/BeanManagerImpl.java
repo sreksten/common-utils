@@ -469,40 +469,20 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("type cannot be null");
         }
 
-        Set<Annotation> requiredBindings = new HashSet<>(Arrays.asList(interceptorBindings));
-        List<Interceptor<?>> matchingInterceptors = new ArrayList<>();
+        // Convert varargs to Set for query
+        Set<Annotation> requiredBindings = interceptorBindings.length > 0
+                ? new HashSet<>(Arrays.asList(interceptorBindings))
+                : Collections.emptySet();
 
-        for (InterceptorInfo interceptorInfo : knowledgeBase.getInterceptorInfos()) {
-            // Check if interceptor supports this interception type
-            boolean supportsType = false;
-            switch (type) {
-                case AROUND_INVOKE:
-                    supportsType = interceptorInfo.getAroundInvokeMethod() != null;
-                    break;
-                case AROUND_CONSTRUCT:
-                    supportsType = interceptorInfo.getAroundConstructMethod() != null;
-                    break;
-                case POST_CONSTRUCT:
-                    supportsType = interceptorInfo.getPostConstructMethod() != null;
-                    break;
-                case PRE_DESTROY:
-                    supportsType = interceptorInfo.getPreDestroyMethod() != null;
-                    break;
-            }
-            if (!supportsType) {
-                continue;
-            }
+        // Use KnowledgeBase query method - already filters by type and bindings, and sorts by priority
+        List<InterceptorInfo> matchingInfos = requiredBindings.isEmpty()
+                ? knowledgeBase.getInterceptorsByType(type)
+                : knowledgeBase.getInterceptorsByBindingsAndType(type, requiredBindings);
 
-            // Check if interceptor has all required bindings
-            if (interceptorBindingsMatch(requiredBindings, interceptorInfo.getInterceptorBindings())) {
-                matchingInterceptors.add(createInterceptor(interceptorInfo));
-            }
-        }
-
-        // Sort by priority (lower priority value = earlier execution)
-        matchingInterceptors.sort(Comparator.comparingInt(this::getPriority));
-
-        return matchingInterceptors;
+        // Convert InterceptorInfo to Interceptor<?> beans
+        return matchingInfos.stream()
+                .map(this::createInterceptor)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -1648,27 +1628,6 @@ public class BeanManagerImpl implements BeanManager {
             boolean found = false;
             for (Annotation eventQual : eventQualifiers) {
                 if (areQualifiersEquivalent(observerQual, eventQual)) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Checks if all required interceptor bindings are present.
-     */
-    private boolean interceptorBindingsMatch(Set<Annotation> required, Set<Annotation> available) {
-        for (Annotation req : required) {
-            boolean found = false;
-            for (Annotation avail : available) {
-                if (areInterceptorBindingsEquivalent(req, avail)) {
                     found = true;
                     break;
                 }
