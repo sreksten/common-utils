@@ -317,11 +317,13 @@ class CDI41InjectionValidator {
      *
      * <p>When a bean is in a passivation-capable scope, it must be passivation capable:
      * - The bean class must implement {@link java.io.Serializable}
+     * - All dependencies (injection points) must be passivation capable (checked recursively)
      * - All interceptors and decorators must be serializable (checked in future phases)
-     * - Note: Member variables are NOT validated by CDI (developer responsibility)
      *
      * <p>Important: Client proxies are ALWAYS Serializable, so injecting non-passivating
      * beans into passivating beans is allowed (the proxy is serialized, not the actual bean).
+     * This means normal-scoped beans (@ApplicationScoped, @SessionScoped, etc.) are always
+     * passivation-capable dependencies because they are injected as proxies.
      *
      * @param validBeans collection of valid beans to validate
      * @return true if all beans satisfy passivation requirements, false otherwise
@@ -329,9 +331,9 @@ class CDI41InjectionValidator {
     private boolean validatePassivation(Collection<Bean<?>> validBeans) {
         boolean allValid = true;
 
-        // Get context manager to check if scope is passivation-capable
-        // Note: We need access to ContextManager here
-        // For now, we'll check the scope annotation directly
+        // Track visited beans to avoid infinite recursion in circular dependencies
+        Set<Bean<?>> visited = new HashSet<>();
+
         for (Bean<?> bean : validBeans) {
             Class<? extends Annotation> scopeAnnotation = bean.getScope();
 
@@ -348,10 +350,155 @@ class CDI41InjectionValidator {
                     );
                     allValid = false;
                 }
+
+                // Recursively validate all dependencies are passivation-capable
+                visited.clear();
+                allValid &= validateDependenciesPassivationCapable(bean, visited, validBeans);
             }
         }
 
         return allValid;
+    }
+
+    /**
+     * Recursively validates that all dependencies of a bean are passivation-capable.
+     *
+     * <p>This method checks that for a bean in a passivation-capable scope, all its
+     * injected dependencies can be safely serialized. The rules are:
+     * <ul>
+     *   <li>Normal-scoped beans (@ApplicationScoped, @SessionScoped, etc.) are ALWAYS passivation-capable
+     *       because they are injected as serializable client proxies</li>
+     *   <li>@Dependent scoped beans MUST be Serializable if injected into passivation-capable beans</li>
+     *   <li>@Dependent beans' dependencies are recursively checked (transitive closure)</li>
+     *   <li>Instance&lt;T&gt; and Provider&lt;T&gt; are always passivation-capable (they are proxies)</li>
+     * </ul>
+     *
+     * @param bean the bean whose dependencies to check
+     * @param visited set of already visited beans to prevent infinite recursion
+     * @param validBeans all valid beans for dependency resolution
+     * @return true if all dependencies are passivation-capable
+     */
+    private boolean validateDependenciesPassivationCapable(Bean<?> bean, Set<Bean<?>> visited,
+                                                           Collection<Bean<?>> validBeans) {
+        // Avoid infinite recursion on circular dependencies
+        if (visited.contains(bean)) {
+            return true;
+        }
+        visited.add(bean);
+
+        boolean allValid = true;
+
+        for (InjectionPoint injectionPoint : bean.getInjectionPoints()) {
+            Type requiredType = injectionPoint.getType();
+            Set<Annotation> qualifiers = injectionPoint.getQualifiers();
+
+            // Instance<T> and Provider<T> are always passivation-capable (they are proxies)
+            if (isInstanceOrProvider(requiredType)) {
+                continue;
+            }
+
+            // Find the bean that will be injected
+            Set<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
+
+            if (candidates.isEmpty()) {
+                // Unsatisfied dependency - already reported by validateInjectionPoint
+                continue;
+            }
+
+            // Get the single resolved bean (ambiguity already checked in validateInjectionPoint)
+            Bean<?> resolvedBean;
+            if (candidates.size() > 1) {
+                Optional<Bean<?>> preferred = chooseByPriority(candidates);
+                if (!preferred.isPresent()) {
+                    // Ambiguous - already reported by validateInjectionPoint
+                    continue;
+                }
+                resolvedBean = preferred.get();
+            } else {
+                resolvedBean = candidates.iterator().next();
+            }
+
+            // Check if dependency is passivation-capable
+            Class<? extends Annotation> dependencyScope = resolvedBean.getScope();
+
+            // Normal-scoped beans are ALWAYS passivation-capable because they inject as proxies
+            if (isNormalScope(dependencyScope)) {
+                // Proxy is serializable, so this dependency is fine
+                continue;
+            }
+
+            // @Dependent scoped dependencies must be Serializable themselves
+            if (isDependentScope(dependencyScope)) {
+                if (!java.io.Serializable.class.isAssignableFrom(resolvedBean.getBeanClass())) {
+                    knowledgeBase.addError(
+                            "Bean " + bean.getBeanClass().getName() +
+                            " has passivation-capable scope @" + bean.getScope().getSimpleName() +
+                            " and injects @Dependent bean " + resolvedBean.getBeanClass().getName() +
+                            " at " + formatInjectionPoint(injectionPoint, bean) +
+                            ", but the dependency does not implement java.io.Serializable. " +
+                            "@Dependent beans injected into passivation-capable beans must be Serializable."
+                    );
+                    allValid = false;
+                } else {
+                    // Recursively check @Dependent bean's dependencies
+                    allValid &= validateDependenciesPassivationCapable(resolvedBean, visited, validBeans);
+                }
+            }
+
+            // Pseudo-scoped beans (@Singleton from JSR-330) should also be checked
+            // They are not proxied, so they need to be Serializable
+            if (!isNormalScope(dependencyScope) && !isDependentScope(dependencyScope)) {
+                // Custom scope or @Singleton - must be Serializable
+                if (!java.io.Serializable.class.isAssignableFrom(resolvedBean.getBeanClass())) {
+                    knowledgeBase.addError(
+                            "Bean " + bean.getBeanClass().getName() +
+                            " has passivation-capable scope @" + bean.getScope().getSimpleName() +
+                            " and injects non-normal-scoped bean " + resolvedBean.getBeanClass().getName() +
+                            " with scope @" + dependencyScope.getSimpleName() +
+                            " at " + formatInjectionPoint(injectionPoint, bean) +
+                            ", but the dependency does not implement java.io.Serializable. " +
+                            "Non-normal-scoped beans injected into passivation-capable beans must be Serializable."
+                    );
+                    allValid = false;
+                }
+            }
+        }
+
+        return allValid;
+    }
+
+    /**
+     * Checks if a scope is a normal scope (uses client proxies).
+     * Normal scopes: @ApplicationScoped, @SessionScoped, @ConversationScoped, @RequestScoped
+     *
+     * @param scopeAnnotation the scope annotation
+     * @return true if it's a normal scope
+     */
+    private boolean isNormalScope(Class<? extends Annotation> scopeAnnotation) {
+        String scopeName = scopeAnnotation.getName();
+        return scopeName.equals("jakarta.enterprise.context.ApplicationScoped") ||
+               scopeName.equals("jakarta.enterprise.context.SessionScoped") ||
+               scopeName.equals("jakarta.enterprise.context.ConversationScoped") ||
+               scopeName.equals("jakarta.enterprise.context.RequestScoped") ||
+               scopeName.equals("javax.enterprise.context.ApplicationScoped") ||
+               scopeName.equals("javax.enterprise.context.SessionScoped") ||
+               scopeName.equals("javax.enterprise.context.ConversationScoped") ||
+               scopeName.equals("javax.enterprise.context.RequestScoped") ||
+               // Check for @NormalScope meta-annotation
+               scopeAnnotation.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
+               scopeAnnotation.isAnnotationPresent(javax.enterprise.context.NormalScope.class);
+    }
+
+    /**
+     * Checks if a scope is @Dependent.
+     *
+     * @param scopeAnnotation the scope annotation
+     * @return true if it's @Dependent
+     */
+    private boolean isDependentScope(Class<? extends Annotation> scopeAnnotation) {
+        String scopeName = scopeAnnotation.getName();
+        return scopeName.equals("jakarta.enterprise.context.Dependent") ||
+               scopeName.equals("javax.enterprise.context.Dependent");
     }
 
     /**

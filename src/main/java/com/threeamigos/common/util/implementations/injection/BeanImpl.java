@@ -907,25 +907,24 @@ public class BeanImpl<T> implements Bean<T> {
         // If not, compute the value (create instance) and cache it atomically
         return interceptorInstanceCache.computeIfAbsent(interceptorClass, clazz -> {
             try {
-                // Step 1: Create instance via no-arg constructor
-                // TODO: In a full implementation, this would:
-                // - Check for @Inject constructor
-                // - Resolve constructor parameters via dependency injection
-                // - Use the injector to create the instance properly
-                //
-                // For now, we use simple no-arg constructor instantiation
-                Constructor<?> constructor = clazz.getDeclaredConstructor();
+                // Step 1: Find and select the appropriate constructor
+                Constructor<?> constructor = selectInterceptorConstructor(clazz);
                 constructor.setAccessible(true);
-                Object instance = constructor.newInstance();
 
-                // Step 2: Perform dependency injection (if needed)
-                // TODO: In a full implementation, this would:
-                // - Inject @Inject fields
-                // - Call @Inject methods
-                // - Call @PostConstruct
-                //
-                // For now, we skip injection (interceptors should have no dependencies)
-                // This is acceptable for Phase 2 - simple interceptors without dependencies
+                // Step 2: Resolve constructor parameters via dependency injection
+                Object[] constructorArgs = resolveConstructorParameters(constructor);
+
+                // Step 3: Create instance with injected constructor parameters
+                Object instance = constructor.newInstance(constructorArgs);
+
+                // Step 4: Perform field injection (@Inject fields)
+                injectInterceptorFields(instance, clazz);
+
+                // Step 5: Perform method injection (@Inject methods)
+                injectInterceptorMethods(instance, clazz);
+
+                // Step 6: Call @PostConstruct lifecycle callback (if present)
+                invokeInterceptorPostConstruct(instance, clazz);
 
                 return instance;
             } catch (Exception e) {
@@ -995,5 +994,152 @@ public class BeanImpl<T> implements Bean<T> {
 
         // Create and return an interceptor-aware proxy
         return interceptorAwareProxyGenerator.createProxy(this, targetInstance, methodInterceptorChains);
+    }
+
+    // ====================================================================================
+    // Interceptor Instance Creation with Dependency Injection
+    // ====================================================================================
+
+    /**
+     * Selects the appropriate constructor for interceptor instantiation.
+     *
+     * <p>CDI constructor selection rules:
+     * <ol>
+     *   <li>If there's a constructor annotated with @Inject, use it</li>
+     *   <li>Otherwise, if there's only one public constructor, use it</li>
+     *   <li>Otherwise, use the no-arg constructor</li>
+     * </ol>
+     */
+    private Constructor<?> selectInterceptorConstructor(Class<?> interceptorClass) {
+        Constructor<?>[] constructors = interceptorClass.getDeclaredConstructors();
+
+        // Look for @Inject constructor
+        for (Constructor<?> ctor : constructors) {
+            if (AnnotationsEnum.hasInjectAnnotation(ctor)) {
+                return ctor;
+            }
+        }
+
+        // If only one public constructor, use it (CDI implicit constructor injection)
+        Constructor<?>[] publicConstructors = interceptorClass.getConstructors();
+        if (publicConstructors.length == 1) {
+            return publicConstructors[0];
+        }
+
+        // Otherwise, use no-arg constructor
+        try {
+            return interceptorClass.getDeclaredConstructor();
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(
+                "Interceptor " + interceptorClass.getName() +
+                " has no suitable constructor (no @Inject, not exactly one public, no no-arg)", e
+            );
+        }
+    }
+
+    /**
+     * Resolves constructor parameters via dependency injection.
+     */
+    private Object[] resolveConstructorParameters(Constructor<?> constructor) {
+        Parameter[] parameters = constructor.getParameters();
+        Object[] args = new Object[parameters.length];
+
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter param = parameters[i];
+            Type paramType = param.getParameterizedType();
+            Annotation[] paramAnnotations = param.getAnnotations();
+
+            // Use dependency resolver to resolve the parameter
+            if (dependencyResolver != null) {
+                args[i] = dependencyResolver.resolve(paramType, paramAnnotations);
+            } else {
+                throw new IllegalStateException(
+                    "DependencyResolver not set for bean " + beanClass.getName() +
+                    " - cannot inject constructor parameter " + param.getName()
+                );
+            }
+        }
+
+        return args;
+    }
+
+    /**
+     * Injects @Inject annotated fields on the interceptor instance.
+     */
+    private void injectInterceptorFields(Object instance, Class<?> clazz) throws IllegalAccessException {
+        if (dependencyResolver == null) {
+            return; // No injection possible without resolver
+        }
+
+        // Find all @Inject fields (including private, inherited)
+        Class<?> currentClass = clazz;
+        while (currentClass != null && currentClass != Object.class) {
+            for (Field field : currentClass.getDeclaredFields()) {
+                if (AnnotationsEnum.hasInjectAnnotation(field)) {
+                    field.setAccessible(true);
+
+                    Type fieldType = field.getGenericType();
+                    Annotation[] fieldAnnotations = field.getAnnotations();
+
+                    // Resolve and inject the dependency
+                    Object value = dependencyResolver.resolve(fieldType, fieldAnnotations);
+                    field.set(instance, value);
+                }
+            }
+            currentClass = currentClass.getSuperclass();
+        }
+    }
+
+    /**
+     * Invokes @Inject annotated methods on the interceptor instance.
+     */
+    private void injectInterceptorMethods(Object instance, Class<?> clazz) throws Exception {
+        if (dependencyResolver == null) {
+            return; // No injection possible without resolver
+        }
+
+        // Find all @Inject methods (including private, inherited)
+        Class<?> currentClass = clazz;
+        while (currentClass != null && currentClass != Object.class) {
+            for (Method method : currentClass.getDeclaredMethods()) {
+                if (AnnotationsEnum.hasInjectAnnotation(method)) {
+                    method.setAccessible(true);
+
+                    // Resolve method parameters
+                    Parameter[] parameters = method.getParameters();
+                    Object[] args = new Object[parameters.length];
+
+                    for (int i = 0; i < parameters.length; i++) {
+                        Parameter param = parameters[i];
+                        Type paramType = param.getParameterizedType();
+                        Annotation[] paramAnnotations = param.getAnnotations();
+
+                        args[i] = dependencyResolver.resolve(paramType, paramAnnotations);
+                    }
+
+                    // Invoke the injector method
+                    method.invoke(instance, args);
+                }
+            }
+            currentClass = currentClass.getSuperclass();
+        }
+    }
+
+    /**
+     * Invokes @PostConstruct lifecycle callback on the interceptor instance.
+     */
+    private void invokeInterceptorPostConstruct(Object instance, Class<?> clazz) throws Exception {
+        // Find @PostConstruct method (including private, inherited)
+        Class<?> currentClass = clazz;
+        while (currentClass != null && currentClass != Object.class) {
+            for (Method method : currentClass.getDeclaredMethods()) {
+                if (AnnotationsEnum.hasPostConstructAnnotation(method)) {
+                    method.setAccessible(true);
+                    method.invoke(instance);
+                    return; // Only one @PostConstruct per class hierarchy
+                }
+            }
+            currentClass = currentClass.getSuperclass();
+        }
     }
 }
