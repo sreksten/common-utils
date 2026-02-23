@@ -149,15 +149,66 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
 
     @Override
     public <T extends Annotation> AnnotatedTypeConfigurator<T> configureQualifier(Class<T> qualifier) {
-        // TODO: Return configurator for configuring qualifier
-        System.out.println("BeforeBeanDiscovery: configureQualifier(" + qualifier.getName() + ")");
-        throw new UnsupportedOperationException("AnnotatedTypeConfigurator not yet implemented");
+        if (qualifier == null) {
+            throw new IllegalArgumentException("Qualifier class cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Configuring qualifier: " + qualifier.getSimpleName());
+
+        // Create an AnnotatedType for the qualifier annotation class
+        AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(qualifier);
+
+        // Return a configurator that will update the qualifier's metadata when complete() is called
+        // This allows extensions to add/modify annotations on the qualifier annotation type
+        // (e.g., add @Nonbinding to specific members)
+        return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
+            @Override
+            public AnnotatedType<T> complete() {
+                AnnotatedType<T> configured = super.complete();
+
+                // After configuration, register this as a qualifier if not already one
+                if (!knowledgeBase.isRegisteredQualifier(qualifier)) {
+                    knowledgeBase.addQualifier(qualifier);
+                }
+
+                System.out.println("[BeforeBeanDiscovery] Completed qualifier configuration: " +
+                                  qualifier.getSimpleName());
+                return configured;
+            }
+        };
     }
 
     @Override
     public <T extends Annotation> AnnotatedTypeConfigurator<T> configureInterceptorBinding(Class<T> bindingType) {
-        // TODO: Return configurator for configuring interceptor binding
-        System.out.println("BeforeBeanDiscovery: configureInterceptorBinding(" + bindingType.getName() + ")");
-        throw new UnsupportedOperationException("AnnotatedTypeConfigurator not yet implemented");
+        if (bindingType == null) {
+            throw new IllegalArgumentException("Interceptor binding type cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Configuring interceptor binding: " +
+                          bindingType.getSimpleName());
+
+        // Create an AnnotatedType for the interceptor binding annotation class
+        AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(bindingType);
+
+        // Return a configurator that will update the binding's metadata when complete() is called
+        // This allows extensions to add/modify annotations on the interceptor binding annotation type
+        // (e.g., add @Nonbinding to specific members, add meta-annotations)
+        return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
+            @Override
+            public AnnotatedType<T> complete() {
+                AnnotatedType<T> configured = super.complete();
+
+                // After configuration, register this as an interceptor binding if not already one
+                if (!knowledgeBase.isRegisteredInterceptorBinding(bindingType)) {
+                    // Extract any meta-annotations from the configured type
+                    Annotation[] metaAnnotations = configured.getAnnotations().toArray(new Annotation[0]);
+                    knowledgeBase.addInterceptorBinding(bindingType, metaAnnotations);
+                }
+
+                System.out.println("[BeforeBeanDiscovery] Completed interceptor binding configuration: " +
+                                  bindingType.getSimpleName());
+                return configured;
+            }
+        };
     }
 }
