@@ -574,18 +574,69 @@ public class Syringe {
     }
 
     /**
-     * Fires ProcessBean events (ProcessManagedBean, ProcessProducerMethod, ProcessProducerField).
+     * Fires ProcessBean events (ProcessManagedBean, ProcessProducerMethod, ProcessProducerField, ProcessSyntheticBean).
      *
      * <p>Extensions can inspect final Bean<?> objects before deployment validation.
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void processBean() {
         System.out.println("[Syringe] Processing beans");
 
-        // TODO: For each bean, fire appropriate event based on bean type:
-        // - ProcessManagedBean<T> for managed beans
-        // - ProcessProducerMethod<T, X> for producer methods
-        // - ProcessProducerField<T, X> for producer fields
-        // - ProcessSyntheticBean<T> for synthetic beans
+        Collection<Bean<?>> allBeans = knowledgeBase.getBeans();
+        System.out.println("[Syringe]   Found " + allBeans.size() + " total bean(s)");
+
+        int managedCount = 0;
+        int producerMethodCount = 0;
+        int producerFieldCount = 0;
+        int syntheticCount = 0;
+
+        for (Bean<?> bean : allBeans) {
+            try {
+                // Determine bean type and fire appropriate event
+                if (bean instanceof SyntheticBean) {
+                    // Synthetic bean - registered via AfterBeanDiscovery.addBean()
+                    ProcessSyntheticBeanImpl event = new ProcessSyntheticBeanImpl(
+                        bean,
+                        null, // source extension - we don't track this yet
+                        beanManager
+                    );
+                    fireEventToExtensions(event);
+                    syntheticCount++;
+
+                } else if (bean instanceof ProducerBean) {
+                    // Producer beans are already handled by processProducers()
+                    // which fires ProcessProducerMethod/ProcessProducerField
+                    ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+                    if (producerBean.isMethod()) {
+                        producerMethodCount++;
+                    } else if (producerBean.isField()) {
+                        producerFieldCount++;
+                    }
+
+                } else if (bean instanceof BeanImpl) {
+                    // Managed bean - discovered via classpath scanning
+                    // TODO: Fire ProcessManagedBean<T> event
+                    // For now, we just count them
+                    managedCount++;
+
+                } else {
+                    // Built-in beans (BeanManager, InjectionPoint, etc.)
+                    // These don't get ProcessBean events
+                    System.out.println("[Syringe]   Skipping built-in bean: " +
+                                      bean.getBeanClass().getSimpleName());
+                }
+            } catch (Exception e) {
+                System.err.println("[Syringe] Error processing bean " +
+                                  bean.getBeanClass().getName() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        System.out.println("[Syringe]   Processed: " +
+                          managedCount + " managed, " +
+                          producerMethodCount + " producer methods, " +
+                          producerFieldCount + " producer fields, " +
+                          syntheticCount + " synthetic");
     }
 
     /**

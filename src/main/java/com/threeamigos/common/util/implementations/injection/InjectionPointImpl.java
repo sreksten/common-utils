@@ -50,6 +50,12 @@ public class InjectionPointImpl<T> implements InjectionPoint {
     private final boolean isDelegate;
 
     /**
+     * The Annotated wrapper for this injection point (field or parameter).
+     * Provides type-safe access to annotations for portable extensions.
+     */
+    private final Annotated annotated;
+
+    /**
      * Creates an injection point for a field.
      * Extracts qualifiers, checks for transient modifier, and checks for @Delegate annotation.
      *
@@ -62,6 +68,12 @@ public class InjectionPointImpl<T> implements InjectionPoint {
         this.type = field.getGenericType();
         this.isTransient = java.lang.reflect.Modifier.isTransient(field.getModifiers());
         this.isDelegate = checkForDelegateAnnotation(field.getAnnotations());
+
+        // Create Annotated wrapper for the field
+        // Note: We pass null for AnnotatedType since we don't have it in this context
+        // This is acceptable - the wrapper will still provide annotation access
+        this.annotated = new AnnotatedFieldWrapper<>(field, null);
+
         collectQualifiers(field.getAnnotations());
     }
 
@@ -79,6 +91,12 @@ public class InjectionPointImpl<T> implements InjectionPoint {
         this.type = parameter.getParameterizedType();
         this.isTransient = false; // Parameters cannot be transient
         this.isDelegate = checkForDelegateAnnotation(parameter.getAnnotations());
+
+        // Create Annotated wrapper for the parameter
+        // Note: We pass null for AnnotatedCallable since we don't have it in this context
+        // This is acceptable - the wrapper will still provide annotation access
+        this.annotated = new AnnotatedParameterWrapper<>(parameter, null);
+
         collectQualifiers(parameter.getAnnotations());
     }
 
@@ -156,10 +174,7 @@ public class InjectionPointImpl<T> implements InjectionPoint {
 
     @Override
     public Annotated getAnnotated() {
-        // TODO: Implement Annotated wrapper when needed for portable extensions
-        // The Annotated interface provides access to annotations in a type-safe way
-        // For now, returning null is acceptable as it's mainly used by advanced CDI features
-        return null;
+        return annotated;
     }
 
     /**

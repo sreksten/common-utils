@@ -40,15 +40,28 @@ public class AfterBeanDiscoveryImpl implements AfterBeanDiscovery {
 
     @Override
     public void addBean(Bean<?> bean) {
-        // TODO: Add custom bean to knowledge base
-        System.out.println("AfterBeanDiscovery: addBean(" + bean.getBeanClass().getName() + ")");
+        if (bean == null) {
+            throw new IllegalArgumentException("Bean cannot be null");
+        }
+
+        System.out.println("[AfterBeanDiscovery] Adding synthetic bean: " + bean.getBeanClass().getName());
+
+        // Register the synthetic bean in the knowledge base
+        knowledgeBase.addBean(bean);
+
+        System.out.println("[AfterBeanDiscovery] Successfully registered synthetic bean: " +
+                          bean.getBeanClass().getSimpleName() +
+                          " with types: " + bean.getTypes());
     }
 
     @Override
     public <T> BeanConfigurator<T> addBean() {
-        // TODO: Return configurator for programmatic bean building
-        System.out.println("AfterBeanDiscovery: addBean()");
-        throw new UnsupportedOperationException("BeanConfigurator not yet implemented");
+        System.out.println("[AfterBeanDiscovery] Creating BeanConfigurator for synthetic bean");
+
+        // Return the configurator directly
+        // Note: The configurator's complete() method will be called when the extension method returns
+        // Extensions are responsible for calling createWith() to provide the creation callback
+        return new BeanConfiguratorImpl<>(knowledgeBase);
     }
 
     @Override
