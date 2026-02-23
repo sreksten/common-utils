@@ -50,8 +50,15 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
 
     @Override
     public void addStereotype(Class<? extends Annotation> stereotype, Annotation... stereotypeDef) {
-        // TODO: Add stereotype to knowledge base
-        System.out.println("BeforeBeanDiscovery: addStereotype(" + stereotype.getName() + ")");
+        if (stereotype == null) {
+            throw new IllegalArgumentException("Stereotype cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Adding stereotype: " + stereotype.getSimpleName() +
+                          " with " + (stereotypeDef != null ? stereotypeDef.length : 0) + " meta-annotation(s)");
+
+        // Register the stereotype with its meta-annotations in the knowledge base
+        knowledgeBase.addStereotype(stereotype, stereotypeDef);
     }
 
     @Override

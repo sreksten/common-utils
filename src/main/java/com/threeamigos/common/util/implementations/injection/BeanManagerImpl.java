@@ -593,7 +593,9 @@ public class BeanManagerImpl implements BeanManager {
         if (annotationType == null) {
             return false;
         }
-        return hasStereotypeAnnotation(annotationType);
+        // Check both @Stereotype annotation and programmatically registered stereotypes
+        return hasStereotypeAnnotation(annotationType) ||
+               knowledgeBase.isRegisteredStereotype(annotationType);
     }
 
     /**
@@ -1169,7 +1171,14 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("Not a stereotype: " + stereotype);
         }
 
-        // Return all annotations on the stereotype
+        // Check if this is a programmatically registered stereotype
+        Set<Annotation> registeredDef = knowledgeBase.getStereotypeDefinition(stereotype);
+        if (registeredDef != null) {
+            // Return the programmatically registered definition
+            return new HashSet<>(registeredDef);
+        }
+
+        // Otherwise, return all annotations on the stereotype (for @Stereotype-annotated classes)
         Set<Annotation> annotations = new HashSet<>();
         annotations.addAll(Arrays.asList(stereotype.getAnnotations()));
 

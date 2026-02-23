@@ -38,6 +38,10 @@ public class KnowledgeBase {
     private final List<String> definitionErrors = new ArrayList<>();
     private final List<String> injectionErrors = new ArrayList<>();
 
+    // Programmatically registered stereotypes (via BeforeBeanDiscovery.addStereotype)
+    // Maps stereotype class -> set of meta-annotations that define the stereotype
+    private final Map<Class<? extends Annotation>, Set<Annotation>> registeredStereotypes = new ConcurrentHashMap<>();
+
     public void add(Class<?> clazz) {
         classes.add(clazz);
     }
@@ -495,5 +499,59 @@ public class KnowledgeBase {
         }
         throw new IllegalArgumentException(
                 "No alternative bean found for class: " + alternativeClass.getName());
+    }
+
+    /**
+     * Registers a stereotype programmatically with its meta-annotations.
+     *
+     * <p>This is called by BeforeBeanDiscovery.addStereotype() to register stereotypes
+     * that are not defined via @Stereotype annotation.
+     *
+     * @param stereotype the stereotype annotation class
+     * @param stereotypeDef the meta-annotations that define the stereotype (scope, qualifiers, interceptor bindings, etc.)
+     */
+    public void addStereotype(Class<? extends Annotation> stereotype, Annotation... stereotypeDef) {
+        if (stereotype == null) {
+            throw new IllegalArgumentException("Stereotype cannot be null");
+        }
+
+        Set<Annotation> definitions = new HashSet<>();
+        if (stereotypeDef != null) {
+            definitions.addAll(Arrays.asList(stereotypeDef));
+        }
+
+        registeredStereotypes.put(stereotype, definitions);
+
+        System.out.println("[KnowledgeBase] Registered stereotype: " + stereotype.getSimpleName() +
+                          " with " + definitions.size() + " meta-annotation(s)");
+    }
+
+    /**
+     * Checks if a given annotation type is a registered stereotype.
+     *
+     * @param annotationType the annotation type to check
+     * @return true if it's a programmatically registered stereotype
+     */
+    public boolean isRegisteredStereotype(Class<? extends Annotation> annotationType) {
+        return registeredStereotypes.containsKey(annotationType);
+    }
+
+    /**
+     * Gets the stereotype definition (meta-annotations) for a registered stereotype.
+     *
+     * @param stereotype the stereotype annotation class
+     * @return set of meta-annotations, or null if not registered
+     */
+    public Set<Annotation> getStereotypeDefinition(Class<? extends Annotation> stereotype) {
+        return registeredStereotypes.get(stereotype);
+    }
+
+    /**
+     * Gets all registered stereotypes.
+     *
+     * @return map of stereotype class to their definitions
+     */
+    public Map<Class<? extends Annotation>, Set<Annotation>> getRegisteredStereotypes() {
+        return Collections.unmodifiableMap(registeredStereotypes);
     }
 }
