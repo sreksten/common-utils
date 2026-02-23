@@ -20,7 +20,7 @@ import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
  */
 public class ProcessObserverMethodImpl<T, X> implements ProcessObserverMethod<T, X> {
 
-    private final ObserverMethod<T> observerMethod;
+    private ObserverMethod<T> observerMethod;
     private final AnnotatedMethod<X> annotatedMethod;
     private final BeanManager beanManager;
     private boolean vetoed = false;
@@ -49,20 +49,38 @@ public class ProcessObserverMethodImpl<T, X> implements ProcessObserverMethod<T,
 
     @Override
     public ObserverMethodConfigurator<T> configureObserverMethod() {
-        System.out.println("ProcessObserverMethod: configureObserverMethod()");
-        throw new UnsupportedOperationException("ObserverMethodConfigurator not yet implemented");
+        System.out.println("[ProcessObserverMethod] Creating ObserverMethodConfigurator");
+
+        // Create a configurator reading from the current observer method
+        return new ObserverMethodConfiguratorImpl<T>(null) {
+            {
+                // Read existing observer method configuration
+                read(observerMethod);
+            }
+
+            @Override
+            public ObserverMethod<T> complete() {
+                // When configuration completes, replace the observer method
+                ObserverMethod<T> configured = super.complete();
+                setObserverMethod(configured);
+                return configured;
+            }
+        };
     }
 
     @Override
     public void veto() {
         this.vetoed = true;
-        System.out.println("ProcessObserverMethod: veto()");
+        System.out.println("[ProcessObserverMethod] Observer method vetoed");
     }
 
     @Override
     public void setObserverMethod(ObserverMethod<T> observerMethod) {
-        // TODO: Replace the observer method
-        System.out.println("ProcessObserverMethod: setObserverMethod()");
+        if (observerMethod == null) {
+            throw new IllegalArgumentException("Observer method cannot be null");
+        }
+        System.out.println("[ProcessObserverMethod] Observer method replaced");
+        this.observerMethod = observerMethod;
     }
 
     public boolean isVetoed() {

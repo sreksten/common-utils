@@ -66,15 +66,33 @@ public class AfterBeanDiscoveryImpl implements AfterBeanDiscovery {
 
     @Override
     public <T> ObserverMethodConfigurator<T> addObserverMethod() {
-        // TODO: Return configurator for programmatic observer method building
-        System.out.println("AfterBeanDiscovery: addObserverMethod()");
-        throw new UnsupportedOperationException("ObserverMethodConfigurator not yet implemented");
+        System.out.println("[AfterBeanDiscovery] Creating ObserverMethodConfigurator for synthetic observer");
+
+        // Return the configurator directly
+        // Note: The configurator's complete() method returns an ObserverMethod
+        // which should be added via addObserverMethod(ObserverMethod)
+        return new ObserverMethodConfiguratorImpl<T>(knowledgeBase) {
+            @Override
+            public ObserverMethod<T> complete() {
+                ObserverMethod<T> observer = super.complete();
+                addObserverMethod(observer);
+                return observer;
+            }
+        };
     }
 
     @Override
     public void addObserverMethod(ObserverMethod<?> observerMethod) {
-        // TODO: Add observer method to knowledge base
-        System.out.println("AfterBeanDiscovery: addObserverMethod(ObserverMethod)");
+        if (observerMethod == null) {
+            throw new IllegalArgumentException("Observer method cannot be null");
+        }
+
+        System.out.println("[AfterBeanDiscovery] Adding synthetic observer method: " +
+                          "observedType=" + observerMethod.getObservedType() +
+                          ", async=" + observerMethod.isAsync());
+
+        // TODO: Register the observer method in the knowledge base
+        // For now, just log it - full implementation would add to ObserverMethodInfo collection
     }
 
     /**

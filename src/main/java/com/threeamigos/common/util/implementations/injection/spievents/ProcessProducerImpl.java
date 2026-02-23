@@ -54,8 +54,19 @@ public class ProcessProducerImpl<T, X> implements ProcessProducer<T, X> {
 
     @Override
     public ProducerConfigurator<X> configureProducer() {
-        System.out.println("[ProcessProducer] configureProducer() called");
-        throw new UnsupportedOperationException("ProducerConfigurator not yet implemented");
+        System.out.println("[ProcessProducer] Creating ProducerConfigurator");
+
+        // Create a configurator wrapping the current producer
+        // The configurator allows fluent modification of producer behavior
+        return new ProducerConfiguratorImpl<X>(producer) {
+            @Override
+            public Producer<X> complete() {
+                // When configuration completes, update the producer and return it
+                Producer<X> configuredProducer = super.complete();
+                setProducer(configuredProducer);
+                return configuredProducer;
+            }
+        };
     }
 
     @Override
