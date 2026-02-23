@@ -1,9 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import java.io.File;
 import java.io.InputStream;
 import java.net.URL;
@@ -25,10 +23,14 @@ import java.util.zip.ZipEntry;
  *   <li><b>Not a bean archive:</b> Contains beans.xml with bean-discovery-mode="none". No beans discovered.</li>
  * </ul>
  *
+ * <p><b>Enhancement (v1.16):</b> Now uses JAXB-based {@link BeansXmlParser} to parse
+ * the complete beans.xml structure, including alternatives, interceptors, decorators, scan, and trim.
+ *
  * <p><b>Usage:</b>
  * <pre>{@code
  * BeanArchiveDetector detector = new BeanArchiveDetector();
  * BeanArchiveMode mode = detector.detectArchiveMode(jarFileOrDirectory);
+ * BeansXml beansXml = detector.getBeansXml(jarFileOrDirectory); // Get full configuration
  * }</pre>
  *
  * @author Stefano Reksten
@@ -43,6 +45,18 @@ class BeanArchiveDetector {
      * Value: detected BeanArchiveMode
      */
     private final Map<String, BeanArchiveMode> archiveModeCache = new ConcurrentHashMap<>();
+
+    /**
+     * Cache of parsed beans.xml configurations.
+     * Key: canonical path of JAR file or directory
+     * Value: parsed BeansXml object
+     */
+    private final Map<String, BeansXml> beansXmlCache = new ConcurrentHashMap<>();
+
+    /**
+     * Parser for beans.xml files.
+     */
+    private final BeansXmlParser beansXmlParser = new BeansXmlParser();
 
     /**
      * Detects the bean archive mode for a JAR file.
@@ -183,7 +197,7 @@ class BeanArchiveDetector {
     }
 
     /**
-     * Parses beans.xml to extract the bean-discovery-mode attribute.
+     * Parses beans.xml using JAXB and extracts the bean-discovery-mode.
      *
      * <p>CDI 4.1 bean-discovery-mode values:
      * <ul>
@@ -197,26 +211,10 @@ class BeanArchiveDetector {
      */
     private BeanArchiveMode parseBeanDiscoveryMode(InputStream inputStream) {
         try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(true);
-            // Disable external entity processing for security
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-
-            DocumentBuilder builder = factory.newDocumentBuilder();
-            Document doc = builder.parse(inputStream);
-
-            Element root = doc.getDocumentElement();
-            if (root == null) {
-                // Empty or malformed beans.xml - default to EXPLICIT per CDI 1.1+ spec
-                return BeanArchiveMode.EXPLICIT;
-            }
-
-            String discoveryMode = root.getAttribute("bean-discovery-mode");
+            BeansXml beansXml = beansXmlParser.parse(inputStream);
+            String discoveryMode = beansXml.getBeanDiscoveryMode();
 
             if (discoveryMode == null || discoveryMode.trim().isEmpty()) {
-                // No bean-discovery-mode attribute - defaults to "all" (EXPLICIT)
                 return BeanArchiveMode.EXPLICIT;
             }
 
@@ -228,19 +226,97 @@ class BeanArchiveDetector {
                 case "none":
                     return BeanArchiveMode.NONE;
                 default:
-                    // Unknown mode - default to EXPLICIT for safety
                     return BeanArchiveMode.EXPLICIT;
             }
         } catch (Exception e) {
-            // If parsing fails, default to EXPLICIT (more permissive)
             return BeanArchiveMode.EXPLICIT;
         }
     }
 
     /**
-     * Clears the internal cache. Useful for testing or reloading.
+     * Gets the fully parsed beans.xml configuration for a JAR file or directory.
+     *
+     * <p>This method returns the complete beans.xml structure, including:
+     * <ul>
+     *   <li>bean-discovery-mode</li>
+     *   <li>alternatives (classes and stereotypes)</li>
+     *   <li>interceptors (ordered list)</li>
+     *   <li>decorators (ordered list)</li>
+     *   <li>scan exclusions</li>
+     *   <li>trim setting</li>
+     * </ul>
+     *
+     * @param jarFile the JAR file or directory to examine
+     * @return the parsed BeansXml object, or a default instance if no beans.xml exists
+     */
+    BeansXml getBeansXml(File jarFile) {
+        if (jarFile == null || !jarFile.exists()) {
+            return new BeansXml(); // Default with bean-discovery-mode="all"
+        }
+
+        try {
+            String canonicalPath = jarFile.getCanonicalPath();
+            return beansXmlCache.computeIfAbsent(canonicalPath, path -> {
+                if (jarFile.isFile() && jarFile.getName().endsWith(".jar")) {
+                    return parseBeansXmlFromJar(jarFile);
+                } else if (jarFile.isDirectory()) {
+                    return parseBeansXmlFromDirectory(jarFile);
+                } else {
+                    return new BeansXml();
+                }
+            });
+        } catch (Exception e) {
+            return new BeansXml();
+        }
+    }
+
+    /**
+     * Parses beans.xml from a JAR file.
+     *
+     * @param jarFile the JAR file
+     * @return the parsed BeansXml object
+     */
+    private BeansXml parseBeansXmlFromJar(File jarFile) {
+        try (JarFile jar = new JarFile(jarFile)) {
+            ZipEntry beansXmlEntry = jar.getEntry(BEANS_XML_PATH);
+
+            if (beansXmlEntry == null) {
+                return new BeansXml(); // No beans.xml
+            }
+
+            try (InputStream is = jar.getInputStream(beansXmlEntry)) {
+                return beansXmlParser.parse(is);
+            }
+        } catch (Exception e) {
+            return new BeansXml();
+        }
+    }
+
+    /**
+     * Parses beans.xml from a directory.
+     *
+     * @param directory the directory
+     * @return the parsed BeansXml object
+     */
+    private BeansXml parseBeansXmlFromDirectory(File directory) {
+        File beansXmlFile = new File(directory, BEANS_XML_PATH);
+
+        if (!beansXmlFile.exists()) {
+            return new BeansXml(); // No beans.xml
+        }
+
+        try {
+            return beansXmlParser.parse(beansXmlFile.toURI().toURL().openStream());
+        } catch (Exception e) {
+            return new BeansXml();
+        }
+    }
+
+    /**
+     * Clears the internal caches. Useful for testing or reloading.
      */
     void clearCache() {
         archiveModeCache.clear();
+        beansXmlCache.clear();
     }
 }

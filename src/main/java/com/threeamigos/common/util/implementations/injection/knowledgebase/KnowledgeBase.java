@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
 import com.threeamigos.common.util.implementations.injection.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.ProducerBean;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InterceptionType;
 
@@ -59,6 +60,10 @@ public class KnowledgeBase {
 
     // Programmatically registered synthetic observer methods (via AfterBeanDiscovery.addObserverMethod)
     private final Collection<jakarta.enterprise.inject.spi.ObserverMethod<?>> syntheticObserverMethods = new ConcurrentLinkedQueue<>();
+
+    // beans.xml configurations from all scanned archives
+    // Collection is used instead of merging because each archive may have different configurations
+    private final Collection<BeansXml> beansXmlConfigurations = new ConcurrentLinkedQueue<>();
 
     public void add(Class<?> clazz) {
         classes.add(clazz);
@@ -790,5 +795,68 @@ public class KnowledgeBase {
      */
     public Collection<jakarta.enterprise.inject.spi.ObserverMethod<?>> getSyntheticObserverMethods() {
         return syntheticObserverMethods;
+    }
+
+    /**
+     * Adds a beans.xml configuration from a scanned archive.
+     *
+     * <p>This is called during bean discovery to collect all beans.xml files found
+     * in the classpath. Each archive (JAR or directory) may have its own beans.xml
+     * with different alternatives, interceptors, decorators, and scan exclusions.
+     *
+     * @param beansXml the parsed beans.xml configuration
+     */
+    public void addBeansXml(BeansXml beansXml) {
+        if (beansXml == null) {
+            throw new IllegalArgumentException("BeansXml cannot be null");
+        }
+
+        // Only add non-empty configurations to avoid clutter
+        if (!beansXml.isEmpty()) {
+            beansXmlConfigurations.add(beansXml);
+            System.out.println("[KnowledgeBase] Registered beans.xml configuration: " + beansXml);
+        }
+    }
+
+    /**
+     * Gets all beans.xml configurations from all scanned archives.
+     *
+     * @return collection of BeansXml objects
+     */
+    public Collection<BeansXml> getBeansXmlConfigurations() {
+        return Collections.unmodifiableCollection(beansXmlConfigurations);
+    }
+
+    /**
+     * Checks if a class or stereotype is enabled as an alternative in any beans.xml.
+     *
+     * <p>CDI 4.1 Section 5.1.2: Alternatives can be enabled via:
+     * <ul>
+     *   <li>@Priority annotation on the class (preferred in CDI 4.1)</li>
+     *   <li>beans.xml &lt;alternatives&gt; section (traditional method)</li>
+     * </ul>
+     *
+     * @param className the fully qualified class name to check
+     * @return true if the class/stereotype is declared in any beans.xml alternatives section
+     */
+    public boolean isAlternativeEnabledInBeansXml(String className) {
+        if (className == null || className.isEmpty()) {
+            return false;
+        }
+
+        for (BeansXml beansXml : beansXmlConfigurations) {
+            if (beansXml.getAlternatives() != null) {
+                // Check if it's listed as an alternative class
+                if (beansXml.getAlternatives().getClasses().contains(className)) {
+                    return true;
+                }
+                // Check if it's listed as an alternative stereotype
+                if (beansXml.getAlternatives().getStereotypes().contains(className)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

@@ -443,9 +443,10 @@ public class Syringe {
     private void discoverBeans() {
         System.out.println("[Syringe] Discovering beans in packages: " + Arrays.toString(packageNames));
 
+        ParallelClasspathScanner scanner;
         try (ParallelTaskExecutor parallelTaskExecutor = ParallelTaskExecutor.createExecutor()) {
             ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase);
-            new ParallelClasspathScanner(
+            scanner = new ParallelClasspathScanner(
                     Thread.currentThread().getContextClassLoader(),
                     classProcessor,
                     packageNames
@@ -456,6 +457,12 @@ public class Syringe {
         }
 
         System.out.println("[Syringe] Discovered " + knowledgeBase.getClasses().size() + " class(es)");
+
+        // Collect beans.xml configurations from all scanned archives
+        for (com.threeamigos.common.util.implementations.injection.beansxml.BeansXml beansXml :
+                scanner.getBeansXmlConfigurations()) {
+            knowledgeBase.addBeansXml(beansXml);
+        }
 
         // Process registered AnnotatedTypes (added programmatically via BeforeBeanDiscovery)
         processRegisteredAnnotatedTypes();

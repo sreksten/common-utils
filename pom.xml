@@ -52,6 +52,18 @@
             <version>1.14.11</version>
             <scope>provided</scope>
         </dependency>
+        <!-- JAXB for beans.xml parsing -->
+        <dependency>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <version>4.0.0</version>
+            <scope>runtime</scope>
+        </dependency>
         <!-- Java EE / javax dependencies (JSR-330, JSR-250, CDI 1.2) -->
         <dependency>
             <groupId>javax.annotation</groupId>

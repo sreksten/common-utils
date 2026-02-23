@@ -61,6 +61,12 @@ class ParallelClasspathScanner {
      */
     private final BeanArchiveDetector beanArchiveDetector = new BeanArchiveDetector();
 
+    /**
+     * Collector for BeansXml configurations from all scanned archives.
+     * Thread-safe for concurrent scanning. Key: archive root path, Value: BeansXml
+     */
+    private final Map<String, com.threeamigos.common.util.implementations.injection.beansxml.BeansXml> beansXmlMap = new ConcurrentHashMap<>();
+
     ParallelClasspathScanner(ClassLoader classLoader,
                      ClassConsumer sink,
                      String... packageNames) throws IOException, ClassNotFoundException {
@@ -122,7 +128,11 @@ class ParallelClasspathScanner {
         }
 
         // Detect bean archive mode for this directory (check for META-INF/beans.xml)
-        BeanArchiveMode archiveMode = beanArchiveDetector.detectArchiveMode(findArchiveRoot(directory));
+        File archiveRoot = findArchiveRoot(directory);
+        BeanArchiveMode archiveMode = beanArchiveDetector.detectArchiveMode(archiveRoot);
+
+        // Collect beans.xml configuration if present
+        collectBeansXml(archiveRoot);
 
         File[] files = directory.listFiles();
 
@@ -190,6 +200,9 @@ class ParallelClasspathScanner {
 
         // Detect bean archive mode for this JAR (check for META-INF/beans.xml inside JAR)
         BeanArchiveMode archiveMode = beanArchiveDetector.detectArchiveMode(jarFile);
+
+        // Collect beans.xml configuration if present
+        collectBeansXml(jarFile);
 
         String packagePath = packageName.replace('.', '/');
 
@@ -297,5 +310,43 @@ class ParallelClasspathScanner {
     private String getPackageFromClassName(String className) {
         int lastDot = className.lastIndexOf('.');
         return lastDot > 0 ? className.substring(0, lastDot) : "";
+    }
+
+    /**
+     * Collects beans.xml configuration from an archive root (JAR or directory).
+     * Uses the canonical path as key to avoid duplicate collection from the same archive.
+     *
+     * @param archiveRoot the archive root (where META-INF/beans.xml would be located)
+     */
+    private void collectBeansXml(File archiveRoot) {
+        if (archiveRoot == null || !archiveRoot.exists()) {
+            return;
+        }
+
+        try {
+            String canonicalPath = archiveRoot.getCanonicalPath();
+
+            // Only collect once per archive (avoid duplicates)
+            if (!beansXmlMap.containsKey(canonicalPath)) {
+                com.threeamigos.common.util.implementations.injection.beansxml.BeansXml beansXml =
+                    beanArchiveDetector.getBeansXml(archiveRoot);
+
+                // Only store non-empty beans.xml configurations
+                if (beansXml != null && !beansXml.isEmpty()) {
+                    beansXmlMap.put(canonicalPath, beansXml);
+                }
+            }
+        } catch (Exception e) {
+            // Ignore errors during beans.xml collection (already handled by detector)
+        }
+    }
+
+    /**
+     * Gets all collected beans.xml configurations from scanned archives.
+     *
+     * @return collection of BeansXml objects
+     */
+    public Collection<com.threeamigos.common.util.implementations.injection.beansxml.BeansXml> getBeansXmlConfigurations() {
+        return Collections.unmodifiableCollection(beansXmlMap.values());
     }
 }

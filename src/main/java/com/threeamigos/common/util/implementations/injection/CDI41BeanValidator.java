@@ -692,19 +692,54 @@ public class CDI41BeanValidator {
 
     /**
      * CDI 4.1 alternative enabling helper usable for bean classes and producer members.
+     *
+     * <p>CDI 4.1 Section 5.1.2: Alternatives can be enabled via:
+     * <ul>
+     *   <li>@Priority annotation on the class (preferred in CDI 4.1)</li>
+     *   <li>beans.xml &lt;alternatives&gt; section (traditional method)</li>
+     * </ul>
+     *
+     * <p>For stereotype-based alternatives, the stereotype itself (not the class)
+     * must be listed in beans.xml or annotated with @Priority.
      */
     private boolean isAlternativeEnabled(AnnotatedElement element, boolean annotatedAlternative) {
         if (!annotatedAlternative) {
             return false;
         }
 
+        // Method 1: Check for @Priority annotation
         Priority priority = element.getAnnotation(Priority.class);
         if (priority != null) {
             return true; // enabled by @Priority
         }
 
+        // Method 2: Check beans.xml alternatives section
+        if (element instanceof Class) {
+            Class<?> clazz = (Class<?>) element;
+
+            // Check if class is directly listed as alternative in beans.xml
+            if (knowledgeBase.isAlternativeEnabledInBeansXml(clazz.getName())) {
+                return true;
+            }
+
+            // Check if class has a stereotype that's enabled as alternative in beans.xml
+            for (Annotation annotation : clazz.getAnnotations()) {
+                Class<? extends Annotation> annotationType = annotation.annotationType();
+
+                // Check if this is a stereotype annotation
+                if (AnnotationsEnum.STEREOTYPE.isPresent(annotationType)) {
+                    // Check if the stereotype is listed in beans.xml alternatives
+                    if (knowledgeBase.isAlternativeEnabledInBeansXml(annotationType.getName())) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Alternative is not enabled
         knowledgeBase.addError(
-                "Alternative " + element + " is not enabled. Without beans.xml support, alternatives must declare @Priority."
+                "Alternative " + element + " is not enabled. " +
+                "Alternatives must be enabled via @Priority annotation or beans.xml <alternatives> section."
         );
         return false;
     }
