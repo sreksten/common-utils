@@ -132,6 +132,15 @@ public class InjectorImpl2 implements Injector {
         // Create BeanManager instance
         this.beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
 
+        // Register container for proxy deserialization
+        // This allows serialized client proxies (e.g., from @SessionScoped beans) to be
+        // deserialized and reconnect to the container
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (classLoader == null) {
+            classLoader = InjectorImpl2.class.getClassLoader();
+        }
+        ClientProxyGenerator.registerContainer(classLoader, beanManager, contextManager);
+
         // PHASE 2: Create interceptor infrastructure (shared across all beans)
         this.interceptorResolver = new InterceptorResolver(knowledgeBase);
         this.interceptorAwareProxyGenerator = new InterceptorAwareProxyGenerator();

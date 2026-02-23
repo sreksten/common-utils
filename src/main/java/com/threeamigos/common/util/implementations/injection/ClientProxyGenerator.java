@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.injection.contexts.ContextMan
 import com.threeamigos.common.util.implementations.injection.contexts.ScopeContext;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
 import net.bytebuddy.implementation.FieldAccessor;
@@ -112,6 +113,62 @@ public class ClientProxyGenerator {
 
     // Cache generated proxy classes to avoid regenerating for the same bean type
     private final ConcurrentHashMap<Class<?>, Class<?>> proxyClassCache = new ConcurrentHashMap<>();
+
+    /**
+     * Global registry for container lookup during proxy deserialization.
+     *
+     * <p>CDI proxies need to be serializable for passivation-capable scopes (@SessionScoped, @ConversationScoped).
+     * When a proxy is deserialized, it needs to reconnect to the container to function properly.
+     *
+     * <p>This registry is thread-safe and supports multiple containers (e.g., in testing scenarios).
+     * The key is typically a container ID or classloader identifier.
+     */
+    private static final ConcurrentHashMap<ClassLoader, ContainerContext> containerRegistry =
+        new ConcurrentHashMap<>();
+
+    /**
+     * Registers a container context for proxy deserialization.
+     *
+     * @param classLoader the classloader associated with this container
+     * @param beanManager the BeanManager for bean lookups
+     * @param contextManager the ContextManager for scope contexts
+     */
+    public static void registerContainer(ClassLoader classLoader, BeanManager beanManager,
+                                        ContextManager contextManager) {
+        containerRegistry.put(classLoader, new ContainerContext(beanManager, contextManager));
+    }
+
+    /**
+     * Unregisters a container context (e.g., during container shutdown).
+     *
+     * @param classLoader the classloader to unregister
+     */
+    public static void unregisterContainer(ClassLoader classLoader) {
+        containerRegistry.remove(classLoader);
+    }
+
+    /**
+     * Gets the container context for a given classloader.
+     *
+     * @param classLoader the classloader
+     * @return the container context, or null if not registered
+     */
+    static ContainerContext getContainerContext(ClassLoader classLoader) {
+        return containerRegistry.get(classLoader);
+    }
+
+    /**
+     * Holds BeanManager and ContextManager for a container.
+     */
+    static class ContainerContext {
+        final BeanManager beanManager;
+        final ContextManager contextManager;
+
+        ContainerContext(BeanManager beanManager, ContextManager contextManager) {
+            this.beanManager = beanManager;
+            this.contextManager = contextManager;
+        }
+    }
 
     public ClientProxyGenerator(ContextManager contextManager) {
         this.contextManager = contextManager;
@@ -417,24 +474,62 @@ public class ClientProxyGenerator {
         /**
          * Called automatically during deserialization.
          *
-         * Note: This implementation returns a placeholder. In a full CDI implementation,
-         * this would look up the bean from the container and return a properly initialized
-         * proxy. For now, this prevents serialization failures and documents the pattern.
+         * <p>This method reconstructs the client proxy by:
+         * <ol>
+         *   <li>Finding the container context for the current classloader</li>
+         *   <li>Looking up the bean from the BeanManager</li>
+         *   <li>Creating a new proxy with proper Bean and ContextManager references</li>
+         * </ol>
          *
-         * @return a proxy instance (or placeholder in current implementation)
+         * <p>This allows passivated beans (e.g., @SessionScoped) to be deserialized
+         * and continue functioning properly after JVM restart or session migration.
+         *
+         * @return a properly initialized proxy instance
+         * @throws IllegalStateException if container not registered or bean not found
          */
         private Object readResolve() {
-            // TODO: In a full implementation, this would:
-            // 1. Look up the bean from the BeanManager/Container
-            // 2. Create a new proxy via ClientProxyGenerator
-            // 3. Initialize it with the bean and contextManager
-            //
-            // For now, we throw an exception with helpful message
-            throw new UnsupportedOperationException(
-                "Proxy deserialization not yet fully implemented. " +
-                "Bean class: " + beanClass.getName() + ". " +
-                "To complete this, integrate with container to retrieve Bean and ContextManager."
-            );
+            // Get the classloader for this bean class
+            ClassLoader classLoader = beanClass.getClassLoader();
+
+            // Look up the container context
+            ContainerContext containerContext = getContainerContext(classLoader);
+            if (containerContext == null) {
+                throw new IllegalStateException(
+                    "Cannot deserialize proxy for " + beanClass.getName() + ": " +
+                    "No container registered for classloader " + classLoader + ". " +
+                    "Ensure ClientProxyGenerator.registerContainer() was called during container initialization."
+                );
+            }
+
+            BeanManager beanManager = containerContext.beanManager;
+            ContextManager contextManager = containerContext.contextManager;
+
+            // Look up the bean from the BeanManager
+            // Use BeanManager.getBeans() to find beans of this type
+            java.util.Set<Bean<?>> beans = beanManager.getBeans(beanClass);
+
+            if (beans.isEmpty()) {
+                throw new IllegalStateException(
+                    "Cannot deserialize proxy for " + beanClass.getName() + ": " +
+                    "No bean found in container. The bean may have been removed or the container restarted."
+                );
+            }
+
+            // Resolve to a single bean (handles alternatives and priorities)
+            Bean<?> bean = beanManager.resolve(beans);
+
+            if (bean == null) {
+                throw new IllegalStateException(
+                    "Cannot deserialize proxy for " + beanClass.getName() + ": " +
+                    "Ambiguous beans found - cannot resolve to a single bean."
+                );
+            }
+
+            // Create a new ClientProxyGenerator and generate the proxy
+            ClientProxyGenerator generator = new ClientProxyGenerator(contextManager);
+            Object proxy = generator.createProxy(bean);
+
+            return proxy;
         }
     }
 }
