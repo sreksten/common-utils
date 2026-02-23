@@ -396,7 +396,7 @@ public class KnowledgeBase {
      *
      * <p><b>CDI 4.1 Binding Matching Rules:</b>
      * <ul>
-     *   <li>ALL of the interceptor's bindings must be present on the target</li>
+     *   <li>ALL the interceptor's bindings must be present on the target</li>
      *   <li>The target may have additional bindings that the interceptor doesn't have</li>
      *   <li>Binding values (annotation attributes) must also match</li>
      * </ul>
@@ -465,7 +465,7 @@ public class KnowledgeBase {
     /**
      * Adds a programmatic bean binding for runtime bean registration.
      *
-     * <p>This allows beans to be registered programmatically outside of classpath scanning,
+     * <p>This allows beans to be registered programmatically outside classpath scanning,
      * useful for testing, dynamic configuration, and third-party library integration.
      *
      * @param type the interface or abstract type

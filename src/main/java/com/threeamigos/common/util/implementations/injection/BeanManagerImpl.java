@@ -1807,4 +1807,22 @@ public class BeanManagerImpl implements BeanManager {
             // This is a limitation of the current design
         }
     }
+
+    // ==================== Container Internal Methods ====================
+
+    /**
+     * Returns the ContextManager for internal container use.
+     * <p>
+     * This method is used by extension SPI implementations (e.g., AfterBeanDiscovery)
+     * to register custom contexts programmatically.
+     * <p>
+     * <b>Note:</b> This is an internal API and should not be used by application code.
+     * Applications should register custom contexts via portable extensions using
+     * {@link AfterBeanDiscovery#addContext(Context)}.
+     *
+     * @return the context manager
+     */
+    public ContextManager getContextManager() {
+        return contextManager;
+    }
 }

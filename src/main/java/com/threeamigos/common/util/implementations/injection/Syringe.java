@@ -6,8 +6,11 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import com.threeamigos.common.util.implementations.injection.spievents.*;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.context.spi.Context;
+import jakarta.enterprise.context.spi.CreationalContext;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.*;
 
 /**
@@ -91,6 +94,13 @@ public class Syringe {
      */
     private boolean initialized = false;
 
+    /**
+     * Custom contexts to register programmatically before container initialization.
+     * These will be registered during the AfterBeanDiscovery phase.
+     * Map key: scope annotation class, Map value: context implementation
+     */
+    private final Map<Class<? extends Annotation>, Context> customContextsToRegister = new HashMap<>();
+
     public Syringe(String... packageNames) {
         this.packageNames = packageNames != null ? packageNames : new String[0];
     }
@@ -106,6 +116,74 @@ public class Syringe {
             throw new IllegalStateException("Cannot add extensions after container initialization");
         }
         extensionClassNames.add(extensionClassName);
+    }
+
+    /**
+     * Registers a custom scope and its context programmatically.
+     * <p>
+     * <b>Non-Standard API:</b> This is a convenience method for direct container configuration
+     * and testing. Standard CDI applications should register custom contexts via portable
+     * extensions using {@link AfterBeanDiscovery#addContext(Context)}.
+     * <p>
+     * This method allows you to register custom scopes before calling {@link #setup()}.
+     * The contexts will be registered during the AfterBeanDiscovery phase of container
+     * initialization.
+     * <p>
+     * <h3>Example Usage:</h3>
+     * <pre>{@code
+     * // Create container
+     * Syringe syringe = new Syringe("com.myapp");
+     *
+     * // Register custom scope programmatically
+     * syringe.registerCustomContext(MyCustomScope.class, new MyCustomScopeContext());
+     *
+     * // Initialize container (custom context will be registered during AfterBeanDiscovery)
+     * syringe.setup();
+     *
+     * // Use beans with custom scope
+     * BeanManager bm = syringe.getBeanManager();
+     * MyBean bean = bm.getReference(...);
+     * }</pre>
+     * <p>
+     * <h3>Requirements:</h3>
+     * The scope annotation must be annotated with {@code @NormalScope} or {@code @Scope}
+     * from the Jakarta CDI specification. The context must properly implement
+     * {@link jakarta.enterprise.context.spi.Context}.
+     *
+     * @param scopeAnnotation the scope annotation class (must be annotated with @NormalScope or @Scope)
+     * @param context the context implementation for this scope
+     * @throws IllegalStateException if the container is already initialized
+     * @throws IllegalArgumentException if scopeAnnotation or context is null
+     */
+    public void registerCustomContext(Class<? extends Annotation> scopeAnnotation,
+                                       Context context) {
+        if (initialized) {
+            throw new IllegalStateException(
+                "Cannot register custom contexts after container initialization. " +
+                "Call this method before setup()."
+            );
+        }
+
+        if (scopeAnnotation == null) {
+            throw new IllegalArgumentException("scopeAnnotation cannot be null");
+        }
+
+        if (context == null) {
+            throw new IllegalArgumentException("context cannot be null");
+        }
+
+        // Validate that the context's scope matches the provided scope annotation
+        if (!context.getScope().equals(scopeAnnotation)) {
+            throw new IllegalArgumentException(
+                "Context scope mismatch: context.getScope() returns " +
+                context.getScope().getName() + " but scopeAnnotation is " +
+                scopeAnnotation.getName()
+            );
+        }
+
+        customContextsToRegister.put(scopeAnnotation, context);
+        System.out.println("[Syringe] Queued custom context for registration: @" +
+                          scopeAnnotation.getSimpleName());
     }
 
     /**
@@ -515,14 +593,135 @@ public class Syringe {
      *
      * <p>Extensions can wrap Producer to customize production logic.
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void processProducers() {
         System.out.println("[Syringe] Processing producers");
 
-        // TODO: For each producer method/field:
-        // 1. Create Producer<T>
-        // 2. Create ProcessProducer<T, X> event
-        // 3. Fire to all extensions
-        // 4. Use wrapped Producer if provided
+        Collection<ProducerBean<?>> producers = knowledgeBase.getProducerBeans();
+        System.out.println("[Syringe]   Found " + producers.size() + " producer(s)");
+
+        for (ProducerBean<?> producerBean : producers) {
+            try {
+                // Get the declaring class
+                Class<?> declaringClass = producerBean.getDeclaringClass();
+
+                // Create AnnotatedType for the declaring class
+                AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(declaringClass);
+
+                if (producerBean.isMethod()) {
+                    // Process producer method
+                    Method method = producerBean.getProducerMethod();
+
+                    // Find the matching AnnotatedMethod
+                    AnnotatedMethod annotatedMethod = findAnnotatedMethod(annotatedType, method);
+
+                    if (annotatedMethod != null) {
+                        // Create a Producer wrapper for the ProducerBean
+                        Producer producer = new ProducerBeanAdapter(producerBean);
+
+                        // Create and fire ProcessProducerMethod event
+                        ProcessProducerMethodImpl event = new ProcessProducerMethodImpl(
+                            producerBean, // bean
+                            annotatedMethod,
+                            producer,
+                            null, // disposerParameter - not tracking this yet
+                            beanManager
+                        );
+
+                        fireEventToExtensions(event);
+
+                        // If extensions wrapped the producer, we would use event.getFinalProducer()
+                        // For now, we log if producer was replaced
+                        if (event.getFinalProducer() != producer) {
+                            System.out.println("[Syringe]   Producer wrapped for method: " +
+                                             declaringClass.getSimpleName() + "." + method.getName());
+                        }
+                    }
+                } else if (producerBean.isField()) {
+                    // Process producer field
+                    Field field = producerBean.getProducerField();
+
+                    // Find the matching AnnotatedField
+                    AnnotatedField annotatedField = findAnnotatedField(annotatedType, field);
+
+                    if (annotatedField != null) {
+                        // Create a Producer wrapper for the ProducerBean
+                        Producer producer = new ProducerBeanAdapter(producerBean);
+
+                        // Create and fire ProcessProducerField event
+                        ProcessProducerFieldImpl event = new ProcessProducerFieldImpl(
+                            producerBean, // bean
+                            annotatedField,
+                            producer,
+                            null, // disposerParameter - not tracking this yet
+                            beanManager
+                        );
+
+                        fireEventToExtensions(event);
+
+                        // If extensions wrapped the producer, we would use event.getFinalProducer()
+                        if (event.getFinalProducer() != producer) {
+                            System.out.println("[Syringe]   Producer wrapped for field: " +
+                                             declaringClass.getSimpleName() + "." + field.getName());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[Syringe] Error processing producer: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * Finds the AnnotatedMethod matching the given Method.
+     */
+    private AnnotatedMethod<?> findAnnotatedMethod(AnnotatedType<?> annotatedType, Method method) {
+        for (AnnotatedMethod<?> am : annotatedType.getMethods()) {
+            if (am.getJavaMember().equals(method)) {
+                return am;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the AnnotatedField matching the given Field.
+     */
+    private AnnotatedField<?> findAnnotatedField(AnnotatedType<?> annotatedType, Field field) {
+        for (AnnotatedField<?> af : annotatedType.getFields()) {
+            if (af.getJavaMember().equals(field)) {
+                return af;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Simple Producer adapter that wraps a ProducerBean.
+     * This allows extensions to observe and wrap producer logic.
+     */
+    private static class ProducerBeanAdapter<T> implements Producer<T> {
+        private final ProducerBean<T> producerBean;
+
+        ProducerBeanAdapter(ProducerBean<T> producerBean) {
+            this.producerBean = producerBean;
+        }
+
+        @Override
+        public T produce(CreationalContext<T> ctx) {
+            return producerBean.create(ctx);
+        }
+
+        @Override
+        public void dispose(T instance) {
+            producerBean.destroy(instance, null);
+        }
+
+        @Override
+        public Set<InjectionPoint> getInjectionPoints() {
+            return producerBean.getInjectionPoints();
+        }
     }
 
     /**
@@ -554,10 +753,36 @@ public class Syringe {
      *   <li>Add observer methods via addObserverMethod()</li>
      *   <li>Add interceptors/decorators</li>
      * </ul>
+     * <p>
+     * This method also registers any custom contexts that were added programmatically
+     * via {@link #registerCustomContext(Class, Context)} before container initialization.
      */
     private void fireAfterBeanDiscovery() {
         System.out.println("[Syringe] Firing AfterBeanDiscovery event");
         AfterBeanDiscovery event = new AfterBeanDiscoveryImpl(knowledgeBase, beanManager);
+
+        // Register programmatically added custom contexts BEFORE firing to extensions
+        // This allows extensions to see and potentially modify these contexts
+        if (!customContextsToRegister.isEmpty()) {
+            System.out.println("[Syringe] Registering " + customContextsToRegister.size() +
+                              " programmatically added custom context(s)");
+
+            for (Map.Entry<Class<? extends Annotation>, Context> entry : customContextsToRegister.entrySet()) {
+                try {
+                    event.addContext(entry.getValue());
+                    System.out.println("[Syringe]   Registered custom context for @" +
+                                      entry.getKey().getSimpleName());
+                } catch (Exception e) {
+                    System.err.println("[Syringe] Failed to register custom context for @" +
+                                      entry.getKey().getSimpleName() + ": " + e.getMessage());
+                    throw new DeploymentException(
+                        "Failed to register custom context for @" + entry.getKey().getSimpleName(), e
+                    );
+                }
+            }
+        }
+
+        // Fire event to extensions (they can also register custom contexts)
         fireEventToExtensions(event);
     }
 
