@@ -32,20 +32,37 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
 
     @Override
     public void addQualifier(Class<? extends Annotation> qualifier) {
-        // TODO: Add qualifier to knowledge base
-        System.out.println("BeforeBeanDiscovery: addQualifier(" + qualifier.getName() + ")");
+        if (qualifier == null) {
+            throw new IllegalArgumentException("Qualifier cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Adding qualifier: " + qualifier.getSimpleName());
+        knowledgeBase.addQualifier(qualifier);
     }
 
     @Override
     public void addQualifier(AnnotatedType<? extends Annotation> qualifier) {
-        // TODO: Add qualifier from AnnotatedType
-        System.out.println("BeforeBeanDiscovery: addQualifier(AnnotatedType)");
+        if (qualifier == null) {
+            throw new IllegalArgumentException("Qualifier AnnotatedType cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Adding qualifier from AnnotatedType: " +
+                          qualifier.getJavaClass().getSimpleName());
+
+        // Extract the qualifier class from the AnnotatedType and register it
+        knowledgeBase.addQualifier(qualifier.getJavaClass());
     }
 
     @Override
     public void addScope(Class<? extends Annotation> scopeType, boolean normal, boolean passivating) {
-        // TODO: Add scope to knowledge base
-        System.out.println("BeforeBeanDiscovery: addScope(" + scopeType.getName() + ", normal=" + normal + ", passivating=" + passivating + ")");
+        if (scopeType == null) {
+            throw new IllegalArgumentException("Scope type cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Adding scope: " + scopeType.getSimpleName() +
+                          " (normal=" + normal + ", passivating=" + passivating + ")");
+
+        knowledgeBase.addScope(scopeType, normal, passivating);
     }
 
     @Override
@@ -63,27 +80,71 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
 
     @Override
     public void addInterceptorBinding(AnnotatedType<? extends Annotation> bindingType) {
-        // TODO: Add interceptor binding from AnnotatedType
-        System.out.println("BeforeBeanDiscovery: addInterceptorBinding(AnnotatedType)");
+        if (bindingType == null) {
+            throw new IllegalArgumentException("Interceptor binding AnnotatedType cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Adding interceptor binding from AnnotatedType: " +
+                          bindingType.getJavaClass().getSimpleName());
+
+        // Extract meta-annotations from the AnnotatedType
+        Annotation[] metaAnnotations = bindingType.getAnnotations().toArray(new Annotation[0]);
+
+        // Register the interceptor binding with its meta-annotations
+        knowledgeBase.addInterceptorBinding(bindingType.getJavaClass(), metaAnnotations);
     }
 
     @Override
     public void addInterceptorBinding(Class<? extends Annotation> bindingType, Annotation... bindingTypeDef) {
-        // TODO: Add interceptor binding to knowledge base
-        System.out.println("BeforeBeanDiscovery: addInterceptorBinding(" + bindingType.getName() + ")");
+        if (bindingType == null) {
+            throw new IllegalArgumentException("Interceptor binding type cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Adding interceptor binding: " + bindingType.getSimpleName() +
+                          " with " + (bindingTypeDef != null ? bindingTypeDef.length : 0) + " meta-annotation(s)");
+
+        knowledgeBase.addInterceptorBinding(bindingType, bindingTypeDef);
     }
 
     @Override
     public void addAnnotatedType(AnnotatedType<?> type, String id) {
-        // TODO: Add annotated type to discovery process
-        System.out.println("BeforeBeanDiscovery: addAnnotatedType(" + type.getJavaClass().getName() + ", id=" + id + ")");
+        if (type == null) {
+            throw new IllegalArgumentException("AnnotatedType cannot be null");
+        }
+        if (id == null) {
+            throw new IllegalArgumentException("ID cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Adding annotated type: " + type.getJavaClass().getName() +
+                          " with ID: " + id);
+
+        knowledgeBase.addAnnotatedType(type, id);
     }
 
     @Override
     public <T> AnnotatedTypeConfigurator<T> addAnnotatedType(Class<T> type, String id) {
-        // TODO: Return configurator for programmatic type building
-        System.out.println("BeforeBeanDiscovery: addAnnotatedType(Class, id=" + id + ")");
-        throw new UnsupportedOperationException("AnnotatedTypeConfigurator not yet implemented");
+        if (type == null) {
+            throw new IllegalArgumentException("Type cannot be null");
+        }
+        if (id == null) {
+            throw new IllegalArgumentException("ID cannot be null");
+        }
+
+        System.out.println("[BeforeBeanDiscovery] Creating AnnotatedTypeConfigurator for: " +
+                          type.getName() + " with ID: " + id);
+
+        // Create an AnnotatedType from the class using BeanManager
+        AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(type);
+
+        // Return a configurator that will register the type when complete() is called
+        return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
+            @Override
+            public AnnotatedType<T> complete() {
+                AnnotatedType<T> configured = super.complete();
+                knowledgeBase.addAnnotatedType(configured, id);
+                return configured;
+            }
+        };
     }
 
     @Override

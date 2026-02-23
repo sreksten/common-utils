@@ -23,12 +23,19 @@ public class ProcessObserverMethodImpl<T, X> implements ProcessObserverMethod<T,
     private ObserverMethod<T> observerMethod;
     private final AnnotatedMethod<X> annotatedMethod;
     private final BeanManager beanManager;
+    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
     private boolean vetoed = false;
 
     public ProcessObserverMethodImpl(ObserverMethod<T> observerMethod, AnnotatedMethod<X> annotatedMethod, BeanManager beanManager) {
         this.observerMethod = observerMethod;
         this.annotatedMethod = annotatedMethod;
         this.beanManager = beanManager;
+        // Extract KnowledgeBase from BeanManager
+        if (beanManager instanceof com.threeamigos.common.util.implementations.injection.BeanManagerImpl) {
+            this.knowledgeBase = ((com.threeamigos.common.util.implementations.injection.BeanManagerImpl) beanManager).getKnowledgeBase();
+        } else {
+            this.knowledgeBase = null;
+        }
     }
 
     @Override
@@ -43,8 +50,21 @@ public class ProcessObserverMethodImpl<T, X> implements ProcessObserverMethod<T,
 
     @Override
     public void addDefinitionError(Throwable t) {
-        System.out.println("ProcessObserverMethod: addDefinitionError(" + t.getMessage() + ")");
-        // TODO: Add error to knowledge base
+        String errorMsg = "ProcessObserverMethod definition error for " +
+                         annotatedMethod.getJavaMember().getName() + ": " +
+                         (t != null ? t.getMessage() : "null");
+        System.err.println("[ProcessObserverMethod] " + errorMsg);
+
+        if (knowledgeBase != null) {
+            knowledgeBase.addDefinitionError(errorMsg);
+        } else {
+            System.err.println("[ProcessObserverMethod] WARNING: Cannot propagate error - KnowledgeBase not available");
+        }
+
+        // Also print stack trace for debugging
+        if (t != null) {
+            t.printStackTrace();
+        }
     }
 
     @Override

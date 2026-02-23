@@ -19,12 +19,19 @@ import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
 public class ProcessAnnotatedTypeImpl<T> implements ProcessAnnotatedType<T> {
 
     private final BeanManager beanManager;
+    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
     private AnnotatedType<T> annotatedType;
     private boolean vetoed = false;
 
     public ProcessAnnotatedTypeImpl(AnnotatedType<T> annotatedType, BeanManager beanManager) {
         this.annotatedType = annotatedType;
         this.beanManager = beanManager;
+        // Extract KnowledgeBase from BeanManager
+        if (beanManager instanceof com.threeamigos.common.util.implementations.injection.BeanManagerImpl) {
+            this.knowledgeBase = ((com.threeamigos.common.util.implementations.injection.BeanManagerImpl) beanManager).getKnowledgeBase();
+        } else {
+            this.knowledgeBase = null;
+        }
     }
 
     @Override
@@ -40,9 +47,18 @@ public class ProcessAnnotatedTypeImpl<T> implements ProcessAnnotatedType<T> {
 
     @Override
     public AnnotatedTypeConfigurator<T> configureAnnotatedType() {
-        // TODO: Return configurator for modifying the AnnotatedType
-        System.out.println("ProcessAnnotatedType: configureAnnotatedType()");
-        throw new UnsupportedOperationException("AnnotatedTypeConfigurator not yet implemented");
+        System.out.println("[ProcessAnnotatedType] Creating AnnotatedTypeConfigurator for: " + annotatedType.getJavaClass().getName());
+
+        // Return a configurator that modifies the current annotatedType
+        return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
+            @Override
+            public AnnotatedType<T> complete() {
+                // When configuration completes, update the annotated type
+                AnnotatedType<T> configured = super.complete();
+                setAnnotatedType(configured);
+                return configured;
+            }
+        };
     }
 
     @Override

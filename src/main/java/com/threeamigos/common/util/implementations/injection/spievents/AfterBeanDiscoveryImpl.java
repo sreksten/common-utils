@@ -91,8 +91,8 @@ public class AfterBeanDiscoveryImpl implements AfterBeanDiscovery {
                           "observedType=" + observerMethod.getObservedType() +
                           ", async=" + observerMethod.isAsync());
 
-        // TODO: Register the observer method in the knowledge base
-        // For now, just log it - full implementation would add to ObserverMethodInfo collection
+        // Register the synthetic observer method in the knowledge base
+        knowledgeBase.addSyntheticObserverMethod(observerMethod);
     }
 
     /**
@@ -174,16 +174,55 @@ public class AfterBeanDiscoveryImpl implements AfterBeanDiscovery {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> java.util.List<AnnotatedType<T>> getAnnotatedTypes(Class<T> type) {
-        // TODO: Return annotated types for the given class
-        System.out.println("AfterBeanDiscovery: getAnnotatedTypes(" + type.getName() + ")");
-        return new java.util.ArrayList<>();
+        if (type == null) {
+            throw new IllegalArgumentException("Type cannot be null");
+        }
+
+        System.out.println("[AfterBeanDiscovery] Getting annotated types for: " + type.getName());
+
+        java.util.List<AnnotatedType<T>> result = new java.util.ArrayList<>();
+
+        // Query all registered AnnotatedTypes from KnowledgeBase
+        for (AnnotatedType<?> annotatedType : knowledgeBase.getRegisteredAnnotatedTypes().values()) {
+            // Check if the AnnotatedType's class matches the requested type
+            if (annotatedType.getJavaClass().equals(type)) {
+                result.add((AnnotatedType<T>) annotatedType);
+            }
+        }
+
+        System.out.println("[AfterBeanDiscovery] Found " + result.size() + " annotated type(s) for: " + type.getName());
+        return result;
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> AnnotatedType<T> getAnnotatedType(Class<T> type, String id) {
-        // TODO: Return specific annotated type by ID
-        System.out.println("AfterBeanDiscovery: getAnnotatedType(" + type.getName() + ", id=" + id + ")");
+        if (type == null) {
+            throw new IllegalArgumentException("Type cannot be null");
+        }
+        if (id == null) {
+            throw new IllegalArgumentException("ID cannot be null");
+        }
+
+        System.out.println("[AfterBeanDiscovery] Getting annotated type: " + type.getName() + " with ID: " + id);
+
+        // Query the specific AnnotatedType by ID from KnowledgeBase
+        AnnotatedType<?> annotatedType = knowledgeBase.getRegisteredAnnotatedType(id);
+
+        if (annotatedType != null) {
+            // Verify the class matches
+            if (!annotatedType.getJavaClass().equals(type)) {
+                System.err.println("[AfterBeanDiscovery] WARNING: AnnotatedType with ID '" + id +
+                                  "' has class " + annotatedType.getJavaClass().getName() +
+                                  " but requested type is " + type.getName());
+                return null;
+            }
+            return (AnnotatedType<T>) annotatedType;
+        }
+
+        System.out.println("[AfterBeanDiscovery] No annotated type found with ID: " + id);
         return null;
     }
 }

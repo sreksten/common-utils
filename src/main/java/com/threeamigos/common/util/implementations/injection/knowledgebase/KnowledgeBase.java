@@ -42,6 +42,24 @@ public class KnowledgeBase {
     // Maps stereotype class -> set of meta-annotations that define the stereotype
     private final Map<Class<? extends Annotation>, Set<Annotation>> registeredStereotypes = new ConcurrentHashMap<>();
 
+    // Programmatically registered qualifiers (via BeforeBeanDiscovery.addQualifier)
+    private final Set<Class<? extends Annotation>> registeredQualifiers = ConcurrentHashMap.newKeySet();
+
+    // Programmatically registered scopes (via BeforeBeanDiscovery.addScope)
+    // Maps scope annotation class -> ScopeMetadata containing normal/passivating flags
+    private final Map<Class<? extends Annotation>, ScopeMetadata> registeredScopes = new ConcurrentHashMap<>();
+
+    // Programmatically registered interceptor bindings (via BeforeBeanDiscovery.addInterceptorBinding)
+    // Maps interceptor binding class -> set of meta-annotations that define the binding
+    private final Map<Class<? extends Annotation>, Set<Annotation>> registeredInterceptorBindings = new ConcurrentHashMap<>();
+
+    // Programmatically registered annotated types (via BeforeBeanDiscovery.addAnnotatedType)
+    // Maps ID -> AnnotatedType for synthetic types added by extensions
+    private final Map<String, jakarta.enterprise.inject.spi.AnnotatedType<?>> registeredAnnotatedTypes = new ConcurrentHashMap<>();
+
+    // Programmatically registered synthetic observer methods (via AfterBeanDiscovery.addObserverMethod)
+    private final Collection<jakarta.enterprise.inject.spi.ObserverMethod<?>> syntheticObserverMethods = new ConcurrentLinkedQueue<>();
+
     public void add(Class<?> clazz) {
         classes.add(clazz);
     }
@@ -460,8 +478,10 @@ public class KnowledgeBase {
      * @return true if the bindings are equal
      */
     private boolean areBindingsEqual(Annotation binding1, Annotation binding2) {
-        // Annotations implement equals() to compare type and all attributes
-        return binding1.equals(binding2);
+        // Use AnnotationComparator to respect @Nonbinding members
+        // According to CDI 4.1 spec, interceptor binding members marked with @Nonbinding
+        // must be ignored when comparing bindings for interceptor resolution
+        return com.threeamigos.common.util.implementations.injection.AnnotationComparator.equals(binding1, binding2);
     }
 
     // === Programmatic Bean Registration (for InjectorImpl2) ===
@@ -553,5 +573,222 @@ public class KnowledgeBase {
      */
     public Map<Class<? extends Annotation>, Set<Annotation>> getRegisteredStereotypes() {
         return Collections.unmodifiableMap(registeredStereotypes);
+    }
+
+    /**
+     * Registers a qualifier programmatically.
+     *
+     * <p>This is called by BeforeBeanDiscovery.addQualifier() to register qualifiers
+     * that are not defined via @Qualifier annotation.
+     *
+     * @param qualifier the qualifier annotation class
+     */
+    public void addQualifier(Class<? extends Annotation> qualifier) {
+        if (qualifier == null) {
+            throw new IllegalArgumentException("Qualifier cannot be null");
+        }
+
+        registeredQualifiers.add(qualifier);
+
+        System.out.println("[KnowledgeBase] Registered qualifier: " + qualifier.getSimpleName());
+    }
+
+    /**
+     * Checks if a given annotation type is a registered qualifier.
+     *
+     * @param annotationType the annotation type to check
+     * @return true if it's a programmatically registered qualifier
+     */
+    public boolean isRegisteredQualifier(Class<? extends Annotation> annotationType) {
+        return registeredQualifiers.contains(annotationType);
+    }
+
+    /**
+     * Gets all registered qualifiers.
+     *
+     * @return set of registered qualifier annotation classes
+     */
+    public Set<Class<? extends Annotation>> getRegisteredQualifiers() {
+        return Collections.unmodifiableSet(registeredQualifiers);
+    }
+
+    /**
+     * Registers a scope programmatically with its characteristics.
+     *
+     * <p>This is called by BeforeBeanDiscovery.addScope() to register scopes
+     * that are not defined via @NormalScope or pseudo-scope annotations.
+     *
+     * @param scopeType the scope annotation class
+     * @param normal whether it's a normal scope (true) or pseudo-scope (false)
+     * @param passivating whether instances in this scope can be passivated (serialized)
+     */
+    public void addScope(Class<? extends Annotation> scopeType, boolean normal, boolean passivating) {
+        if (scopeType == null) {
+            throw new IllegalArgumentException("Scope type cannot be null");
+        }
+
+        ScopeMetadata metadata = new ScopeMetadata(scopeType, normal, passivating);
+        registeredScopes.put(scopeType, metadata);
+
+        System.out.println("[KnowledgeBase] Registered scope: " + scopeType.getSimpleName() +
+                          " (normal=" + normal + ", passivating=" + passivating + ")");
+    }
+
+    /**
+     * Checks if a given annotation type is a registered scope.
+     *
+     * @param annotationType the annotation type to check
+     * @return true if it's a programmatically registered scope
+     */
+    public boolean isRegisteredScope(Class<? extends Annotation> annotationType) {
+        return registeredScopes.containsKey(annotationType);
+    }
+
+    /**
+     * Gets the scope metadata for a registered scope.
+     *
+     * @param scopeType the scope annotation class
+     * @return scope metadata, or null if not registered
+     */
+    public ScopeMetadata getScopeMetadata(Class<? extends Annotation> scopeType) {
+        return registeredScopes.get(scopeType);
+    }
+
+    /**
+     * Gets all registered scopes.
+     *
+     * @return map of scope class to their metadata
+     */
+    public Map<Class<? extends Annotation>, ScopeMetadata> getRegisteredScopes() {
+        return Collections.unmodifiableMap(registeredScopes);
+    }
+
+    /**
+     * Registers an interceptor binding programmatically with its meta-annotations.
+     *
+     * <p>This is called by BeforeBeanDiscovery.addInterceptorBinding() to register
+     * interceptor bindings that are not defined via @InterceptorBinding annotation.
+     *
+     * @param bindingType the interceptor binding annotation class
+     * @param bindingTypeDef the meta-annotations that define the binding
+     */
+    public void addInterceptorBinding(Class<? extends Annotation> bindingType, Annotation... bindingTypeDef) {
+        if (bindingType == null) {
+            throw new IllegalArgumentException("Interceptor binding type cannot be null");
+        }
+
+        Set<Annotation> definitions = new HashSet<>();
+        if (bindingTypeDef != null) {
+            definitions.addAll(Arrays.asList(bindingTypeDef));
+        }
+
+        registeredInterceptorBindings.put(bindingType, definitions);
+
+        System.out.println("[KnowledgeBase] Registered interceptor binding: " + bindingType.getSimpleName() +
+                          " with " + definitions.size() + " meta-annotation(s)");
+    }
+
+    /**
+     * Checks if a given annotation type is a registered interceptor binding.
+     *
+     * @param annotationType the annotation type to check
+     * @return true if it's a programmatically registered interceptor binding
+     */
+    public boolean isRegisteredInterceptorBinding(Class<? extends Annotation> annotationType) {
+        return registeredInterceptorBindings.containsKey(annotationType);
+    }
+
+    /**
+     * Gets the interceptor binding definition (meta-annotations) for a registered binding.
+     *
+     * @param bindingType the interceptor binding annotation class
+     * @return set of meta-annotations, or null if not registered
+     */
+    public Set<Annotation> getInterceptorBindingDefinition(Class<? extends Annotation> bindingType) {
+        return registeredInterceptorBindings.get(bindingType);
+    }
+
+    /**
+     * Gets all registered interceptor bindings.
+     *
+     * @return map of interceptor binding class to their definitions
+     */
+    public Map<Class<? extends Annotation>, Set<Annotation>> getRegisteredInterceptorBindings() {
+        return Collections.unmodifiableMap(registeredInterceptorBindings);
+    }
+
+    /**
+     * Registers an annotated type programmatically.
+     *
+     * <p>This is called by BeforeBeanDiscovery.addAnnotatedType() to register synthetic
+     * types added by extensions that should be processed during bean discovery.
+     *
+     * @param type the annotated type to register
+     * @param id the unique identifier for this registration
+     */
+    public void addAnnotatedType(jakarta.enterprise.inject.spi.AnnotatedType<?> type, String id) {
+        if (type == null) {
+            throw new IllegalArgumentException("Annotated type cannot be null");
+        }
+        if (id == null) {
+            throw new IllegalArgumentException("ID cannot be null");
+        }
+
+        if (registeredAnnotatedTypes.containsKey(id)) {
+            throw new IllegalArgumentException("Annotated type with ID '" + id + "' already registered");
+        }
+
+        registeredAnnotatedTypes.put(id, type);
+
+        System.out.println("[KnowledgeBase] Registered annotated type: " + type.getJavaClass().getName() +
+                          " with ID: " + id);
+    }
+
+    /**
+     * Gets a registered annotated type by ID.
+     *
+     * @param id the unique identifier
+     * @return the annotated type, or null if not found
+     */
+    public jakarta.enterprise.inject.spi.AnnotatedType<?> getRegisteredAnnotatedType(String id) {
+        return registeredAnnotatedTypes.get(id);
+    }
+
+    /**
+     * Gets all registered annotated types.
+     *
+     * @return map of ID to annotated type
+     */
+    public Map<String, jakarta.enterprise.inject.spi.AnnotatedType<?>> getRegisteredAnnotatedTypes() {
+        return Collections.unmodifiableMap(registeredAnnotatedTypes);
+    }
+
+    /**
+     * Registers a synthetic observer method.
+     *
+     * <p>This is called by AfterBeanDiscovery.addObserverMethod() to register observer methods
+     * created programmatically by extensions (not discovered from bean classes).
+     *
+     * @param observerMethod the synthetic observer method to register
+     */
+    public void addSyntheticObserverMethod(jakarta.enterprise.inject.spi.ObserverMethod<?> observerMethod) {
+        if (observerMethod == null) {
+            throw new IllegalArgumentException("Observer method cannot be null");
+        }
+
+        syntheticObserverMethods.add(observerMethod);
+
+        System.out.println("[KnowledgeBase] Registered synthetic observer method: " +
+                          "observedType=" + observerMethod.getObservedType() +
+                          ", async=" + observerMethod.isAsync());
+    }
+
+    /**
+     * Gets all synthetic observer methods.
+     *
+     * @return collection of synthetic observer methods
+     */
+    public Collection<jakarta.enterprise.inject.spi.ObserverMethod<?>> getSyntheticObserverMethods() {
+        return syntheticObserverMethods;
     }
 }

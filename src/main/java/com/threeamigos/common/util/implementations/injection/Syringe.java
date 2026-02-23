@@ -456,6 +456,40 @@ public class Syringe {
         }
 
         System.out.println("[Syringe] Discovered " + knowledgeBase.getClasses().size() + " class(es)");
+
+        // Process registered AnnotatedTypes (added programmatically via BeforeBeanDiscovery)
+        processRegisteredAnnotatedTypes();
+    }
+
+    /**
+     * Processes AnnotatedTypes that were registered programmatically via BeforeBeanDiscovery.addAnnotatedType().
+     *
+     * <p>These synthetic types are added to the KnowledgeBase classes collection so they will be
+     * validated and registered as beans during the normal bean processing phase.
+     */
+    private void processRegisteredAnnotatedTypes() {
+        Map<String, jakarta.enterprise.inject.spi.AnnotatedType<?>> registeredTypes =
+            knowledgeBase.getRegisteredAnnotatedTypes();
+
+        if (registeredTypes.isEmpty()) {
+            System.out.println("[Syringe] No registered AnnotatedTypes to process");
+            return;
+        }
+
+        System.out.println("[Syringe] Processing " + registeredTypes.size() + " registered AnnotatedType(s)");
+
+        for (Map.Entry<String, jakarta.enterprise.inject.spi.AnnotatedType<?>> entry : registeredTypes.entrySet()) {
+            String id = entry.getKey();
+            jakarta.enterprise.inject.spi.AnnotatedType<?> annotatedType = entry.getValue();
+            Class<?> clazz = annotatedType.getJavaClass();
+
+            System.out.println("[Syringe] Processing registered AnnotatedType: " + clazz.getName() + " (ID: " + id + ")");
+
+            // Add the class to KnowledgeBase so it will be processed as a bean candidate
+            knowledgeBase.add(clazz);
+        }
+
+        System.out.println("[Syringe] Total classes after registered types: " + knowledgeBase.getClasses().size());
     }
 
     /**

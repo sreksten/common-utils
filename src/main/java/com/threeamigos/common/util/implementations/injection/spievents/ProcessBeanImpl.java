@@ -20,11 +20,18 @@ public class ProcessBeanImpl<X> implements ProcessBean<X> {
     private final Bean<X> bean;
     private final Annotated annotated;
     private final BeanManager beanManager;
+    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
 
     public ProcessBeanImpl(Bean<X> bean, Annotated annotated, BeanManager beanManager) {
         this.bean = bean;
         this.annotated = annotated;
         this.beanManager = beanManager;
+        // Extract KnowledgeBase from BeanManager
+        if (beanManager instanceof com.threeamigos.common.util.implementations.injection.BeanManagerImpl) {
+            this.knowledgeBase = ((com.threeamigos.common.util.implementations.injection.BeanManagerImpl) beanManager).getKnowledgeBase();
+        } else {
+            this.knowledgeBase = null;
+        }
     }
 
     @Override
@@ -39,7 +46,20 @@ public class ProcessBeanImpl<X> implements ProcessBean<X> {
 
     @Override
     public void addDefinitionError(Throwable t) {
-        System.out.println("ProcessBean: addDefinitionError(" + t.getMessage() + ")");
-        // TODO: Add error to knowledge base
+        String errorMsg = "ProcessBean definition error for " +
+                         bean.getBeanClass().getName() + ": " +
+                         (t != null ? t.getMessage() : "null");
+        System.err.println("[ProcessBean] " + errorMsg);
+
+        if (knowledgeBase != null) {
+            knowledgeBase.addDefinitionError(errorMsg);
+        } else {
+            System.err.println("[ProcessBean] WARNING: Cannot propagate error - KnowledgeBase not available");
+        }
+
+        // Also print stack trace for debugging
+        if (t != null) {
+            t.printStackTrace();
+        }
     }
 }

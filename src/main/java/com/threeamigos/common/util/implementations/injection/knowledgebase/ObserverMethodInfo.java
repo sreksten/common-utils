@@ -32,7 +32,7 @@ import java.util.Set;
  */
 public class ObserverMethodInfo {
 
-    private final Method observerMethod;
+    private final Method observerMethod;           // Null for synthetic observers
     private final Type eventType;                  // The type of event being observed
     private final Set<Annotation> qualifiers;      // Qualifiers for event filtering
     private final Reception reception;             // IF_EXISTS or ALWAYS
@@ -40,9 +40,10 @@ public class ObserverMethodInfo {
     private final boolean async;                   // true if @ObservesAsync, false if @Observes
     private final Bean<?> declaringBean;           // The bean that declares this observer method
     private final int priority;                    // Observer priority (lower = earlier)
+    private final jakarta.enterprise.inject.spi.ObserverMethod<?> syntheticObserver; // Synthetic observer (for programmatically registered observers)
 
     /**
-     * Creates observer method metadata.
+     * Creates observer method metadata for reflection-based observers.
      *
      * @param observerMethod the method annotated with @Observes or @ObservesAsync
      * @param eventType the type of event being observed (from observed parameter)
@@ -71,6 +72,40 @@ public class ObserverMethodInfo {
         this.async = async;
         this.declaringBean = declaringBean; // Can be null during validation phase
         this.priority = priority;
+        this.syntheticObserver = null;
+    }
+
+    /**
+     * Creates observer method metadata for synthetic observers (registered via AfterBeanDiscovery.addObserverMethod()).
+     *
+     * @param eventType the type of event being observed
+     * @param qualifiers the qualifiers for event filtering
+     * @param reception the reception condition
+     * @param transactionPhase the transaction phase for synchronous observers
+     * @param priority the priority for observer invocation order
+     * @param async true if asynchronous, false if synchronous
+     * @param declaringBean the declaring bean (may be null for synthetic observers)
+     * @param syntheticObserver the synthetic ObserverMethod instance
+     */
+    public ObserverMethodInfo(
+            Type eventType,
+            Set<Annotation> qualifiers,
+            Reception reception,
+            TransactionPhase transactionPhase,
+            int priority,
+            boolean async,
+            Bean<?> declaringBean,
+            jakarta.enterprise.inject.spi.ObserverMethod<?> syntheticObserver) {
+
+        this.observerMethod = null; // No Method for synthetic observers
+        this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
+        this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
+        this.reception = Objects.requireNonNull(reception, "reception cannot be null");
+        this.transactionPhase = Objects.requireNonNull(transactionPhase, "transactionPhase cannot be null");
+        this.async = async;
+        this.declaringBean = declaringBean;
+        this.priority = priority;
+        this.syntheticObserver = Objects.requireNonNull(syntheticObserver, "syntheticObserver cannot be null");
     }
 
     public Method getObserverMethod() {
@@ -103,6 +138,14 @@ public class ObserverMethodInfo {
 
     public int getPriority() {
         return priority;
+    }
+
+    public jakarta.enterprise.inject.spi.ObserverMethod<?> getSyntheticObserver() {
+        return syntheticObserver;
+    }
+
+    public boolean isSynthetic() {
+        return syntheticObserver != null;
     }
 
     /**

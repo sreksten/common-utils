@@ -260,15 +260,13 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
     }
 
     /**
-     * Checks if two qualifiers are equal.
+     * Checks if two qualifiers are equal, respecting @Nonbinding members.
+     *
+     * <p>According to CDI 4.1 specification, qualifier members marked with @Nonbinding
+     * must be ignored when comparing qualifiers for bean resolution.
      */
     private boolean qualifiersEqual(Annotation q1, Annotation q2) {
-        if (!q1.annotationType().equals(q2.annotationType())) {
-            return false;
-        }
-
-        // For now, use simple equality (this should compare all annotation members)
-        return q1.equals(q2);
+        return AnnotationComparator.equals(q1, q2);
     }
 
     /**

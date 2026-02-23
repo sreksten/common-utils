@@ -83,6 +83,16 @@ public class BeanManagerImpl implements BeanManager {
         this.typeChecker = new TypeChecker();
     }
 
+    /**
+     * Returns the KnowledgeBase used by this BeanManager.
+     * This is used internally by extension events to propagate definition errors.
+     *
+     * @return the knowledge base
+     */
+    public KnowledgeBase getKnowledgeBase() {
+        return knowledgeBase;
+    }
+
     // ==================== BeanContainer Methods ====================
 
     /**
@@ -506,7 +516,10 @@ public class BeanManagerImpl implements BeanManager {
         if (annotationType == null) {
             return false;
         }
-        return hasScopeAnnotation(annotationType) || hasNormalScopeAnnotation(annotationType);
+        // Check both annotation-based and programmatically registered scopes
+        return hasScopeAnnotation(annotationType) ||
+               hasNormalScopeAnnotation(annotationType) ||
+               knowledgeBase.isRegisteredScope(annotationType);
     }
 
     /**
@@ -564,7 +577,9 @@ public class BeanManagerImpl implements BeanManager {
         if (annotationType == null) {
             return false;
         }
-        return hasQualifierAnnotation(annotationType);
+        // Check both annotation-based and programmatically registered qualifiers
+        return hasQualifierAnnotation(annotationType) ||
+               knowledgeBase.isRegisteredQualifier(annotationType);
     }
 
     /**
@@ -621,7 +636,9 @@ public class BeanManagerImpl implements BeanManager {
         if (annotationType == null) {
             return false;
         }
-        return annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class);
+        // Check both annotation-based and programmatically registered interceptor bindings
+        return annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
+               knowledgeBase.isRegisteredInterceptorBinding(annotationType);
     }
 
     /**

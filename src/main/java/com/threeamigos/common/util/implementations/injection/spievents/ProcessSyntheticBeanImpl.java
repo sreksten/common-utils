@@ -28,6 +28,7 @@ public class ProcessSyntheticBeanImpl<X> implements ProcessSyntheticBean<X> {
     private final Bean<X> bean;
     private final Extension source;
     private final BeanManager beanManager;
+    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
 
     /**
      * Constructor for ProcessSyntheticBean event.
@@ -40,6 +41,12 @@ public class ProcessSyntheticBeanImpl<X> implements ProcessSyntheticBean<X> {
         this.bean = bean;
         this.source = source;
         this.beanManager = beanManager;
+        // Extract KnowledgeBase from BeanManager
+        if (beanManager instanceof com.threeamigos.common.util.implementations.injection.BeanManagerImpl) {
+            this.knowledgeBase = ((com.threeamigos.common.util.implementations.injection.BeanManagerImpl) beanManager).getKnowledgeBase();
+        } else {
+            this.knowledgeBase = null;
+        }
     }
 
     @Override
@@ -61,8 +68,21 @@ public class ProcessSyntheticBeanImpl<X> implements ProcessSyntheticBean<X> {
 
     @Override
     public void addDefinitionError(Throwable t) {
-        System.out.println("[ProcessSyntheticBean] addDefinitionError: " + t.getMessage());
-        // TODO: Add error to knowledge base
+        String errorMsg = "ProcessSyntheticBean definition error for " +
+                         bean.getBeanClass().getName() + ": " +
+                         (t != null ? t.getMessage() : "null");
+        System.err.println("[ProcessSyntheticBean] " + errorMsg);
+
+        if (knowledgeBase != null) {
+            knowledgeBase.addDefinitionError(errorMsg);
+        } else {
+            System.err.println("[ProcessSyntheticBean] WARNING: Cannot propagate error - KnowledgeBase not available");
+        }
+
+        // Also print stack trace for debugging
+        if (t != null) {
+            t.printStackTrace();
+        }
     }
 
     @Override

@@ -379,6 +379,7 @@ public class EventImpl<T> implements Event<T> {
         List<ObserverMethodInfo> matching = new ArrayList<>();
         Type eventRuntimeType = event.getClass();
 
+        // Find matching reflection-based observers (from @Observes/@ObservesAsync methods)
         for (ObserverMethodInfo observerInfo : knowledgeBase.getObserverMethodInfos()) {
             // Match async/sync mode
             if (observerInfo.isAsync() != async) {
@@ -398,7 +399,49 @@ public class EventImpl<T> implements Event<T> {
             matching.add(observerInfo);
         }
 
+        // Also find matching synthetic observers (registered via AfterBeanDiscovery.addObserverMethod())
+        for (jakarta.enterprise.inject.spi.ObserverMethod<?> syntheticObserver : knowledgeBase.getSyntheticObserverMethods()) {
+            // Match async/sync mode
+            if (syntheticObserver.isAsync() != async) {
+                continue;
+            }
+
+            // Check if observer event type is assignable from the runtime type
+            if (!typeChecker.isAssignable(syntheticObserver.getObservedType(), eventRuntimeType)) {
+                continue;
+            }
+
+            // Check if all observer qualifiers are present in event qualifiers
+            if (!qualifiers.containsAll(syntheticObserver.getObservedQualifiers())) {
+                continue;
+            }
+
+            // Wrap the synthetic ObserverMethod as an ObserverMethodInfo
+            // Note: Synthetic observers don't have a Method, so we create a minimal wrapper
+            matching.add(createSyntheticObserverInfo(syntheticObserver));
+        }
+
         return matching;
+    }
+
+    /**
+     * Creates an ObserverMethodInfo wrapper for a synthetic ObserverMethod.
+     *
+     * <p>Synthetic observers registered via AfterBeanDiscovery.addObserverMethod()
+     * don't have an underlying java.lang.reflect.Method, so we create a minimal
+     * ObserverMethodInfo that delegates to the ObserverMethod's notify() method.
+     */
+    private ObserverMethodInfo createSyntheticObserverInfo(jakarta.enterprise.inject.spi.ObserverMethod<?> syntheticObserver) {
+        return new ObserverMethodInfo(
+            syntheticObserver.getObservedType(),
+            syntheticObserver.getObservedQualifiers(),
+            syntheticObserver.getReception(),
+            syntheticObserver.getTransactionPhase(),
+            syntheticObserver.getPriority(),
+            syntheticObserver.isAsync(),
+            null, // No declaring bean for synthetic observers
+            syntheticObserver // Store the synthetic observer for invocation
+        );
     }
 
     /**
@@ -431,8 +474,18 @@ public class EventImpl<T> implements Event<T> {
      * @param event the event payload
      * @throws RuntimeException if observer invocation fails
      */
+    @SuppressWarnings("unchecked")
     private void invokeObserver(ObserverMethodInfo observerInfo, Object event) {
         try {
+            // Check if this is a synthetic observer (registered via AfterBeanDiscovery.addObserverMethod())
+            if (observerInfo.isSynthetic()) {
+                // Invoke the synthetic observer's notify() method
+                jakarta.enterprise.inject.spi.ObserverMethod syntheticObserver = observerInfo.getSyntheticObserver();
+                syntheticObserver.notify(event);
+                return;
+            }
+
+            // Handle reflection-based observers (from @Observes/@ObservesAsync methods)
             Method method = observerInfo.getObserverMethod();
             Bean<?> declaringBean = observerInfo.getDeclaringBean();
 
@@ -471,9 +524,12 @@ public class EventImpl<T> implements Event<T> {
             method.invoke(beanInstance, args);
 
         } catch (Exception e) {
+            String observerName = observerInfo.isSynthetic() ?
+                "synthetic observer for " + observerInfo.getEventType() :
+                observerInfo.getObserverMethod().getName() + " in " + observerInfo.getObserverMethod().getDeclaringClass().getName();
+
             throw new RuntimeException(
-                "Failed to invoke observer method: " + observerInfo.getObserverMethod().getName() +
-                " in class: " + observerInfo.getObserverMethod().getDeclaringClass().getName(),
+                "Failed to invoke observer: " + observerName,
                 e
             );
         }

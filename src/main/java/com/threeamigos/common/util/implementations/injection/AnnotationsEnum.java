@@ -67,6 +67,28 @@ public enum AnnotationsEnum {
      */
     SCOPE(javax.inject.Scope.class, jakarta.inject.Scope.class),
 
+    // ==================== CDI Qualifier/Binding Annotations ====================
+
+    /**
+     * Marks qualifier or interceptor binding annotation members that should be ignored during matching.
+     * When comparing two qualifier or interceptor binding annotations, members marked with @Nonbinding
+     * are not considered in the equality check.
+     *
+     * <p><b>Example:</b>
+     * <pre>{@code
+     * @Qualifier
+     * @Retention(RUNTIME)
+     * @Target({FIELD, TYPE, METHOD, PARAMETER})
+     * public @interface PayBy {
+     *     PaymentMethod value();           // Considered during matching
+     *     @Nonbinding String description() default "";  // Ignored during matching
+     * }
+     * }</pre>
+     *
+     * Maps: {@code javax.enterprise.util.Nonbinding}, {@code jakarta.enterprise.util.Nonbinding}
+     */
+    NONBINDING(javax.enterprise.util.Nonbinding.class, jakarta.enterprise.util.Nonbinding.class),
+
     // ==================== JSR-250 Annotations ====================
 
     /**
@@ -419,5 +441,14 @@ public enum AnnotationsEnum {
      */
     public static boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
         return OBSERVES_ASYNC.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @Nonbinding annotation (javax or jakarta).
+     * Used to mark qualifier/interceptor binding annotation members that should be
+     * ignored during matching.
+     */
+    public static boolean hasNonbindingAnnotation(AnnotatedElement element) {
+        return NONBINDING.isPresent(element);
     }
 }

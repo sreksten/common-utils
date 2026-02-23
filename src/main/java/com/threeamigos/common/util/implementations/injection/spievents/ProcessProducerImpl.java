@@ -25,11 +25,18 @@ public class ProcessProducerImpl<T, X> implements ProcessProducer<T, X> {
     private final AnnotatedMember<T> annotatedMember;
     private Producer<X> producer;
     private final BeanManager beanManager;
+    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
 
     public ProcessProducerImpl(AnnotatedMember<T> annotatedMember, Producer<X> producer, BeanManager beanManager) {
         this.annotatedMember = annotatedMember;
         this.producer = producer;
         this.beanManager = beanManager;
+        // Extract KnowledgeBase from BeanManager
+        if (beanManager instanceof com.threeamigos.common.util.implementations.injection.BeanManagerImpl) {
+            this.knowledgeBase = ((com.threeamigos.common.util.implementations.injection.BeanManagerImpl) beanManager).getKnowledgeBase();
+        } else {
+            this.knowledgeBase = null;
+        }
     }
 
     @Override
@@ -71,8 +78,21 @@ public class ProcessProducerImpl<T, X> implements ProcessProducer<T, X> {
 
     @Override
     public void addDefinitionError(Throwable t) {
-        System.out.println("[ProcessProducer] addDefinitionError: " + t.getMessage());
-        // TODO: Add error to knowledge base
+        String errorMsg = "ProcessProducer definition error for " +
+                         annotatedMember.getJavaMember().getName() + ": " +
+                         (t != null ? t.getMessage() : "null");
+        System.err.println("[ProcessProducer] " + errorMsg);
+
+        if (knowledgeBase != null) {
+            knowledgeBase.addDefinitionError(errorMsg);
+        } else {
+            System.err.println("[ProcessProducer] WARNING: Cannot propagate error - KnowledgeBase not available");
+        }
+
+        // Also print stack trace for debugging
+        if (t != null) {
+            t.printStackTrace();
+        }
     }
 
     /**
