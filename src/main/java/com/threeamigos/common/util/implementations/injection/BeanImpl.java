@@ -104,6 +104,28 @@ public class BeanImpl<T> implements Bean<T> {
      */
     private InterceptorAwareProxyGenerator interceptorAwareProxyGenerator;
 
+    // ====================================================================================
+    // PHASE 3: Decorator Support - Bean-level Decoration
+    // ====================================================================================
+
+    /**
+     * DecoratorResolver - resolves which decorators apply to this bean's types.
+     * Set during container initialization by InjectorImpl2.
+     */
+    private DecoratorResolver decoratorResolver;
+
+    /**
+     * DecoratorAwareProxyGenerator - creates decorator chains with @Delegate injection.
+     * Shared across all beans.
+     */
+    private DecoratorAwareProxyGenerator decoratorAwareProxyGenerator;
+
+    /**
+     * BeanManager - needed for creating decorator instances.
+     * Set during container initialization by InjectorImpl2.
+     */
+    private jakarta.enterprise.inject.spi.BeanManager beanManager;
+
     public BeanImpl(Class<T> beanClass, boolean alternative) {
         this.beanClass = beanClass;
         this.name = "";
@@ -232,6 +254,14 @@ public class BeanImpl<T> implements Bean<T> {
             // - Or check if scope is jakarta.enterprise.context.Dependent.class
             if (hasInterceptors() && isDependent()) {
                 instance = createInterceptorAwareProxy(instance);
+            }
+
+            // 6. PHASE 3 - Wrap with decorators if applicable
+            // IMPORTANT: Decorators apply to ALL beans (not just @Dependent)
+            // Unlike interceptors which are method-level, decorators are bean-level
+            // and wrap the entire bean instance (or interceptor proxy if interceptors exist)
+            if (hasDecorators()) {
+                instance = createDecoratorChain(instance, creationalContext);
             }
 
             return instance;
@@ -589,6 +619,37 @@ public class BeanImpl<T> implements Bean<T> {
      */
     public void setInterceptorAwareProxyGenerator(InterceptorAwareProxyGenerator interceptorAwareProxyGenerator) {
         this.interceptorAwareProxyGenerator = interceptorAwareProxyGenerator;
+    }
+
+    /**
+     * Sets the decorator resolver for this bean.
+     * Called during container initialization by InjectorImpl2.
+     *
+     * @param decoratorResolver the decorator resolver
+     */
+    public void setDecoratorResolver(DecoratorResolver decoratorResolver) {
+        this.decoratorResolver = decoratorResolver;
+    }
+
+    /**
+     * Sets the decorator-aware proxy generator for this bean.
+     * Called during container initialization by InjectorImpl2.
+     *
+     * @param decoratorAwareProxyGenerator the decorator proxy generator
+     */
+    public void setDecoratorAwareProxyGenerator(DecoratorAwareProxyGenerator decoratorAwareProxyGenerator) {
+        this.decoratorAwareProxyGenerator = decoratorAwareProxyGenerator;
+    }
+
+    /**
+     * Sets the BeanManager for this bean.
+     * Called during container initialization by InjectorImpl2.
+     * Needed for creating decorator instances.
+     *
+     * @param beanManager the BeanManager
+     */
+    public void setBeanManager(jakarta.enterprise.inject.spi.BeanManager beanManager) {
+        this.beanManager = beanManager;
     }
 
     /**
@@ -1141,5 +1202,92 @@ public class BeanImpl<T> implements Bean<T> {
             }
             currentClass = currentClass.getSuperclass();
         }
+    }
+
+    // ====================================================================================
+    // PHASE 3: Decorator Support
+    // ====================================================================================
+
+    /**
+     * Checks if any decorators apply to this bean.
+     *
+     * <p>This is used to determine whether to wrap the bean instance with decorators.
+     *
+     * @return true if this bean has decorators, false otherwise
+     */
+    public boolean hasDecorators() {
+        if (decoratorResolver == null) {
+            return false;
+        }
+        return decoratorResolver.hasDecorators(getTypes(), getQualifiers());
+    }
+
+    /**
+     * Creates a decorator chain wrapping the target instance.
+     *
+     * <p>This method:
+     * <ol>
+     *   <li>Resolves decorators that apply to this bean (by type)</li>
+     *   <li>Creates decorator instances with @Delegate injection</li>
+     *   <li>Returns the outermost decorator (what client code sees)</li>
+     * </ol>
+     *
+     * <p><b>Decorator vs Interceptor Wrapping:</b>
+     * <ul>
+     *   <li><b>Interceptors</b>: Single proxy with method interception</li>
+     *   <li><b>Decorators</b>: Nested instances with @Delegate injection</li>
+     * </ul>
+     *
+     * <p><b>Wrapping Order:</b>
+     * <pre>
+     * Client → Decorator1 (priority=100) → Decorator2 (priority=200) → Target (possibly interceptor proxy)
+     * </pre>
+     *
+     * @param targetInstance the bean instance to decorate (may already be an interceptor proxy)
+     * @param creationalContext the CreationalContext for managing decorator lifecycle
+     * @return the outermost decorator instance, or target if no decorators apply
+     * @throws IllegalStateException if decorator support not configured
+     */
+    @SuppressWarnings("unchecked")
+    public T createDecoratorChain(T targetInstance, CreationalContext<T> creationalContext) {
+        if (decoratorAwareProxyGenerator == null) {
+            throw new IllegalStateException(
+                "DecoratorAwareProxyGenerator not set for bean: " + beanClass.getName()
+            );
+        }
+
+        if (decoratorResolver == null) {
+            throw new IllegalStateException(
+                "DecoratorResolver not set for bean: " + beanClass.getName()
+            );
+        }
+
+        // Resolve decorators that apply to this bean
+        java.util.List<com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo> decorators =
+                decoratorResolver.resolve(getTypes(), getQualifiers());
+
+        if (decorators.isEmpty()) {
+            // No decorators apply, return target as-is
+            return targetInstance;
+        }
+
+        // Check if BeanManager is available
+        if (beanManager == null) {
+            throw new IllegalStateException(
+                "BeanManager not set for bean: " + beanClass.getName() +
+                " - cannot create decorator instances"
+            );
+        }
+
+        // Create decorator chain using DecoratorAwareProxyGenerator
+        DecoratorChain chain = decoratorAwareProxyGenerator.createDecoratorChain(
+                targetInstance,
+                decorators,
+                beanManager,
+                creationalContext
+        );
+
+        // Return the outermost decorator (what client code will interact with)
+        return (T) chain.getOutermostInstance();
     }
 }

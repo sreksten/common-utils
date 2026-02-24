@@ -99,6 +99,22 @@ public class InjectorImpl2 implements Injector {
      */
     private final InterceptorAwareProxyGenerator interceptorAwareProxyGenerator;
 
+    // ====================================================================================
+    // PHASE 3: Decorator Support
+    // ====================================================================================
+
+    /**
+     * DecoratorResolver - resolves which decorators apply to bean types.
+     * Created once and shared across all beans for efficiency.
+     */
+    private final DecoratorResolver decoratorResolver;
+
+    /**
+     * DecoratorAwareProxyGenerator - creates decorator chains with @Delegate injection.
+     * Created once and shared across all beans for efficiency.
+     */
+    private final DecoratorAwareProxyGenerator decoratorAwareProxyGenerator;
+
     /**
      * Creates a new InjectorImpl2 with the given CDI infrastructure components.
      *
@@ -144,6 +160,10 @@ public class InjectorImpl2 implements Injector {
         // PHASE 2: Create interceptor infrastructure (shared across all beans)
         this.interceptorResolver = new InterceptorResolver(knowledgeBase);
         this.interceptorAwareProxyGenerator = new InterceptorAwareProxyGenerator();
+
+        // PHASE 3: Create decorator infrastructure (shared across all beans)
+        this.decoratorResolver = new DecoratorResolver(knowledgeBase);
+        this.decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
 
         // Register built-in beans (CDI 4.1 Section 3.10)
         registerBuiltInBeans();
@@ -624,6 +644,19 @@ public class InjectorImpl2 implements Injector {
                 // This analyzes the bean's methods and pre-builds chains for methods with interceptors
                 // Chains are cached in the bean and reused for all invocations
                 beanImpl.buildMethodInterceptorChains();
+
+                // PHASE 3: Initialize decorator support
+                // Step 6: Set the decorator resolver
+                // This allows the bean to find applicable decorators for its types
+                beanImpl.setDecoratorResolver(decoratorResolver);
+
+                // Step 7: Set the decorator-aware proxy generator
+                // This allows the bean to create decorator chains with @Delegate injection
+                beanImpl.setDecoratorAwareProxyGenerator(decoratorAwareProxyGenerator);
+
+                // Step 8: Set the BeanManager
+                // This is needed for creating decorator instances
+                beanImpl.setBeanManager(beanManager);
             }
         }
     }
