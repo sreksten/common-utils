@@ -150,6 +150,11 @@ class ParallelClasspathScanner {
                 String className = prefix + file.getName().substring(0, file.getName().length() - CLASS_EXTENSION_LENGTH);
                 // Only process if we haven't seen this class before (avoid duplicates from multiple JARs)
                 if (scannedClasses.add(className)) {
+                    // Check beans.xml scan exclusions (CDI 4.1 Section 12.4)
+                    if (isExcludedByBeansXml(className, archiveRoot, classLoader)) {
+                        continue; // Skip excluded classes
+                    }
+
                     try {
                         Class<?> clazz = Class.forName(className, false, classLoader);
                         sink.add(clazz, archiveMode);
@@ -224,6 +229,11 @@ class ParallelClasspathScanner {
 
                     // Only process if we haven't seen this class before (avoid duplicates from multiple JARs)
                     if (scannedClasses.add(className)) {
+                        // Check beans.xml scan exclusions (CDI 4.1 Section 12.4)
+                        if (isExcludedByBeansXml(className, jarFile, classLoader)) {
+                            continue; // Skip excluded classes
+                        }
+
                         try {
                             sink.add(Class.forName(className, false, classLoader), archiveMode);
                         } catch (NoClassDefFoundError | ClassNotFoundException e) {
@@ -348,5 +358,128 @@ class ParallelClasspathScanner {
      */
     public Collection<com.threeamigos.common.util.implementations.injection.beansxml.BeansXml> getBeansXmlConfigurations() {
         return Collections.unmodifiableCollection(beansXmlMap.values());
+    }
+
+    /**
+     * Checks if a class should be excluded based on beans.xml scan exclusions.
+     *
+     * <p>CDI 4.1 Section 12.4: The &lt;scan&gt;&lt;exclude&gt; elements allow
+     * fine-grained control over which classes are discovered as beans.
+     *
+     * <p>An exclusion rule applies if:
+     * <ul>
+     *   <li>The class name matches the exclusion pattern (exact, *, **)</li>
+     *   <li>ALL conditions (if-class-available, if-class-not-available, if-system-property) are met</li>
+     * </ul>
+     *
+     * @param className the fully qualified class name to check
+     * @param archiveRoot the archive root (to get its beans.xml configuration)
+     * @param classLoader the class loader for condition evaluation
+     * @return true if the class should be excluded
+     */
+    private boolean isExcludedByBeansXml(String className, File archiveRoot, ClassLoader classLoader) {
+        if (className == null || archiveRoot == null) {
+            return false;
+        }
+
+        try {
+            String canonicalPath = archiveRoot.getCanonicalPath();
+            com.threeamigos.common.util.implementations.injection.beansxml.BeansXml beansXml =
+                beansXmlMap.get(canonicalPath);
+
+            if (beansXml == null || beansXml.getScan() == null) {
+                return false; // No exclusions defined
+            }
+
+            // Check each exclusion rule
+            for (com.threeamigos.common.util.implementations.injection.beansxml.Exclude exclude :
+                    beansXml.getScan().getExcludes()) {
+
+                // Check if pattern matches
+                if (!exclude.matches(className)) {
+                    continue; // Pattern doesn't match, try next exclusion
+                }
+
+                // Pattern matches - now check conditions (AND logic)
+                if (evaluateExclusionConditions(exclude, classLoader)) {
+                    // All conditions met - exclude this class
+                    return true;
+                }
+            }
+
+            return false; // No matching exclusion rules
+
+        } catch (Exception e) {
+            // On error, don't exclude (fail-safe approach)
+            return false;
+        }
+    }
+
+    /**
+     * Evaluates all conditions for an exclusion rule.
+     *
+     * <p>CDI 4.1 Section 12.4: All conditions must be true (AND logic)
+     * for the exclusion to apply.
+     *
+     * @param exclude the exclusion rule with conditions
+     * @param classLoader the class loader for checking class availability
+     * @return true if ALL conditions are met (or no conditions exist)
+     */
+    private boolean evaluateExclusionConditions(
+            com.threeamigos.common.util.implementations.injection.beansxml.Exclude exclude,
+            ClassLoader classLoader) {
+
+        // No conditions = unconditional exclusion (always applies)
+        if (exclude.isUnconditional()) {
+            return true;
+        }
+
+        // Check all "if-class-available" conditions
+        for (com.threeamigos.common.util.implementations.injection.beansxml.IfClassAvailable condition :
+                exclude.getIfClassAvailable()) {
+            if (!isClassAvailable(condition.getName(), classLoader)) {
+                return false; // Condition not met
+            }
+        }
+
+        // Check all "if-class-not-available" conditions
+        for (com.threeamigos.common.util.implementations.injection.beansxml.IfClassNotAvailable condition :
+                exclude.getIfClassNotAvailable()) {
+            if (isClassAvailable(condition.getName(), classLoader)) {
+                return false; // Condition not met (class IS available but shouldn't be)
+            }
+        }
+
+        // Check all "if-system-property" conditions
+        for (com.threeamigos.common.util.implementations.injection.beansxml.IfSystemProperty condition :
+                exclude.getIfSystemProperty()) {
+            String actualValue = System.getProperty(condition.getName());
+            if (actualValue == null || !actualValue.equals(condition.getValue())) {
+                return false; // Condition not met
+            }
+        }
+
+        // All conditions met
+        return true;
+    }
+
+    /**
+     * Checks if a class is available on the classpath.
+     *
+     * @param className the fully qualified class name
+     * @param classLoader the class loader to use
+     * @return true if the class can be loaded
+     */
+    private boolean isClassAvailable(String className, ClassLoader classLoader) {
+        if (className == null || className.isEmpty()) {
+            return false;
+        }
+
+        try {
+            Class.forName(className, false, classLoader);
+            return true;
+        } catch (ClassNotFoundException | NoClassDefFoundError e) {
+            return false;
+        }
     }
 }
