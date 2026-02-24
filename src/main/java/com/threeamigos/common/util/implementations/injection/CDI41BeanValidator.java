@@ -819,6 +819,19 @@ public class CDI41BeanValidator {
         return hasMetaAnnotation(at, Qualifier.class);
     }
 
+    /**
+     * Validates that a producer type is legal according to CDI 4.1 Section 3.3.2.
+     * <p>
+     * Rules:
+     * <ul>
+     *   <li>The type itself cannot be a wildcard or type variable</li>
+     *   <li>Parameterized types CAN contain wildcards (e.g., List&lt;?&gt; is valid)</li>
+     *   <li>Wildcards in parameterized types are allowed for producers (but not for injection points)</li>
+     * </ul>
+     *
+     * @param type the producer return/field type to validate
+     * @throws DefinitionException if the type is invalid
+     */
     private void checkProducerTypeValidity(Type type) {
         if (type instanceof WildcardType) {
             throw new DefinitionException("type may not be a wildcard (" + type.getTypeName() + ")");
@@ -826,6 +839,10 @@ public class CDI41BeanValidator {
         if (type instanceof TypeVariable) {
             throw new DefinitionException("type may not be a type variable (" + type.getTypeName() + ")");
         }
+
+        // Note: Parameterized types containing wildcards (e.g., List<? extends Number>) are ALLOWED
+        // for producers (unlike injection points). The wildcards are handled during type extraction
+        // and resolution according to CDI 4.1 typesafe resolution rules.
     }
 
     private void checkInjectionTypeValidity(Type type) {
@@ -1191,22 +1208,49 @@ public class CDI41BeanValidator {
 
     /**
      * Extracts bean types for a producer (its return/field type and supertypes).
+     * <p>
+     * According to CDI 4.1 Section 3.3 - Bean types of a producer method/field:
+     * <ul>
+     *   <li>The producer type itself (with its parameterization, if any)</li>
+     *   <li>All supertypes and superinterfaces of the raw type</li>
+     *   <li>Object.class</li>
+     *   <li>Wildcards in parameterized types are preserved for typesafe resolution</li>
+     * </ul>
+     * <p>
+     * <b>CDI 4.1 Wildcard Handling:</b>
+     * When a producer method returns a parameterized type containing wildcards
+     * (e.g., {@code List<? extends Number>}), the wildcard is part of the bean type.
+     * During typesafe resolution:
+     * <ul>
+     *   <li>{@code List<? extends Number>} can satisfy injection point {@code List<Integer>}
+     *       if Integer extends Number</li>
+     *   <li>{@code List<?>} (unbounded) can satisfy any {@code List<T>} injection point</li>
+     *   <li>Resolution follows Java's wildcard subtyping rules</li>
+     * </ul>
+     *
+     * @param producerType the type returned by producer method or field
+     * @return set of bean types for this producer
      */
     private Set<Type> extractProducerTypes(Type producerType) {
         // Build full bean types per CDI: raw type, all superclasses, all interfaces
         Set<Type> types = new LinkedHashSet<>();
 
-        // Add hierarchy
+        // Add the declared generic type itself first (keeps parameterization including wildcards)
+        // This is crucial: List<? extends Number> must be in the bean types with its wildcard
+        types.add(producerType);
+
+        // Add raw type hierarchy (superclasses and interfaces)
         Class<?> c = RawTypeExtractor.getRawType(producerType);
         while (c != null && c != Object.class) {
             types.add(c);
+            // Add all interfaces implemented by this class (raw types)
             types.addAll(Arrays.asList(c.getGenericInterfaces()));
             c = c.getSuperclass();
         }
 
-        // Include the declared generic type itself (keeps parameterization)
-        types.add(producerType);
+        // Always include Object.class as per CDI spec
         types.add(Object.class);
+
         return types;
     }
 

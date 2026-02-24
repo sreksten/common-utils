@@ -356,14 +356,49 @@ public class TypeChecker {
      * @param t2 the candidate type argument (from implementation)
      * @return true if t2 is compatible with t1
      */
+    /**
+     * Checks if type argument {@code t2} is compatible with type argument {@code t1}.
+     *
+     * <p>This method handles type argument matching with the following rules:
+     * <ul>
+     *   <li>Exact equality: {@code String} = {@code String}</li>
+     *   <li>Wildcards in t2: checked against t1 using wildcard bound rules (CDI 4.1)</li>
+     *   <li>TypeVariables in t2 are accepted (raw type compatibility)</li>
+     *   <li>Nested parameterized types are checked recursively</li>
+     *   <li>Raw types can match parameterized types (with warning semantics)</li>
+     *   <li><b>Invariance:</b> {@code String} does NOT match {@code Object}</li>
+     * </ul>
+     *
+     * <p><b>Wildcard Handling (CDI 4.1 Section 5.2.4):</b>
+     * When t2 contains wildcards (from producer beans), they are matched against t1:
+     * <ul>
+     *   <li>{@code ? extends Number} matches {@code Integer} if Integer extends Number</li>
+     *   <li>{@code ? super Integer} matches {@code Number} if Number is superclass of Integer</li>
+     *   <li>{@code ?} (unbounded) matches any type</li>
+     * </ul>
+     *
+     * <p>Note: t1 (target) cannot be a wildcard or type variable due to
+     * {@link #validateInjectionPoint(Type)} validation.
+     *
+     * @param t1 the target type argument (from injection point)
+     * @param t2 the candidate type argument (from implementation or producer)
+     * @return true if t2 is compatible with t1
+     */
     boolean typeArgsMatch(Type t1, Type t2) {
         if (t1.equals(t2)) {
             return true;
         }
 
-        // t1 (target) cannot be Wildcard or TypeVariable due to validateInjectionPoint.
-        // But t2 (candidate/implementation) can be.
-        if (t2 instanceof WildcardType || t2 instanceof TypeVariable) {
+        // t1 (target/injection point) cannot be Wildcard or TypeVariable due to validateInjectionPoint.
+        // But t2 (candidate/implementation from producer) CAN be a wildcard.
+
+        // Handle wildcards in producer bean types (t2)
+        if (t2 instanceof WildcardType) {
+            return isWildcardCompatible(t1, (WildcardType) t2);
+        }
+
+        // TypeVariables in t2 are treated as compatible (raw type erasure)
+        if (t2 instanceof TypeVariable) {
             return true;
         }
 
@@ -389,6 +424,76 @@ public class TypeChecker {
         }
         // For non-parameterized types, use exact equality (invariance)
         return t1.equals(t2);
+    }
+
+    /**
+     * Checks if a wildcard type (from producer bean) is compatible with a target type
+     * (from injection point) according to CDI 4.1 wildcard subtyping rules.
+     *
+     * <p><b>CDI 4.1 Wildcard Rules:</b>
+     * <ul>
+     *   <li>{@code ? extends T}: producer provides unknown subtype of T, can satisfy injection of any type U where U extends T</li>
+     *   <li>{@code ? super T}: producer provides unknown supertype of T, can satisfy injection of T or supertypes of T</li>
+     *   <li>{@code ?}: unbounded wildcard matches any type</li>
+     * </ul>
+     *
+     * <p><b>Examples:</b>
+     * <pre>
+     * // Producer: List&lt;? extends Number&gt;
+     * // Can inject into: List&lt;Integer&gt; ✅, List&lt;Number&gt; ✅, List&lt;String&gt; ❌
+     *
+     * // Producer: List&lt;? super Integer&gt;
+     * // Can inject into: List&lt;Number&gt; ✅, List&lt;Object&gt; ✅, List&lt;Integer&gt; ✅
+     *
+     * // Producer: List&lt;?&gt;
+     * // Can inject into: List&lt;String&gt; ✅, List&lt;Integer&gt; ✅, List&lt;anything&gt; ✅
+     * </pre>
+     *
+     * @param injectionPointType the type required at injection point (e.g., Integer)
+     * @param producerWildcard the wildcard from producer bean (e.g., ? extends Number)
+     * @return true if the producer wildcard can satisfy the injection point type
+     */
+    private boolean isWildcardCompatible(Type injectionPointType, WildcardType producerWildcard) {
+        Type[] upperBounds = producerWildcard.getUpperBounds();
+        Type[] lowerBounds = producerWildcard.getLowerBounds();
+
+        // Unbounded wildcard (?) matches everything
+        if ((upperBounds.length == 1 && upperBounds[0].equals(Object.class)) && lowerBounds.length == 0) {
+            return true;
+        }
+
+        // ? extends T: injection point type must be assignable to T (or equal to T)
+        // Example: List<? extends Number> can provide List<Integer> since Integer extends Number
+        if (upperBounds.length > 0 && lowerBounds.length == 0) {
+            for (Type upperBound : upperBounds) {
+                // Check if injectionPointType is a subtype of upperBound
+                if (upperBound.equals(Object.class)) {
+                    return true; // effectively unbounded
+                }
+                Class<?> injectionRaw = RawTypeExtractor.getRawType(injectionPointType);
+                Class<?> boundRaw = RawTypeExtractor.getRawType(upperBound);
+                if (boundRaw.isAssignableFrom(injectionRaw)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // ? super T: injection point type must be a supertype of T (or equal to T)
+        // Example: List<? super Integer> can provide List<Number> since Number is super of Integer
+        if (lowerBounds.length > 0) {
+            for (Type lowerBound : lowerBounds) {
+                Class<?> injectionRaw = RawTypeExtractor.getRawType(injectionPointType);
+                Class<?> boundRaw = RawTypeExtractor.getRawType(lowerBound);
+                if (injectionRaw.isAssignableFrom(boundRaw)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Fallback: treat as incompatible
+        return false;
     }
 
     /**

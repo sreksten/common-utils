@@ -323,6 +323,10 @@ public class BeanImpl<T> implements Bean<T> {
      * <p>
      * PHASE 3: Supports @AroundConstruct interceptors.
      * If constructor interceptors are present, they are invoked before the actual construction.
+     * <p>
+     * <b>CDI 4.1 Section 3.10 - InjectionPoint Bean:</b>
+     * Sets the current InjectionPoint context for each constructor parameter so that
+     * if InjectionPoint is injected as a dependency, it receives the correct metadata.
      */
     private T createInstance(CreationalContext<T> creationalContext) throws Exception {
         Constructor<T> constructor = injectConstructor;
@@ -339,8 +343,16 @@ public class BeanImpl<T> implements Bean<T> {
         Object[] args = new Object[parameters.length];
 
         for (int i = 0; i < parameters.length; i++) {
-            args[i] = resolveInjectionPoint(parameters[i].getParameterizedType(),
-                    parameters[i].getAnnotations(), creationalContext);
+            // Create InjectionPoint metadata for this constructor parameter
+            InjectionPoint injectionPoint = new InjectionPointImpl<>(parameters[i], this);
+
+            // Resolve the parameter with InjectionPoint context set
+            args[i] = resolveInjectionPointWithContext(
+                parameters[i].getParameterizedType(),
+                parameters[i].getAnnotations(),
+                injectionPoint,
+                creationalContext
+            );
         }
 
         // PHASE 3: Check for @AroundConstruct interceptors
@@ -358,6 +370,10 @@ public class BeanImpl<T> implements Bean<T> {
     /**
      * Performs field injection for all @Inject fields.
      * Processes fields in hierarchy order (superclass → subclass) per CDI 4.1 spec.
+     * <p>
+     * <b>CDI 4.1 Section 3.10 - InjectionPoint Bean:</b>
+     * Sets the current InjectionPoint context for each field so that
+     * if InjectionPoint is injected as a dependency, it receives the correct metadata.
      */
     private void performFieldInjection(T instance, CreationalContext<T> creationalContext) throws Exception {
         // Build hierarchy: superclass first, then subclass
@@ -372,8 +388,18 @@ public class BeanImpl<T> implements Bean<T> {
                 }
 
                 field.setAccessible(true);
-                Object value = resolveInjectionPoint(field.getGenericType(),
-                        field.getAnnotations(), creationalContext);
+
+                // Create InjectionPoint metadata for this field
+                InjectionPoint injectionPoint = new InjectionPointImpl<>(field, this);
+
+                // Resolve the field with InjectionPoint context set
+                Object value = resolveInjectionPointWithContext(
+                    field.getGenericType(),
+                    field.getAnnotations(),
+                    injectionPoint,
+                    creationalContext
+                );
+
                 field.set(instance, value);
             }
         }
@@ -383,6 +409,10 @@ public class BeanImpl<T> implements Bean<T> {
      * Performs method injection for all @Inject methods.
      * Processes methods in hierarchy order (superclass → subclass) per CDI 4.1 spec.
      * Skips overridden methods per JSR-330 rules.
+     * <p>
+     * <b>CDI 4.1 Section 3.10 - InjectionPoint Bean:</b>
+     * Sets the current InjectionPoint context for each method parameter so that
+     * if InjectionPoint is injected as a dependency, it receives the correct metadata.
      */
     private void performMethodInjection(T instance, CreationalContext<T> creationalContext) throws Exception {
         // Build hierarchy: superclass first, then subclass
@@ -406,8 +436,16 @@ public class BeanImpl<T> implements Bean<T> {
                 Object[] args = new Object[parameters.length];
 
                 for (int i = 0; i < parameters.length; i++) {
-                    args[i] = resolveInjectionPoint(parameters[i].getParameterizedType(),
-                            parameters[i].getAnnotations(), creationalContext);
+                    // Create InjectionPoint metadata for this method parameter
+                    InjectionPoint injectionPoint = new InjectionPointImpl<>(parameters[i], this);
+
+                    // Resolve the parameter with InjectionPoint context set
+                    args[i] = resolveInjectionPointWithContext(
+                        parameters[i].getParameterizedType(),
+                        parameters[i].getAnnotations(),
+                        injectionPoint,
+                        creationalContext
+                    );
                 }
 
                 method.invoke(instance, args);
@@ -503,6 +541,9 @@ public class BeanImpl<T> implements Bean<T> {
 
     /**
      * Resolves an injection point by finding a matching bean from the knowledge base.
+     * <p>
+     * <b>DEPRECATED:</b> Use {@link #resolveInjectionPointWithContext} instead to ensure
+     * InjectionPoint metadata is available if the dependency needs it.
      *
      * @param type the required type
      * @param annotations the qualifier annotations
@@ -519,6 +560,57 @@ public class BeanImpl<T> implements Bean<T> {
         }
 
         return dependencyResolver.resolve(type, annotations);
+    }
+
+    /**
+     * Resolves an injection point with InjectionPoint context set.
+     * <p>
+     * This method sets the InjectionPoint in BeanResolver's ThreadLocal before resolution,
+     * allowing any dependency that injects InjectionPoint to receive the correct metadata
+     * about where it's being injected.
+     * <p>
+     * <b>CDI 4.1 Section 3.10 - InjectionPoint Bean:</b>
+     * InjectionPoint is a built-in dependent-scoped bean that provides metadata about
+     * the injection point it's being injected into. Per spec, it must be contextual to
+     * the current injection operation.
+     * <p>
+     * <b>Thread Safety:</b> Uses BeanResolver's ThreadLocal storage, safe for concurrent injection.
+     *
+     * @param type the required type
+     * @param annotations the qualifier annotations
+     * @param injectionPoint the injection point metadata (field, parameter, etc.)
+     * @param creationalContext the creational context
+     * @return the resolved bean instance
+     */
+    private Object resolveInjectionPointWithContext(Type type,
+                                                     Annotation[] annotations,
+                                                     InjectionPoint injectionPoint,
+                                                     CreationalContext<T> creationalContext) {
+        if (dependencyResolver == null) {
+            throw new IllegalStateException(
+                "BeanImpl dependency resolver not set. " +
+                "This should be set during container initialization for bean: " + beanClass.getName()
+            );
+        }
+
+        // Only set context if the resolver is BeanResolver (which supports InjectionPoint context)
+        if (dependencyResolver instanceof BeanResolver) {
+            BeanResolver beanResolver = (BeanResolver) dependencyResolver;
+
+            // Set the current injection point context
+            beanResolver.setCurrentInjectionPoint(injectionPoint);
+
+            try {
+                // Resolve the dependency with context set
+                return dependencyResolver.resolve(type, annotations);
+            } finally {
+                // Always clear the context to prevent memory leaks in thread pools
+                beanResolver.clearCurrentInjectionPoint();
+            }
+        } else {
+            // Fallback: resolver doesn't support InjectionPoint context
+            return dependencyResolver.resolve(type, annotations);
+        }
     }
 
     /**
