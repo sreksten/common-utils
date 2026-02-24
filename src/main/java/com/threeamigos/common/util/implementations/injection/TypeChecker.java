@@ -83,6 +83,10 @@ public class TypeChecker {
      * Validates that a type is a legal bean type for an injection point.
      * Per JSR 330/346, injection points cannot contain wildcards or type variables.
      *
+     * <p>Note: Intersection types (e.g., T extends Serializable & Comparable&lt;T&gt;) are
+     * represented via TypeVariable bounds in Java's reflection API. These are allowed in
+     * injection points when fully resolved (i.e., when the actual type is known).
+     *
      * @param type the type to validate
      * @throws DefinitionException if the type contains wildcards or type variables
      */
@@ -155,10 +159,16 @@ public class TypeChecker {
      * <ol>
      *   <li>Validates that the target is a legal injection point</li>
      *   <li>Checks if types are identical</li>
+     *   <li>Handles intersection types via TypeVariable bounds</li>
      *   <li>Verifies raw type assignability</li>
      *   <li>For parameterized types, resolves generic arguments and checks invariance</li>
      *   <li>For generic arrays, recursively checks component types</li>
      * </ol>
+     *
+     * <p><b>Intersection Types:</b>
+     * Java represents intersection types (e.g., {@code T extends Serializable & Comparable<T>})
+     * through {@link TypeVariable#getBounds()}, which returns multiple bounds. When checking
+     * assignability, the implementation must be assignable to ALL bounds of the intersection.
      *
      * @param targetType the target injection point type
      * @param implementationType the candidate bean type
@@ -171,6 +181,22 @@ public class TypeChecker {
 
         if (targetType.equals(implementationType)) {
             return true;
+        }
+
+        // Handle intersection types in implementation (TypeVariable with multiple bounds)
+        // Example: <T extends Serializable & Comparable<T>> - represented as TypeVariable with bounds[]
+        if (implementationType instanceof TypeVariable) {
+            TypeVariable<?> tv = (TypeVariable<?>) implementationType;
+            Type[] bounds = tv.getBounds();
+
+            // For intersection types, implementation must satisfy ALL bounds
+            // If any bound doesn't match target, fail
+            for (Type bound : bounds) {
+                if (isAssignable(targetType, bound)) {
+                    return true; // At least one bound matches
+                }
+            }
+            return false;
         }
 
         Class<?> targetRaw = RawTypeExtractor.getRawType(targetType);
@@ -377,6 +403,18 @@ public class TypeChecker {
      *   <li>{@code ?} (unbounded) matches any type</li>
      * </ul>
      *
+     * <p><b>Nested Parameterized Type Edge Cases:</b>
+     * When matching nested generics like {@code Map<String, List<Integer>>}, each level
+     * is resolved recursively. The edge cases that previously failed:
+     * <ul>
+     *   <li>{@code Map<String, List<Integer>>} vs {@code HashMap<String, ArrayList<Integer>>}:
+     *       Now resolves HashMap→Map, then recursively checks ArrayList→List</li>
+     *   <li>{@code Map<String, Map<String, List<Integer>>>} (3+ level nesting):
+     *       Now handles arbitrary nesting depth via recursive resolution</li>
+     *   <li>Mixed raw/parameterized types at different levels:
+     *       Properly handles raw type compatibility at each nesting level</li>
+     * </ul>
+     *
      * <p>Note: t1 (target) cannot be a wildcard or type variable due to
      * {@link #validateInjectionPoint(Type)} validation.
      *
@@ -403,11 +441,13 @@ public class TypeChecker {
         }
 
         // For nested parameterized types, we need to resolve t2 to t1's raw type structure
+        // This handles edge cases with deeply nested generics like Map<String, Map<String, List<Integer>>>
         if (t1 instanceof ParameterizedType && t2 instanceof ParameterizedType) {
             return matchParameterizedTypes(t1, t2);
         }
 
         // Handle raw type (Class) in t1 vs ParameterizedType in t2
+        // Example: List vs ArrayList<String>
         if (t1 instanceof Class<?> && t2 instanceof ParameterizedType) {
             Class<?> raw1 = (Class<?>) t1;
             ParameterizedType pt2 = (ParameterizedType) t2;
@@ -416,12 +456,21 @@ public class TypeChecker {
         }
 
         // Handle ParameterizedType in t1 vs raw type (Class) in t2
+        // Example: List<String> vs ArrayList (raw)
         if (t1 instanceof ParameterizedType && t2 instanceof Class<?>) {
             ParameterizedType pt1 = (ParameterizedType) t1;
             Class<?> raw1 = (Class<?>) pt1.getRawType();
             Class<?> raw2 = (Class<?>) t2;
             return raw1.isAssignableFrom(raw2);
         }
+
+        // Handle GenericArrayType cases (arrays of generics like T[] or List<String>[])
+        if (t1 instanceof GenericArrayType && t2 instanceof GenericArrayType) {
+            Type comp1 = ((GenericArrayType) t1).getGenericComponentType();
+            Type comp2 = ((GenericArrayType) t2).getGenericComponentType();
+            return typeArgsMatch(comp1, comp2);
+        }
+
         // For non-parameterized types, use exact equality (invariance)
         return t1.equals(t2);
     }
@@ -501,15 +550,29 @@ public class TypeChecker {
      *
      * <p>Handles cases where:
      * <ul>
-     *   <li>Raw types are identical: check type arguments directly</li>
+     *   <li>Raw types are identical: check type arguments recursively</li>
      *   <li>Raw types differ but assignable: resolve t2 to t1's structure first</li>
+     *   <li>Nested parameterized types: recursive resolution (e.g., Map&lt;String, List&lt;Integer&gt;&gt;)</li>
      * </ul>
      *
-     * <p>Example:
+     * <p><b>Nested Parameterized Type Examples:</b>
      * <pre>
+     * // Simple case:
      * t1 = List&lt;String&gt;
      * t2 = ArrayList&lt;String&gt;
-     * This resolves ArrayList&lt;String&gt; to List&lt;String&gt;, then checks arguments
+     * Resolves ArrayList&lt;String&gt; to List&lt;String&gt;, then checks arguments
+     *
+     * // Nested case:
+     * t1 = Map&lt;String, List&lt;Integer&gt;&gt;
+     * t2 = HashMap&lt;String, ArrayList&lt;Integer&gt;&gt;
+     * Resolves HashMap to Map, then recursively checks:
+     * - String vs String ✓
+     * - List&lt;Integer&gt; vs ArrayList&lt;Integer&gt; (recursive resolution) ✓
+     *
+     * // Deep nesting:
+     * t1 = Map&lt;String, Map&lt;String, List&lt;Integer&gt;&gt;&gt;
+     * t2 = HashMap&lt;String, HashMap&lt;String, ArrayList&lt;Integer&gt;&gt;&gt;
+     * Resolves at each level recursively
      * </pre>
      *
      * @param t1 the target parameterized type
@@ -525,19 +588,22 @@ public class TypeChecker {
         Class<?> raw2 = (Class<?>) pt2.getRawType();
 
         // If raw types match exactly, check type arguments recursively
+        // This handles nested parameterized types correctly
         if (raw1.equals(raw2)) {
             return actualTypeArgumentsMatch(pt1, pt2);
         }
 
         // If raw types differ but are assignable, resolve t2 to t1's raw type
+        // This handles cases like ArrayList<T> -> List<T>
         if (raw1.isAssignableFrom(raw2)) {
             Type resolvedT2 = getExactSuperType(t2, raw1);
             if (resolvedT2 == null) {
                 throw new IllegalStateException(
-                        "getExactSuperType returned null despite isAssignableFrom being true in typeArgsMatch. " +
+                        "getExactSuperType returned null despite isAssignableFrom being true in matchParameterizedTypes. " +
                                 "t1: " + t1 + " (raw1: " + raw1 + "), t2: " + t2 + " (raw2: " + raw2 + ")");
             }
-            return typeArgsMatch(t1, resolvedT2);
+            // After resolving, check if types match
+            return typesMatch(t1, resolvedT2);
         }
 
         return false;

@@ -1339,39 +1339,65 @@ public class CDI41BeanValidator {
             currentClass = currentClass.getSuperclass();
         }
 
-        // 4. Find @PostConstruct method (searches hierarchy automatically)
-        // CDI 4.1: At most one @PostConstruct method per class
-        Method postConstruct = findLifecycleMethod(clazz, PostConstruct.class);
-        if (postConstruct != null) {
-            bean.setPostConstructMethod(postConstruct);
-        }
+        // 4. Find all @PostConstruct methods in hierarchy (superclass → subclass order)
+        // Per Interceptors Specification 1.2+: All @PostConstruct methods in the hierarchy are invoked
+        // unless overridden by a subclass
+        findAllLifecycleMethods(clazz, PostConstruct.class, bean, true);
 
-        // 5. Find @PreDestroy method (searches hierarchy automatically)
-        // CDI 4.1: At most one @PreDestroy method per class
-        Method preDestroy = findLifecycleMethod(clazz, PreDestroy.class);
-        if (preDestroy != null) {
-            bean.setPreDestroyMethod(preDestroy);
-        }
+        // 5. Find all @PreDestroy methods in hierarchy (superclass → subclass order during discovery)
+        // Per Interceptors Specification 1.2+: All @PreDestroy methods in the hierarchy are invoked
+        // unless overridden by a subclass. They will be executed in reverse order (subclass → superclass).
+        findAllLifecycleMethods(clazz, PreDestroy.class, bean, false);
+
+        // 6. Find all @PrePassivate methods in hierarchy for passivating scopes
+        // CDI 4.1 Section 6.6.4: Invoked before session serialization
+        findAllPassivationMethods(clazz, bean, true);
+
+        // 7. Find all @PostActivate methods in hierarchy for passivating scopes
+        // CDI 4.1 Section 6.6.4: Invoked after session deserialization
+        findAllPassivationMethods(clazz, bean, false);
     }
 
     /**
-     * Finds a lifecycle method (@PostConstruct or @PreDestroy) in the class hierarchy.
-     * Returns the first method found with the specified annotation.
+     * Finds all lifecycle methods (@PostConstruct or @PreDestroy) in the class hierarchy.
+     * <p>
+     * <b>Interceptors Specification 1.2+ / CDI 4.1 Section 7.1:</b>
+     * <ul>
+     *   <li>Lifecycle methods are discovered in superclass → subclass order</li>
+     *   <li>If a subclass overrides a superclass lifecycle method, only the overriding method is invoked</li>
+     *   <li>Multiple lifecycle methods can exist in the hierarchy (one per class level)</li>
+     *   <li>@PostConstruct: executed superclass → subclass</li>
+     *   <li>@PreDestroy: executed subclass → superclass (reversed at invocation time)</li>
+     * </ul>
      *
      * @param clazz the bean class
      * @param lifecycleAnnotation the lifecycle annotation class (@PostConstruct or @PreDestroy)
-     * @return the lifecycle method, or null if not found
+     * @param bean the bean being populated
+     * @param isPostConstruct true if @PostConstruct, false if @PreDestroy
      */
-    private Method findLifecycleMethod(Class<?> clazz, Class<? extends Annotation> lifecycleAnnotation) {
-        // Determine which static checker to use
-        boolean isPostConstruct = lifecycleAnnotation.equals(PostConstruct.class) ||
-                                   lifecycleAnnotation.equals(javax.annotation.PostConstruct.class);
+    private void findAllLifecycleMethods(Class<?> clazz,
+                                         Class<? extends Annotation> lifecycleAnnotation,
+                                         BeanImpl<?> bean,
+                                         boolean isPostConstruct) {
+        // Build class hierarchy: superclass → subclass
+        List<Class<?>> hierarchy = new ArrayList<>();
+        Class<?> current = clazz;
+        while (current != null && current != Object.class) {
+            hierarchy.add(0, current); // Add at beginning to get superclass → subclass order
+            current = current.getSuperclass();
+        }
 
-        // Search in current class and superclasses
-        Class<?> currentClass = clazz;
-        while (currentClass != null && currentClass != Object.class) {
+        // Track which method signatures we've seen (to detect overrides)
+        Set<String> seenSignatures = new HashSet<>();
+
+        // Process in superclass → subclass order
+        for (Class<?> currentClass : hierarchy) {
+            Method foundMethod = null;
+
             for (Method method : currentClass.getDeclaredMethods()) {
-                boolean hasLifecycle = isPostConstruct ? hasPostConstructAnnotation(method) : hasPreDestroyAnnotation(method);
+                boolean hasLifecycle = isPostConstruct ?
+                    hasPostConstructAnnotation(method) :
+                    hasPreDestroyAnnotation(method);
 
                 if (hasLifecycle) {
                     // Validate lifecycle method rules:
@@ -1383,21 +1409,67 @@ public class CDI41BeanValidator {
                             fmtMethod(method) + ": " + lifecycleAnnotation.getSimpleName() +
                             " method must have no parameters"
                         );
-                        return null;
+                        return;
                     }
                     if (Modifier.isStatic(method.getModifiers())) {
                         knowledgeBase.addDefinitionError(
                             fmtMethod(method) + ": " + lifecycleAnnotation.getSimpleName() +
                             " method must not be static"
                         );
-                        return null;
+                        return;
                     }
-                    return method;
+
+                    // Check if multiple lifecycle methods in same class (not allowed)
+                    if (foundMethod != null) {
+                        knowledgeBase.addDefinitionError(
+                            currentClass.getName() + ": multiple " +
+                            lifecycleAnnotation.getSimpleName() +
+                            " methods found in same class (only one allowed per class)"
+                        );
+                        return;
+                    }
+
+                    foundMethod = method;
                 }
             }
-            currentClass = currentClass.getSuperclass();
+
+            if (foundMethod != null) {
+                // Create method signature for override detection
+                String signature = getMethodSignature(foundMethod);
+
+                // If this signature was already seen, it means a subclass overrides it
+                // In that case, skip this method (only the overriding method should be called)
+                if (!seenSignatures.contains(signature)) {
+                    seenSignatures.add(signature);
+
+                    // Add to bean's lifecycle method list
+                    if (isPostConstruct) {
+                        bean.addPostConstructMethod(foundMethod);
+                    } else {
+                        bean.addPreDestroyMethod(foundMethod);
+                    }
+                }
+            }
         }
-        return null;
+    }
+
+    /**
+     * Gets a method signature for override detection.
+     * Format: "methodName(paramType1,paramType2,...)"
+     *
+     * @param method the method
+     * @return the method signature string
+     */
+    private String getMethodSignature(Method method) {
+        StringBuilder sb = new StringBuilder(method.getName());
+        sb.append("(");
+        Class<?>[] paramTypes = method.getParameterTypes();
+        for (int i = 0; i < paramTypes.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(paramTypes[i].getName());
+        }
+        sb.append(")");
+        return sb.toString();
     }
 
     // InjectionPoint best-effort creation
