@@ -148,6 +148,24 @@ public enum AnnotationsEnum {
     VETOED(javax.enterprise.inject.Vetoed.class, jakarta.enterprise.inject.Vetoed.class),
 
     /**
+     * Restricts the bean types of a bean to only the types specified in the annotation value.
+     * Per CDI 4.1 Section 2.2, this allows fine-grained control over which types from the
+     * class hierarchy are included in the bean's type set.
+     *
+     * <p><b>Example:</b>
+     * <pre>{@code
+     * @ApplicationScoped
+     * @Typed(PaymentProcessor.class)  // Only injectable as PaymentProcessor
+     * public class PayPalProcessor implements PaymentProcessor, EmailSender {
+     *     // Not injectable as EmailSender or PayPalProcessor
+     * }
+     * }</pre>
+     *
+     * Maps: {@code javax.enterprise.inject.Typed}, {@code jakarta.enterprise.inject.Typed}
+     */
+    TYPED(javax.enterprise.inject.Typed.class, jakarta.enterprise.inject.Typed.class),
+
+    /**
      * Identifies a stereotype annotation (meta-annotation).
      * Maps: {@code javax.enterprise.inject.Stereotype}, {@code jakarta.enterprise.inject.Stereotype}
      */
@@ -450,5 +468,34 @@ public enum AnnotationsEnum {
      */
     public static boolean hasNonbindingAnnotation(AnnotatedElement element) {
         return NONBINDING.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @Typed annotation (javax or jakarta).
+     * Used to restrict the bean types of a bean per CDI 4.1 Section 2.2.
+     */
+    public static boolean hasTypedAnnotation(AnnotatedElement element) {
+        return TYPED.isPresent(element);
+    }
+
+    /**
+     * Gets the @Typed annotation from the element (supports both javax and jakarta).
+     * Returns null if no @Typed annotation is present.
+     *
+     * @param element the annotated element to check
+     * @return the @Typed annotation instance, or null if not present
+     */
+    public static <T extends Annotation> T getTypedAnnotation(AnnotatedElement element) {
+        if (element == null) {
+            return null;
+        }
+        for (Class<? extends Annotation> annotationClass : TYPED.getAnnotations()) {
+            @SuppressWarnings("unchecked")
+            T annotation = (T) element.getAnnotation(annotationClass);
+            if (annotation != null) {
+                return annotation;
+            }
+        }
+        return null;
     }
 }

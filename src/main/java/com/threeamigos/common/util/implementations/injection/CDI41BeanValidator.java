@@ -353,8 +353,49 @@ public class CDI41BeanValidator {
     }
 
     private Set<Type> extractBeanTypes(Class<?> clazz) {
-        // Conservative "bean types" computation:
-        // include class, all superclasses (up to Object), and all directly implemented interfaces across the hierarchy.
+        // CDI 4.1 Section 2.2 - Bean types
+        // Check for @Typed annotation which restricts the bean types
+        // Using AnnotationsEnum for javax/jakarta compatibility
+        if (hasTypedAnnotation(clazz)) {
+            Annotation typedAnnotation = getTypedAnnotation(clazz);
+            if (typedAnnotation != null) {
+                // @Typed present: Use only the types specified in the annotation
+                Set<Type> types = new LinkedHashSet<>();
+
+                try {
+                    // Use reflection to extract value() from the annotation (works with both javax and jakarta)
+                    Method valueMethod = typedAnnotation.getClass().getMethod("value");
+                    Class<?>[] typedClasses = (Class<?>[]) valueMethod.invoke(typedAnnotation);
+
+                    if (typedClasses.length == 0) {
+                        // @Typed with empty value means only Object.class
+                        types.add(Object.class);
+                    } else {
+                        // Add all types specified in @Typed
+                        for (Class<?> typedClass : typedClasses) {
+                            // Validate that the bean class is assignable to the typed class
+                            if (!typedClass.isAssignableFrom(clazz)) {
+                                addValidationError(clazz,
+                                    "@Typed specifies type " + typedClass.getName() +
+                                    " which is not a type of bean class " + clazz.getName());
+                                continue;
+                            }
+                            types.add(typedClass);
+                        }
+                        // Object.class is always present per CDI 4.1 spec
+                        types.add(Object.class);
+                    }
+                    return types;
+                } catch (ReflectiveOperationException e) {
+                    // If reflection fails, fall through to default behavior
+                    knowledgeBase.addDefinitionError(clazz.getName() +
+                        ": Failed to extract @Typed annotation values: " + e.getMessage());
+                }
+            }
+        }
+
+        // No @Typed annotation: Conservative "bean types" computation
+        // Include class, all superclasses (up to Object), and all directly implemented interfaces across the hierarchy.
         Set<Type> types = new LinkedHashSet<>();
         Class<?> c = clazz;
         while (c != null && c != Object.class) {
@@ -982,6 +1023,13 @@ public class CDI41BeanValidator {
         return (p.isNamePresent() ? p.getName() : "<param>");
     }
 
+    /**
+     * Adds a validation error for a class to the knowledge base.
+     */
+    private void addValidationError(Class<?> clazz, String message) {
+        knowledgeBase.addDefinitionError(clazz.getName() + ": " + message);
+    }
+
     // -----------------------
     // Annotation utilities
     // -----------------------
@@ -1350,11 +1398,13 @@ public class CDI41BeanValidator {
         findAllLifecycleMethods(clazz, PreDestroy.class, bean, false);
 
         // 6. Find all @PrePassivate methods in hierarchy for passivating scopes
-        // CDI 4.1 Section 6.6.4: Invoked before session serialization
+        // NOTE: @PrePassivate is an EJB annotation (jakarta.ejb), NOT CDI 4.1 standard.
+        // This is optional support for EJB integration. CDI 4.1 uses writeObject()/readObject().
         findAllPassivationMethods(clazz, bean, true);
 
         // 7. Find all @PostActivate methods in hierarchy for passivating scopes
-        // CDI 4.1 Section 6.6.4: Invoked after session deserialization
+        // NOTE: @PostActivate is an EJB annotation (jakarta.ejb), NOT CDI 4.1 standard.
+        // This is optional support for EJB integration. CDI 4.1 uses writeObject()/readObject().
         findAllPassivationMethods(clazz, bean, false);
     }
 
@@ -1451,6 +1501,131 @@ public class CDI41BeanValidator {
                 }
             }
         }
+    }
+
+    /**
+     * Finds all passivation lifecycle methods (@PrePassivate or @PostActivate) in the class hierarchy.
+     * <p>
+     * <b>IMPORTANT:</b> @PrePassivate and @PostActivate are EJB annotations (jakarta.ejb), NOT CDI 4.1 standard.
+     * CDI 4.1 Section 6.6 only requires beans in passivating scopes to implement Serializable and relies on
+     * Java's standard {@code writeObject()}/{@code readObject()} methods. This method provides optional support
+     * for EJB-style callbacks as a convenience for applications using both CDI and EJB.
+     * <p>
+     * <b>CDI 4.1 Standard Approach:</b> Beans should use Java's serialization callbacks instead:
+     * <ul>
+     *   <li>{@code private void writeObject(ObjectOutputStream)} instead of @PrePassivate</li>
+     *   <li>{@code private void readObject(ObjectInputStream)} instead of @PostActivate</li>
+     * </ul>
+     * <p>
+     * <b>EJB Callback Behavior (when jakarta.ejb is on classpath):</b>
+     * <ul>
+     *   <li>@PrePassivate methods are invoked before the session is serialized</li>
+     *   <li>@PostActivate methods are invoked after the session is deserialized</li>
+     *   <li>Execution order: superclass → subclass (same as @PostConstruct)</li>
+     *   <li>Override detection: if a subclass overrides a superclass method, only the overriding method is invoked</li>
+     * </ul>
+     * <p>
+     * These callbacks allow beans to:
+     * <ul>
+     *   <li>Close non-serializable resources before passivation (database connections, file handles)</li>
+     *   <li>Re-open resources after activation</li>
+     *   <li>Transform state to serializable form</li>
+     * </ul>
+     *
+     * @param clazz the bean class
+     * @param bean the bean implementation to populate with lifecycle methods
+     * @param isPrePassivate true for @PrePassivate, false for @PostActivate
+     */
+    private void findAllPassivationMethods(Class<?> clazz, BeanImpl<?> bean, boolean isPrePassivate) {
+        // Try to load jakarta.ejb.PrePassivate and jakarta.ejb.PostActivate annotations
+        Class<? extends Annotation> annotationClass;
+        try {
+            if (isPrePassivate) {
+                annotationClass = Class.forName("jakarta.ejb.PrePassivate").asSubclass(Annotation.class);
+            } else {
+                annotationClass = Class.forName("jakarta.ejb.PostActivate").asSubclass(Annotation.class);
+            }
+        } catch (ClassNotFoundException e) {
+            // jakarta.ejb not on classpath - passivation callbacks not supported
+            // This is acceptable - not all applications need passivating scopes
+            return;
+        }
+
+        // Build class hierarchy: superclass → subclass
+        List<Class<?>> hierarchy = new ArrayList<>();
+        Class<?> current = clazz;
+        while (current != null && current != Object.class) {
+            hierarchy.add(0, current); // Add at beginning for superclass-first order
+            current = current.getSuperclass();
+        }
+
+        // Track seen signatures for override detection
+        Set<String> seenSignatures = new HashSet<>();
+
+        // Process in superclass → subclass order
+        for (Class<?> currentClass : hierarchy) {
+            Method foundMethod = findPassivationMethodInClass(currentClass, annotationClass);
+
+            if (foundMethod != null) {
+                String signature = getMethodSignature(foundMethod);
+
+                // Skip if overridden by subclass
+                if (!seenSignatures.contains(signature)) {
+                    seenSignatures.add(signature);
+
+                    // Validate method signature
+                    if (foundMethod.getParameterCount() != 0) {
+                        addValidationError(currentClass,
+                            (isPrePassivate ? "@PrePassivate" : "@PostActivate") +
+                            " method must have no parameters: " + foundMethod.getName());
+                        continue;
+                    }
+
+                    if (Modifier.isStatic(foundMethod.getModifiers())) {
+                        addValidationError(currentClass,
+                            (isPrePassivate ? "@PrePassivate" : "@PostActivate") +
+                            " method cannot be static: " + foundMethod.getName());
+                        continue;
+                    }
+
+                    // Add to bean's passivation method list
+                    if (isPrePassivate) {
+                        bean.addPrePassivateMethod(foundMethod);
+                    } else {
+                        bean.addPostActivateMethod(foundMethod);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Finds a passivation lifecycle method in a single class (not hierarchy).
+     *
+     * @param clazz the class to search
+     * @param annotationClass the annotation class (@PrePassivate or @PostActivate)
+     * @return the found method, or null if none found
+     */
+    private Method findPassivationMethodInClass(Class<?> clazz, Class<? extends Annotation> annotationClass) {
+        Method found = null;
+        int count = 0;
+
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(annotationClass)) {
+                found = method;
+                count++;
+            }
+        }
+
+        // Validate: at most one passivation method per class
+        if (count > 1) {
+            addValidationError(clazz,
+                "Class cannot have more than one @" + annotationClass.getSimpleName() +
+                " method, found " + count);
+            return null;
+        }
+
+        return found;
     }
 
     /**

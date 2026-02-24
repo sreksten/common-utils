@@ -35,8 +35,17 @@ public class BeanImpl<T> implements Bean<T> {
     private Constructor<T> injectConstructor;
     private final Set<Field> injectFields = new HashSet<>();
     private final Set<Method> injectMethods = new HashSet<>();
-    private Method postConstructMethod;
-    private Method preDestroyMethod;
+
+    // Lifecycle methods - can have multiple in hierarchy (per Interceptors spec)
+    private final List<Method> postConstructMethods = new ArrayList<>();
+    private final List<Method> preDestroyMethods = new ArrayList<>();
+
+    // Passivation lifecycle methods for @SessionScoped beans
+    // NOTE: @PrePassivate/@PostActivate are EJB annotations (jakarta.ejb), NOT CDI 4.1 standard.
+    // CDI 4.1 relies on Java's Serializable (writeObject/readObject). This is optional support
+    // for applications using both CDI and EJB. If jakarta.ejb is not on classpath, these remain empty.
+    private final List<Method> prePassivateMethods = new ArrayList<>();
+    private final List<Method> postActivateMethods = new ArrayList<>();
 
     // Dependency resolver (set during container initialization)
     private ProducerBean.DependencyResolver dependencyResolver;
@@ -498,44 +507,143 @@ public class BeanImpl<T> implements Bean<T> {
     }
 
     /**
-     * Invokes @PostConstruct method if present.
+     * Invokes @PostConstruct methods in the bean hierarchy.
+     * <p>
+     * <b>Interceptors Specification 1.2+ / CDI 4.1 Section 7.1:</b>
+     * <ul>
+     *   <li>All @PostConstruct methods in the class hierarchy are invoked</li>
+     *   <li>Execution order: <b>superclass → subclass</b></li>
+     *   <li>If a subclass overrides a parent's @PostConstruct, only the overriding method is called</li>
+     *   <li>Interceptor @PostConstruct methods run before all target bean methods</li>
+     * </ul>
      * <p>
      * PHASE 4: Supports @PostConstruct lifecycle interceptors.
-     * If lifecycle interceptors are present, they are invoked before the target @PostConstruct method.
-     * The chain executes: [Interceptor 1 @PostConstruct] → [Interceptor 2 @PostConstruct] → [Target @PostConstruct]
+     * The complete execution order is:
+     * <ol>
+     *   <li>Interceptor 1 @PostConstruct</li>
+     *   <li>Interceptor 2 @PostConstruct</li>
+     *   <li>Target bean superclass @PostConstruct</li>
+     *   <li>Target bean subclass @PostConstruct</li>
+     * </ol>
      */
     private void invokePostConstruct(T instance) throws Exception {
         // PHASE 4: Check for @PostConstruct interceptors
         if (postConstructInterceptorChain != null) {
-            // Invoke lifecycle interceptor chain
-            // The chain will execute all interceptor @PostConstruct methods, then the target @PostConstruct
-            // The target @PostConstruct method is passed to the chain and invoked as the final step
-            postConstructInterceptorChain.invokeLifecycle(instance, postConstructMethod);
-        } else if (postConstructMethod != null) {
-            // No interceptors, invoke target @PostConstruct directly
-            postConstructMethod.setAccessible(true);
-            postConstructMethod.invoke(instance);
+            // Invoke interceptor chain which will then invoke all target @PostConstruct methods
+            // We pass the list of methods to be invoked in order
+            postConstructInterceptorChain.invokeLifecycleChain(instance, postConstructMethods);
+        } else if (!postConstructMethods.isEmpty()) {
+            // No interceptors, invoke target @PostConstruct methods directly
+            // Methods are already in correct order: superclass → subclass
+            for (Method method : postConstructMethods) {
+                method.setAccessible(true);
+                method.invoke(instance);
+            }
         }
     }
 
     /**
-     * Invokes @PreDestroy method if present.
+     * Invokes @PreDestroy methods in the bean hierarchy.
+     * <p>
+     * <b>Interceptors Specification 1.2+ / CDI 4.1 Section 7.1:</b>
+     * <ul>
+     *   <li>All @PreDestroy methods in the class hierarchy are invoked</li>
+     *   <li>Execution order: <b>subclass → superclass</b> (reverse of @PostConstruct!)</li>
+     *   <li>If a subclass overrides a parent's @PreDestroy, only the overriding method is called</li>
+     *   <li>Interceptor @PreDestroy methods run before all target bean methods</li>
+     * </ul>
      * <p>
      * PHASE 4: Supports @PreDestroy lifecycle interceptors.
-     * If lifecycle interceptors are present, they are invoked before the target @PreDestroy method.
-     * The chain executes: [Interceptor 1 @PreDestroy] → [Interceptor 2 @PreDestroy] → [Target @PreDestroy]
+     * The complete execution order is:
+     * <ol>
+     *   <li>Interceptor 1 @PreDestroy</li>
+     *   <li>Interceptor 2 @PreDestroy</li>
+     *   <li>Target bean subclass @PreDestroy</li>
+     *   <li>Target bean superclass @PreDestroy</li>
+     * </ol>
      */
     private void invokePreDestroy(T instance) throws Exception {
         // PHASE 4: Check for @PreDestroy interceptors
         if (preDestroyInterceptorChain != null) {
-            // Invoke lifecycle interceptor chain
-            // The chain will execute all interceptor @PreDestroy methods, then the target @PreDestroy
-            // The target @PreDestroy method is passed to the chain and invoked as the final step
-            preDestroyInterceptorChain.invokeLifecycle(instance, preDestroyMethod);
-        } else if (preDestroyMethod != null) {
-            // No interceptors, invoke target @PreDestroy directly
-            preDestroyMethod.setAccessible(true);
-            preDestroyMethod.invoke(instance);
+            // Invoke interceptor chain which will then invoke all target @PreDestroy methods
+            // Methods must be in reverse order for @PreDestroy: subclass → superclass
+            List<Method> reversedMethods = new ArrayList<>(preDestroyMethods);
+            Collections.reverse(reversedMethods);
+            preDestroyInterceptorChain.invokeLifecycleChain(instance, reversedMethods);
+        } else if (!preDestroyMethods.isEmpty()) {
+            // No interceptors, invoke target @PreDestroy methods directly
+            // Must reverse the order: subclass → superclass (opposite of @PostConstruct)
+            for (int i = preDestroyMethods.size() - 1; i >= 0; i--) {
+                Method method = preDestroyMethods.get(i);
+                method.setAccessible(true);
+                method.invoke(instance);
+            }
+        }
+    }
+
+    /**
+     * Invokes @PrePassivate methods in the bean hierarchy before serialization.
+     * <p>
+     * <b>IMPORTANT:</b> @PrePassivate is an EJB annotation (jakarta.ejb.PrePassivate), NOT a CDI 4.1 standard.
+     * CDI 4.1 only requires beans in passivating scopes to implement Serializable and relies on Java's
+     * standard {@code writeObject()} method for custom serialization logic. This method provides optional
+     * support for EJB-style callbacks as a convenience for applications using both CDI and EJB.
+     * <p>
+     * <b>CDI 4.1 Standard Approach:</b> Use Java's {@code private void writeObject(ObjectOutputStream)}
+     * method in your bean class instead of @PrePassivate.
+     * <p>
+     * <b>Execution order:</b> superclass → subclass (same as @PostConstruct)
+     * <p>
+     * This allows beans to prepare for serialization by:
+     * <ul>
+     *   <li>Closing non-serializable resources (database connections, file handles)</li>
+     *   <li>Clearing transient fields</li>
+     *   <li>Saving state to serializable form</li>
+     * </ul>
+     *
+     * @param instance the bean instance to prepare for passivation
+     * @throws Exception if any @PrePassivate method fails
+     */
+    public void invokePrePassivate(T instance) throws Exception {
+        if (!prePassivateMethods.isEmpty()) {
+            // Invoke in superclass → subclass order
+            for (Method method : prePassivateMethods) {
+                method.setAccessible(true);
+                method.invoke(instance);
+            }
+        }
+    }
+
+    /**
+     * Invokes @PostActivate methods in the bean hierarchy after deserialization.
+     * <p>
+     * <b>IMPORTANT:</b> @PostActivate is an EJB annotation (jakarta.ejb.PostActivate), NOT a CDI 4.1 standard.
+     * CDI 4.1 only requires beans in passivating scopes to implement Serializable and relies on Java's
+     * standard {@code readObject()} method for custom deserialization logic. This method provides optional
+     * support for EJB-style callbacks as a convenience for applications using both CDI and EJB.
+     * <p>
+     * <b>CDI 4.1 Standard Approach:</b> Use Java's {@code private void readObject(ObjectInputStream)}
+     * method in your bean class instead of @PostActivate.
+     * <p>
+     * <b>Execution order:</b> superclass → subclass (same as @PostConstruct)
+     * <p>
+     * This allows beans to restore state after deserialization by:
+     * <ul>
+     *   <li>Re-opening non-serializable resources (database connections, file handles)</li>
+     *   <li>Re-initializing transient fields</li>
+     *   <li>Restoring state from serialized form</li>
+     * </ul>
+     *
+     * @param instance the bean instance to restore after activation
+     * @throws Exception if any @PostActivate method fails
+     */
+    public void invokePostActivate(T instance) throws Exception {
+        if (!postActivateMethods.isEmpty()) {
+            // Invoke in superclass → subclass order
+            for (Method method : postActivateMethods) {
+                method.setAccessible(true);
+                method.invoke(instance);
+            }
         }
     }
 
@@ -678,20 +786,93 @@ public class BeanImpl<T> implements Bean<T> {
         }
     }
 
-    public Method getPostConstructMethod() {
-        return postConstructMethod;
+    /**
+     * Gets all @PostConstruct methods in the bean hierarchy.
+     * Methods are ordered from superclass to subclass (execution order).
+     *
+     * @return list of @PostConstruct methods (may be empty)
+     */
+    public List<Method> getPostConstructMethods() {
+        return Collections.unmodifiableList(postConstructMethods);
     }
 
-    public void setPostConstructMethod(Method postConstructMethod) {
-        this.postConstructMethod = postConstructMethod;
+    /**
+     * Adds a @PostConstruct method to the list.
+     * Should be called during bean discovery in hierarchy order (superclass → subclass).
+     *
+     * @param method the @PostConstruct method to add
+     */
+    public void addPostConstructMethod(Method method) {
+        if (method != null && !postConstructMethods.contains(method)) {
+            postConstructMethods.add(method);
+        }
     }
 
-    public Method getPreDestroyMethod() {
-        return preDestroyMethod;
+    /**
+     * Gets all @PreDestroy methods in the bean hierarchy.
+     * Methods are ordered from subclass to superclass (execution order).
+     *
+     * @return list of @PreDestroy methods (may be empty)
+     */
+    public List<Method> getPreDestroyMethods() {
+        return Collections.unmodifiableList(preDestroyMethods);
     }
 
-    public void setPreDestroyMethod(Method preDestroyMethod) {
-        this.preDestroyMethod = preDestroyMethod;
+    /**
+     * Adds a @PreDestroy method to the list.
+     * Should be called during bean discovery in hierarchy order (superclass → subclass),
+     * but will be reversed for execution (subclass → superclass).
+     *
+     * @param method the @PreDestroy method to add
+     */
+    public void addPreDestroyMethod(Method method) {
+        if (method != null && !preDestroyMethods.contains(method)) {
+            preDestroyMethods.add(method);
+        }
+    }
+
+    /**
+     * Gets all @PrePassivate methods in the bean hierarchy.
+     * Methods are ordered from superclass to subclass (execution order).
+     *
+     * @return list of @PrePassivate methods (may be empty)
+     */
+    public List<Method> getPrePassivateMethods() {
+        return Collections.unmodifiableList(prePassivateMethods);
+    }
+
+    /**
+     * Adds a @PrePassivate method to the list.
+     * Should be called during bean discovery in hierarchy order (superclass → subclass).
+     *
+     * @param method the @PrePassivate method to add
+     */
+    public void addPrePassivateMethod(Method method) {
+        if (method != null && !prePassivateMethods.contains(method)) {
+            prePassivateMethods.add(method);
+        }
+    }
+
+    /**
+     * Gets all @PostActivate methods in the bean hierarchy.
+     * Methods are ordered from superclass to subclass (execution order).
+     *
+     * @return list of @PostActivate methods (may be empty)
+     */
+    public List<Method> getPostActivateMethods() {
+        return Collections.unmodifiableList(postActivateMethods);
+    }
+
+    /**
+     * Adds a @PostActivate method to the list.
+     * Should be called during bean discovery in hierarchy order (superclass → subclass).
+     *
+     * @param method the @PostActivate method to add
+     */
+    public void addPostActivateMethod(Method method) {
+        if (method != null && !postActivateMethods.contains(method)) {
+            postActivateMethods.add(method);
+        }
     }
 
     public void setDependencyResolver(ProducerBean.DependencyResolver dependencyResolver) {
