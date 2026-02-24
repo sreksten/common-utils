@@ -204,6 +204,12 @@ public class CDI41BeanValidator {
             bean.setHasValidationErrors(true);
         }
 
+        // Mark bean as vetoed if the type was vetoed by an extension
+        if (knowledgeBase.isTypeVetoed(clazz)) {
+            bean.setVetoed(true);
+            System.out.println("[CDI41BeanValidator] Bean marked as vetoed: " + clazz.getName());
+        }
+
         // Populate BeanAttributes (now that BeanImpl supports it)
         bean.setName(extractBeanName(clazz));
         bean.setQualifiers(extractBeanQualifiers(clazz));
@@ -1106,6 +1112,14 @@ public class CDI41BeanValidator {
             if (disposer != null) {
                 producerBean.setDisposerMethod(disposer);
             }
+        }
+
+        // Mark producer bean as vetoed if the declaring class was vetoed by an extension
+        if (knowledgeBase.isTypeVetoed(declaringClass)) {
+            producerBean.setVetoed(true);
+            System.out.println("[CDI41BeanValidator] Producer bean marked as vetoed (declaring class vetoed): " +
+                declaringClass.getName() + " -> " +
+                (producerMethod != null ? producerMethod.getName() : producerField.getName()));
         }
 
         // Capture @Priority for enabled alternatives (used during resolution ordering)

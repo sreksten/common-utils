@@ -148,6 +148,14 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
                 continue;
             }
 
+            // Skip vetoed beans - beans vetoed by extensions during ProcessAnnotatedType
+            if (bean instanceof BeanImpl && ((BeanImpl<?>) bean).isVetoed()) {
+                continue;
+            }
+            if (bean instanceof ProducerBean && ((ProducerBean<?>) bean).isVetoed()) {
+                continue;
+            }
+
             // Check type match
             boolean typeMatches = false;
             for (Type beanType : bean.getTypes()) {

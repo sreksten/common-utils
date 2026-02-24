@@ -65,6 +65,9 @@ public class KnowledgeBase {
     // Collection is used instead of merging because each archive may have different configurations
     private final Collection<BeansXml> beansXmlConfigurations = new ConcurrentLinkedQueue<>();
 
+    // Vetoed types (types vetoed by extensions during ProcessAnnotatedType)
+    private final Set<Class<?>> vetoedTypes = ConcurrentHashMap.newKeySet();
+
     public void add(Class<?> clazz) {
         classes.add(clazz);
     }
@@ -858,5 +861,36 @@ public class KnowledgeBase {
         }
 
         return false;
+    }
+
+    // ==================== Vetoed Types Management ====================
+
+    /**
+     * Marks a type as vetoed by an extension during ProcessAnnotatedType.
+     * Vetoed types should not become beans.
+     *
+     * @param clazz the class to veto
+     */
+    public void vetoType(Class<?> clazz) {
+        vetoedTypes.add(clazz);
+    }
+
+    /**
+     * Checks if a type was vetoed by an extension.
+     *
+     * @param clazz the class to check
+     * @return true if the type was vetoed
+     */
+    public boolean isTypeVetoed(Class<?> clazz) {
+        return vetoedTypes.contains(clazz);
+    }
+
+    /**
+     * Returns all vetoed types.
+     *
+     * @return set of vetoed types
+     */
+    public Set<Class<?>> getVetoedTypes() {
+        return Collections.unmodifiableSet(vetoedTypes);
     }
 }

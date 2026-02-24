@@ -50,6 +50,9 @@ public class ProducerBean<T> implements Bean<T> {
     // Validation state
     private boolean hasValidationErrors = false;
 
+    // Extension veto state
+    private boolean vetoed = false;
+
     // Reference to dependency resolver (will be set during initialization)
     private DependencyResolver dependencyResolver;
 
@@ -310,6 +313,21 @@ public class ProducerBean<T> implements Bean<T> {
 
     public void setHasValidationErrors(boolean hasValidationErrors) {
         this.hasValidationErrors = hasValidationErrors;
+    }
+
+    /**
+     * Returns true if this producer bean was vetoed by an extension.
+     * Vetoed beans should not be available for injection.
+     */
+    public boolean isVetoed() {
+        return vetoed;
+    }
+
+    /**
+     * Marks this producer bean as vetoed by an extension.
+     */
+    public void setVetoed(boolean vetoed) {
+        this.vetoed = vetoed;
     }
 
     public void setDependencyResolver(DependencyResolver dependencyResolver) {

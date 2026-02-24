@@ -28,6 +28,9 @@ public class BeanImpl<T> implements Bean<T> {
     // Validation state
     private boolean hasValidationErrors = false;
 
+    // Extension veto state
+    private boolean vetoed = false;
+
     // Injection metadata (set by validator)
     private Constructor<T> injectConstructor;
     private final Set<Field> injectFields = new HashSet<>();
@@ -535,6 +538,22 @@ public class BeanImpl<T> implements Bean<T> {
      */
     public void setHasValidationErrors(boolean hasValidationErrors) {
         this.hasValidationErrors = hasValidationErrors;
+    }
+
+    /**
+     * Returns true if this bean was vetoed by an extension during ProcessAnnotatedType.
+     * Vetoed beans should not be available for injection.
+     */
+    public boolean isVetoed() {
+        return vetoed;
+    }
+
+    /**
+     * Marks this bean as vetoed by an extension.
+     * This should be called when an extension calls ProcessAnnotatedType.veto().
+     */
+    public void setVetoed(boolean vetoed) {
+        this.vetoed = vetoed;
     }
 
     // Injection metadata getters/setters (used by CDI41BeanValidator)

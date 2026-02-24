@@ -512,24 +512,40 @@ public class Syringe {
     private void processAnnotatedTypes() {
         System.out.println("[Syringe] Processing annotated types");
 
-        // TODO: For each discovered class:
-        // 1. Create AnnotatedType<T> using reflection
+        // For each discovered class:
+        // 1. Create AnnotatedType<T> using BeanManager
         // 2. Create ProcessAnnotatedType<T> event
         // 3. Fire to all extensions
-        // 4. If vetoed, remove from bean candidates
-        // 5. If modified, use modified AnnotatedType
+        // 4. If vetoed, mark in KnowledgeBase
+        // 5. If modified, use modified AnnotatedType (TODO: implement type replacement)
 
-        // for (Class<?> clazz : knowledgeBase.getClasses()) {
-        //     AnnotatedType<?> annotatedType = createAnnotatedType(clazz);
-        //     ProcessAnnotatedType<?> event = new ProcessAnnotatedTypeImpl<>(annotatedType);
-        //     fireToExtensions(event);
-        //
-        //     if (event.isVeto()) {
-        //         // Remove from bean candidates
-        //         continue;
-        //     }
-        //     // Use event.getAnnotatedType() (may be modified)
-        // }
+        for (Class<?> clazz : new ArrayList<>(knowledgeBase.getClasses())) {
+            try {
+                // Create AnnotatedType for the class using BeanManager
+                @SuppressWarnings("unchecked")
+                jakarta.enterprise.inject.spi.AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(clazz);
+
+                // Create ProcessAnnotatedType event
+                ProcessAnnotatedTypeImpl<?> event = new ProcessAnnotatedTypeImpl<>(annotatedType, beanManager);
+
+                // Fire to all extensions
+                fireEventToExtensions(event);
+
+                // If vetoed, mark the type in KnowledgeBase
+                if (event.isVetoed()) {
+                    System.out.println("[Syringe] Type vetoed by extension: " + clazz.getName());
+                    knowledgeBase.vetoType(clazz);
+                }
+
+                // TODO: If AnnotatedType was modified via setAnnotatedType(), use the modified version
+                // This would require storing the modified AnnotatedType and using it during bean creation
+            } catch (Exception e) {
+                System.err.println("[Syringe] Error processing annotated type: " + clazz.getName() + " - " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        System.out.println("[Syringe] Vetoed types: " + knowledgeBase.getVetoedTypes().size());
     }
 
     // ============================================================
