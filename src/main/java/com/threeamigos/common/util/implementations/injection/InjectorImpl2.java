@@ -148,6 +148,9 @@ public class InjectorImpl2 implements Injector {
         // Register built-in beans (CDI 4.1 Section 3.10)
         registerBuiltInBeans();
 
+        // Register CDI provider for static container access (CDI 4.1 Section 12.1)
+        registerCDIProvider();
+
         // PHASE 2: Initialize interceptor support for all beans
         initializeInterceptorSupport();
     }
@@ -175,6 +178,30 @@ public class InjectorImpl2 implements Injector {
 
         // Register Conversation as a built-in bean (no dependencies needed!)
         knowledgeBase.addBean(new ConversationBean());
+    }
+
+    /**
+     * Registers the CDI provider for static container access.
+     *
+     * <p>This enables CDI.current() to work, allowing application code to obtain
+     * the BeanManager statically when injection is not available:
+     * <pre>
+     * BeanManager manager = CDI.current().getBeanManager();
+     * MyBean bean = CDI.current().select(MyBean.class).get();
+     * </pre>
+     *
+     * <p><b>CDI 4.1 Compliance:</b>
+     * <ul>
+     *   <li>Section 12.1: Accessing the BeanManager via CDI.current()</li>
+     *   <li>Section 12.2: CDI provider discovery via ServiceLoader</li>
+     * </ul>
+     */
+    private void registerCDIProvider() {
+        // Create CDI instance wrapping our BeanManager
+        CDIImpl cdiInstance = new CDIImpl(beanManager);
+
+        // Register globally so CDI.current() can find it
+        SyringeCDIProvider.registerGlobalCDI(cdiInstance);
     }
 
     /**
