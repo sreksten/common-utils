@@ -1365,20 +1365,20 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("annotatedType cannot be null");
         }
 
-        throw new UnsupportedOperationException("getInjectionTargetFactory not yet implemented");
+        return new InjectionTargetFactoryImpl<>(annotatedType, this);
     }
 
     /**
      * Gets a producer factory for a field.
      *
-     * <p><b>Note:</b> Portable extension support not yet implemented.
+     * <p>The factory can be used to create Producer instances that handle
+     * producer field invocation and lifecycle.
      *
-     * @param field the field
+     * @param field the producer field
      * @param declaringBean the declaring bean
      * @param <X> the produced type
      * @return producer factory
      * @throws IllegalArgumentException if field is null
-     * @throws UnsupportedOperationException always
      */
     @Override
     public <X> ProducerFactory<X> getProducerFactory(AnnotatedField<? super X> field, Bean<X> declaringBean) {
@@ -1386,20 +1386,20 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("field cannot be null");
         }
 
-        throw new UnsupportedOperationException("getProducerFactory not yet implemented");
+        return new ProducerFactoryImpl<>(field, this);
     }
 
     /**
      * Gets a producer factory for a method.
      *
-     * <p><b>Note:</b> Portable extension support not yet implemented.
+     * <p>The factory can be used to create Producer instances that handle
+     * producer method invocation and lifecycle.
      *
-     * @param method the method
+     * @param method the producer method
      * @param declaringBean the declaring bean
      * @param <X> the produced type
      * @return producer factory
      * @throws IllegalArgumentException if method is null
-     * @throws UnsupportedOperationException always
      */
     @Override
     public <X> ProducerFactory<X> getProducerFactory(AnnotatedMethod<? super X> method, Bean<X> declaringBean) {
@@ -1407,7 +1407,7 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("method cannot be null");
         }
 
-        throw new UnsupportedOperationException("getProducerFactory not yet implemented");
+        return new ProducerFactoryImpl<>(method, this);
     }
 
     /**
@@ -1427,7 +1427,15 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("type cannot be null");
         }
 
-        throw new UnsupportedOperationException("createBeanAttributes not yet implemented");
+        // Extract metadata from AnnotatedType
+        String name = extractName(type);
+        Set<Annotation> qualifiers = extractQualifiersFromAnnotated(type);
+        Class<? extends Annotation> scope = extractScopeFromAnnotated(type);
+        Set<Class<? extends Annotation>> stereotypes = extractStereotypesFromAnnotated(type);
+        Set<Type> types = extractTypesFromClass(type.getJavaClass());
+        boolean alternative = type.isAnnotationPresent(jakarta.enterprise.inject.Alternative.class);
+
+        return new BeanAttributesImpl<>(name, qualifiers, scope, stereotypes, types, alternative);
     }
 
     /**
@@ -1446,7 +1454,15 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("member cannot be null");
         }
 
-        throw new UnsupportedOperationException("createBeanAttributes not yet implemented");
+        // Extract metadata from AnnotatedMember (producer field or method)
+        String name = extractName(member);
+        Set<Annotation> qualifiers = extractQualifiersFromAnnotated(member);
+        Class<? extends Annotation> scope = extractScopeFromAnnotated(member);
+        Set<Class<? extends Annotation>> stereotypes = extractStereotypesFromAnnotated(member);
+        Set<Type> types = extractTypesFromMember(member);
+        boolean alternative = member.isAnnotationPresent(jakarta.enterprise.inject.Alternative.class);
+
+        return new BeanAttributesImpl<>(name, qualifiers, scope, stereotypes, types, alternative);
     }
 
     /**
@@ -1475,7 +1491,11 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("injectionTargetFactory cannot be null");
         }
 
-        throw new UnsupportedOperationException("createBean not yet implemented");
+        // Create the injection target from the factory
+        InjectionTarget<T> injectionTarget = injectionTargetFactory.createInjectionTarget(null);
+
+        // Create a synthetic bean that uses the injection target for lifecycle management
+        return new SyntheticBeanImpl<>(attributes, beanClass, injectionTarget);
     }
 
     /**
@@ -1505,7 +1525,11 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("producerFactory cannot be null");
         }
 
-        throw new UnsupportedOperationException("createBean not yet implemented");
+        // Create the producer from the factory
+        Producer<T> producer = producerFactory.createProducer(null);
+
+        // Create a synthetic producer bean that uses the producer for instance creation
+        return new SyntheticProducerBeanImpl<>(attributes, beanClass, producer);
     }
 
     /**
@@ -1524,7 +1548,9 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("field cannot be null");
         }
 
-        throw new UnsupportedOperationException("createInjectionPoint not yet implemented");
+        // Create an injection point from the annotated field
+        // Note: We pass null for the Bean since this is a programmatically created injection point
+        return new InjectionPointImpl<>(field.getJavaMember(), null);
     }
 
     /**
@@ -1543,7 +1569,9 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("parameter cannot be null");
         }
 
-        throw new UnsupportedOperationException("createInjectionPoint not yet implemented");
+        // Create an injection point from the annotated parameter
+        // Note: We pass null for the Bean since this is a programmatically created injection point
+        return new InjectionPointImpl<>(parameter.getJavaParameter(), null);
     }
 
     /**
@@ -1836,6 +1864,141 @@ public class BeanManagerImpl implements BeanManager {
             // Note: ScopeContext doesn't have per-bean destroy, only full scope destroy
             // This is a limitation of the current design
         }
+    }
+
+    // ==================== Metadata Extraction Helper Methods ====================
+
+    /**
+     * Extracts the bean name from an Annotated element.
+     * Returns empty string if no @Named annotation is present.
+     */
+    private String extractName(jakarta.enterprise.inject.spi.Annotated annotated) {
+        if (annotated.isAnnotationPresent(jakarta.inject.Named.class)) {
+            jakarta.inject.Named named = annotated.getAnnotation(jakarta.inject.Named.class);
+            String value = named.value();
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+            // Default name: decapitalized simple class name
+            if (annotated instanceof jakarta.enterprise.inject.spi.AnnotatedType) {
+                Class<?> clazz = ((jakarta.enterprise.inject.spi.AnnotatedType<?>) annotated).getJavaClass();
+                return decapitalize(clazz.getSimpleName());
+            }
+        }
+        return "";
+    }
+
+    /**
+     * Extracts qualifiers from an Annotated element.
+     * Adds @Default if no qualifiers are present, and always adds @Any.
+     */
+    private Set<Annotation> extractQualifiersFromAnnotated(jakarta.enterprise.inject.spi.Annotated annotated) {
+        Set<Annotation> qualifiers = new HashSet<>();
+        for (Annotation ann : annotated.getAnnotations()) {
+            if (hasQualifierAnnotation(ann.annotationType())) {
+                qualifiers.add(ann);
+            }
+        }
+
+        // If no qualifiers, add @Default
+        if (qualifiers.isEmpty() || (qualifiers.size() == 1 && qualifiers.iterator().next().annotationType().equals(jakarta.inject.Named.class))) {
+            qualifiers.add(new com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral());
+        }
+
+        // Always add @Any
+        qualifiers.add(new com.threeamigos.common.util.implementations.injection.literals.AnyLiteral());
+
+        return qualifiers;
+    }
+
+    /**
+     * Extracts scope from an Annotated element.
+     * Returns @Dependent if no scope is present.
+     */
+    private Class<? extends Annotation> extractScopeFromAnnotated(jakarta.enterprise.inject.spi.Annotated annotated) {
+        for (Annotation ann : annotated.getAnnotations()) {
+            if (isScopeAnnotationType(ann.annotationType())) {
+                return ann.annotationType();
+            }
+        }
+        return jakarta.enterprise.context.Dependent.class;
+    }
+
+    /**
+     * Extracts stereotypes from an Annotated element.
+     */
+    private Set<Class<? extends Annotation>> extractStereotypesFromAnnotated(jakarta.enterprise.inject.spi.Annotated annotated) {
+        Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
+        for (Annotation ann : annotated.getAnnotations()) {
+            if (isStereotypeAnnotationType(ann.annotationType())) {
+                stereotypes.add(ann.annotationType());
+            }
+        }
+        return stereotypes;
+    }
+
+    /**
+     * Extracts bean types from a class.
+     */
+    private Set<Type> extractTypesFromClass(Class<?> clazz) {
+        Set<Type> types = new LinkedHashSet<>();
+        Class<?> c = clazz;
+        while (c != null && c != Object.class) {
+            types.add(c);
+            types.addAll(Arrays.asList(c.getGenericInterfaces()));
+            c = c.getSuperclass();
+        }
+        types.add(Object.class);
+        return types;
+    }
+
+    /**
+     * Extracts bean types from an AnnotatedMember (producer field or method).
+     */
+    private Set<Type> extractTypesFromMember(jakarta.enterprise.inject.spi.AnnotatedMember<?> member) {
+        Set<Type> types = new HashSet<>();
+        Type baseType = member.getBaseType();
+        types.add(baseType);
+
+        // If it's a class type, add its hierarchy
+        if (baseType instanceof Class) {
+            Class<?> clazz = (Class<?>) baseType;
+            while (clazz != null && clazz != Object.class) {
+                types.add(clazz);
+                types.addAll(Arrays.asList(clazz.getGenericInterfaces()));
+                clazz = clazz.getSuperclass();
+            }
+        }
+
+        types.add(Object.class);
+        return types;
+    }
+
+    /**
+     * Decapitalizes a string following CDI conventions.
+     */
+    private String decapitalize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        if (s.length() > 1 && Character.isUpperCase(s.charAt(0)) && Character.isUpperCase(s.charAt(1))) {
+            return s;
+        }
+        return Character.toLowerCase(s.charAt(0)) + s.substring(1);
+    }
+
+    /**
+     * Checks if an annotation type is a scope annotation.
+     */
+    private boolean isScopeAnnotationType(Class<? extends Annotation> annotationType) {
+        return annotationType.isAnnotationPresent(jakarta.inject.Scope.class) ||
+               annotationType.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
+               knowledgeBase.isRegisteredScope(annotationType);
+    }
+
+    /**
+     * Checks if an annotation type is a stereotype annotation.
+     */
+    private boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
+        return annotationType.isAnnotationPresent(jakarta.enterprise.inject.Stereotype.class);
     }
 
     // ==================== Container Internal Methods ====================
