@@ -1587,7 +1587,11 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("clazz cannot be null");
         }
 
-        throw new UnsupportedOperationException("createInterceptionFactory not yet implemented");
+        // Create InterceptorAwareProxyGenerator for creating proxies
+        InterceptorAwareProxyGenerator proxyGenerator = new InterceptorAwareProxyGenerator();
+
+        // Return InterceptionFactory implementation
+        return new InterceptionFactoryImpl<>(clazz, ctx, this, proxyGenerator);
     }
 
     // ==================== Helper Methods ====================
