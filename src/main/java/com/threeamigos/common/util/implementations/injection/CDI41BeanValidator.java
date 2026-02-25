@@ -144,9 +144,7 @@ public class CDI41BeanValidator {
             }
 
             if (disposes) {
-                // Disposers will be linked to ProducerBeans after all beans are created
-                // Store disposer info for later processing
-                // (handled in a separate pass after all producers are registered)
+                valid &= validateDisposerMethod(method);
             }
 
             if (inject && produces) {
@@ -727,6 +725,116 @@ public class CDI41BeanValidator {
         return valid;
     }
 
+    /**
+     * Validates a disposer method according to CDI 4.1 Section 3.4.
+     * <p>
+     * CDI 4.1 Disposer Method Rules:
+     * <ul>
+     *   <li>Must have exactly one parameter annotated with @Disposes</li>
+     *   <li>Must not be annotated with @Produces or @Inject</li>
+     *   <li>Must not be abstract or static</li>
+     *   <li>Must not declare type parameters (not a generic method)</li>
+     *   <li>The @Disposes parameter type must match a producer method's return type</li>
+     *   <li>Other parameters are treated as injection points</li>
+     *   <li>@Disposes parameter qualifiers must match corresponding producer qualifiers</li>
+     * </ul>
+     *
+     * @param method the method to validate
+     * @return true if valid, false otherwise
+     */
+    private boolean validateDisposerMethod(Method method) {
+        boolean valid = true;
+
+        // Rule 1: Must not be abstract
+        if (Modifier.isAbstract(method.getModifiers())) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method must not be abstract");
+            valid = false;
+        }
+
+        // Rule 2: Must not be static
+        if (Modifier.isStatic(method.getModifiers())) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method must not be static");
+            valid = false;
+        }
+
+        // Rule 3: Must not be generic
+        if (method.getTypeParameters().length > 0) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method must not be generic");
+            valid = false;
+        }
+
+        // Rule 4: Must not be annotated with @Produces
+        if (hasProducesAnnotation(method)) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method may not be annotated @Produces");
+            valid = false;
+        }
+
+        // Rule 5: Must not be annotated with @Inject
+        if (hasInjectAnnotation(method)) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method may not be annotated @Inject");
+            valid = false;
+        }
+
+        // Rule 6: Must have exactly one @Disposes parameter
+        int disposesCount = 0;
+        Parameter disposesParam = null;
+        for (Parameter p : method.getParameters()) {
+            if (hasDisposesAnnotation(p)) {
+                disposesCount++;
+                disposesParam = p;
+            }
+        }
+
+        if (disposesCount == 0) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method must have exactly one @Disposes parameter (found 0)");
+            valid = false;
+        } else if (disposesCount > 1) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method must have exactly one @Disposes parameter (found " + disposesCount + ")");
+            valid = false;
+        }
+
+        // Rule 7: Validate @Disposes parameter type
+        if (disposesParam != null) {
+            try {
+                checkInjectionTypeValidity(disposesParam.getParameterizedType());
+            } catch (IllegalArgumentException e) {
+                knowledgeBase.addInjectionError(fmtParameter(disposesParam) + ": " + e.getMessage());
+                valid = false;
+            } catch (DefinitionException e) {
+                knowledgeBase.addDefinitionError(fmtParameter(disposesParam) + ": " + e.getMessage());
+                valid = false;
+            }
+        }
+
+        // Rule 8: Validate other parameters as injection points
+        for (Parameter p : method.getParameters()) {
+            if (!hasDisposesAnnotation(p)) {
+                // Regular injection parameter
+                try {
+                    checkInjectionTypeValidity(p.getParameterizedType());
+                } catch (IllegalArgumentException e) {
+                    knowledgeBase.addInjectionError(fmtParameter(p) + ": " + e.getMessage());
+                    valid = false;
+                } catch (DefinitionException e) {
+                    knowledgeBase.addDefinitionError(fmtParameter(p) + ": " + e.getMessage());
+                    valid = false;
+                }
+
+                try {
+                    validateQualifiers(p.getAnnotations(), fmtMethod(method));
+                } catch (DefinitionException e) {
+                    knowledgeBase.addDefinitionError(fmtParameter(p) + ": " + e.getMessage());
+                    valid = false;
+                }
+            }
+        }
+
+        // Rule 9: Validate that a matching producer exists
+        // Note: This is checked during producer-disposer linking phase, not here
+
+        return valid;
+    }
+
     private boolean hasAnyProducer(Class<?> clazz) {
         for (Field f : clazz.getDeclaredFields()) {
             if (hasProducesAnnotation(f)) return true;
@@ -1159,6 +1267,18 @@ public class CDI41BeanValidator {
             producerBean.setQualifiers(extractQualifiers(producerMethod));
             producerBean.setScope(extractScope(producerMethod, Dependent.class));
             producerBean.setTypes(extractProducerTypes(producerMethod.getGenericReturnType()));
+
+            // CDI 4.1 Section 3.10: Add InjectionPoint metadata for producer method parameters
+            // Producer method parameters are injection points and should have InjectionPoint metadata
+            for (Parameter param : producerMethod.getParameters()) {
+                // Skip @Disposes parameters - they are not injection points
+                if (!hasDisposesAnnotation(param)) {
+                    InjectionPoint ip = tryCreateInjectionPoint(param, producerBean);
+                    if (ip != null) {
+                        producerBean.addInjectionPoint(ip);
+                    }
+                }
+            }
         } else if (producerField != null) {
             producerBean = new ProducerBean<>(declaringClass, producerField, alternativeEnabled);
 
