@@ -226,6 +226,15 @@ public class InjectorImpl implements Injector {
             throw new RuntimeException(e);
         }
 
+        // Validate and register beans AFTER ProcessAnnotatedType should run in modern path.
+        // InjectorImpl is legacy; we perform validation now using recorded archive modes.
+        CDI41BeanValidator validator = new CDI41BeanValidator(knowledgeBase);
+        for (Class<?> clazz : knowledgeBase.getClasses()) {
+            validator.validateAndRegister(clazz,
+                    knowledgeBase.getBeanArchiveMode(clazz),
+                    knowledgeBase.getAnnotatedTypeOverride(clazz));
+        }
+
         // After scanning completes, validate all injection points
         CDI41InjectionValidator injectionValidator = new CDI41InjectionValidator(knowledgeBase);
         injectionValidator.validateAllInjectionPoints();

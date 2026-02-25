@@ -17,6 +17,12 @@ public class KnowledgeBase {
 
     // Use Set to prevent duplicate class registrations
     private final Set<Class<?>> classes = ConcurrentHashMap.newKeySet();
+    // Track BeanArchiveMode per discovered class (explicit/implicit)
+    private final Map<Class<?>, com.threeamigos.common.util.implementations.injection.BeanArchiveMode> classArchiveModes =
+            new ConcurrentHashMap<>();
+    // AnnotatedType replacements supplied by ProcessAnnotatedType#setAnnotatedType
+    private final Map<Class<?>, jakarta.enterprise.inject.spi.AnnotatedType<?>> annotatedTypeOverrides =
+            new ConcurrentHashMap<>();
     private final Collection<Bean<?>> beans = new ConcurrentLinkedQueue<>();
 
     private final Map<Class<?>, Constructor<?>> constructorsMap = new ConcurrentHashMap<>();
@@ -72,8 +78,30 @@ public class KnowledgeBase {
         classes.add(clazz);
     }
 
+    public void add(Class<?> clazz, com.threeamigos.common.util.implementations.injection.BeanArchiveMode mode) {
+        classes.add(clazz);
+        if (mode != null) {
+            classArchiveModes.put(clazz, mode);
+        }
+    }
+
     public Collection<Class<?>> getClasses() {
         return classes;
+    }
+
+    public com.threeamigos.common.util.implementations.injection.BeanArchiveMode getBeanArchiveMode(Class<?> clazz) {
+        return classArchiveModes.getOrDefault(clazz, com.threeamigos.common.util.implementations.injection.BeanArchiveMode.IMPLICIT);
+    }
+
+    public void setAnnotatedTypeOverride(Class<?> clazz, jakarta.enterprise.inject.spi.AnnotatedType<?> annotatedType) {
+        if (clazz != null && annotatedType != null) {
+            annotatedTypeOverrides.put(clazz, annotatedType);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> jakarta.enterprise.inject.spi.AnnotatedType<T> getAnnotatedTypeOverride(Class<T> clazz) {
+        return (jakarta.enterprise.inject.spi.AnnotatedType<T>) annotatedTypeOverrides.get(clazz);
     }
 
     public void addBean(Bean<?> bean) {

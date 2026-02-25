@@ -12,7 +12,6 @@ class ClassProcessor implements ClassConsumer {
 
     private final ParallelTaskExecutor taskExecutor;
     private final KnowledgeBase knowledgeBase;
-    private final CDI41BeanValidator cdi41BeanValidator;
 
     /**
      * Track classes that have been processed to prevent duplicate bean registration.
@@ -24,7 +23,6 @@ class ClassProcessor implements ClassConsumer {
     public ClassProcessor(ParallelTaskExecutor taskExecutor, KnowledgeBase knowledgeBase) {
         this.taskExecutor = Objects.requireNonNull(taskExecutor, "taskExecutor cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
-        this.cdi41BeanValidator = new CDI41BeanValidator(knowledgeBase);
     }
 
     @Override
@@ -38,10 +36,7 @@ class ClassProcessor implements ClassConsumer {
     }
 
     private void accept(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
-        // CDI41BeanValidator always registers beans (even invalid ones)
-        // and marks them with hasValidationErrors flag
-        cdi41BeanValidator.validateAndRegister(clazz, beanArchiveMode);
-        // Always add to the knowledge base for class resolution
-        knowledgeBase.add(clazz);
+        // Only record discovery now; validation/registration happen later after ProcessAnnotatedType
+        knowledgeBase.add(clazz, beanArchiveMode);
     }
 }

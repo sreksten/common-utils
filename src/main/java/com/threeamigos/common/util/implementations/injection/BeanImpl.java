@@ -138,6 +138,13 @@ public class BeanImpl<T> implements Bean<T> {
      */
     private jakarta.enterprise.inject.spi.BeanManager beanManager;
 
+    /**
+     * Optional InjectionTarget provided/modified by ProcessInjectionTarget extension events.
+     * When present, lifecycle operations delegate to this InjectionTarget instead of the
+     * internal implementation.
+     */
+    private jakarta.enterprise.inject.spi.InjectionTarget<T> customInjectionTarget;
+
     public BeanImpl(Class<T> beanClass, boolean alternative) {
         this.beanClass = beanClass;
         this.name = "";
@@ -157,6 +164,19 @@ public class BeanImpl<T> implements Bean<T> {
 
     public void addInjectionPoint(InjectionPoint injectionPoint) {
         injectionPoints.add(injectionPoint);
+    }
+
+    public void replaceInjectionPoint(InjectionPoint oldIp, InjectionPoint newIp) {
+        if (oldIp != null) {
+            injectionPoints.remove(oldIp);
+        }
+        if (newIp != null) {
+            injectionPoints.add(newIp);
+        }
+    }
+
+    public void setCustomInjectionTarget(jakarta.enterprise.inject.spi.InjectionTarget<T> injectionTarget) {
+        this.customInjectionTarget = injectionTarget;
     }
 
     @Override
@@ -239,6 +259,14 @@ public class BeanImpl<T> implements Bean<T> {
     @Override
     public T create(CreationalContext<T> creationalContext) {
         try {
+            if (customInjectionTarget != null) {
+                // Delegate lifecycle to custom InjectionTarget provided by extensions
+                T instance = customInjectionTarget.produce(creationalContext);
+                customInjectionTarget.inject(instance, creationalContext);
+                customInjectionTarget.postConstruct(instance);
+                return instance;
+            }
+
             // 1. Create instance via constructor injection
             T instance = createInstance(creationalContext);
 
@@ -314,6 +342,15 @@ public class BeanImpl<T> implements Bean<T> {
         }
 
         try {
+            if (customInjectionTarget != null) {
+                customInjectionTarget.preDestroy(instance);
+                customInjectionTarget.dispose(instance);
+                if (creationalContext != null) {
+                    creationalContext.release();
+                }
+                return;
+            }
+
             // 1. Call @PreDestroy if present
             invokePreDestroy(instance);
 

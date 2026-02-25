@@ -43,6 +43,7 @@ public class ProducerBean<T> implements Bean<T> {
     private final Set<Type> types = new HashSet<>();
     private final boolean alternative;
     private Integer priority; // @Priority value when the alternative is enabled
+    private jakarta.enterprise.inject.spi.InjectionTarget<T> customInjectionTarget;
 
     // Injection points (for producer method parameters)
     private final Set<InjectionPoint> injectionPoints = new HashSet<>();
@@ -90,6 +91,15 @@ public class ProducerBean<T> implements Bean<T> {
 
     public void addInjectionPoint(InjectionPoint injectionPoint) {
         injectionPoints.add(injectionPoint);
+    }
+
+    public void replaceInjectionPoint(InjectionPoint oldIp, InjectionPoint newIp) {
+        if (oldIp != null) {
+            injectionPoints.remove(oldIp);
+        }
+        if (newIp != null) {
+            injectionPoints.add(newIp);
+        }
     }
 
     @Override

@@ -10,6 +10,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Named;
 import jakarta.inject.Qualifier;
@@ -47,6 +48,7 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
 public class CDI41BeanValidator {
 
     private final KnowledgeBase knowledgeBase;
+    private Annotation[] overrideAnnotations;
 
     CDI41BeanValidator(KnowledgeBase knowledgeBase) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
@@ -57,9 +59,19 @@ public class CDI41BeanValidator {
      * If valid, the Bean is registered in the KnowledgeBase.
      */
     <T> BeanImpl<T> validateAndRegister(Class<T> clazz, BeanArchiveMode beanArchiveMode) {
+        return validateAndRegister(clazz, beanArchiveMode, null);
+    }
+
+    <T> BeanImpl<T> validateAndRegister(Class<T> clazz,
+                                        BeanArchiveMode beanArchiveMode,
+                                        AnnotatedType<T> annotatedTypeOverride) {
         Objects.requireNonNull(clazz, "Class cannot be null");
 
         boolean valid = true;
+        try {
+            overrideAnnotations = annotatedTypeOverride != null
+                    ? annotatedTypeOverride.getAnnotations().toArray(new Annotation[0])
+                    : null;
 
         // 1) Bean class eligibility (managed bean type)
         if (!isCandidateBeanClass(clazz, beanArchiveMode)) {
@@ -189,13 +201,13 @@ public class CDI41BeanValidator {
             return null;
         }
 
-        // 7) Check if this is an alternative bean and if it's properly enabled
+        // 7) Check if this is an alternative bean
         boolean alternative = hasAlternativeAnnotation(clazz);
         boolean alternativeEnabled = isAlternativeEnabled(clazz, alternative);
 
-        // 7) Build and register Bean (even if invalid, to track all beans)
-        // Note: Only alternatives with @Priority reach this point
-        BeanImpl<T> bean = new BeanImpl<>(clazz, alternativeEnabled);
+        // Build and register Bean (even if invalid, to track all beans)
+        // Mark alternative based on annotation; enablement affects resolution elsewhere.
+        BeanImpl<T> bean = new BeanImpl<>(clazz, alternative);
 
         // Mark bean as having validation errors if validation failed
         if (!valid) {
@@ -254,11 +266,18 @@ public class CDI41BeanValidator {
 
         // Return the bean (even if invalid) so it's tracked
         return bean;
+        } finally {
+            overrideAnnotations = null;
+        }
+    }
+
+    private Annotation[] annotationsOf(Class<?> clazz) {
+        return overrideAnnotations != null ? overrideAnnotations : clazz.getAnnotations();
     }
 
     private String extractBeanName(Class<?> clazz) {
         // CDI: @Named without value defaults to decapitalized simple name.
-        for (Annotation a : clazz.getAnnotations()) {
+        for (Annotation a : annotationsOf(clazz)) {
             if (a.annotationType().equals(Named.class)) {
                 try {
                     Method value = a.annotationType().getMethod("value");
@@ -287,7 +306,7 @@ public class CDI41BeanValidator {
         boolean hasNonNamedQualifier = false;
 
         // First, collect qualifiers directly on the class
-        for (Annotation a : clazz.getAnnotations()) {
+        for (Annotation a : annotationsOf(clazz)) {
             if (isQualifierAnnotationType(a.annotationType())) {
                 result.add(a);
                 // Check if this is a qualifier other than @Named
@@ -298,7 +317,7 @@ public class CDI41BeanValidator {
         }
 
         // Then, inherit qualifiers from stereotypes
-        for (Annotation a : clazz.getAnnotations()) {
+        for (Annotation a : annotationsOf(clazz)) {
             if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
                 Set<Annotation> stereotypeQualifiers = extractQualifiersFromStereotype(a.annotationType());
                 result.addAll(stereotypeQualifiers);
@@ -327,7 +346,7 @@ public class CDI41BeanValidator {
     private Class<? extends Annotation> extractBeanScope(Class<?> clazz) {
         // CDI 4.1: Check for scope directly on the class first
         // If a scope exists, it's already validated as at-most-one in validateScopeAnnotations.
-        for (Annotation a : clazz.getAnnotations()) {
+        for (Annotation a : annotationsOf(clazz)) {
             Class<? extends Annotation> at = a.annotationType();
             if (isScopeAnnotationType(at)) {
                 return at;
@@ -337,7 +356,7 @@ public class CDI41BeanValidator {
         // If no direct scope, inherit from stereotypes
         // If multiple stereotypes define different scopes, CDI requires explicit scope on the bean
         // For now, we take the first stereotype's scope (CDI validation would catch conflicts)
-        for (Annotation a : clazz.getAnnotations()) {
+        for (Annotation a : annotationsOf(clazz)) {
             if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
                 Class<? extends Annotation> stereotypeScope = extractScopeFromStereotype(a.annotationType());
                 if (stereotypeScope != null) {
@@ -407,7 +426,7 @@ public class CDI41BeanValidator {
 
     private Set<Class<? extends Annotation>> extractBeanStereotypes(Class<?> clazz) {
         Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
-        for (Annotation a : clazz.getAnnotations()) {
+        for (Annotation a : annotationsOf(clazz)) {
             Class<? extends Annotation> at = a.annotationType();
             if (hasMetaAnnotation(at, Stereotype.class)) {
                 stereotypes.add(at);
@@ -878,7 +897,7 @@ public class CDI41BeanValidator {
             }
 
             // Check if class has a stereotype that's enabled as alternative in beans.xml
-            for (Annotation annotation : clazz.getAnnotations()) {
+            for (Annotation annotation : annotationsOf(clazz)) {
                 Class<? extends Annotation> annotationType = annotation.annotationType();
 
                 // Check if this is a stereotype annotation
@@ -891,11 +910,6 @@ public class CDI41BeanValidator {
             }
         }
 
-        // Alternative is not enabled
-        knowledgeBase.addError(
-                "Alternative " + element + " is not enabled. " +
-                "Alternatives must be enabled via @Priority annotation or beans.xml <alternatives> section."
-        );
         return false;
     }
 
@@ -910,7 +924,7 @@ public class CDI41BeanValidator {
      * @throws DefinitionException if more than one scope annotation is present.
      */
     private Class<? extends Annotation> validateScopeAnnotations(Class<?> clazz) {
-        List<Class<? extends Annotation>> scopes = Arrays.stream(clazz.getAnnotations())
+        List<Class<? extends Annotation>> scopes = Arrays.stream(annotationsOf(clazz))
                 .map(Annotation::annotationType)
                 .filter(this::isScopeAnnotationType)
                 .collect(Collectors.toList());
@@ -1063,7 +1077,7 @@ public class CDI41BeanValidator {
         }
 
         // A scope meta-annotated type also counts
-        for (Annotation a : clazz.getAnnotations()) {
+        for (Annotation a : annotationsOf(clazz)) {
             if (isScopeAnnotationType(a.annotationType())) {
                 return true;
             }
@@ -1253,14 +1267,14 @@ public class CDI41BeanValidator {
     private void createAndRegisterProducerBean(Class<?> declaringClass, Method producerMethod, Field producerField) {
         AnnotatedElement element = (producerMethod != null) ? producerMethod : producerField;
 
-        // Determine alternative status at element level; require @Priority to enable in beans.xml-less mode
+        // Determine alternative status at element level
         boolean annotatedAlternative = hasAlternativeAnnotation(declaringClass) || hasAlternativeAnnotation(element);
         boolean alternativeEnabled = isAlternativeEnabled(element, annotatedAlternative);
 
         // Create ProducerBean
         ProducerBean<?> producerBean;
         if (producerMethod != null) {
-            producerBean = new ProducerBean<>(declaringClass, producerMethod, alternativeEnabled);
+            producerBean = new ProducerBean<>(declaringClass, producerMethod, annotatedAlternative);
 
             // Set bean attributes from producer method annotations
             producerBean.setName(extractProducerName(producerMethod));
@@ -1280,7 +1294,7 @@ public class CDI41BeanValidator {
                 }
             }
         } else if (producerField != null) {
-            producerBean = new ProducerBean<>(declaringClass, producerField, alternativeEnabled);
+            producerBean = new ProducerBean<>(declaringClass, producerField, annotatedAlternative);
 
             // Set bean attributes from producer field annotations
             producerBean.setName(extractProducerName(producerField));
@@ -1853,7 +1867,7 @@ public class CDI41BeanValidator {
      */
     private Set<Annotation> extractInterceptorBindings(Class<?> clazz) {
         Set<Annotation> bindings = new HashSet<>();
-        for (Annotation annotation : clazz.getAnnotations()) {
+        for (Annotation annotation : annotationsOf(clazz)) {
             if (isInterceptorBinding(annotation.annotationType())) {
                 bindings.add(annotation);
             }

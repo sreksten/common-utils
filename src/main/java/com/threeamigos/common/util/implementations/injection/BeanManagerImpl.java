@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Decor
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.ObserverMethodInfo;
+import com.threeamigos.common.util.implementations.injection.SimpleAnnotatedType;
 import jakarta.el.ELResolver;
 import jakarta.el.ExpressionFactory;
 import jakarta.enterprise.context.spi.Context;
@@ -1343,9 +1344,7 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("type cannot be null");
         }
 
-        // Create a simple AnnotatedType wrapper
-        // For full implementation, would need AnnotatedTypeImpl
-        throw new UnsupportedOperationException("createAnnotatedType not yet implemented");
+        return new SimpleAnnotatedType<>(type);
     }
 
     /**

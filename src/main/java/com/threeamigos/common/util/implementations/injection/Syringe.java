@@ -3,10 +3,12 @@ package com.threeamigos.common.util.implementations.injection;
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
 import com.threeamigos.common.util.implementations.injection.contexts.ContextManager;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.spievents.*;
-import jakarta.enterprise.inject.spi.*;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -552,8 +554,11 @@ public class Syringe {
                     knowledgeBase.vetoType(clazz);
                 }
 
-                // TODO: If AnnotatedType was modified via setAnnotatedType(), use the modified version
-                // This would require storing the modified AnnotatedType and using it during bean creation
+                // Store AnnotatedType override if modified
+                AnnotatedType<?> finalAnnotatedType = event.getAnnotatedType();
+                if (finalAnnotatedType != null) {
+                    knowledgeBase.setAnnotatedTypeOverride(clazz, finalAnnotatedType);
+                }
             } catch (Exception e) {
                 System.err.println("[Syringe] Error processing annotated type: " + clazz.getName() + " - " + e.getMessage());
                 e.printStackTrace();
@@ -583,15 +588,23 @@ public class Syringe {
     private void validateAndRegisterBeans() {
         System.out.println("[Syringe] Validating and registering beans");
 
-        // CDI41BeanValidator is already called during bean discovery
-        // via ClassProcessor, but we can perform additional validation here
+        CDI41BeanValidator validator = new CDI41BeanValidator(knowledgeBase);
+        int validated = 0;
 
-        // TODO: Additional bean validation if needed
-        // - Check that all beans have valid scopes
-        // - Validate qualifiers, stereotypes
-        // - Build final Bean<?> objects
+        for (Class<?> clazz : knowledgeBase.getClasses()) {
+            try {
+                BeanArchiveMode mode = knowledgeBase.getBeanArchiveMode(clazz);
+                jakarta.enterprise.inject.spi.AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(clazz);
+                validator.validateAndRegister(clazz, mode, override);
+                validated++;
+            } catch (Exception e) {
+                System.err.println("[Syringe] Error validating bean class " + clazz.getName() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
 
-        System.out.println("[Syringe] Registered " + knowledgeBase.getBeans().size() + " bean(s)");
+        System.out.println("[Syringe] Validated " + validated + " class(es); registered " +
+                          knowledgeBase.getBeans().size() + " bean(s)");
     }
 
     /**
@@ -602,18 +615,27 @@ public class Syringe {
     private void processInjectionPoints() {
         System.out.println("[Syringe] Processing injection points");
 
-        // TODO: For each bean, for each injection point:
-        // 1. Create ProcessInjectionPoint<T, X> event
-        // 2. Fire to all extensions
-        // 3. Use modified injection point if changed
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            try {
+                Set<InjectionPoint> injectionPoints = bean.getInjectionPoints();
 
-        // for (Bean<?> bean : knowledgeBase.getBeans()) {
-        //     for (InjectionPoint ip : bean.getInjectionPoints()) {
-        //         ProcessInjectionPoint<?, ?> event = new ProcessInjectionPointImpl<>(ip);
-        //         fireToExtensions(event);
-        //         // Use event.getInjectionPoint() (may be modified)
-        //     }
-        // }
+                for (InjectionPoint ip : injectionPoints) {
+                    ProcessInjectionPointImpl<?, ?> event =
+                        new ProcessInjectionPointImpl<>(ip, beanManager, knowledgeBase);
+
+                    fireEventToExtensions(event);
+
+                    InjectionPoint updated = event.getInjectionPoint();
+                    if (updated != ip) {
+                        updateInjectionPoint(bean, ip, updated);
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[Syringe] Error processing injection points for bean " +
+                                   bean.getBeanClass().getName() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
     }
 
     /**
@@ -624,11 +646,31 @@ public class Syringe {
     private void processInjectionTargets() {
         System.out.println("[Syringe] Processing injection targets");
 
-        // TODO: For each managed bean:
-        // 1. Create InjectionTarget<T>
-        // 2. Create ProcessInjectionTarget<T> event
-        // 3. Fire to all extensions
-        // 4. Use wrapped InjectionTarget if provided
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (bean instanceof BeanImpl<?>) {
+                BeanImpl<?> managedBean = (BeanImpl<?>) bean;
+                Class<?> beanClass = managedBean.getBeanClass();
+
+                try {
+                    AnnotatedType<?> annotatedType = new SimpleAnnotatedType<>(beanClass);
+                    InjectionTargetFactory<?> factory =
+                        new InjectionTargetFactoryImpl<>(annotatedType, beanManager);
+                    InjectionTarget<?> injectionTarget = factory.createInjectionTarget(managedBean);
+
+                    ProcessInjectionTargetImpl<?> event =
+                        new ProcessInjectionTargetImpl<>(annotatedType, injectionTarget, beanManager, knowledgeBase);
+
+                    fireEventToExtensions(event);
+
+                    InjectionTarget<?> finalTarget = event.getInjectionTarget();
+                    managedBean.setCustomInjectionTarget((InjectionTarget) finalTarget);
+                } catch (Exception e) {
+                    System.err.println("[Syringe] Error processing injection target for " +
+                                       beanClass.getName() + ": " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
     /**
@@ -639,11 +681,50 @@ public class Syringe {
     private void processBeanAttributes() {
         System.out.println("[Syringe] Processing bean attributes");
 
-        // TODO: For each bean:
-        // 1. Create BeanAttributes<T>
-        // 2. Create ProcessBeanAttributes<T> event
-        // 3. Fire to all extensions
-        // 4. Apply modified attributes if changed
+        List<Bean<?>> vetoed = new ArrayList<>();
+
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            try {
+                BeanAttributes<?> attrs = new BeanAttributesImpl<>(
+                    bean.getName(),
+                    bean.getQualifiers(),
+                    bean.getScope(),
+                    bean.getStereotypes(),
+                    bean.getTypes(),
+                    bean.isAlternative()
+                );
+
+                Annotated annotated = new SimpleAnnotatedType<>(bean.getBeanClass());
+                ProcessBeanAttributesImpl<?> event =
+                    new ProcessBeanAttributesImpl<>(annotated, attrs, beanManager, knowledgeBase);
+
+                fireEventToExtensions(event);
+
+                if (event.isVetoed()) {
+                    vetoed.add(bean);
+                    continue;
+                }
+
+                if (event.isIgnoreFinalMethods()) {
+                    knowledgeBase.addWarning("ProcessBeanAttributes ignoreFinalMethods requested for " +
+                                             bean.getBeanClass().getName());
+                }
+
+                BeanAttributes<?> finalAttrs = event.getBeanAttributes();
+                applyBeanAttributes(bean, finalAttrs);
+
+            } catch (Exception e) {
+                System.err.println("[Syringe] Error processing bean attributes for bean " +
+                                   bean.getBeanClass().getName() + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        // Remove vetoed beans
+        if (!vetoed.isEmpty()) {
+            knowledgeBase.getBeans().removeAll(vetoed);
+            System.out.println("[Syringe]   Vetoed " + vetoed.size() + " bean(s) via ProcessBeanAttributes");
+        }
     }
 
     /**
@@ -856,11 +937,192 @@ public class Syringe {
     private void processObserverMethods() {
         System.out.println("[Syringe] Processing observer methods");
 
-        // TODO: For each observer method:
-        // 1. Create ObserverMethod<T>
-        // 2. Create ProcessObserverMethod<T, X> event
-        // 3. Fire to all extensions
-        // 4. Use modified observer if changed
+        Collection<ObserverMethodInfo> existing = new ArrayList<>(knowledgeBase.getObserverMethodInfos());
+        List<ObserverMethodInfo> updated = new ArrayList<>();
+
+        for (ObserverMethodInfo info : existing) {
+            try {
+                ObserverMethod<?> observer;
+                AnnotatedMethod<?> annotatedMethod = null;
+
+                if (info.isSynthetic()) {
+                    observer = info.getSyntheticObserver();
+                } else {
+                    Method method = info.getObserverMethod();
+                    AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(method.getDeclaringClass());
+                    annotatedMethod = findAnnotatedMethod(annotatedType, method);
+                    observer = new ReflectiveObserverMethodAdapter<>(info,
+                            new BeanResolver(knowledgeBase, contextManager),
+                            contextManager);
+                }
+
+                ProcessObserverMethodImpl<?, ?> event =
+                        new ProcessObserverMethodImpl(observer, (AnnotatedMethod) annotatedMethod, beanManager);
+
+                fireEventToExtensions(event);
+
+                if (event.isVetoed()) {
+                    continue; // remove this observer
+                }
+
+                ObserverMethod<?> finalObserver = event.getObserverMethod();
+                updated.add(toObserverMethodInfo(finalObserver, info.getDeclaringBean()));
+
+            } catch (Exception e) {
+                System.err.println("[Syringe] Error processing observer method: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        knowledgeBase.getObserverMethodInfos().clear();
+        knowledgeBase.getObserverMethodInfos().addAll(updated);
+    }
+
+    /**
+     * Applies updated BeanAttributes back to the underlying bean implementation.
+     */
+    private void applyBeanAttributes(Bean<?> bean, BeanAttributes<?> attrs) {
+        if (bean instanceof BeanImpl<?>) {
+            BeanImpl<?> b = (BeanImpl<?>) bean;
+            b.setName(attrs.getName());
+            b.setQualifiers(attrs.getQualifiers());
+            b.setScope(attrs.getScope());
+            b.setStereotypes(attrs.getStereotypes());
+            b.setTypes(attrs.getTypes());
+        } else if (bean instanceof ProducerBean<?>) {
+            ProducerBean<?> b = (ProducerBean<?>) bean;
+            b.setName(attrs.getName());
+            b.setQualifiers(attrs.getQualifiers());
+            b.setScope(attrs.getScope());
+            b.setStereotypes(attrs.getStereotypes());
+            b.setTypes(attrs.getTypes());
+            // alternative flag is final; cannot be changed post-creation
+        } else {
+            // Synthetic or built-in beans: no-op
+        }
+    }
+
+    /**
+     * Replaces an injection point inside a bean with an updated instance.
+     */
+    private void updateInjectionPoint(Bean<?> bean, InjectionPoint original, InjectionPoint updated) {
+        if (bean instanceof BeanImpl<?>) {
+            ((BeanImpl<?>) bean).replaceInjectionPoint(original, updated);
+        } else if (bean instanceof ProducerBean<?>) {
+            ProducerBean<?> pb = (ProducerBean<?>) bean;
+            pb.replaceInjectionPoint(original, updated);
+        }
+        // Synthetic beans expose injection points from their InjectionTarget; skip for now.
+    }
+
+    private ObserverMethodInfo toObserverMethodInfo(ObserverMethod<?> observer, Bean<?> declaringBean) {
+        return new ObserverMethodInfo(
+                observer.getObservedType(),
+                observer.getObservedQualifiers(),
+                observer.getReception(),
+                observer.getTransactionPhase(),
+                observer.getPriority(),
+                observer.isAsync(),
+                declaringBean,
+                observer
+        );
+    }
+
+    /**
+     * ObserverMethod adapter that invokes the original reflective observer method.
+     * Used so ProcessObserverMethod can replace/keep reflective observers while allowing
+     * extensions to wrap or veto them.
+     */
+    private static class ReflectiveObserverMethodAdapter<T> implements ObserverMethod<T> {
+        private final ObserverMethodInfo info;
+        private final BeanResolver beanResolver;
+        private final ContextManager contextManager;
+
+        ReflectiveObserverMethodAdapter(ObserverMethodInfo info,
+                                        BeanResolver beanResolver,
+                                        ContextManager contextManager) {
+            this.info = info;
+            this.beanResolver = beanResolver;
+            this.contextManager = contextManager;
+        }
+
+        @Override
+        public Class<?> getBeanClass() {
+            return info.getDeclaringBean() != null
+                    ? info.getDeclaringBean().getBeanClass()
+                    : info.getObserverMethod().getDeclaringClass();
+        }
+
+        @Override
+        public Type getObservedType() {
+            return info.getEventType();
+        }
+
+        @Override
+        public Set<Annotation> getObservedQualifiers() {
+            return info.getQualifiers();
+        }
+
+        @Override
+        public Reception getReception() {
+            return info.getReception();
+        }
+
+        @Override
+        public TransactionPhase getTransactionPhase() {
+            return info.getTransactionPhase();
+        }
+
+        @Override
+        public void notify(T event) {
+            try {
+                // Honor IF_EXISTS reception
+                if (info.getReception() == Reception.IF_EXISTS && info.getDeclaringBean() != null) {
+                    Class<? extends Annotation> scope = info.getDeclaringBean().getScope();
+                    try {
+                        Context ctx = contextManager.getContext(scope);
+                        Object existing = ctx.getIfExists(info.getDeclaringBean());
+                        if (existing == null) {
+                            return; // skip notification
+                        }
+                    } catch (IllegalArgumentException ignored) {
+                        return;
+                    }
+                }
+
+                Method method = info.getObserverMethod();
+                Object beanInstance = info.getDeclaringBean() != null
+                        ? beanResolver.resolveDeclaringBeanInstance(info.getDeclaringBean().getBeanClass())
+                        : beanResolver.resolveDeclaringBeanInstance(method.getDeclaringClass());
+
+                java.lang.reflect.Parameter[] params = method.getParameters();
+                Object[] args = new Object[params.length];
+                for (int i = 0; i < params.length; i++) {
+                    java.lang.reflect.Parameter p = params[i];
+                    if (AnnotationsEnum.hasObservesAnnotation(p) || AnnotationsEnum.hasObservesAsyncAnnotation(p)) {
+                        args[i] = event;
+                    } else {
+                        args[i] = beanResolver.resolve(p.getParameterizedType(), p.getAnnotations());
+                    }
+                }
+
+                method.setAccessible(true);
+                method.invoke(beanInstance, args);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to notify observer " +
+                        info.getObserverMethod().getName() + ": " + e.getMessage(), e);
+            }
+        }
+
+        @Override
+        public boolean isAsync() {
+            return info.isAsync();
+        }
+
+        @Override
+        public int getPriority() {
+            return info.getPriority();
+        }
     }
 
     // ============================================================
@@ -982,10 +1244,30 @@ public class Syringe {
     private void destroyAllBeans() {
         System.out.println("[Syringe] Destroying all beans");
 
-        // TODO: For each context, destroy all beans
-        // - Call @PreDestroy methods
-        // - Release resources
-        // - Clear context storage
+        if (contextManager != null) {
+            try {
+                contextManager.destroyAll();
+            } catch (Exception e) {
+                System.err.println("[Syringe] Error destroying contexts: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+
+        // Destroy @Dependent beans that were created outside normal contexts (edge cases)
+        if (knowledgeBase != null) {
+            for (Bean<?> bean : knowledgeBase.getBeans()) {
+                if (bean.getScope() == null || bean.getScope().getName().equals(jakarta.enterprise.context.Dependent.class.getName())) {
+                    try {
+                        // Dependent beans aren't stored in contexts; nothing to release beyond CreationalContext
+                        // but if bean holds resources, call destroy with null ctx (BeanImpl handles @PreDestroy)
+                        bean.destroy(null, null);
+                    } catch (Exception e) {
+                        System.err.println("[Syringe] Error destroying dependent bean " +
+                                           bean.getBeanClass().getName() + ": " + e.getMessage());
+                    }
+                }
+            }
+        }
     }
 
     // ============================================================
@@ -1003,80 +1285,121 @@ public class Syringe {
      */
     private <T> void fireEventToExtensions(T event) {
         Class<?> eventType = event.getClass();
+        List<ExtensionObserverInvocation> invocations = new ArrayList<>();
 
+        // Collect all matching observer methods across all extensions, with priority
         for (Extension extension : extensions) {
+            collectExtensionObserverMethods(extension, eventType, invocations);
+        }
+
+        // Sort by @Priority (ascending). Methods without @Priority run last.
+        invocations.sort(Comparator.comparingInt(ExtensionObserverInvocation::priority));
+
+        for (ExtensionObserverInvocation invocation : invocations) {
             try {
-                invokeExtensionObserverMethods(extension, eventType, event);
+                invocation.invoke(event);
             } catch (Exception e) {
-                System.err.println("[Syringe] Error invoking extension " + extension.getClass().getName() +
+                System.err.println("[Syringe] Error invoking extension " +
+                                   invocation.extension().getClass().getName() +
                                    " for event " + eventType.getSimpleName() + ": " + e.getMessage());
                 e.printStackTrace();
             }
         }
     }
 
-    /**
-     * Invokes observer methods in an extension that observe a specific event type.
-     *
-     * <p>This method uses reflection to:
-     * <ol>
-     *   <li>Find all methods in the extension class</li>
-     *   <li>Check each method's parameters for @Observes annotation</li>
-     *   <li>Verify the observed parameter type matches the event type (or is a supertype)</li>
-     *   <li>Invoke the method with the event object</li>
-     * </ol>
-     *
-     * @param extension the extension instance
-     * @param eventType the event class being fired
-     * @param event the event object
-     */
-    private void invokeExtensionObserverMethods(Extension extension, Class<?> eventType, Object event) {
-        java.lang.reflect.Method[] methods = extension.getClass().getMethods();
-
-        for (java.lang.reflect.Method method : methods) {
+    private void collectExtensionObserverMethods(Extension extension,
+                                                 Class<?> eventType,
+                                                 List<ExtensionObserverInvocation> sink) {
+        for (java.lang.reflect.Method method : extension.getClass().getMethods()) {
             java.lang.reflect.Parameter[] parameters = method.getParameters();
 
-            // Check each parameter for @Observes annotation
             for (int i = 0; i < parameters.length; i++) {
                 java.lang.reflect.Parameter parameter = parameters[i];
 
-                // Check if parameter has @Observes annotation (javax or jakarta)
                 if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
-                    // Check if the observed parameter type matches the event type
                     Class<?> observedType = parameter.getType();
-
                     if (observedType.isAssignableFrom(eventType)) {
-                        try {
-                            // Prepare method arguments
-                            Object[] args = new Object[parameters.length];
-                            args[i] = event; // The observed parameter gets the event
-
-                            // TODO: Other parameters might be injection points
-                            // For now, we only support single @Observes parameter
-                            if (parameters.length > 1) {
-                                System.err.println("[Syringe] Warning: Extension observer method " +
-                                                   method.getName() + " has multiple parameters. " +
-                                                   "Only @Observes parameter is supported.");
-                            }
-
-                            // Invoke the observer method
-                            method.setAccessible(true);
-                            method.invoke(extension, args);
-
-                            System.out.println("[Syringe]   Invoked extension observer: " +
-                                               extension.getClass().getSimpleName() + "." + method.getName() +
-                                               "(@Observes " + eventType.getSimpleName() + ")");
-
-                        } catch (Exception e) {
-                            System.err.println("[Syringe] Error invoking observer method " +
-                                               method.getName() + " in extension " +
-                                               extension.getClass().getName() + ": " + e.getMessage());
-                            e.printStackTrace();
-                        }
-
-                        break; // Found the @Observes parameter, no need to check other parameters
+                        int priority = resolvePriority(method);
+                        sink.add(new ExtensionObserverInvocation(extension, method, i, priority, beanManager, knowledgeBase));
                     }
                 }
+            }
+        }
+    }
+
+    private int resolvePriority(Method method) {
+        Priority priorityAnn = method.getAnnotation(Priority.class);
+        if (priorityAnn != null) {
+            return priorityAnn.value();
+        }
+        // javax.annotation.Priority fallback
+        java.lang.annotation.Annotation legacy = method.getAnnotation(javax.annotation.Priority.class);
+        if (legacy != null) {
+            return ((javax.annotation.Priority) legacy).value();
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    /**
+     * Lightweight wrapper capturing an extension observer method invocation.
+     * Sorting happens on the priority value.
+     */
+    private record ExtensionObserverInvocation(Extension extension,
+                                               Method method,
+                                               int observesIndex,
+                                               int priority,
+                                               BeanManager beanManager,
+                                               com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase) {
+        void invoke(Object event) throws Exception {
+            java.lang.reflect.Parameter[] parameters = method.getParameters();
+            Object[] args = new Object[parameters.length];
+            args[observesIndex] = event;
+
+            for (int i = 0; i < parameters.length; i++) {
+                if (i == observesIndex) continue;
+                args[i] = resolveExtensionParameter(parameters[i]);
+            }
+
+            method.setAccessible(true);
+            method.invoke(extension, args);
+
+            System.out.println("[Syringe]   Invoked extension observer: " +
+                               extension.getClass().getSimpleName() + "." + method.getName() +
+                               "(@Observes " + event.getClass().getSimpleName() +
+                               ", priority=" + priority + ")");
+        }
+
+        private Object resolveExtensionParameter(java.lang.reflect.Parameter parameter) {
+            Class<?> pType = parameter.getType();
+            if (BeanManager.class.isAssignableFrom(pType)) {
+                return beanManager;
+            }
+
+            // Collect qualifier annotations on the parameter
+            List<java.lang.annotation.Annotation> qualifiers = new ArrayList<>();
+            for (java.lang.annotation.Annotation ann : parameter.getAnnotations()) {
+                if (AnnotationsEnum.hasQualifierAnnotation(ann.annotationType())) {
+                    qualifiers.add(ann);
+                }
+            }
+
+            try {
+                Set<Bean<?>> beans = beanManager.getBeans(parameter.getParameterizedType(),
+                        qualifiers.toArray(new java.lang.annotation.Annotation[0]));
+                Bean<?> resolved = beanManager.resolve(beans);
+                if (resolved == null) {
+                    throw new IllegalStateException("No bean resolved for " + parameter.getParameterizedType());
+                }
+                CreationalContext<?> ctx = beanManager.createCreationalContext(resolved);
+                return beanManager.getReference(resolved, parameter.getParameterizedType(), ctx);
+            } catch (Exception e) {
+                String msg = "[Syringe] Extension observer parameter " +
+                             parameter.getName() + " (" + parameter.getType().getName() +
+                             ") could not be injected: " + e.getMessage();
+                if (knowledgeBase != null) {
+                    knowledgeBase.addDefinitionError(msg);
+                }
+                throw new RuntimeException(msg, e);
             }
         }
     }
