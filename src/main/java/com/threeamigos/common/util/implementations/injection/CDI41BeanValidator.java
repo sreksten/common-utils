@@ -1097,7 +1097,7 @@ public class CDI41BeanValidator {
             return hasNoArgsConstructor(clazz);
         }
 
-        // In implicit mode, bean-defining annotation is required
+        // In implicit/trimmed mode, bean-defining annotation is required
         return false;
     }
 

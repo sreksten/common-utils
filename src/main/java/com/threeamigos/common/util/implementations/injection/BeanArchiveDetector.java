@@ -104,7 +104,9 @@ class BeanArchiveDetector {
 
             // beans.xml exists - parse it to determine mode
             try (InputStream is = jar.getInputStream(beansXmlEntry)) {
-                return parseBeanDiscoveryMode(is);
+                BeansXml beansXml = beansXmlParser.parse(is);
+                cacheBeansXml(jarFile, beansXml);
+                return determineMode(beansXml);
             }
         } catch (Exception e) {
             // If we can't read beans.xml, default to IMPLICIT
@@ -127,8 +129,10 @@ class BeanArchiveDetector {
         }
 
         // beans.xml exists - parse it to determine mode
-        try {
-            return parseBeanDiscoveryMode(beansXmlFile.toURI().toURL().openStream());
+        try (InputStream is = beansXmlFile.toURI().toURL().openStream()) {
+            BeansXml beansXml = beansXmlParser.parse(is);
+            cacheBeansXml(directory, beansXml);
+            return determineMode(beansXml);
         } catch (Exception e) {
             // If we can't read beans.xml, default to IMPLICIT
             return BeanArchiveMode.IMPLICIT;
@@ -212,25 +216,44 @@ class BeanArchiveDetector {
     private BeanArchiveMode parseBeanDiscoveryMode(InputStream inputStream) {
         try {
             BeansXml beansXml = beansXmlParser.parse(inputStream);
-            String discoveryMode = beansXml.getBeanDiscoveryMode();
-
-            if (discoveryMode == null || discoveryMode.trim().isEmpty()) {
-                return BeanArchiveMode.EXPLICIT;
-            }
-
-            switch (discoveryMode.trim().toLowerCase()) {
-                case "all":
-                    return BeanArchiveMode.EXPLICIT;
-                case "annotated":
-                    return BeanArchiveMode.IMPLICIT;
-                case "none":
-                    return BeanArchiveMode.NONE;
-                default:
-                    return BeanArchiveMode.EXPLICIT;
-            }
+            // parseBeanDiscoveryMode is used when we cannot associate with a concrete file path
+            return determineMode(beansXml);
         } catch (Exception e) {
             return BeanArchiveMode.EXPLICIT;
         }
+    }
+
+    private BeanArchiveMode determineMode(BeansXml beansXml) {
+        if (beansXml == null) {
+            return BeanArchiveMode.IMPLICIT;
+        }
+
+        String discoveryMode = beansXml.getBeanDiscoveryMode();
+        BeanArchiveMode baseMode;
+
+        if (discoveryMode == null || discoveryMode.trim().isEmpty()) {
+            baseMode = BeanArchiveMode.EXPLICIT;
+        } else {
+            switch (discoveryMode.trim().toLowerCase()) {
+                case "all":
+                    baseMode = BeanArchiveMode.EXPLICIT;
+                    break;
+                case "annotated":
+                    baseMode = BeanArchiveMode.IMPLICIT;
+                    break;
+                case "none":
+                    baseMode = BeanArchiveMode.NONE;
+                    break;
+                default:
+                    baseMode = BeanArchiveMode.EXPLICIT;
+            }
+        }
+
+        // <trim/> turns explicit discovery into trimmed explicit (behaves like implicit)
+        if (beansXml.isTrimEnabled() && baseMode == BeanArchiveMode.EXPLICIT) {
+            return BeanArchiveMode.TRIMMED;
+        }
+        return baseMode;
     }
 
     /**
@@ -285,7 +308,11 @@ class BeanArchiveDetector {
             }
 
             try (InputStream is = jar.getInputStream(beansXmlEntry)) {
-                return beansXmlParser.parse(is);
+                BeansXml beansXml = beansXmlParser.parse(is);
+                cacheBeansXml(jarFile, beansXml);
+                // Update archive mode cache with the effective mode (including trim)
+                archiveModeCache.put(jarFile.getCanonicalPath(), determineMode(beansXml));
+                return beansXml;
             }
         } catch (Exception e) {
             return new BeansXml();
@@ -306,9 +333,25 @@ class BeanArchiveDetector {
         }
 
         try {
-            return beansXmlParser.parse(beansXmlFile.toURI().toURL().openStream());
+            try (InputStream is = beansXmlFile.toURI().toURL().openStream()) {
+                BeansXml beansXml = beansXmlParser.parse(is);
+                cacheBeansXml(directory, beansXml);
+                archiveModeCache.put(directory.getCanonicalPath(), determineMode(beansXml));
+                return beansXml;
+            }
         } catch (Exception e) {
             return new BeansXml();
+        }
+    }
+
+    private void cacheBeansXml(File archiveRoot, BeansXml beansXml) {
+        if (archiveRoot == null || beansXml == null) {
+            return;
+        }
+        try {
+            beansXmlCache.putIfAbsent(archiveRoot.getCanonicalPath(), beansXml);
+        } catch (Exception ignored) {
+            // ignore cache write failures
         }
     }
 

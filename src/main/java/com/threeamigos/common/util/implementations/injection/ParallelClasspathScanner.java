@@ -134,6 +134,11 @@ class ParallelClasspathScanner {
         // Collect beans.xml configuration if present
         collectBeansXml(archiveRoot);
 
+        // bean-discovery-mode="none" → skip all classes in this archive
+        if (archiveMode == BeanArchiveMode.NONE) {
+            return;
+        }
+
         File[] files = directory.listFiles();
 
         // listFiles() CAN return null on I/O errors or permission issues
@@ -208,6 +213,10 @@ class ParallelClasspathScanner {
 
         // Collect beans.xml configuration if present
         collectBeansXml(jarFile);
+
+        if (archiveMode == BeanArchiveMode.NONE) {
+            return; // Skip entries entirely for bean-discovery-mode="none"
+        }
 
         String packagePath = packageName.replace('.', '/');
 
