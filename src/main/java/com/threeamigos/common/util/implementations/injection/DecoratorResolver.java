@@ -116,7 +116,9 @@ public class DecoratorResolver {
         List<DecoratorInfo> matchingDecorators = allDecorators.stream()
                 .filter(decorator -> matchesTypes(decorator, beanTypes))
                 .filter(decorator -> matchesQualifiers(decorator, qualifiers))
-                .sorted(Comparator.comparingInt(DecoratorInfo::getPriority))
+                .sorted(Comparator
+                        .comparingInt(DecoratorInfo::getPriority)
+                        .thenComparing(di -> di.getDecoratorClass().getName()))
                 .collect(Collectors.toList());
 
         return matchingDecorators;

@@ -1846,6 +1846,28 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
+        // Validate signatures per CDI spec
+        if (aroundInvokeMethod != null && !isValidAroundInvoke(aroundInvokeMethod)) {
+            knowledgeBase.addDefinitionError(fmtMethod(aroundInvokeMethod) +
+                    ": @AroundInvoke must be non-static, return Object, and accept a single InvocationContext parameter");
+            valid = false;
+        }
+        if (aroundConstructMethod != null && !isValidAroundConstruct(aroundConstructMethod)) {
+            knowledgeBase.addDefinitionError(fmtMethod(aroundConstructMethod) +
+                    ": @AroundConstruct must be non-static, return Object, and accept a single InvocationContext parameter");
+            valid = false;
+        }
+        if (postConstructMethod != null && !isValidLifecycleVoidNoArgs(postConstructMethod)) {
+            knowledgeBase.addDefinitionError(fmtMethod(postConstructMethod) +
+                    ": @PostConstruct interceptor method must be non-static, void, and take no parameters");
+            valid = false;
+        }
+        if (preDestroyMethod != null && !isValidLifecycleVoidNoArgs(preDestroyMethod)) {
+            knowledgeBase.addDefinitionError(fmtMethod(preDestroyMethod) +
+                    ": @PreDestroy interceptor method must be non-static, void, and take no parameters");
+            valid = false;
+        }
+
         // Only register if valid
         if (valid) {
             InterceptorInfo info = new InterceptorInfo(
@@ -1859,6 +1881,26 @@ public class CDI41BeanValidator {
             );
             knowledgeBase.addInterceptorInfo(info);
         }
+    }
+
+    private boolean isValidAroundInvoke(Method m) {
+        return !Modifier.isStatic(m.getModifiers())
+                && m.getReturnType().equals(Object.class)
+                && m.getParameterCount() == 1
+                && jakarta.interceptor.InvocationContext.class.isAssignableFrom(m.getParameterTypes()[0]);
+    }
+
+    private boolean isValidAroundConstruct(Method m) {
+        return !Modifier.isStatic(m.getModifiers())
+                && m.getReturnType().equals(Object.class)
+                && m.getParameterCount() == 1
+                && jakarta.interceptor.InvocationContext.class.isAssignableFrom(m.getParameterTypes()[0]);
+    }
+
+    private boolean isValidLifecycleVoidNoArgs(Method m) {
+        return !Modifier.isStatic(m.getModifiers())
+                && m.getReturnType().equals(void.class)
+                && m.getParameterCount() == 0;
     }
 
     /**
