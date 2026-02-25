@@ -358,16 +358,29 @@ public class CDI41BeanValidator {
             }
         }
 
-        // If no direct scope, inherit from stereotypes
-        // If multiple stereotypes define different scopes, CDI requires explicit scope on the bean
-        // For now, we take the first stereotype's scope (CDI validation would catch conflicts)
+        // If no direct scope, inherit from stereotypes (must be consistent)
+        Class<? extends Annotation> inheritedScope = null;
         for (Annotation a : annotationsOf(clazz)) {
             if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
                 Class<? extends Annotation> stereotypeScope = extractScopeFromStereotype(a.annotationType());
-                if (stereotypeScope != null) {
-                    return stereotypeScope;
+                if (stereotypeScope == null) {
+                    continue;
+                }
+
+                if (inheritedScope == null) {
+                    inheritedScope = stereotypeScope;
+                } else if (!inheritedScope.equals(stereotypeScope)) {
+                    knowledgeBase.addDefinitionError(clazz.getName() +
+                        ": conflicting scopes inherited from stereotypes (" +
+                        inheritedScope.getName() + " vs " + stereotypeScope.getName() +
+                        "). Declare an explicit scope on the bean to resolve.");
+                    // Keep the first to avoid NPEs in downstream processing
                 }
             }
+        }
+
+        if (inheritedScope != null) {
+            return inheritedScope;
         }
 
         // Default scope for managed beans is @Dependent.
@@ -2014,6 +2027,9 @@ public class CDI41BeanValidator {
         // Extract decorated types from @Delegate injection point
         Set<Type> decoratedTypes = extractDecoratedTypes(clazz, delegateInjectionPoint);
 
+        // Validate that decorator implements all abstract methods of decorated types
+        validateDecoratorAbstractMethods(clazz, decoratedTypes);
+
         // Register decorator info
         DecoratorInfo info = new DecoratorInfo(
             clazz,
@@ -2022,6 +2038,46 @@ public class CDI41BeanValidator {
             delegateInjectionPoint
         );
         knowledgeBase.addDecoratorInfo(info);
+    }
+
+    /**
+     * CDI 4.1 Section 8.1: A decorator must implement all abstract methods of the decorated types
+     * (excluding methods declared on java.lang.Object).
+     */
+    private void validateDecoratorAbstractMethods(Class<?> decoratorClass, Set<Type> decoratedTypes) {
+        if (decoratedTypes == null || decoratedTypes.isEmpty()) {
+            return;
+        }
+
+        for (Type type : decoratedTypes) {
+            if (!(type instanceof Class)) {
+                continue; // Skip non-class types for implementation check
+            }
+            Class<?> decoratedClass = (Class<?>) type;
+
+            for (Method m : decoratedClass.getMethods()) {
+                // Only consider abstract, non-Object methods
+                if (!Modifier.isAbstract(m.getModifiers())) {
+                    continue;
+                }
+                if (m.getDeclaringClass().equals(Object.class)) {
+                    continue;
+                }
+
+                try {
+                    Method impl = decoratorClass.getMethod(m.getName(), m.getParameterTypes());
+                    if (Modifier.isAbstract(impl.getModifiers())) {
+                        knowledgeBase.addDefinitionError(decoratorClass.getName() +
+                            ": abstract method " + fmtMethod(m) +
+                            " must be implemented with a concrete method in the decorator.");
+                    }
+                } catch (NoSuchMethodException e) {
+                    knowledgeBase.addDefinitionError(decoratorClass.getName() +
+                        ": missing implementation for abstract method " + fmtMethod(m) +
+                        " from decorated type " + decoratedClass.getName());
+                }
+            }
+        }
     }
 
     /**

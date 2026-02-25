@@ -275,6 +275,37 @@ public class KnowledgeBase {
     }
 
     /**
+     * Returns the aggregate beans.xml decorator order index for a decorator class.
+     *
+     * <p>Decorators listed in any beans.xml are considered enabled and their relative order
+     * is determined by first-appearance across all beans.xml files (in scan order) and
+     * by position within the list. Decorators not present return -1.</p>
+     *
+     * @param decoratorClass the decorator class
+     * @return zero-based order, or -1 if not listed
+     */
+    public int getDecoratorBeansXmlOrder(Class<?> decoratorClass) {
+        if (decoratorClass == null || beansXmlConfigurations.isEmpty()) {
+            return -1;
+        }
+
+        Map<String, Integer> orderMap = new LinkedHashMap<>();
+        int counter = 0;
+        for (BeansXml beansXml : beansXmlConfigurations) {
+            if (beansXml.getDecorators() == null || beansXml.getDecorators().isEmpty()) {
+                continue;
+            }
+            for (String className : beansXml.getDecorators().getClasses()) {
+                if (!orderMap.containsKey(className)) {
+                    orderMap.put(className, counter++);
+                }
+            }
+        }
+
+        return orderMap.getOrDefault(decoratorClass.getName(), -1);
+    }
+
+    /**
      * Adds fully validated observer method metadata to the knowledge base.
      * This should be called after validating the observer method.
      *

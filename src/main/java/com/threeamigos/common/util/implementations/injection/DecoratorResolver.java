@@ -109,19 +109,40 @@ public class DecoratorResolver {
             return Collections.emptyList();
         }
 
-        // Get all decorators from knowledge base
         Collection<DecoratorInfo> allDecorators = knowledgeBase.getDecoratorInfos();
 
-        // Filter decorators that match the bean's types
         List<DecoratorInfo> matchingDecorators = allDecorators.stream()
-                .filter(decorator -> matchesTypes(decorator, beanTypes))
-                .filter(decorator -> matchesQualifiers(decorator, qualifiers))
-                .sorted(Comparator
-                        .comparingInt(DecoratorInfo::getPriority)
-                        .thenComparing(di -> di.getDecoratorClass().getName()))
-                .collect(Collectors.toList());
+            .filter(decorator -> isEnabled(decorator)) // must be enabled via beans.xml or @Priority
+            .filter(decorator -> matchesTypes(decorator, beanTypes))
+            .filter(decorator -> matchesQualifiers(decorator, qualifiers))
+            .sorted(decoratorOrderingComparator())
+            .collect(Collectors.toList());
 
         return matchingDecorators;
+    }
+
+    /**
+     * Comparator implementing CDI ordering rules:
+     * 1) Decorators listed in beans.xml come first, in listed order across archives.
+     * 2) Remaining decorators are ordered by @Priority (ascending).
+     * 3) Tiebreaker: class name for determinism.
+     */
+    private Comparator<DecoratorInfo> decoratorOrderingComparator() {
+        return Comparator
+            .comparingInt((DecoratorInfo d) -> {
+                int order = knowledgeBase.getDecoratorBeansXmlOrder(d.getDecoratorClass());
+                return order >= 0 ? order : Integer.MAX_VALUE;
+            })
+            .thenComparingInt(DecoratorInfo::getPriority)
+            .thenComparing(di -> di.getDecoratorClass().getName());
+    }
+
+    /**
+     * A decorator is enabled if it is listed in any beans.xml OR has @Priority.
+     */
+    private boolean isEnabled(DecoratorInfo decorator) {
+        int beansXmlOrder = knowledgeBase.getDecoratorBeansXmlOrder(decorator.getDecoratorClass());
+        return beansXmlOrder >= 0 || decorator.getPriority() != Integer.MAX_VALUE;
     }
 
     /**
