@@ -122,6 +122,9 @@ public class CDI41BeanValidator {
         // 4) Validate producers and injection points on fields/methods
         boolean hasInjectionPoints = false;
 
+        // Track producers to detect ambiguous overloads (same qualifiers + same raw/boxed type)
+        Map<String, String> producerSignatureOwners = new HashMap<>();
+
         for (Field field : clazz.getDeclaredFields()) {
             boolean inject = hasInjectAnnotation(field);
             boolean produces = hasProducesAnnotation(field);
@@ -133,6 +136,18 @@ public class CDI41BeanValidator {
 
             if (produces) {
                 valid &= validateProducerField(field);
+
+                // Ambiguity check for overloaded producers
+                String signatureKey = producerSignatureKey(field.getGenericType(), extractQualifiers(field));
+                if (producerSignatureOwners.containsKey(signatureKey)) {
+                    knowledgeBase.addDefinitionError(fmtField(field) +
+                        ": producer conflicts with " + producerSignatureOwners.get(signatureKey) +
+                        " (same bean type/qualifiers). Overloaded producers for the same bean are not allowed.");
+                    valid = false;
+                } else {
+                    producerSignatureOwners.put(signatureKey, fmtField(field));
+                }
+
                 // Create and register ProducerBean for this producer field
                 createAndRegisterProducerBean(clazz, null, field);
             }
@@ -156,6 +171,18 @@ public class CDI41BeanValidator {
 
             if (produces) {
                 valid &= validateProducerMethod(method);
+
+                // Ambiguity check for overloaded producers
+                String signatureKey = producerSignatureKey(method.getGenericReturnType(), extractQualifiers(method));
+                if (producerSignatureOwners.containsKey(signatureKey)) {
+                    knowledgeBase.addDefinitionError(fmtMethod(method) +
+                        ": producer conflicts with " + producerSignatureOwners.get(signatureKey) +
+                        " (same bean type/qualifiers). Overloaded producers for the same bean are not allowed.");
+                    valid = false;
+                } else {
+                    producerSignatureOwners.put(signatureKey, fmtMethod(method));
+                }
+
                 // Create and register ProducerBean for this producer method
                 createAndRegisterProducerBean(clazz, method, null);
             }
@@ -715,6 +742,11 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
+        if (method.isVarArgs()) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": producer method must not be varargs");
+            valid = false;
+        }
+
         // Important rule you explicitly asked for:
         if (hasInjectAnnotation(method)) {
             knowledgeBase.addDefinitionError(fmtMethod(method) + ": producer method must not be annotated @Inject");
@@ -1024,6 +1056,23 @@ public class CDI41BeanValidator {
         // Note: Parameterized types containing wildcards (e.g., List<? extends Number>) are ALLOWED
         // for producers (unlike injection points). The wildcards are handled during type extraction
         // and resolution according to CDI 4.1 typesafe resolution rules.
+    }
+
+    /**
+     * Builds a signature key for a producer based on bean type and qualifiers.
+     * Uses boxed type names to treat primitive/boxed as equivalent for ambiguity checks.
+     */
+    private String producerSignatureKey(Type type, Set<Annotation> qualifiers) {
+        Class<?> raw = RawTypeExtractor.getRawType(type);
+        if (raw.isPrimitive()) {
+            raw = getBoxedType(raw);
+        }
+        String qualKey = qualifiers.stream()
+                .filter(q -> hasMetaAnnotation(q.annotationType(), Qualifier.class))
+                .map(q -> "@" + q.annotationType().getName())
+                .sorted()
+                .collect(Collectors.joining(","));
+        return raw.getName() + "|" + qualKey;
     }
 
     private void checkInjectionTypeValidity(Type type) {
@@ -1459,14 +1508,22 @@ public class CDI41BeanValidator {
      */
     private Method findDisposerForProducer(Class<?> clazz, Method producerMethod) {
         Class<?> producedType = producerMethod.getReturnType();
+        boolean primitiveBoxingMismatchReported = false;
 
         for (Method method : clazz.getDeclaredMethods()) {
             if (hasDisposesParameter(method)) {
                 // Check if disposer parameter type matches producer return type
                 for (Parameter param : method.getParameters()) {
                     if (hasDisposesAnnotation(param)) {
-                        if (param.getType().equals(producedType)) {
+                        Class<?> disposerType = param.getType();
+                        if (disposerType.equals(producedType)) {
                             return method;
+                        } else if (isPrimitiveBoxingPair(disposerType, producedType) && !primitiveBoxingMismatchReported) {
+                            knowledgeBase.addDefinitionError(fmtMethod(method) +
+                                ": @Disposes parameter type " + disposerType.getName() +
+                                " does not exactly match producer return type " + producedType.getName() +
+                                " (primitive/boxed mismatch). Use the exact same type.");
+                            primitiveBoxingMismatchReported = true;
                         }
                     }
                 }
@@ -1485,6 +1542,24 @@ public class CDI41BeanValidator {
             }
         }
         return false;
+    }
+
+    private boolean isPrimitiveBoxingPair(Class<?> a, Class<?> b) {
+        return (a.isPrimitive() && getBoxedType(a).equals(b)) ||
+               (b.isPrimitive() && getBoxedType(b).equals(a));
+    }
+
+    private Class<?> getBoxedType(Class<?> primitive) {
+        if (primitive == int.class) return Integer.class;
+        if (primitive == long.class) return Long.class;
+        if (primitive == double.class) return Double.class;
+        if (primitive == float.class) return Float.class;
+        if (primitive == boolean.class) return Boolean.class;
+        if (primitive == char.class) return Character.class;
+        if (primitive == byte.class) return Byte.class;
+        if (primitive == short.class) return Short.class;
+        if (primitive == void.class) return Void.class;
+        return primitive;
     }
 
     // -----------------------
