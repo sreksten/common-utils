@@ -512,26 +512,41 @@ public class Syringe {
     private void processAnnotatedTypes() {
         System.out.println("[Syringe] Processing annotated types");
 
-        // For each discovered class:
-        // 1. Create AnnotatedType<T> using BeanManager
-        // 2. Create ProcessAnnotatedType<T> event
-        // 3. Fire to all extensions
-        // 4. If vetoed, mark in KnowledgeBase
-        // 5. If modified, use modified AnnotatedType (TODO: implement type replacement)
+        // Create exclude filter from all beans.xml configurations
+        com.threeamigos.common.util.implementations.injection.beansxml.ExcludeFilter excludeFilter =
+            new com.threeamigos.common.util.implementations.injection.beansxml.ExcludeFilter(
+                knowledgeBase.getBeansXmlConfigurations()
+            );
 
+        // For each discovered class:
+        // 1. Check if excluded by beans.xml scan filters
+        // 2. Create AnnotatedType<T> using BeanManager
+        // 3. Create ProcessAnnotatedType<T> event
+        // 4. Fire to all extensions
+        // 5. If vetoed, mark in KnowledgeBase
+        // 6. If modified, use modified AnnotatedType (TODO: implement type replacement)
+
+        int excludedCount = 0;
         for (Class<?> clazz : new ArrayList<>(knowledgeBase.getClasses())) {
             try {
-                // Create AnnotatedType for the class using BeanManager
+                // Step 1: Check if class is excluded by beans.xml scan filters
+                if (excludeFilter.isExcluded(clazz.getName())) {
+                    knowledgeBase.vetoType(clazz);
+                    excludedCount++;
+                    continue;
+                }
+
+                // Step 2: Create AnnotatedType for the class using BeanManager
                 @SuppressWarnings("unchecked")
                 jakarta.enterprise.inject.spi.AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(clazz);
 
-                // Create ProcessAnnotatedType event
+                // Step 3: Create ProcessAnnotatedType event
                 ProcessAnnotatedTypeImpl<?> event = new ProcessAnnotatedTypeImpl<>(annotatedType, beanManager);
 
-                // Fire to all extensions
+                // Step 4: Fire to all extensions
                 fireEventToExtensions(event);
 
-                // If vetoed, mark the type in KnowledgeBase
+                // Step 5: If vetoed, mark the type in KnowledgeBase
                 if (event.isVetoed()) {
                     System.out.println("[Syringe] Type vetoed by extension: " + clazz.getName());
                     knowledgeBase.vetoType(clazz);
@@ -545,7 +560,8 @@ public class Syringe {
             }
         }
 
-        System.out.println("[Syringe] Vetoed types: " + knowledgeBase.getVetoedTypes().size());
+        System.out.println("[Syringe] Excluded by beans.xml filters: " + excludedCount);
+        System.out.println("[Syringe] Vetoed types (total): " + knowledgeBase.getVetoedTypes().size());
     }
 
     // ============================================================
