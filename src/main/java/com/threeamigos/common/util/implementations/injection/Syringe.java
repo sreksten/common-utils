@@ -8,11 +8,14 @@ import com.threeamigos.common.util.implementations.injection.spievents.*;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.event.Reception;
+import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Type;
 import java.util.*;
 
 /**
@@ -595,7 +598,7 @@ public class Syringe {
             try {
                 BeanArchiveMode mode = knowledgeBase.getBeanArchiveMode(clazz);
                 jakarta.enterprise.inject.spi.AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(clazz);
-                validator.validateAndRegister(clazz, mode, override);
+                validator.validateAndRegisterRaw(clazz, mode, override);
                 validated++;
             } catch (Exception e) {
                 System.err.println("[Syringe] Error validating bean class " + clazz.getName() + ": " + e.getMessage());
@@ -655,10 +658,12 @@ public class Syringe {
                     AnnotatedType<?> annotatedType = new SimpleAnnotatedType<>(beanClass);
                     InjectionTargetFactory<?> factory =
                         new InjectionTargetFactoryImpl<>(annotatedType, beanManager);
-                    InjectionTarget<?> injectionTarget = factory.createInjectionTarget(managedBean);
+                @SuppressWarnings("unchecked")
+                InjectionTarget<Object> injectionTarget = (InjectionTarget<Object>) factory.createInjectionTarget((Bean) managedBean);
 
-                    ProcessInjectionTargetImpl<?> event =
-                        new ProcessInjectionTargetImpl<>(annotatedType, injectionTarget, beanManager, knowledgeBase);
+                    @SuppressWarnings("unchecked")
+                    ProcessInjectionTargetImpl<Object> event =
+                        new ProcessInjectionTargetImpl<>((AnnotatedType<Object>) annotatedType, injectionTarget, beanManager, knowledgeBase);
 
                     fireEventToExtensions(event);
 
@@ -1080,7 +1085,8 @@ public class Syringe {
                 if (info.getReception() == Reception.IF_EXISTS && info.getDeclaringBean() != null) {
                     Class<? extends Annotation> scope = info.getDeclaringBean().getScope();
                     try {
-                        Context ctx = contextManager.getContext(scope);
+                        com.threeamigos.common.util.implementations.injection.contexts.ScopeContext ctx =
+                                contextManager.getContext(scope);
                         Object existing = ctx.getIfExists(info.getDeclaringBean());
                         if (existing == null) {
                             return; // skip notification
@@ -1293,14 +1299,14 @@ public class Syringe {
         }
 
         // Sort by @Priority (ascending). Methods without @Priority run last.
-        invocations.sort(Comparator.comparingInt(ExtensionObserverInvocation::priority));
+        invocations.sort(Comparator.comparingInt(inv -> inv.priority));
 
         for (ExtensionObserverInvocation invocation : invocations) {
             try {
                 invocation.invoke(event);
             } catch (Exception e) {
                 System.err.println("[Syringe] Error invoking extension " +
-                                   invocation.extension().getClass().getName() +
+                                   invocation.extension.getClass().getName() +
                                    " for event " + eventType.getSimpleName() + ": " + e.getMessage());
                 e.printStackTrace();
             }
@@ -1344,12 +1350,28 @@ public class Syringe {
      * Lightweight wrapper capturing an extension observer method invocation.
      * Sorting happens on the priority value.
      */
-    private record ExtensionObserverInvocation(Extension extension,
-                                               Method method,
-                                               int observesIndex,
-                                               int priority,
-                                               BeanManager beanManager,
-                                               com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase) {
+    private static class ExtensionObserverInvocation {
+        private final Extension extension;
+        private final Method method;
+        private final int observesIndex;
+        private final int priority;
+        private final BeanManager beanManager;
+        private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
+
+        ExtensionObserverInvocation(Extension extension,
+                                    Method method,
+                                    int observesIndex,
+                                    int priority,
+                                    BeanManager beanManager,
+                                    com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase) {
+            this.extension = extension;
+            this.method = method;
+            this.observesIndex = observesIndex;
+            this.priority = priority;
+            this.beanManager = beanManager;
+            this.knowledgeBase = knowledgeBase;
+        }
+
         void invoke(Object event) throws Exception {
             java.lang.reflect.Parameter[] parameters = method.getParameters();
             Object[] args = new Object[parameters.length];
@@ -1364,9 +1386,9 @@ public class Syringe {
             method.invoke(extension, args);
 
             System.out.println("[Syringe]   Invoked extension observer: " +
-                               extension.getClass().getSimpleName() + "." + method.getName() +
-                               "(@Observes " + event.getClass().getSimpleName() +
-                               ", priority=" + priority + ")");
+                    extension.getClass().getSimpleName() + "." + method.getName() +
+                    "(@Observes " + event.getClass().getSimpleName() +
+                    ", priority=" + priority + ")");
         }
 
         private Object resolveExtensionParameter(java.lang.reflect.Parameter parameter) {
@@ -1394,8 +1416,8 @@ public class Syringe {
                 return beanManager.getReference(resolved, parameter.getParameterizedType(), ctx);
             } catch (Exception e) {
                 String msg = "[Syringe] Extension observer parameter " +
-                             parameter.getName() + " (" + parameter.getType().getName() +
-                             ") could not be injected: " + e.getMessage();
+                        parameter.getName() + " (" + parameter.getType().getName() +
+                        ") could not be injected: " + e.getMessage();
                 if (knowledgeBase != null) {
                     knowledgeBase.addDefinitionError(msg);
                 }

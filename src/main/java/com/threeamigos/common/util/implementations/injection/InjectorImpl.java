@@ -230,7 +230,7 @@ public class InjectorImpl implements Injector {
         // InjectorImpl is legacy; we perform validation now using recorded archive modes.
         CDI41BeanValidator validator = new CDI41BeanValidator(knowledgeBase);
         for (Class<?> clazz : knowledgeBase.getClasses()) {
-            validator.validateAndRegister(clazz,
+            validator.validateAndRegisterRaw(clazz,
                     knowledgeBase.getBeanArchiveMode(clazz),
                     knowledgeBase.getAnnotatedTypeOverride(clazz));
         }

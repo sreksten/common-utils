@@ -62,6 +62,11 @@ public class CDI41BeanValidator {
         return validateAndRegister(clazz, beanArchiveMode, null);
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    BeanImpl<?> validateAndRegisterRaw(Class<?> clazz, BeanArchiveMode beanArchiveMode, AnnotatedType<?> annotatedTypeOverride) {
+        return validateAndRegister((Class) clazz, beanArchiveMode, (AnnotatedType) annotatedTypeOverride);
+    }
+
     <T> BeanImpl<T> validateAndRegister(Class<T> clazz,
                                         BeanArchiveMode beanArchiveMode,
                                         AnnotatedType<T> annotatedTypeOverride) {

@@ -148,6 +148,10 @@ public class TypeChecker {
      * @throws IllegalStateException if type hierarchy navigation fails unexpectedly
      */
     boolean isAssignable(Type targetType, Type implementationType) {
+        if (targetType instanceof TypeVariable || implementationType instanceof TypeVariable ||
+            targetType instanceof WildcardType || implementationType instanceof WildcardType) {
+            return isAssignableInternal(targetType, implementationType);
+        }
         TypePair pair = new TypePair(targetType, implementationType);
         return assignabilityCache.computeIfAbsent(pair, () -> isAssignableInternal(targetType, implementationType));
     }
@@ -184,19 +188,25 @@ public class TypeChecker {
         }
 
         // Handle intersection types in implementation (TypeVariable with multiple bounds)
-        // Example: <T extends Serializable & Comparable<T>> - represented as TypeVariable with bounds[]
+        // Candidate is an unknown that MUST satisfy all bounds; target is valid if it satisfies all bounds.
         if (implementationType instanceof TypeVariable) {
             TypeVariable<?> tv = (TypeVariable<?>) implementationType;
             Type[] bounds = tv.getBounds();
 
-            // For intersection types, implementation must satisfy ALL bounds
-            // If any bound doesn't match target, fail
+            if (bounds == null || bounds.length == 0) {
+                bounds = new Type[] { Object.class };
+            }
+
             for (Type bound : bounds) {
-                if (isAssignable(targetType, bound)) {
-                    return true; // At least one bound matches
+                Class<?> boundRaw = RawTypeExtractor.getRawType(bound);
+                Class<?> targetRaw = RawTypeExtractor.getRawType(targetType);
+                boolean targetIsSubtype = boundRaw.isAssignableFrom(targetRaw);
+                boolean targetIsSupertype = targetRaw.isAssignableFrom(boundRaw);
+                if (!(targetIsSubtype || targetIsSupertype)) {
+                    return false;
                 }
             }
-            return false;
+            return true;
         }
 
         Class<?> targetRaw = RawTypeExtractor.getRawType(targetType);
@@ -222,14 +232,21 @@ public class TypeChecker {
         }
 
         if (targetType instanceof GenericArrayType) {
-            if (!implementationRaw.isArray()) {
-                throw new IllegalStateException(
-                    "Implementation type is not an array despite passing isAssignableFrom check. " +
-                    "Target: " + targetType + " (raw: " + targetRaw + "), " +
-                    "Implementation: " + implementationType + " (raw: " + implementationRaw + ")");
-            }
             Type targetComponent = ((GenericArrayType) targetType).getGenericComponentType();
-            return isAssignable(targetComponent, implementationRaw.getComponentType());
+
+            Type implComponentType;
+            if (implementationType instanceof GenericArrayType) {
+                implComponentType = ((GenericArrayType) implementationType).getGenericComponentType();
+            } else {
+                if (!implementationRaw.isArray()) {
+                    throw new IllegalStateException(
+                        "Implementation type is not an array despite passing isAssignableFrom check. " +
+                        "Target: " + targetType + " (raw: " + targetRaw + "), " +
+                        "Implementation: " + implementationType + " (raw: " + implementationRaw + ")");
+                }
+                implComponentType = implementationRaw.getComponentType();
+            }
+            return isAssignable(targetComponent, implComponentType);
         }
 
         throw new IllegalStateException(
@@ -435,8 +452,18 @@ public class TypeChecker {
             return isWildcardCompatible(t1, (WildcardType) t2);
         }
 
-        // TypeVariables in t2 are treated as compatible (raw type erasure)
+        // TypeVariables in t2: target argument must be assignable to ALL bounds (t2 represents unknown within bounds)
         if (t2 instanceof TypeVariable) {
+            TypeVariable<?> tv = (TypeVariable<?>) t2;
+            Type[] bounds = tv.getBounds();
+            if (bounds == null || bounds.length == 0) {
+                bounds = new Type[] { Object.class };
+            }
+            for (Type bound : bounds) {
+                if (!isAssignable(bound, t1)) {
+                    return false;
+                }
+            }
             return true;
         }
 
