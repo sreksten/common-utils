@@ -170,6 +170,40 @@ public class InterceptorChain {
     }
 
     /**
+     * Invokes the interceptor chain for multiple lifecycle callbacks in sequence.
+     *
+     * <p>This is used for @PostConstruct and @PreDestroy callbacks where there may be
+     * multiple lifecycle methods in a class hierarchy that all need to be invoked.
+     *
+     * <p>The interceptor chain executes once, then invokes all target lifecycle methods
+     * in the provided order.
+     *
+     * @param target the target bean instance
+     * @param lifecycleCallbacks list of lifecycle callback methods to invoke in order
+     * @throws Exception any exception thrown by interceptors or callbacks
+     */
+    public void invokeLifecycleChain(Object target, java.util.List<java.lang.reflect.Method> lifecycleCallbacks) throws Exception {
+        // Create target invocation that calls all lifecycle methods in order
+        InvocationContextImpl.TargetInvocation targetInvocation = ctx -> {
+            if (lifecycleCallbacks != null && !lifecycleCallbacks.isEmpty()) {
+                for (java.lang.reflect.Method callback : lifecycleCallbacks) {
+                    callback.setAccessible(true);
+                    callback.invoke(target);
+                }
+            }
+            return null; // Lifecycle callbacks return void
+        };
+
+        // Create invocation context
+        InvocationContextImpl context = new InvocationContextImpl(
+                target, this, targetInvocation
+        );
+
+        // Start chain execution
+        context.proceed();
+    }
+
+    /**
      * Checks if the chain is empty (no interceptors).
      *
      * @return true if there are no interceptors in the chain

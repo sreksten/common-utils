@@ -1161,7 +1161,10 @@ public class BeanImpl<T> implements Bean<T> {
         // Use the Builder pattern to construct the chain
         InterceptorChain.Builder builder = InterceptorChain.builder();
 
-        // Add interceptor lifecycle methods
+        // Add interceptor lifecycle methods to the chain
+        // Note: The target bean's lifecycle methods are NOT added to the interceptor chain here.
+        // They are passed separately to invokeLifecycleChain() to support multiple lifecycle
+        // methods in the class hierarchy (per Interceptors spec).
         for (InterceptorInfo interceptorInfo : interceptors) {
             Object interceptorInstance = getOrCreateInterceptorInstance(interceptorInfo);
             Method interceptorMethod = getInterceptorMethod(interceptorInfo, interceptionType);
@@ -1169,19 +1172,6 @@ public class BeanImpl<T> implements Bean<T> {
             if (interceptorMethod != null) {
                 builder.addInterceptor(interceptorInstance, interceptorMethod);
             }
-        }
-
-        // Add the target bean's lifecycle method at the end of the chain
-        // This ensures interceptors run before the target method (per CDI spec)
-        Method targetLifecycleMethod = interceptionType == InterceptionType.POST_CONSTRUCT
-                ? postConstructMethod
-                : preDestroyMethod;
-
-        if (targetLifecycleMethod != null) {
-            // Add a special invocation that will invoke the target's lifecycle method
-            // We can't add it directly because the target instance is not available yet during chain building
-            // Instead, we'll handle this in the invoke methods (invokePostConstruct/invokePreDestroy)
-            // by ensuring the target method is called as part of the chain's final proceed()
         }
 
         return builder.build();
