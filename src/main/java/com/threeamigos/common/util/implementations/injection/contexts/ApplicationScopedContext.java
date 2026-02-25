@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.contexts;
 
 import com.threeamigos.common.util.implementations.injection.BeanImpl;
+import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
@@ -27,7 +28,7 @@ public class ApplicationScopedContext implements ScopeContext {
     @SuppressWarnings("unchecked")
     public <T> T get(Bean<T> bean, CreationalContext<T> creationalContext) {
         if (!active) {
-            throw new IllegalStateException("ApplicationScoped context is not active");
+            throw new ContextNotActiveException("ApplicationScoped context is not active");
         }
 
         return (T) instances.computeIfAbsent(bean, b -> {

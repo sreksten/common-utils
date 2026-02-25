@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.contexts;
 
 import com.threeamigos.common.util.implementations.injection.BeanImpl;
+import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
@@ -231,12 +232,12 @@ public class ConversationScopedContext implements ScopeContext {
     @SuppressWarnings("unchecked")
     public <T> T get(Bean<T> bean, CreationalContext<T> creationalContext) {
         if (!active) {
-            throw new IllegalStateException("ConversationScoped context is not active");
+            throw new ContextNotActiveException("ConversationScoped context is not active");
         }
 
         String conversationId = currentConversationId.get();
         if (conversationId == null) {
-            throw new IllegalStateException("No active conversation. Call beginConversation() first.");
+            throw new ContextNotActiveException("No active conversation. Call beginConversation() first.");
         }
 
         // Touch conversation to update last access time

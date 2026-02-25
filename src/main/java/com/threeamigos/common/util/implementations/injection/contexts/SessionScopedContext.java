@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.contexts;
 
 import com.threeamigos.common.util.implementations.injection.BeanImpl;
+import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
@@ -75,12 +76,12 @@ public class SessionScopedContext implements ScopeContext {
     @SuppressWarnings("unchecked")
     public <T> T get(Bean<T> bean, CreationalContext<T> creationalContext) {
         if (!active) {
-            throw new IllegalStateException("SessionScoped context is not active");
+            throw new ContextNotActiveException("SessionScoped context is not active");
         }
 
         String sessionId = currentSessionId.get();
         if (sessionId == null) {
-            throw new IllegalStateException("No active session. Call activateSession() first.");
+            throw new ContextNotActiveException("No active session. Call activateSession() first.");
         }
 
         Map<Bean<?>, Object> instances = sessionInstances.get(sessionId);
