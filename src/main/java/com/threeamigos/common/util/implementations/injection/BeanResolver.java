@@ -59,9 +59,28 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
             jakarta.enterprise.inject.spi.InjectionPoint ip = currentInjectionPoint.get();
             if (ip == null) {
                 throw new IllegalStateException(
-                    "InjectionPoint can only be injected during dependency resolution. " +
-                    "It cannot be injected into @ApplicationScoped or other normal-scoped beans " +
-                    "because it is contextual to the current injection point.");
+                    "InjectionPoint is not available in this context. " +
+                    "\n\nReason: InjectionPoint provides metadata about the current injection point, but normal-scoped beans " +
+                    "(like @ApplicationScoped, @RequestScoped, @SessionScoped) use client proxies. The proxy cannot capture " +
+                    "the injection point context because it's shared across multiple injection points." +
+                    "\n\nWorkarounds:" +
+                    "\n  1. Use Provider<InjectionPoint> or Instance<InjectionPoint> instead:" +
+                    "\n     @Inject Provider<InjectionPoint> injectionPointProvider;" +
+                    "\n     InjectionPoint ip = injectionPointProvider.get(); // Returns current context" +
+                    "\n" +
+                    "\n  2. Change bean scope to @Dependent (each injection gets its own instance):" +
+                    "\n     @Dependent // Instead of @ApplicationScoped" +
+                    "\n     public class MyBean {" +
+                    "\n         @Inject InjectionPoint injectionPoint; // Now works!" +
+                    "\n     }" +
+                    "\n" +
+                    "\n  3. Inject into producer methods (common pattern for Logger):" +
+                    "\n     @Produces" +
+                    "\n     public Logger createLogger(InjectionPoint ip) {" +
+                    "\n         return Logger.getLogger(ip.getMember().getDeclaringClass().getName());" +
+                    "\n     }" +
+                    "\n" +
+                    "\nSee CDI 4.1 Spec Section 3.10 for more details.");
             }
             return ip;
         }
