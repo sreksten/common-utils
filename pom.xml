@@ -45,6 +45,13 @@
             <version>2.2.0</version>
             <scope>provided</scope>
         </dependency>
+        <!-- Jakarta Servlet API for HTTP conversation propagation -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.0.0</version>
+            <scope>provided</scope>
+        </dependency>
         <!-- ByteBuddy for client proxy generation -->
         <dependency>
             <groupId>net.bytebuddy</groupId>

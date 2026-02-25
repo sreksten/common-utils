@@ -215,6 +215,35 @@ public class ConversationScopedContext implements ScopeContext {
     }
 
     /**
+     * Synchronizes this context with the Conversation bean state.
+     * Called by ConversationImpl when a conversation is promoted to long-running.
+     *
+     * <p>This method:
+     * <ul>
+     *   <li>Sets the conversation ID for the current thread</li>
+     *   <li>Initializes conversation storage if needed</li>
+     *   <li>Creates metadata for timeout tracking</li>
+     * </ul>
+     *
+     * @param conversationId the conversation ID to synchronize with
+     */
+    public void syncWithConversation(String conversationId) {
+        currentConversationId.set(conversationId);
+        conversationInstances.putIfAbsent(conversationId, new ConcurrentHashMap<>());
+        conversationContexts.putIfAbsent(conversationId, new ConcurrentHashMap<>());
+        conversationMetadata.putIfAbsent(conversationId,
+            new ConversationMetadata(defaultTimeoutMillis));
+    }
+
+    /**
+     * Clears the current thread's conversation ID.
+     * Called by ConversationPropagationFilter at request end to prevent memory leaks.
+     */
+    public void clearCurrentThread() {
+        currentConversationId.remove();
+    }
+
+    /**
      * Touches the current conversation, updating its last access time.
      * This prevents the conversation from timing out.
      */

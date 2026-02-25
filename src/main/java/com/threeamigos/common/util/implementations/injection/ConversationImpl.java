@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.contexts.ConversationScopedContext;
 import jakarta.enterprise.context.Conversation;
 
 import java.io.Serializable;
@@ -55,6 +56,19 @@ public class ConversationImpl implements Conversation, Serializable {
         return state;
     });
 
+    // Reference to ConversationScopedContext for state synchronization
+    private static ConversationScopedContext conversationContext;
+
+    /**
+     * Sets the conversation context for integration between Conversation bean
+     * and ConversationScopedContext. This should be called during container initialization.
+     *
+     * @param context the conversation scoped context
+     */
+    public static void setConversationContext(ConversationScopedContext context) {
+        conversationContext = context;
+    }
+
     /**
      * Creates a new Conversation instance.
      * State is managed via ThreadLocal, so each request thread gets its own conversation.
@@ -95,6 +109,11 @@ public class ConversationImpl implements Conversation, Serializable {
         state.transientFlag = false;
         // Register this conversation as active
         activeConversations.put(state.id, state);
+
+        // Synchronize with ConversationScopedContext
+        if (conversationContext != null) {
+            conversationContext.syncWithConversation(state.id);
+        }
     }
 
     /**
@@ -120,6 +139,11 @@ public class ConversationImpl implements Conversation, Serializable {
         state.transientFlag = false;
         // Register this conversation as active
         activeConversations.put(state.id, state);
+
+        // Synchronize with ConversationScopedContext
+        if (conversationContext != null) {
+            conversationContext.syncWithConversation(state.id);
+        }
     }
 
     /**
@@ -140,8 +164,17 @@ public class ConversationImpl implements Conversation, Serializable {
         if (state.transientFlag) {
             throw new IllegalStateException("Cannot end a transient conversation");
         }
+
+        String conversationId = state.id;
+
         // Remove from active conversations
-        activeConversations.remove(state.id);
+        activeConversations.remove(conversationId);
+
+        // End conversation in ConversationScopedContext (destroys beans)
+        if (conversationContext != null) {
+            conversationContext.endConversation(conversationId);
+        }
+
         state.transientFlag = true;
         // Generate new ID for potential future begin()
         state.id = generateStaticId();
@@ -225,7 +258,7 @@ public class ConversationImpl implements Conversation, Serializable {
      * Clears the current thread's conversation state.
      * Should be called at the end of each request to prevent memory leaks.
      */
-    static void clearCurrentConversation() {
+    public static void clearCurrentConversation() {
         currentConversation.remove();
     }
 
@@ -235,7 +268,7 @@ public class ConversationImpl implements Conversation, Serializable {
      * @param conversationId the conversation ID to restore
      * @return true if the conversation was found and restored
      */
-    static boolean restoreConversation(String conversationId) {
+    public static boolean restoreConversation(String conversationId) {
         ConversationState state = activeConversations.get(conversationId);
         if (state != null) {
             currentConversation.set(state);
