@@ -7,8 +7,11 @@ import com.threeamigos.common.util.implementations.injection.literals.DefaultLit
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.AmbiguousResolutionException;
+import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.inject.Named;
 import jakarta.inject.Provider;
 
@@ -112,20 +115,23 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
         Collection<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
 
         if (candidates.isEmpty()) {
-            throw new RuntimeException(
-                "No bean found for type: " + requiredType +
-                " with qualifiers: " + Arrays.toString(qualifiers)
+            String message = buildResolutionMessage(
+                "Unsatisfied dependency",
+                requiredType,
+                qualifiers
             );
+            throw new UnsatisfiedResolutionException(message);
         }
 
         if (candidates.size() > 1) {
-            throw new RuntimeException(
-                "Ambiguous dependency: multiple beans found for type: " + requiredType +
-                " with qualifiers: " + Arrays.toString(qualifiers) +
-                ". Matching beans: " + candidates.stream()
-                    .map(b -> b.getBeanClass().getName())
-                    .collect(Collectors.joining(", "))
-            );
+            String message = buildResolutionMessage(
+                "Ambiguous dependency",
+                requiredType,
+                qualifiers
+            ) + ". Matching beans: " + candidates.stream()
+                .map(this::formatBeanSummary)
+                .collect(Collectors.joining(", "));
+            throw new AmbiguousResolutionException(message);
         }
 
         Bean<?> bean = candidates.iterator().next();
@@ -261,6 +267,79 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
         }
 
         return true;
+    }
+
+    /**
+     * Formats an array of qualifiers for human-friendly CDI-style error messages.
+     */
+    private String formatQualifiers(Annotation[] qualifiers) {
+        if (qualifiers == null || qualifiers.length == 0) {
+            return "[@Default]";
+        }
+
+        return Arrays.stream(qualifiers)
+            .filter(a -> hasQualifierAnnotation(a.annotationType()))
+            .sorted(Comparator.comparing(a -> a.annotationType().getName()))
+            .map(this::qualifierToString)
+            .collect(Collectors.joining(", ", "[", "]"));
+    }
+
+    private String qualifierToString(Annotation qualifier) {
+        if (qualifier instanceof Named) {
+            return "@Named(" + getNamedValue(qualifier) + ")";
+        }
+        return "@" + qualifier.annotationType().getSimpleName();
+    }
+
+    /**
+     * Builds a CDI-style resolution error message with contextual injection point details.
+     */
+    private String buildResolutionMessage(String prefix, Type requiredType, Annotation[] qualifiers) {
+        StringBuilder message = new StringBuilder()
+            .append(prefix)
+            .append(" for type ")
+            .append(requiredType.getTypeName())
+            .append(" with qualifiers ")
+            .append(formatQualifiers(qualifiers));
+
+        InjectionPoint ip = currentInjectionPoint.get();
+        if (ip != null) {
+            message.append(" at ").append(describeInjectionPoint(ip));
+        }
+        return message.toString();
+    }
+
+    private String describeInjectionPoint(InjectionPoint ip) {
+        StringBuilder sb = new StringBuilder("[");
+        if (ip.getBean() != null) {
+            sb.append(ip.getBean().getBeanClass().getName()).append(" -> ");
+        }
+        if (ip.getMember() != null) {
+            sb.append(ip.getMember().getDeclaringClass().getName())
+              .append("#")
+              .append(ip.getMember().getName());
+        } else {
+            sb.append("<unknown member>");
+        }
+
+        if (ip.getAnnotated() instanceof AnnotatedParameter) {
+            AnnotatedParameter<?> param = (AnnotatedParameter<?>) ip.getAnnotated();
+            sb.append(" parameter ").append(param.getPosition());
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String formatBeanSummary(Bean<?> bean) {
+        String qualifiers = bean.getQualifiers().stream()
+            .filter(q -> hasQualifierAnnotation(q.annotationType()))
+            .map(this::qualifierToString)
+            .sorted()
+            .collect(Collectors.joining(", "));
+        if (qualifiers.isEmpty()) {
+            qualifiers = "@Default";
+        }
+        return bean.getBeanClass().getName() + " {" + qualifiers + "}";
     }
 
     /**

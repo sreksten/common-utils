@@ -150,10 +150,10 @@ public class TypeChecker {
     boolean isAssignable(Type targetType, Type implementationType) {
         if (targetType instanceof TypeVariable || implementationType instanceof TypeVariable ||
             targetType instanceof WildcardType || implementationType instanceof WildcardType) {
-            return isAssignableInternal(targetType, implementationType);
+            return isAssignableInternal(targetType, implementationType, true);
         }
         TypePair pair = new TypePair(targetType, implementationType);
-        return assignabilityCache.computeIfAbsent(pair, () -> isAssignableInternal(targetType, implementationType));
+        return assignabilityCache.computeIfAbsent(pair, () -> isAssignableInternal(targetType, implementationType, true));
     }
 
     /**
@@ -181,7 +181,13 @@ public class TypeChecker {
      * @throws IllegalStateException if type navigation fails unexpectedly
      */
     boolean isAssignableInternal(Type targetType, Type implementationType) {
-        validateInjectionPoint(targetType);
+        return isAssignableInternal(targetType, implementationType, true);
+    }
+
+    boolean isAssignableInternal(Type targetType, Type implementationType, boolean validateTarget) {
+        if (validateTarget) {
+            validateInjectionPoint(targetType);
+        }
 
         if (targetType.equals(implementationType)) {
             return true;
@@ -193,16 +199,15 @@ public class TypeChecker {
             TypeVariable<?> tv = (TypeVariable<?>) implementationType;
             Type[] bounds = tv.getBounds();
 
-            if (bounds == null || bounds.length == 0) {
-                bounds = new Type[] { Object.class };
+            if (bounds == null || bounds.length == 0 || isOnlyObjectBound(bounds)) {
+                return true; // Raw/erased type variable accepts any target
             }
 
+            Class<?> targetRaw = RawTypeExtractor.getRawType(targetType);
             for (Type bound : bounds) {
                 Class<?> boundRaw = RawTypeExtractor.getRawType(bound);
-                Class<?> targetRaw = RawTypeExtractor.getRawType(targetType);
-                boolean targetIsSubtype = boundRaw.isAssignableFrom(targetRaw);
-                boolean targetIsSupertype = targetRaw.isAssignableFrom(boundRaw);
-                if (!(targetIsSubtype || targetIsSupertype)) {
+                boolean overlap = boundRaw.isAssignableFrom(targetRaw) || targetRaw.isAssignableFrom(boundRaw);
+                if (!overlap) {
                     return false;
                 }
             }
@@ -252,6 +257,10 @@ public class TypeChecker {
         throw new IllegalStateException(
             "Unexpected target type: " + targetType.getClass().getName() +
             " - " + targetType + ". Expected Class, ParameterizedType, or GenericArrayType.");
+    }
+
+    private boolean isOnlyObjectBound(Type[] bounds) {
+        return bounds.length == 1 && Object.class.equals(bounds[0]);
     }
 
     /**
@@ -459,8 +468,16 @@ public class TypeChecker {
             if (bounds == null || bounds.length == 0) {
                 bounds = new Type[] { Object.class };
             }
+
+            if (isOnlyObjectBound(bounds)) {
+                return true; // erased type variable, accept target argument
+            }
+
             for (Type bound : bounds) {
-                if (!isAssignable(bound, t1)) {
+                Class<?> boundRaw = RawTypeExtractor.getRawType(bound);
+                Class<?> targetRaw = RawTypeExtractor.getRawType(t1);
+                boolean overlap = boundRaw.isAssignableFrom(targetRaw) || targetRaw.isAssignableFrom(boundRaw);
+                if (!overlap) {
                     return false;
                 }
             }
