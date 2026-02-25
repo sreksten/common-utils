@@ -132,20 +132,16 @@ public class InterceptorResolver {
      * @return set of interceptor binding annotations
      */
     private Set<Annotation> extractInterceptorBindings(AnnotatedElement element) {
-        Set<Annotation> bindings = new HashSet<>();
+        if (element instanceof Class) {
+            return extractInterceptorBindingsFromHierarchy((Class<?>) element);
+        }
 
+        Set<Annotation> bindings = new HashSet<>();
         for (Annotation annotation : element.getAnnotations()) {
-            // Check if this annotation is an interceptor binding
             if (isInterceptorBinding(annotation.annotationType())) {
                 bindings.add(annotation);
             }
-
-            // For classes, also check stereotypes for inherited bindings
-            if (element instanceof Class && AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
-                bindings.addAll(extractInterceptorBindingsFromStereotype(annotation.annotationType()));
-            }
         }
-
         return bindings;
     }
 
@@ -169,6 +165,47 @@ public class InterceptorResolver {
             // Handle nested stereotypes (stereotype on stereotype)
             if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
                 bindings.addAll(extractInterceptorBindingsFromStereotype(annotation.annotationType()));
+            }
+        }
+
+        return bindings;
+    }
+
+    /**
+     * Collects interceptor bindings from a class and its type hierarchy (superclasses and interfaces).
+     *
+     * <p>CDI 4.1 specifies that interceptor bindings are inherited. This method walks the full
+     * hierarchy to ensure bindings declared on generic superclasses or implemented interfaces
+     * are considered during resolution.</p>
+     */
+    private Set<Annotation> extractInterceptorBindingsFromHierarchy(Class<?> type) {
+        Set<Annotation> bindings = new HashSet<>();
+        Set<Class<?>> visited = new HashSet<>();
+        Deque<Class<?>> stack = new ArrayDeque<>();
+        if (type != null) {
+            stack.push(type);
+        }
+
+        while (!stack.isEmpty()) {
+            Class<?> current = stack.pop();
+            if (current == null || !visited.add(current)) {
+                continue;
+            }
+
+            for (Annotation annotation : current.getAnnotations()) {
+                if (isInterceptorBinding(annotation.annotationType())) {
+                    bindings.add(annotation);
+                }
+                if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
+                    bindings.addAll(extractInterceptorBindingsFromStereotype(annotation.annotationType()));
+                }
+            }
+
+            // Traverse superclass first (preserves natural overriding semantics)
+            stack.push(current.getSuperclass());
+            // Then traverse interfaces (may include generic parents)
+            for (Class<?> iface : current.getInterfaces()) {
+                stack.push(iface);
             }
         }
 
