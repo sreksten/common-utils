@@ -4,6 +4,8 @@ import com.threeamigos.common.util.implementations.injection.contexts.ContextMan
 import com.threeamigos.common.util.implementations.injection.contexts.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.tx.NoOpTransactionServices;
+import com.threeamigos.common.util.implementations.injection.tx.TransactionServices;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
@@ -43,14 +45,20 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
     private final KnowledgeBase knowledgeBase;
     private final ContextManager contextManager;
     private final TypeChecker typeChecker;
+    private TransactionServices transactionServices;
 
     // ThreadLocal to pass injection point context during resolution
     private final ThreadLocal<InjectionPoint> currentInjectionPoint = new ThreadLocal<>();
 
     BeanResolver(KnowledgeBase knowledgeBase, ContextManager contextManager) {
+        this(knowledgeBase, contextManager, new NoOpTransactionServices());
+    }
+
+    BeanResolver(KnowledgeBase knowledgeBase, ContextManager contextManager, TransactionServices transactionServices) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
         this.typeChecker = new TypeChecker();
+        this.transactionServices = transactionServices == null ? new NoOpTransactionServices() : transactionServices;
     }
 
     @Override
@@ -473,7 +481,15 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
      */
     @SuppressWarnings("unchecked")
     private <T> Event<T> createEventWrapper(Type eventType, Set<Annotation> qualifiers) {
-        return new EventImpl<>(eventType, qualifiers, knowledgeBase, this, contextManager);
+        return new EventImpl<>(eventType, qualifiers, knowledgeBase, this, contextManager, transactionServices);
+    }
+
+    TransactionServices getTransactionServices() {
+        return transactionServices;
+    }
+
+    void setTransactionServices(TransactionServices transactionServices) {
+        this.transactionServices = transactionServices == null ? new NoOpTransactionServices() : transactionServices;
     }
 
     /**

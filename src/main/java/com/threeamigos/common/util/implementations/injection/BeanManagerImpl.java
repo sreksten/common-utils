@@ -80,7 +80,8 @@ public class BeanManagerImpl implements BeanManager {
     public BeanManagerImpl(KnowledgeBase knowledgeBase, ContextManager contextManager) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
-        this.beanResolver = new BeanResolver(knowledgeBase, contextManager);
+        this.beanResolver = new BeanResolver(knowledgeBase, contextManager,
+            com.threeamigos.common.util.implementations.injection.tx.TransactionServicesFactory.create());
         this.typeChecker = new TypeChecker();
     }
 
@@ -746,7 +747,7 @@ public class BeanManagerImpl implements BeanManager {
         Set<Annotation> qualifiers = new HashSet<>();
         qualifiers.add(new com.threeamigos.common.util.implementations.injection.literals.AnyLiteral());
 
-        return new EventImpl<>(Object.class, qualifiers, knowledgeBase, beanResolver, contextManager);
+        return new EventImpl<>(Object.class, qualifiers, knowledgeBase, beanResolver, contextManager, beanResolver.getTransactionServices());
     }
 
     /**

@@ -4,6 +4,8 @@ import com.threeamigos.common.util.implementations.injection.contexts.ContextMan
 import com.threeamigos.common.util.implementations.injection.contexts.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.ObserverMethodInfo;
+import com.threeamigos.common.util.implementations.injection.tx.TransactionServices;
+import com.threeamigos.common.util.implementations.injection.tx.TransactionSynchronizationCallbacks;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.NotificationOptions;
 import jakarta.enterprise.event.Reception;
@@ -66,6 +68,7 @@ public class EventImpl<T> implements Event<T> {
     private final BeanResolver beanResolver;
     private final ContextManager contextManager;
     private final TypeChecker typeChecker;
+    private final TransactionServices transactionServices;
 
     /**
      * Creates an Event instance for firing events of a specific type with qualifiers.
@@ -76,13 +79,15 @@ public class EventImpl<T> implements Event<T> {
      * @param beanResolver the resolver for obtaining observer bean instances
      * @param contextManager the context manager for checking bean existence in scopes
      */
-    public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase, BeanResolver beanResolver, ContextManager contextManager) {
+    public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
+                    BeanResolver beanResolver, ContextManager contextManager, TransactionServices transactionServices) {
         this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
         this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
         this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
         this.typeChecker = new TypeChecker();
+        this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
     }
 
     /**
@@ -117,6 +122,12 @@ public class EventImpl<T> implements Event<T> {
         // Sort by priority (lower = earlier)
         matchingObservers.sort(Comparator.comparingInt(ObserverMethodInfo::getPriority));
 
+        boolean txActive = transactionServices.isTransactionActive();
+        List<ObserverMethodInfo> beforeCompletion = new ArrayList<>();
+        List<ObserverMethodInfo> afterSuccess = new ArrayList<>();
+        List<ObserverMethodInfo> afterFailure = new ArrayList<>();
+        List<ObserverMethodInfo> afterCompletion = new ArrayList<>();
+
         // Invoke each observer
         for (ObserverMethodInfo observerInfo : matchingObservers) {
             // Check reception condition per CDI 4.1 specification (Section 10.5.2):
@@ -143,13 +154,52 @@ public class EventImpl<T> implements Event<T> {
             }
             // If Reception.ALWAYS: invokeObserver() will create the bean if needed via beanResolver
 
-            // Only invoke IN_PROGRESS observers during fire()
-            // (Other transaction phases would require transaction integration)
-            if (observerInfo.getTransactionPhase() != TransactionPhase.IN_PROGRESS) {
-                continue;
-            }
+            TransactionPhase phase = observerInfo.getTransactionPhase();
 
-            invokeObserver(observerInfo, event);
+            if (phase == TransactionPhase.IN_PROGRESS) {
+                invokeObserver(observerInfo, event);
+            } else if (!txActive) {
+                // Spec: if no transaction is active, transactional observers fire immediately
+                invokeObserver(observerInfo, event);
+            } else {
+                switch (phase) {
+                    case BEFORE_COMPLETION:
+                        beforeCompletion.add(observerInfo);
+                        break;
+                    case AFTER_SUCCESS:
+                        afterSuccess.add(observerInfo);
+                        break;
+                    case AFTER_FAILURE:
+                        afterFailure.add(observerInfo);
+                        break;
+                    case AFTER_COMPLETION:
+                        afterCompletion.add(observerInfo);
+                        break;
+                    default:
+                        // fallback
+                        invokeObserver(observerInfo, event);
+                }
+            }
+        }
+
+        if (txActive && (!beforeCompletion.isEmpty() || !afterSuccess.isEmpty() ||
+            !afterFailure.isEmpty() || !afterCompletion.isEmpty())) {
+            transactionServices.registerSynchronization(new TransactionSynchronizationCallbacks() {
+                @Override
+                public void beforeCompletion() {
+                    invokeObserverList(beforeCompletion, event);
+                }
+
+                @Override
+                public void afterCompletion(boolean committed) {
+                    if (committed) {
+                        invokeObserverList(afterSuccess, event);
+                    } else {
+                        invokeObserverList(afterFailure, event);
+                    }
+                    invokeObserverList(afterCompletion, event);
+                }
+            });
         }
     }
 
@@ -283,7 +333,7 @@ public class EventImpl<T> implements Event<T> {
             }
             newQualifiers.add(qualifier);
         }
-        return new EventImpl<>(eventType, newQualifiers, knowledgeBase, beanResolver, contextManager);
+        return new EventImpl<>(eventType, newQualifiers, knowledgeBase, beanResolver, contextManager, transactionServices);
     }
 
     /**
@@ -321,7 +371,7 @@ public class EventImpl<T> implements Event<T> {
         }
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
-        return (Event<U>) new EventImpl<U>(subtype, newQualifiers, knowledgeBase, beanResolver, contextManager);
+        return (Event<U>) new EventImpl<U>(subtype, newQualifiers, knowledgeBase, beanResolver, contextManager, transactionServices);
     }
 
     /**
@@ -358,7 +408,7 @@ public class EventImpl<T> implements Event<T> {
         }
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
-        return (Event<U>) new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager);
+        return (Event<U>) new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager, transactionServices);
     }
 
     /**
@@ -532,6 +582,17 @@ public class EventImpl<T> implements Event<T> {
                 "Failed to invoke observer: " + observerName,
                 e
             );
+        }
+    }
+
+    private void invokeObserverList(List<ObserverMethodInfo> observers, Object event) {
+        for (ObserverMethodInfo observer : observers) {
+            try {
+                invokeObserver(observer, event);
+            } catch (Exception e) {
+                // Per spec, observer exceptions must not affect transaction outcome
+                System.err.println("Transactional observer error (" + observer + "): " + e.getMessage());
+            }
         }
     }
 

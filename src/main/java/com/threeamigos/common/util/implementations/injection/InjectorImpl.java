@@ -1471,10 +1471,12 @@ public class InjectorImpl implements Injector {
         // Get or create ContextManager and BeanResolver
         // For simplicity, create new instances (in full CDI these would be container-managed)
         ContextManager contextManager = new ContextManager();
-        BeanResolver beanResolver = new BeanResolver(knowledgeBase, contextManager);
+        com.threeamigos.common.util.implementations.injection.tx.TransactionServices transactionServices =
+            com.threeamigos.common.util.implementations.injection.tx.TransactionServicesFactory.create();
+        BeanResolver beanResolver = new BeanResolver(knowledgeBase, contextManager, transactionServices);
 
         Set<Annotation> qualifierSet = new HashSet<>(qualifiers);
-        return new EventImpl<>(eventType, qualifierSet, knowledgeBase, beanResolver, contextManager);
+        return new EventImpl<>(eventType, qualifierSet, knowledgeBase, beanResolver, contextManager, transactionServices);
     }
 
     /**
