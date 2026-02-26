@@ -1,7 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.http;
 
-import com.threeamigos.common.util.implementations.injection.ConversationImpl;
 import com.threeamigos.common.util.implementations.injection.contexts.ConversationScopedContext;
+import com.threeamigos.common.util.implementations.injection.propagation.ConversationPropagationManager;
+import com.threeamigos.common.util.implementations.injection.propagation.HttpConversationCarrier;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -74,6 +75,7 @@ public class ConversationPropagationFilter implements Filter {
      * This is typically injected by the CDI container or set manually.
      */
     private ConversationScopedContext conversationContext;
+    private volatile ConversationPropagationManager propagationManager;
 
     /**
      * Sets the conversation context for synchronization.
@@ -83,6 +85,7 @@ public class ConversationPropagationFilter implements Filter {
      */
     public void setConversationContext(ConversationScopedContext context) {
         this.conversationContext = context;
+        this.propagationManager = new ConversationPropagationManager(context);
     }
 
     @Override
@@ -97,47 +100,36 @@ public class ConversationPropagationFilter implements Filter {
     @Override
     public void doFilter(ServletRequest request, ServletResponse response,
                         FilterChain chain) throws IOException, ServletException {
-        try {
-            if (request instanceof HttpServletRequest) {
-                HttpServletRequest httpRequest = (HttpServletRequest) request;
-                String conversationId = httpRequest.getParameter(cidParameterName);
-
-                if (conversationId != null && !conversationId.trim().isEmpty()) {
-                    // Restore existing long-running conversation
-                    boolean restored = ConversationImpl.restoreConversation(conversationId);
-
-                    if (restored && conversationContext != null) {
-                        // Synchronize with ConversationScopedContext
-                        conversationContext.syncWithConversation(conversationId);
-                    } else if (!restored) {
-                        // Conversation timed out or doesn't exist
-                        // ThreadLocal initializer will create a new transient conversation
-                        System.out.println("Failed to restore conversation with ID: " +
-                            conversationId + " (may have timed out). Creating new transient conversation.");
-                    }
-                } else {
-                    // No cid parameter: new transient conversation created automatically
-                    // by ConversationImpl's ThreadLocal initializer
-                }
-            }
-
-            // Continue filter chain
+        if (!(request instanceof HttpServletRequest)) {
             chain.doFilter(request, response);
+            return;
+        }
 
+        ensureManager();
+        HttpConversationCarrier carrier =
+            new HttpConversationCarrier((HttpServletRequest) request, response, cidParameterName);
+
+        try {
+            propagationManager.handleIncoming(carrier);
+            chain.doFilter(request, response);
+            propagationManager.handleOutgoing(carrier);
         } finally {
-            // Clean up ThreadLocal to prevent memory leaks
-            // This is critical for application server thread pool reuse
-            ConversationImpl.clearCurrentConversation();
-
-            // Also clear conversation context ThreadLocal if available
-            if (conversationContext != null) {
-                conversationContext.clearCurrentThread();
-            }
+            propagationManager.complete(carrier);
         }
     }
 
     @Override
     public void destroy() {
         // No cleanup needed
+    }
+
+    private void ensureManager() {
+        if (propagationManager == null) {
+            synchronized (this) {
+                if (propagationManager == null) {
+                    propagationManager = new ConversationPropagationManager(conversationContext);
+                }
+            }
+        }
     }
 }
