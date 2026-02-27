@@ -3,6 +3,8 @@ package com.threeamigos.common.util.implementations.injection;
 import com.threeamigos.common.util.implementations.injection.contexts.ContextManager;
 import com.threeamigos.common.util.implementations.injection.contexts.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.contexts.RequestScopedContext;
+import com.threeamigos.common.util.implementations.injection.contexts.ConversationScopedContext;
+import com.threeamigos.common.util.implementations.injection.contexts.SessionScopedContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.tx.TransactionServices;
@@ -75,6 +77,7 @@ public class EventImpl<T> implements Event<T> {
     private final ContextManager contextManager;
     private final TypeChecker typeChecker;
     private final TransactionServices transactionServices;
+    private final ContextTokenProvider tokenProvider;
     private static final AtomicBoolean TRANSACTION_DOWNGRADE_WARNED = new AtomicBoolean(false);
     private static final ConcurrentHashMap<Class<? extends Annotation>, AtomicBoolean> INACTIVE_SCOPE_WARNED =
         new ConcurrentHashMap<>();
@@ -97,6 +100,20 @@ public class EventImpl<T> implements Event<T> {
         this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
         this.typeChecker = new TypeChecker();
         this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
+        this.tokenProvider = new NoopContextTokenProvider();
+    }
+
+    public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
+                     BeanResolver beanResolver, ContextManager contextManager,
+                     TransactionServices transactionServices, ContextTokenProvider tokenProvider) {
+        this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
+        this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
+        this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
+        this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
+        this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
+        this.typeChecker = new TypeChecker();
+        this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
+        this.tokenProvider = tokenProvider == null ? new NoopContextTokenProvider() : tokenProvider;
     }
 
     /**
@@ -646,6 +663,14 @@ public class EventImpl<T> implements Event<T> {
                 return ContextActivation.NOOP;
             }
 
+            // try provider-assisted restoration
+            ContextSnapshot snapshot = tokenProvider.capture();
+            ContextActivation providerActivation = tryProviderRestore(scope, snapshot);
+            if (providerActivation != null) {
+                warnOnce(scope, declaringBean, true);
+                return providerActivation;
+            }
+
             // Optional reactivation for RequestScoped
             if (scope == RequestScoped.class && ctx instanceof RequestScopedContext) {
                 ((RequestScopedContext) ctx).activateRequest();
@@ -672,6 +697,30 @@ public class EventImpl<T> implements Event<T> {
         }
     }
 
+    private ContextActivation tryProviderRestore(Class<? extends Annotation> scope, ContextSnapshot snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+
+        if (scope == ConversationScoped.class && snapshot.conversationId != null) {
+            ScopeContext ctx = contextManager.getContext(ConversationScoped.class);
+            if (ctx instanceof ConversationScopedContext) {
+                ((ConversationScopedContext) ctx).beginConversation(snapshot.conversationId);
+                return new ContextActivation((ConversationScopedContext) ctx, snapshot.conversationId, true);
+            }
+        }
+
+        if (scope == SessionScoped.class && snapshot.sessionId != null) {
+            ScopeContext ctx = contextManager.getContext(SessionScoped.class);
+            if (ctx instanceof SessionScopedContext && snapshot.sessionData != null) {
+                ((SessionScopedContext) ctx).activateSession(snapshot.sessionId, snapshot.sessionData);
+                return new ContextActivation((SessionScopedContext) ctx, snapshot.sessionId, true);
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Tracks temporary context activations (currently RequestScoped only).
      */
@@ -681,24 +730,72 @@ public class EventImpl<T> implements Event<T> {
 
         private final boolean skip;
         private final RequestScopedContext requestCtx;
+        private final ConversationScopedContext conversationCtx;
+        private final SessionScopedContext sessionCtx;
+        private final String conversationId;
+        private final String sessionId;
         private final boolean deactivateRequest;
+        private final boolean endConversation;
+        private final boolean deactivateSession;
 
         private ContextActivation() {
             this.skip = false;
             this.requestCtx = null;
+            this.conversationCtx = null;
+            this.sessionCtx = null;
+            this.conversationId = null;
+            this.sessionId = null;
             this.deactivateRequest = false;
+            this.endConversation = false;
+            this.deactivateSession = false;
         }
 
         private ContextActivation(boolean skip) {
             this.skip = skip;
             this.requestCtx = null;
+            this.conversationCtx = null;
+            this.sessionCtx = null;
+            this.conversationId = null;
+            this.sessionId = null;
             this.deactivateRequest = false;
+            this.endConversation = false;
+            this.deactivateSession = false;
         }
 
         private ContextActivation(RequestScopedContext requestCtx) {
             this.skip = false;
             this.requestCtx = requestCtx;
+            this.conversationCtx = null;
+            this.sessionCtx = null;
+            this.conversationId = null;
+            this.sessionId = null;
             this.deactivateRequest = true;
+            this.endConversation = false;
+            this.deactivateSession = false;
+        }
+
+        private ContextActivation(ConversationScopedContext conversationCtx, String conversationId, boolean endConversation) {
+            this.skip = false;
+            this.requestCtx = null;
+            this.conversationCtx = conversationCtx;
+            this.sessionCtx = null;
+            this.conversationId = conversationId;
+            this.sessionId = null;
+            this.deactivateRequest = false;
+            this.endConversation = endConversation;
+            this.deactivateSession = false;
+        }
+
+        private ContextActivation(SessionScopedContext sessionCtx, String sessionId, boolean deactivateSession) {
+            this.skip = false;
+            this.requestCtx = null;
+            this.conversationCtx = null;
+            this.sessionCtx = sessionCtx;
+            this.conversationId = null;
+            this.sessionId = sessionId;
+            this.deactivateRequest = false;
+            this.endConversation = false;
+            this.deactivateSession = deactivateSession;
         }
 
         boolean isSkip() {
@@ -710,6 +807,40 @@ public class EventImpl<T> implements Event<T> {
             if (deactivateRequest && requestCtx != null) {
                 requestCtx.deactivateRequest();
             }
+            if (endConversation && conversationCtx != null && conversationId != null) {
+                conversationCtx.endConversation(conversationId);
+            }
+            if (deactivateSession && sessionCtx != null && sessionId != null) {
+                sessionCtx.deactivateSession();
+            }
+        }
+    }
+
+    /**
+     * Snapshot of contextual identifiers used for provider-assisted restoration.
+     */
+    public static class ContextSnapshot {
+        public final String requestId; // unused placeholder
+        public final String conversationId;
+        public final String sessionId;
+        public final byte[] sessionData;
+
+        public ContextSnapshot(String requestId, String conversationId, String sessionId, byte[] sessionData) {
+            this.requestId = requestId;
+            this.conversationId = conversationId;
+            this.sessionId = sessionId;
+            this.sessionData = sessionData;
+        }
+    }
+
+    public interface ContextTokenProvider {
+        ContextSnapshot capture();
+    }
+
+    private static class NoopContextTokenProvider implements ContextTokenProvider {
+        @Override
+        public ContextSnapshot capture() {
+            return null;
         }
     }
 

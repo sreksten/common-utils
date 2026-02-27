@@ -46,6 +46,7 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
     private final ContextManager contextManager;
     private final TypeChecker typeChecker;
     private TransactionServices transactionServices;
+    private EventImpl.ContextTokenProvider contextTokenProvider = new RegistryContextTokenProvider();
 
     // ThreadLocal to pass injection point context during resolution
     private final ThreadLocal<InjectionPoint> currentInjectionPoint = new ThreadLocal<>();
@@ -481,7 +482,7 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
      */
     @SuppressWarnings("unchecked")
     private <T> Event<T> createEventWrapper(Type eventType, Set<Annotation> qualifiers) {
-        return new EventImpl<>(eventType, qualifiers, knowledgeBase, this, contextManager, transactionServices);
+        return new EventImpl<>(eventType, qualifiers, knowledgeBase, this, contextManager, transactionServices, contextTokenProvider);
     }
 
     TransactionServices getTransactionServices() {
@@ -490,6 +491,10 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
 
     void setTransactionServices(TransactionServices transactionServices) {
         this.transactionServices = transactionServices == null ? new NoOpTransactionServices() : transactionServices;
+    }
+
+    void setContextTokenProvider(EventImpl.ContextTokenProvider provider) {
+        this.contextTokenProvider = provider == null ? new RegistryContextTokenProvider() : provider;
     }
 
     /**

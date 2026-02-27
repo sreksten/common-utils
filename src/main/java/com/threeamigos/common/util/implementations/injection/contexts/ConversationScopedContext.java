@@ -1,12 +1,27 @@
 package com.threeamigos.common.util.implementations.injection.contexts;
 
 import com.threeamigos.common.util.implementations.injection.BeanImpl;
+import com.threeamigos.common.util.implementations.injection.LifecycleMethodHelper;
 import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.CDI;
+import jakarta.enterprise.inject.spi.PassivationCapable;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of ConversationScoped context.
@@ -29,6 +44,7 @@ public class ConversationScopedContext implements ScopeContext {
 
     private final Map<String, Map<Bean<?>, Object>> conversationInstances = new ConcurrentHashMap<>();
     private final Map<String, Map<Bean<?>, CreationalContext<?>>> conversationContexts = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, Bean<?>>> conversationBeans = new ConcurrentHashMap<>();
     private final Map<String, ConversationMetadata> conversationMetadata = new ConcurrentHashMap<>();
     private final ThreadLocal<String> currentConversationId = new ThreadLocal<>();
     private volatile boolean active = true;
@@ -162,6 +178,7 @@ public class ConversationScopedContext implements ScopeContext {
         currentConversationId.set(conversationId);
         conversationInstances.putIfAbsent(conversationId, new ConcurrentHashMap<>());
         conversationContexts.putIfAbsent(conversationId, new ConcurrentHashMap<>());
+        conversationBeans.putIfAbsent(conversationId, new ConcurrentHashMap<>());
         conversationMetadata.putIfAbsent(conversationId, new ConversationMetadata(defaultTimeoutMillis));
     }
 
@@ -231,6 +248,7 @@ public class ConversationScopedContext implements ScopeContext {
         currentConversationId.set(conversationId);
         conversationInstances.putIfAbsent(conversationId, new ConcurrentHashMap<>());
         conversationContexts.putIfAbsent(conversationId, new ConcurrentHashMap<>());
+        conversationBeans.putIfAbsent(conversationId, new ConcurrentHashMap<>());
         conversationMetadata.putIfAbsent(conversationId,
             new ConversationMetadata(defaultTimeoutMillis));
     }
@@ -274,9 +292,12 @@ public class ConversationScopedContext implements ScopeContext {
 
         Map<Bean<?>, Object> instances = conversationInstances.get(conversationId);
         Map<Bean<?>, CreationalContext<?>> contexts = conversationContexts.get(conversationId);
+        Map<String, Bean<?>> beans = conversationBeans.computeIfAbsent(conversationId, id -> new ConcurrentHashMap<>());
 
+        String beanId = getBeanId(bean);
         return (T) instances.computeIfAbsent(bean, b -> {
             contexts.put(bean, creationalContext);
+            beans.put(beanId, bean);
 
             // Step 1: Create the actual bean instance
             T instance = bean.create(creationalContext);
@@ -345,6 +366,132 @@ public class ConversationScopedContext implements ScopeContext {
     }
 
     /**
+    * Passivates (serializes) a conversation to a byte array.
+    *
+    * <p>Before serialization, invokes @PrePassivate on all beans to allow resource cleanup.</p>
+    */
+    @SuppressWarnings("unchecked")
+    public byte[] passivateConversation(String conversationId) {
+        Map<Bean<?>, Object> instances = conversationInstances.get(conversationId);
+        Map<String, Bean<?>> beans = conversationBeans.get(conversationId);
+
+        if (instances == null || instances.isEmpty()) {
+            return null;
+        }
+
+        // Step 1: Invoke @PrePassivate on all beans
+        if (beans != null) {
+            for (Map.Entry<Bean<?>, Object> entry : instances.entrySet()) {
+                Bean<?> bean = entry.getKey();
+                Object instance = entry.getValue();
+
+                if (bean instanceof BeanImpl) {
+                    BeanImpl<Object> beanImpl = (BeanImpl<Object>) bean;
+                    try {
+                        beanImpl.invokePrePassivate(instance);
+                    } catch (Exception e) {
+                        System.err.println("Error invoking @PrePassivate on bean " +
+                            bean.getBeanClass().getName() + " in conversation " + conversationId + ": " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                } else {
+                    invokeAnnotationIfPresent(instance, "jakarta.ejb.PrePassivate");
+                }
+            }
+        }
+
+        // Step 2: Serialize instances + bean class metadata
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+
+            Map<String, Object> serializableInstances = new HashMap<>();
+            Map<String, String> beanClasses = new HashMap<>();
+
+            for (Map.Entry<Bean<?>, Object> entry : instances.entrySet()) {
+                Bean<?> bean = entry.getKey();
+                String id = getBeanId(bean);
+                serializableInstances.put(id, entry.getValue());
+                beanClasses.put(id, bean.getBeanClass().getName());
+            }
+
+            ConversationPassivationData data = new ConversationPassivationData(serializableInstances, beanClasses);
+            oos.writeObject(data);
+            return baos.toByteArray();
+
+        } catch (IOException e) {
+            throw new RuntimeException("Conversation passivation failed for " + conversationId, e);
+        }
+    }
+
+    /**
+    * Activates (deserializes) a conversation from a byte array.
+    *
+    * <p>After deserialization, invokes @PostActivate on all beans.</p>
+    */
+    @SuppressWarnings("unchecked")
+    public void activateConversation(String conversationId, byte[] serializedData) {
+        if (serializedData == null) {
+            throw new IllegalArgumentException("Serialized data cannot be null");
+        }
+
+        ConversationPassivationData data;
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(serializedData);
+             ObjectInputStream ois = new ObjectInputStream(bais)) {
+            data = (ConversationPassivationData) ois.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException("Conversation activation failed for " + conversationId, e);
+        }
+
+        Map<Bean<?>, Object> restoredInstances = new ConcurrentHashMap<>();
+        Map<Bean<?>, CreationalContext<?>> contexts = new ConcurrentHashMap<>();
+        Map<String, Bean<?>> beans = conversationBeans.computeIfAbsent(conversationId, id -> new ConcurrentHashMap<>());
+
+        BeanManager beanManager = CDI.current().getBeanManager();
+
+        for (Map.Entry<String, Object> entry : data.getInstances().entrySet()) {
+            String beanId = entry.getKey();
+            String className = data.getBeanClasses().get(beanId);
+
+            Bean<?> bean = beans.get(beanId);
+            if (bean == null) {
+                bean = resolveBean(beanManager, beanId, className);
+                if (bean != null) {
+                    beans.put(beanId, bean);
+                }
+            }
+
+            if (bean != null) {
+                restoredInstances.put(bean, entry.getValue());
+            }
+        }
+
+        conversationInstances.put(conversationId, restoredInstances);
+        conversationContexts.put(conversationId, contexts);
+        conversationMetadata.putIfAbsent(conversationId, new ConversationMetadata(defaultTimeoutMillis));
+
+        currentConversationId.set(conversationId);
+
+        // Invoke @PostActivate
+        for (Map.Entry<Bean<?>, Object> entry : restoredInstances.entrySet()) {
+            Bean<?> bean = entry.getKey();
+            Object instance = entry.getValue();
+
+            if (bean instanceof BeanImpl) {
+                BeanImpl<Object> beanImpl = (BeanImpl<Object>) bean;
+                try {
+                    beanImpl.invokePostActivate(instance);
+                } catch (Exception e) {
+                    System.err.println("Error invoking @PostActivate on bean " +
+                        bean.getBeanClass().getName() + " in conversation " + conversationId + ": " + e.getMessage());
+                    e.printStackTrace();
+                }
+            } else {
+                invokeAnnotationIfPresent(instance, "jakarta.ejb.PostActivate");
+            }
+        }
+    }
+
+    /**
      * Cleans up timed-out conversations.
      * Called periodically by the timeout scheduler.
      */
@@ -369,13 +516,14 @@ public class ConversationScopedContext implements ScopeContext {
     private void destroyConversation(String conversationId) {
         Map<Bean<?>, Object> instances = conversationInstances.remove(conversationId);
         Map<Bean<?>, CreationalContext<?>> contexts = conversationContexts.remove(conversationId);
+        conversationBeans.remove(conversationId);
         conversationMetadata.remove(conversationId);
 
-        if (instances != null && contexts != null) {
+        if (instances != null) {
             for (Map.Entry<Bean<?>, Object> entry : instances.entrySet()) {
                 Bean<Object> bean = (Bean<Object>) entry.getKey();
                 Object instance = entry.getValue();
-                CreationalContext<Object> ctx = (CreationalContext<Object>) contexts.get(bean);
+                CreationalContext<Object> ctx = contexts != null ? (CreationalContext<Object>) contexts.get(bean) : null;
 
                 try {
                     bean.destroy(instance, ctx);
@@ -384,6 +532,86 @@ public class ConversationScopedContext implements ScopeContext {
                                      " in conversation " + conversationId + ": " + e.getMessage());
                 }
             }
+        }
+    }
+
+    private String getBeanId(Bean<?> bean) {
+        if (bean instanceof PassivationCapable) {
+            String id = ((PassivationCapable) bean).getId();
+            if (id != null) {
+                return id;
+            }
+        }
+
+        String qualifierSignature = bean.getQualifiers().stream()
+            .map(Annotation::annotationType)
+            .map(Class::getName)
+            .sorted()
+            .collect(Collectors.joining(","));
+
+        return bean.getBeanClass().getName() + "|" + qualifierSignature;
+    }
+
+    private Bean<?> resolveBean(BeanManager beanManager, String beanId, String className) {
+        try {
+            Bean<?> bean = beanManager.getPassivationCapableBean(beanId);
+            if (bean != null) {
+                return bean;
+            }
+        } catch (Exception ignored) {
+            // getPassivationCapableBean may throw if ID not found; ignore and fallback
+        }
+
+        try {
+            Class<?> clazz = Class.forName(className);
+            Set<Bean<?>> candidates = beanManager.getBeans(clazz);
+            if (!candidates.isEmpty()) {
+                return beanManager.resolve(candidates);
+            }
+        } catch (ClassNotFoundException ignored) {
+            // Class disappeared between passivation/activation
+        }
+        return null;
+    }
+
+    private void invokeAnnotationIfPresent(Object instance, String annotationClassName) {
+        try {
+            @SuppressWarnings("unchecked")
+            Class<? extends Annotation> annClass =
+                (Class<? extends Annotation>) Class.forName(annotationClassName);
+
+            for (Class<?> clazz : LifecycleMethodHelper.buildHierarchy(instance)) {
+                for (Method method : clazz.getDeclaredMethods()) {
+                    if (method.isAnnotationPresent(annClass)) {
+                        method.setAccessible(true);
+                        method.invoke(instance);
+                    }
+                }
+            }
+        } catch (ClassNotFoundException e) {
+            // jakarta.ejb not on classpath; nothing to do
+        } catch (Exception e) {
+            System.err.println("Error invoking @" + annotationClassName + " on " +
+                instance.getClass().getName() + ": " + e.getMessage());
+        }
+    }
+
+    private static class ConversationPassivationData implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private final Map<String, Object> instances;
+        private final Map<String, String> beanClasses;
+
+        ConversationPassivationData(Map<String, Object> instances, Map<String, String> beanClasses) {
+            this.instances = instances;
+            this.beanClasses = beanClasses;
+        }
+
+        Map<String, Object> getInstances() {
+            return instances;
+        }
+
+        Map<String, String> getBeanClasses() {
+            return beanClasses;
         }
     }
 }
