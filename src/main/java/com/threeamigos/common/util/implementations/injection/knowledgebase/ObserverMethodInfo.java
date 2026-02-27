@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
+import com.threeamigos.common.util.implementations.injection.TypeChecker;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.spi.Bean;
@@ -31,6 +32,8 @@ import java.util.Set;
  * @see jakarta.enterprise.inject.spi.ObserverMethod
  */
 public class ObserverMethodInfo {
+
+    private static final TypeChecker TYPE_CHECKER = new TypeChecker();
 
     private final Method observerMethod;           // Null for synthetic observers
     private final Type eventType;                  // The type of event being observed
@@ -157,20 +160,12 @@ public class ObserverMethodInfo {
      */
     public boolean matches(Type eventType, Set<Annotation> eventQualifiers) {
         // Type must be assignable
-        if (!isAssignable(this.eventType, eventType)) {
+        if (!TYPE_CHECKER.isAssignable(this.eventType, eventType)) {
             return false;
         }
 
         // Qualifiers must match (observer qualifiers must be subset of event qualifiers)
         return eventQualifiers.containsAll(this.qualifiers);
-    }
-
-    /**
-     * Simple assignability check (should be enhanced with proper CDI type checking).
-     */
-    private boolean isAssignable(Type observerType, Type eventType) {
-        // Simplified check - in real CDI this would be much more sophisticated
-        return observerType.equals(eventType);
     }
 
     @Override

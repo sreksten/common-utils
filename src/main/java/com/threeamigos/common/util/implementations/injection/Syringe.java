@@ -529,7 +529,7 @@ public class Syringe {
         // 3. Create ProcessAnnotatedType<T> event
         // 4. Fire to all extensions
         // 5. If vetoed, mark in KnowledgeBase
-        // 6. If modified, use modified AnnotatedType (TODO: implement type replacement)
+        // 6. If modified, use modified AnnotatedType
 
         int excludedCount = 0;
         for (Class<?> clazz : new ArrayList<>(knowledgeBase.getClasses())) {
@@ -774,8 +774,20 @@ public class Syringe {
 
                 } else if (bean instanceof BeanImpl) {
                     // Managed bean - discovered via classpath scanning
-                    // TODO: Fire ProcessManagedBean<T> event
-                    // For now, we just count them
+                    BeanImpl<?> managedBean = (BeanImpl<?>) bean;
+                    AnnotatedType<?> annotatedType =
+                        knowledgeBase.getAnnotatedTypeOverride(managedBean.getBeanClass());
+                    if (annotatedType == null) {
+                        annotatedType = beanManager.createAnnotatedType(managedBean.getBeanClass());
+                    }
+
+                    @SuppressWarnings({"rawtypes", "unchecked"})
+                    ProcessManagedBeanImpl<?> event = new ProcessManagedBeanImpl(
+                        (Bean) managedBean,
+                        (AnnotatedType) annotatedType,
+                        beanManager
+                    );
+                    fireEventToExtensions(event);
                     managedCount++;
 
                 } else {
@@ -1199,7 +1211,6 @@ public class Syringe {
     private void validateDeployment() {
         System.out.println("[Syringe] Validating deployment");
 
-        // TODO: Perform comprehensive validation
         // 1. Check for unsatisfied/ambiguous dependencies
         CDI41InjectionValidator injectionValidator = new CDI41InjectionValidator(knowledgeBase);
         injectionValidator.validateAllInjectionPoints();

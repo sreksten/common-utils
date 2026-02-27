@@ -147,7 +147,10 @@ public class TypeChecker {
      * @throws DefinitionException if targetType contains wildcards or type variables
      * @throws IllegalStateException if type hierarchy navigation fails unexpectedly
      */
-    boolean isAssignable(Type targetType, Type implementationType) {
+    /**
+     * Public entry point for type assignability checks, used across injection and observer matching.
+     */
+    public boolean isAssignable(Type targetType, Type implementationType) {
         if (targetType instanceof TypeVariable || implementationType instanceof TypeVariable ||
             targetType instanceof WildcardType || implementationType instanceof WildcardType) {
             return isAssignableInternal(targetType, implementationType, true);

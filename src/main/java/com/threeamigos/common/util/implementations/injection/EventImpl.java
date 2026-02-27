@@ -2,10 +2,14 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.injection.contexts.ContextManager;
 import com.threeamigos.common.util.implementations.injection.contexts.ScopeContext;
+import com.threeamigos.common.util.implementations.injection.contexts.RequestScopedContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.tx.TransactionSynchronizationCallbacks;
+import jakarta.enterprise.context.ConversationScoped;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.NotificationOptions;
 import jakarta.enterprise.event.Reception;
@@ -22,6 +26,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * CDI 4.1 Event implementation for firing synchronous and asynchronous events.
@@ -69,6 +75,9 @@ public class EventImpl<T> implements Event<T> {
     private final ContextManager contextManager;
     private final TypeChecker typeChecker;
     private final TransactionServices transactionServices;
+    private static final AtomicBoolean TRANSACTION_DOWNGRADE_WARNED = new AtomicBoolean(false);
+    private static final ConcurrentHashMap<Class<? extends Annotation>, AtomicBoolean> INACTIVE_SCOPE_WARNED =
+        new ConcurrentHashMap<>();
 
     /**
      * Creates an Event instance for firing events of a specific type with qualifiers.
@@ -160,6 +169,7 @@ public class EventImpl<T> implements Event<T> {
                 invokeObserver(observerInfo, event);
             } else if (!txActive) {
                 // Spec: if no transaction is active, transactional observers fire immediately
+                maybeWarnTransactionalDowngrade(observerInfo);
                 invokeObserver(observerInfo, event);
             } else {
                 switch (phase) {
@@ -200,6 +210,17 @@ public class EventImpl<T> implements Event<T> {
                     invokeObserverList(afterCompletion, event);
                 }
             });
+        }
+    }
+
+    private void maybeWarnTransactionalDowngrade(ObserverMethodInfo observerInfo) {
+        if (transactionServices instanceof com.threeamigos.common.util.implementations.injection.tx.NoOpTransactionServices) {
+            if (TRANSACTION_DOWNGRADE_WARNED.compareAndSet(false, true)) {
+                String method = observerInfo.getObserverMethod() != null
+                    ? observerInfo.getObserverMethod().toGenericString()
+                    : "synthetic observer";
+                System.out.println("[Event] Transactional observer downgraded to immediate (no transaction services). First occurrence: " + method);
+            }
         }
     }
 
@@ -587,11 +608,107 @@ public class EventImpl<T> implements Event<T> {
 
     private void invokeObserverList(List<ObserverMethodInfo> observers, Object event) {
         for (ObserverMethodInfo observer : observers) {
+            ContextActivation activation = ensureObserverContext(observer);
+            if (activation.isSkip()) {
+                continue;
+            }
             try {
                 invokeObserver(observer, event);
             } catch (Exception e) {
                 // Per spec, observer exceptions must not affect transaction outcome
                 System.err.println("Transactional observer error (" + observer + "): " + e.getMessage());
+            } finally {
+                activation.close();
+            }
+        }
+    }
+
+    /**
+     * Guards transactional observer callbacks by ensuring required normal scopes are active.
+     * If the declaring bean uses an inactive normal scope (e.g., @RequestScoped after request end),
+     * the invocation is skipped and a warning is logged once per scope type.
+     */
+    private ContextActivation ensureObserverContext(ObserverMethodInfo observer) {
+        Bean<?> declaringBean = observer.getDeclaringBean();
+        if (declaringBean == null) {
+            return ContextActivation.NOOP; // Synthetic or unknown bean; proceed
+        }
+        Class<? extends Annotation> scope = declaringBean.getScope();
+        // Dependent/Application are always safe
+        if (scope == jakarta.enterprise.context.Dependent.class ||
+            scope == jakarta.enterprise.context.ApplicationScoped.class) {
+            return ContextActivation.NOOP;
+        }
+
+        try {
+            ScopeContext ctx = contextManager.getContext(scope);
+            if (ctx.isActive()) {
+                return ContextActivation.NOOP;
+            }
+
+            // Optional reactivation for RequestScoped
+            if (scope == RequestScoped.class && ctx instanceof RequestScopedContext) {
+                ((RequestScopedContext) ctx).activateRequest();
+                warnOnce(scope, declaringBean, true);
+                return new ContextActivation((RequestScopedContext) ctx);
+            }
+
+            // Conversation/Session or other scopes: warn and skip
+            warnOnce(scope, declaringBean, false);
+            return ContextActivation.SKIP;
+        } catch (IllegalArgumentException e) {
+            // Unknown scope; proceed to avoid hiding functionality
+            return ContextActivation.NOOP;
+        }
+    }
+
+    private void warnOnce(Class<? extends Annotation> scope, Bean<?> bean, boolean reactivated) {
+        AtomicBoolean flag = INACTIVE_SCOPE_WARNED.computeIfAbsent(scope, k -> new AtomicBoolean(false));
+        if (flag.compareAndSet(false, true)) {
+            String action = reactivated ? "Reactivated" : "Skipping";
+            System.out.println("[Event] " + action + " transactional observer for @" +
+                scope.getSimpleName() + " (" + bean.getBeanClass().getName() + ")" +
+                (reactivated ? " during tx callback" : " because scope inactive"));
+        }
+    }
+
+    /**
+     * Tracks temporary context activations (currently RequestScoped only).
+     */
+    private static class ContextActivation implements AutoCloseable {
+        static final ContextActivation NOOP = new ContextActivation();
+        static final ContextActivation SKIP = new ContextActivation(true);
+
+        private final boolean skip;
+        private final RequestScopedContext requestCtx;
+        private final boolean deactivateRequest;
+
+        private ContextActivation() {
+            this.skip = false;
+            this.requestCtx = null;
+            this.deactivateRequest = false;
+        }
+
+        private ContextActivation(boolean skip) {
+            this.skip = skip;
+            this.requestCtx = null;
+            this.deactivateRequest = false;
+        }
+
+        private ContextActivation(RequestScopedContext requestCtx) {
+            this.skip = false;
+            this.requestCtx = requestCtx;
+            this.deactivateRequest = true;
+        }
+
+        boolean isSkip() {
+            return skip;
+        }
+
+        @Override
+        public void close() {
+            if (deactivateRequest && requestCtx != null) {
+                requestCtx.deactivateRequest();
             }
         }
     }

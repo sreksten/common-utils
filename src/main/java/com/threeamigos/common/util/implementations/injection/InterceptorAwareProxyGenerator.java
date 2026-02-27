@@ -82,7 +82,7 @@ public class InterceptorAwareProxyGenerator {
      * <p>
      * The proxy will:
      * <ul>
-     * <li>Intercept all public business methods</li>
+     * <li>Intercept all non-private business methods (public, protected, package-private)</li>
      * <li>Check if each method has interceptors configured (from methodInterceptorChains map)</li>
      * <li>Execute interceptor chain if present, or direct invocation if not</li>
      * <li>Return the result to the caller</li>
@@ -236,7 +236,8 @@ public class InterceptorAwareProxyGenerator {
                 .method(ElementMatchers.any()
                     .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class)))
                     .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(InterceptorProxyState.class)))
-                    .and(ElementMatchers.isPublic()))  // Only intercept public methods
+                    .and(ElementMatchers.not(ElementMatchers.isPrivate()))
+                    .and(ElementMatchers.not(ElementMatchers.isStatic())))
                 .intercept(MethodDelegation.to(InterceptorMethodInterceptor.class))
 
                 // Load the class into the same classloader as the target class

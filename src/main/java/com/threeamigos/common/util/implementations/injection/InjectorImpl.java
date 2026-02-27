@@ -7,6 +7,8 @@ import com.threeamigos.common.util.implementations.injection.literals.DefaultLit
 import com.threeamigos.common.util.implementations.injection.scopehandlers.SingletonScopeHandler;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.ScopeHandler;
+import com.threeamigos.common.util.implementations.injection.tx.TransactionServices;
+import com.threeamigos.common.util.implementations.injection.tx.TransactionServicesFactory;
 import jakarta.annotation.Nonnull;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -201,6 +203,14 @@ public class InjectorImpl implements Injector {
     private final Set<Class<?>> injectedStaticClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     /**
+     * Shared CDI infrastructure used by Event and Instance wrappers to ensure contextual consistency.
+     * Keeping these singletons avoids creating isolated containers per injection point.
+     */
+    private final ContextManager contextManager;
+    private final TransactionServices transactionServices;
+    private final BeanResolver beanResolver;
+
+    /**
      * Creates a new injector that scans the specified package(s) for injectable components.
      * If no packages are specified, the injector will scan all available packages, which may
      * impact startup performance.
@@ -266,6 +276,9 @@ public class InjectorImpl implements Injector {
         }
 
         this.classResolver = new ClassResolver(knowledgeBase);
+        this.contextManager = new ContextManager();
+        this.transactionServices = TransactionServicesFactory.create();
+        this.beanResolver = new BeanResolver(knowledgeBase, contextManager, transactionServices);
         registerDefaultScopes();
         addShutdownHook();
     }
@@ -283,6 +296,9 @@ public class InjectorImpl implements Injector {
             throw new IllegalArgumentException("Class resolver cannot be null");
         }
         this.classResolver = classResolver;
+        this.contextManager = new ContextManager();
+        this.transactionServices = TransactionServicesFactory.create();
+        this.beanResolver = new BeanResolver(knowledgeBase, contextManager, transactionServices);
         registerDefaultScopes();
         addShutdownHook();
     }
@@ -1468,13 +1484,6 @@ public class InjectorImpl implements Injector {
      * @see jakarta.enterprise.event.ObservesAsync
      */
     <T> jakarta.enterprise.event.Event<T> createEvent(Type eventType, Collection<Annotation> qualifiers) {
-        // Get or create ContextManager and BeanResolver
-        // For simplicity, create new instances (in full CDI these would be container-managed)
-        ContextManager contextManager = new ContextManager();
-        com.threeamigos.common.util.implementations.injection.tx.TransactionServices transactionServices =
-            com.threeamigos.common.util.implementations.injection.tx.TransactionServicesFactory.create();
-        BeanResolver beanResolver = new BeanResolver(knowledgeBase, contextManager, transactionServices);
-
         Set<Annotation> qualifierSet = new HashSet<>(qualifiers);
         return new EventImpl<>(eventType, qualifierSet, knowledgeBase, beanResolver, contextManager, transactionServices);
     }

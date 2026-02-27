@@ -12,7 +12,7 @@ import java.util.stream.Stream;
 /**
  * Implementation of jakarta.enterprise.inject.spi.CDI for static container access.
  *
- * <p>This class provides the CDI.current() entry point for obtaining a BeanManager
+ * <p>This class provides the CDI.current() entry point for getting a BeanManager
  * reference when injection is not available.
  *
  * <p><b>Usage Example:</b>
