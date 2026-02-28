@@ -1,6 +1,6 @@
-package com.threeamigos.common.util.implementations.injection.events;
+package com.threeamigos.common.util.implementations.injection.events.propagation;
 
-import com.threeamigos.common.util.implementations.injection.events.propagation.ConversationPropagationRegistry;
+import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 
 /**
  * ContextTokenProvider backed by ConversationPropagationRegistry.
