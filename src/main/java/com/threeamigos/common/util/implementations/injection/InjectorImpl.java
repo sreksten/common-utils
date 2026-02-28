@@ -1,14 +1,23 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
-import com.threeamigos.common.util.implementations.injection.contexts.ContextManager;
+import com.threeamigos.common.util.implementations.injection.events.EventImpl;
+import com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl;
+import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
+import com.threeamigos.common.util.implementations.injection.discovery.CDI41BeanValidator;
+import com.threeamigos.common.util.implementations.injection.discovery.CDI41InjectionValidator;
+import com.threeamigos.common.util.implementations.injection.discovery.ClassProcessor;
+import com.threeamigos.common.util.implementations.injection.discovery.ParallelClasspathScanner;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.SingletonScopeHandler;
+import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.ScopeHandler;
-import com.threeamigos.common.util.implementations.injection.tx.TransactionServices;
-import com.threeamigos.common.util.implementations.injection.tx.TransactionServicesFactory;
+import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
+import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
 import jakarta.annotation.Nonnull;
 
 import jakarta.enterprise.context.ApplicationScoped;

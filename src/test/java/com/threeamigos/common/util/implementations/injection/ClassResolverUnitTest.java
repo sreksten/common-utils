@@ -11,6 +11,8 @@ import com.threeamigos.common.util.implementations.injection.alternatives.Altern
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesInterface;
 import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesStandardImplementation;
 import com.threeamigos.common.util.implementations.injection.bind.*;
+import com.threeamigos.common.util.implementations.injection.discovery.ParallelClasspathScanner;
+import com.threeamigos.common.util.implementations.injection.discovery.SimpleClassConsumer;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.*;
 import com.threeamigos.common.util.implementations.injection.interfaces.namedimplementationsonly.NamedImplementationsOnlyImplementation1;
 import com.threeamigos.common.util.implementations.injection.interfaces.namedimplementationsonly.NamedImplementationsOnlyInterface;
@@ -22,8 +24,9 @@ import com.threeamigos.common.util.implementations.injection.interfaces.singleim
 import com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation.SingleImplementationInterface;
 import com.threeamigos.common.util.implementations.injection.interfaces.multiplenotannotatedimplementations.MultipleNotAnnotatedImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.literals.AnnotationLiteral;
-import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

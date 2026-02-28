@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

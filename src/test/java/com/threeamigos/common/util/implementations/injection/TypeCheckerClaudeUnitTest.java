@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,6 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 /**
  * Comprehensive unit tests for TypeChecker class covering 100% code coverage.

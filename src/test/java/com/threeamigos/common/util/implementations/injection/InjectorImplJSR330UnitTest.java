@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.implementations.injection.literals.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
 import org.atinject.tck.auto.*;
 import org.atinject.tck.auto.accessories.Cupholder;
 import org.atinject.tck.auto.accessories.RoundThing;

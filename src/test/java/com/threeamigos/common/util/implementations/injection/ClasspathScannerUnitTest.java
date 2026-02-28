@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.discovery.ClasspathScanner;
 import com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation.SingleImplementationClass;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

@@ -2,7 +2,9 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.collections.Cache;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
+import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 

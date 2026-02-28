@@ -25,8 +25,8 @@ import com.threeamigos.common.util.implementations.injection.interfaces.multiple
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.literals.AnnotationLiteral;
-import com.threeamigos.common.util.implementations.injection.literals.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithInvalidParameter;
 import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithValidParameters;
 import com.threeamigos.common.util.implementations.injection.methods.FirstMethodParameter;

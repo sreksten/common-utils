@@ -1,1 +1,1 @@
-com.threeamigos.common.util.implementations.injection.SyringeCDIProvider
+com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider

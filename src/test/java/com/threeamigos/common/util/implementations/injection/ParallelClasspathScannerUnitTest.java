@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.discovery.ParallelClasspathScanner;
+import com.threeamigos.common.util.implementations.injection.discovery.SimpleClassConsumer;
 import com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation.SingleImplementationClass;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.discovery.JSR330Validator;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

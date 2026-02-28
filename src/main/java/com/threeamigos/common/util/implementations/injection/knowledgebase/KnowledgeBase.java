@@ -1,8 +1,11 @@
 package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
-import com.threeamigos.common.util.implementations.injection.BeanImpl;
-import com.threeamigos.common.util.implementations.injection.ProducerBean;
+import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
+import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
+import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
+import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InterceptionType;
 
@@ -18,7 +21,7 @@ public class KnowledgeBase {
     // Use Set to prevent duplicate class registrations
     private final Set<Class<?>> classes = ConcurrentHashMap.newKeySet();
     // Track BeanArchiveMode per discovered class (explicit/implicit)
-    private final Map<Class<?>, com.threeamigos.common.util.implementations.injection.BeanArchiveMode> classArchiveModes =
+    private final Map<Class<?>, BeanArchiveMode> classArchiveModes =
             new ConcurrentHashMap<>();
     // AnnotatedType replacements supplied by ProcessAnnotatedType#setAnnotatedType
     private final Map<Class<?>, jakarta.enterprise.inject.spi.AnnotatedType<?>> annotatedTypeOverrides =
@@ -78,7 +81,7 @@ public class KnowledgeBase {
         classes.add(clazz);
     }
 
-    public void add(Class<?> clazz, com.threeamigos.common.util.implementations.injection.BeanArchiveMode mode) {
+    public void add(Class<?> clazz, BeanArchiveMode mode) {
         classes.add(clazz);
         if (mode != null) {
             classArchiveModes.put(clazz, mode);
@@ -89,8 +92,8 @@ public class KnowledgeBase {
         return classes;
     }
 
-    public com.threeamigos.common.util.implementations.injection.BeanArchiveMode getBeanArchiveMode(Class<?> clazz) {
-        return classArchiveModes.getOrDefault(clazz, com.threeamigos.common.util.implementations.injection.BeanArchiveMode.IMPLICIT);
+    public BeanArchiveMode getBeanArchiveMode(Class<?> clazz) {
+        return classArchiveModes.getOrDefault(clazz, BeanArchiveMode.IMPLICIT);
     }
 
     public void setAnnotatedTypeOverride(Class<?> clazz, jakarta.enterprise.inject.spi.AnnotatedType<?> annotatedType) {
@@ -548,7 +551,7 @@ public class KnowledgeBase {
         // Use AnnotationComparator to respect @Nonbinding members
         // According to CDI 4.1 spec, interceptor binding members marked with @Nonbinding
         // must be ignored when comparing bindings for interceptor resolution
-        return com.threeamigos.common.util.implementations.injection.AnnotationComparator.equals(binding1, binding2);
+        return AnnotationComparator.equals(binding1, binding2);
     }
 
     // === Programmatic Bean Registration (for InjectorImpl2) ===

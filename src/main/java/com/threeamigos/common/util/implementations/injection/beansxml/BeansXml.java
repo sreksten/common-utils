@@ -60,7 +60,7 @@ public class BeansXml {
      * The bean discovery mode.
      *
      * <p>Valid values: "all", "annotated", "none"
-     * <p>Default: "all" (if attribute is missing or empty)
+     * <p>Default: "all" (if the attribute is missing or empty)
      *
      * <p>CDI 4.1 Section 12.1:
      * <ul>

@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.builtinbeans;
 
-import com.threeamigos.common.util.implementations.injection.BeanResolver;
+import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Any;

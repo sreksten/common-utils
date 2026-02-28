@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.builtinbeans;
 
-import com.threeamigos.common.util.implementations.injection.ConversationImpl;
+import com.threeamigos.common.util.implementations.injection.scopes.ConversationImpl;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Conversation;
 import jakarta.enterprise.context.spi.CreationalContext;

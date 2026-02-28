@@ -1,10 +1,18 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
-import com.threeamigos.common.util.implementations.injection.contexts.ContextManager;
+import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
+import com.threeamigos.common.util.implementations.injection.discovery.*;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.knowledgebase.ObserverMethodInfo;
-import com.threeamigos.common.util.implementations.injection.spievents.*;
+import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
+import com.threeamigos.common.util.implementations.injection.resolution.BeanAttributesImpl;
+import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
+import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
+import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.spi.InjectionTargetFactoryImpl;
+import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
+import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -518,8 +526,8 @@ public class Syringe {
         System.out.println("[Syringe] Processing annotated types");
 
         // Create exclude filter from all beans.xml configurations
-        com.threeamigos.common.util.implementations.injection.beansxml.ExcludeFilter excludeFilter =
-            new com.threeamigos.common.util.implementations.injection.beansxml.ExcludeFilter(
+        ExcludeFilter excludeFilter =
+            new ExcludeFilter(
                 knowledgeBase.getBeansXmlConfigurations()
             );
 
@@ -542,7 +550,6 @@ public class Syringe {
                 }
 
                 // Step 2: Create AnnotatedType for the class using BeanManager
-                @SuppressWarnings("unchecked")
                 jakarta.enterprise.inject.spi.AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(clazz);
 
                 // Step 3: Create ProcessAnnotatedType event
@@ -1097,7 +1104,7 @@ public class Syringe {
                 if (info.getReception() == Reception.IF_EXISTS && info.getDeclaringBean() != null) {
                     Class<? extends Annotation> scope = info.getDeclaringBean().getScope();
                     try {
-                        com.threeamigos.common.util.implementations.injection.contexts.ScopeContext ctx =
+                        com.threeamigos.common.util.implementations.injection.scopes.ScopeContext ctx =
                                 contextManager.getContext(scope);
                         Object existing = ctx.getIfExists(info.getDeclaringBean());
                         if (existing == null) {
