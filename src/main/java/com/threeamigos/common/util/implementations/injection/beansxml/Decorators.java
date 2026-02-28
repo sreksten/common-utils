@@ -4,13 +4,14 @@ import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlElement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * Model class for the &lt;decorators&gt; section of beans.xml.
  *
  * <p>CDI 4.1 Section 8.2: Decorators can be enabled and ordered via beans.xml.
- * The order in the list determines decorator precedence - first entry has highest priority.
+ * The order in the list determines decorator precedence - the first entry has the highest priority.
  *
  * <h2>Example XML:</h2>
  * <pre>{@code
@@ -29,7 +30,7 @@ import java.util.List;
  *   <li>LoggingDecorator wraps last (innermost, closest to delegate)</li>
  * </ol>
  *
- * <h2>Decorators vs Interceptors:</h2>
+ * <h2>Decorators vs. Interceptors:</h2>
  * <ul>
  *   <li><b>Decorators</b> - Implement business interfaces, type-safe delegation</li>
  *   <li><b>Interceptors</b> - Generic cross-cutting concerns, annotation-based</li>
@@ -52,13 +53,13 @@ import java.util.List;
 public class Decorators {
 
     /**
-     * Ordered list of decorator classes to enable.
+     * An ordered list of decorator classes to enable.
      *
-     * <p>Each entry is a fully-qualified class name (e.g., "com.example.TimingDecorator").
+     * <p>Each entry is a fully qualified class name (e.g., "com.example.TimingDecorator").
      *
-     * <p>The order in this list determines decorator wrapping order:
+     * <p>The order in this list determines the decorator wrapping order:
      * <ul>
-     *   <li>First entry = outermost decorator (highest priority)</li>
+     *   <li>First entry = outermost decorator (the highest priority)</li>
      *   <li>Last entry = innermost decorator (closest to actual delegate)</li>
      * </ul>
      *
@@ -87,15 +88,11 @@ public class Decorators {
     private List<String> classes = new ArrayList<>();
 
     // ============================================
-    // Getters and Setters
+    // Getters
     // ============================================
 
     public List<String> getClasses() {
-        return classes;
-    }
-
-    public void setClasses(List<String> classes) {
-        this.classes = classes;
+        return Collections.unmodifiableList(classes);
     }
 
     // ============================================
@@ -109,18 +106,6 @@ public class Decorators {
      */
     public boolean isEmpty() {
         return classes.isEmpty();
-    }
-
-    /**
-     * Gets the priority/order of a specific decorator class.
-     *
-     * <p>Lower index = higher priority (outermost decorator).
-     *
-     * @param className the fully-qualified decorator class name
-     * @return the index (0-based), or -1 if not found
-     */
-    public int getOrder(String className) {
-        return classes.indexOf(className);
     }
 
     @Override

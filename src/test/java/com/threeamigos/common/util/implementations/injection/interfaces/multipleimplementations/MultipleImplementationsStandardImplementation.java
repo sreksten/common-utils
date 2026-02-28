@@ -1,4 +1,0 @@
-package com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations;
-
-public class MultipleImplementationsStandardImplementation implements MultipleImplementationsInterface {
-}

@@ -1,28 +1,28 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesAbstractClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed1;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed2;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesStandardClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.subpackage.MultipleConcreteClassesNamed3;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesAlternativeImplementation1;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesAlternativeImplementation2;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesInterface;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesStandardImplementation;
-import com.threeamigos.common.util.implementations.injection.bind.*;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesAbstractClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed1;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed2;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesStandardClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.subpackage.MultipleConcreteClassesNamed3;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.alternatives.AlternativesAlternativeImplementation1;
+import com.threeamigos.common.util.implementations.injection.testpackages.alternatives.AlternativesAlternativeImplementation2;
+import com.threeamigos.common.util.implementations.injection.testpackages.alternatives.AlternativesInterface;
+import com.threeamigos.common.util.implementations.injection.testpackages.alternatives.AlternativesStandardImplementation;
 import com.threeamigos.common.util.implementations.injection.discovery.ParallelClasspathScanner;
 import com.threeamigos.common.util.implementations.injection.discovery.SimpleClassConsumer;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.*;
-import com.threeamigos.common.util.implementations.injection.interfaces.namedimplementationsonly.NamedImplementationsOnlyImplementation1;
-import com.threeamigos.common.util.implementations.injection.interfaces.namedimplementationsonly.NamedImplementationsOnlyInterface;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.noconcreteclasses.NoConcreteClassesAbstractClass;
-import com.threeamigos.common.util.implementations.injection.interfaces.noimplementations.NoImplementationsInterface;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multiplenotannotatedconcreteclasses.MultipleNotAnnotatedAbstractClass;
-import com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation.SingleImplementationClass;
-import com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation.SingleImplementationInterface;
-import com.threeamigos.common.util.implementations.injection.interfaces.multiplenotannotatedimplementations.MultipleNotAnnotatedImplementationsInterface;
+import com.threeamigos.common.util.implementations.injection.testpackages.bind.*;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.multipleimplementations.*;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.namedimplementationsonly.NamedImplementationsOnlyImplementation1;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.namedimplementationsonly.NamedImplementationsOnlyInterface;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.noconcreteclasses.NoConcreteClassesAbstractClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.noimplementations.NoImplementationsInterface;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multiplenotannotatedconcreteclasses.MultipleNotAnnotatedAbstractClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.singleimplementation.SingleImplementationClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.singleimplementation.SingleImplementationInterface;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.multiplenotannotatedimplementations.MultipleNotAnnotatedImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
@@ -68,7 +68,7 @@ class ClassResolverUnitTest {
         // Given
         KnowledgeBase knowledgeBase = new KnowledgeBase();
         SimpleClassConsumer sink = new SimpleClassConsumer();
-        new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink, getPackageName(ClassResolverUnitTest.class));
+        new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink, new KnowledgeBase(), getPackageName(ClassResolverUnitTest.class));
         // Populate knowledgeBase from sink
         for (Class<?> clazz : sink.getClasses()) {
             knowledgeBase.add(clazz);
@@ -636,16 +636,16 @@ class ClassResolverUnitTest {
                     MultipleImplementationsInterface.class, null);
 
             // Then - MultipleAlternativesAlternativeImplementation should NOT be in results
-            assertFalse(resolved.contains(com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleAlternativesAlternativeImplementation.class));
+            assertFalse(resolved.contains(MultipleAlternativesAlternativeImplementation.class));
             // But non-alternative classes should be present
-            assertTrue(resolved.contains(com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation.class));
+            assertTrue(resolved.contains(MultipleImplementationsStandardImplementation.class));
         }
 
         @Test
         @DisplayName("Should include @Alternative classes when they are enabled")
         void shouldIncludeEnabledAlternatives() {
             // Given - Line 235: Tests enabledAlternatives.contains(clazz) == true branch
-            Class<?> alternative = com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleAlternativesAlternativeImplementation.class;
+            Class<?> alternative = MultipleAlternativesAlternativeImplementation.class;
             sut.enableAlternative(alternative);
 
             // When
@@ -672,7 +672,7 @@ class ClassResolverUnitTest {
                 KnowledgeBase kb = new KnowledgeBase();
                 SimpleClassConsumer sink = new SimpleClassConsumer();
                 new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(),
-                    sink, getPackageName(SingleImplementationInterface.class));
+                    sink, kb, getPackageName(SingleImplementationInterface.class));
                 for (Class<?> clazz : sink.getClasses()) {
                     kb.add(clazz);
                 }
@@ -689,7 +689,7 @@ class ClassResolverUnitTest {
                 // Given
                 KnowledgeBase kb = new KnowledgeBase();
                 SimpleClassConsumer sink = new SimpleClassConsumer();
-                new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink);
+                new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink, kb);
                 for (Class<?> clazz : sink.getClasses()) {
                     kb.add(clazz);
                 }
@@ -1489,15 +1489,15 @@ class ClassResolverUnitTest {
         }
     }
 
-    private static class MyQualifierLiteral implements com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MyQualifier {
+    private static class MyQualifierLiteral implements MyQualifier {
         @Override
         public Class<? extends Annotation> annotationType() {
-            return com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MyQualifier.class;
+            return MyQualifier.class;
         }
 
         @Override
         public boolean equals(Object obj) {
-            return obj instanceof com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MyQualifier;
+            return obj instanceof MyQualifier;
         }
 
         @Override

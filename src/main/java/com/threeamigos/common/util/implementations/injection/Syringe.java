@@ -462,6 +462,7 @@ public class Syringe {
             scanner = new ParallelClasspathScanner(
                     Thread.currentThread().getContextClassLoader(),
                     classProcessor,
+                    knowledgeBase,
                     packageNames
             );
             parallelTaskExecutor.awaitCompletion();

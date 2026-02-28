@@ -26,7 +26,7 @@ import jakarta.xml.bind.annotation.XmlAttribute;
 public class IfClassAvailable {
 
     /**
-     * The fully-qualified name of the class to check for.
+     * The fully qualified name of the class to check for.
      *
      * <p>The exclusion rule only applies if this class is found on the classpath.
      */
@@ -34,15 +34,11 @@ public class IfClassAvailable {
     private String name;
 
     // ============================================
-    // Getters and Setters
+    // Getters
     // ============================================
 
     public String getName() {
         return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
     }
 
     @Override

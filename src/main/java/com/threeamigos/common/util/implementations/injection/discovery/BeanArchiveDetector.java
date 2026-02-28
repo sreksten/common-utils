@@ -17,11 +17,9 @@ import java.util.zip.ZipEntry;
  *
  * <p><b>CDI 4.1 Bean Archive Types:</b>
  * <ul>
- *   <li><b>Explicit bean archive:</b> Contains beans.xml with bean-discovery-mode="all" (or no mode attribute).
- *       All classes with suitable constructors are beans.</li>
- *   <li><b>Implicit bean archive:</b> Contains beans.xml with bean-discovery-mode="annotated", OR
- *       no beans.xml but has classes with bean-defining annotations. Only annotated classes are beans.</li>
- *   <li><b>Not a bean archive:</b> Contains beans.xml with bean-discovery-mode="none". No beans discovered.</li>
+ *   <li><b>Explicit bean archive:</b> Contains beans.xml with bean-discovery-mode="all".</li>
+ *   <li><b>Implicit bean archive:</b> beans.xml missing or bean-discovery-mode="annotated".</li>
+ *   <li><b>Not a bean archive:</b> Contains beans.xml with bean-discovery-mode="none".</li>
  * </ul>
  *
  * <p><b>Enhancement (v1.16):</b> Now uses JAXB-based {@link BeansXmlParser} to parse
@@ -58,6 +56,15 @@ public class BeanArchiveDetector {
      * Parser for beans.xml files.
      */
     private final BeansXmlParser beansXmlParser = new BeansXmlParser();
+    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
+
+    public BeanArchiveDetector() {
+        this(null);
+    }
+
+    public BeanArchiveDetector(com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase) {
+        this.knowledgeBase = knowledgeBase;
+    }
 
     /**
      * Detects the bean archive mode for a JAR file.
@@ -110,8 +117,8 @@ public class BeanArchiveDetector {
                 return determineMode(beansXml);
             }
         } catch (Exception e) {
-            // If we can't read beans.xml, default to IMPLICIT
-            return BeanArchiveMode.IMPLICIT;
+            handleParseError(e, jarFile.getName());
+            return BeanArchiveMode.NONE;
         }
     }
 
@@ -135,8 +142,16 @@ public class BeanArchiveDetector {
             cacheBeansXml(directory, beansXml);
             return determineMode(beansXml);
         } catch (Exception e) {
-            // If we can't read beans.xml, default to IMPLICIT
-            return BeanArchiveMode.IMPLICIT;
+            handleParseError(e, directory.getName());
+            return BeanArchiveMode.NONE;
+        }
+    }
+
+    private void handleParseError(Exception e, String archiveName) {
+        String msg = "[BeanArchiveDetector] beans.xml parse error in " + archiveName + ": " + e.getMessage();
+        System.err.println(msg);
+        if (knowledgeBase != null) {
+            knowledgeBase.addDefinitionError(msg);
         }
     }
 
@@ -181,7 +196,7 @@ public class BeanArchiveDetector {
 
     /**
      * Finds the classpath root directory by navigating up from a file.
-     * The classpath root is where META-INF directory exists.
+     * The classpath root is where the META-INF directory exists.
      *
      * @param file a file within the classpath
      * @return the classpath root directory, or null if not found
@@ -233,7 +248,7 @@ public class BeanArchiveDetector {
         BeanArchiveMode baseMode;
 
         if (discoveryMode == null || discoveryMode.trim().isEmpty()) {
-            baseMode = BeanArchiveMode.EXPLICIT;
+            baseMode = BeanArchiveMode.IMPLICIT;
         } else {
             switch (discoveryMode.trim().toLowerCase()) {
                 case "all":
@@ -275,7 +290,7 @@ public class BeanArchiveDetector {
      */
     BeansXml getBeansXml(File jarFile) {
         if (jarFile == null || !jarFile.exists()) {
-            return new BeansXml(); // Default with bean-discovery-mode="all"
+            return new BeansXml(); // Default with bean-discovery-mode="annotated"
         }
 
         try {
@@ -316,7 +331,7 @@ public class BeanArchiveDetector {
                 return beansXml;
             }
         } catch (Exception e) {
-            return new BeansXml();
+                    return new BeansXml();
         }
     }
 

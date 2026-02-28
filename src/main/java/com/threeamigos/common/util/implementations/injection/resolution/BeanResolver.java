@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
-import com.threeamigos.common.util.implementations.injection.events.RegistryContextTokenProvider;
+import com.threeamigos.common.util.implementations.injection.events.propagation.RegistryContextTokenProvider;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;

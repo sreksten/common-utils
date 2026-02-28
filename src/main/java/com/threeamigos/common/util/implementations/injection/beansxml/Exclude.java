@@ -5,6 +5,7 @@ import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlAttribute;
 import jakarta.xml.bind.annotation.XmlElement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -39,7 +40,7 @@ import java.util.List;
  * <h2>Pattern Matching:</h2>
  * <ul>
  *   <li><b>Exact:</b> com.example.MyClass - matches only this class</li>
- *   <li><b>Package:</b> com.example.* - matches all classes in package (no subpackages)</li>
+ *   <li><b>Package:</b> com.example.* - matches all classes in the package (no subpackages)</li>
  *   <li><b>Recursive:</b> com.example.** - matches all classes in package and subpackages</li>
  * </ul>
  *
@@ -112,39 +113,23 @@ public class Exclude {
     private List<IfSystemProperty> ifSystemProperty = new ArrayList<>();
 
     // ============================================
-    // Getters and Setters
+    // Getters
     // ============================================
 
     public String getName() {
         return name;
     }
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
     public List<IfClassAvailable> getIfClassAvailable() {
-        return ifClassAvailable;
-    }
-
-    public void setIfClassAvailable(List<IfClassAvailable> ifClassAvailable) {
-        this.ifClassAvailable = ifClassAvailable;
+        return Collections.unmodifiableList(ifClassAvailable);
     }
 
     public List<IfClassNotAvailable> getIfClassNotAvailable() {
-        return ifClassNotAvailable;
-    }
-
-    public void setIfClassNotAvailable(List<IfClassNotAvailable> ifClassNotAvailable) {
-        this.ifClassNotAvailable = ifClassNotAvailable;
+        return Collections.unmodifiableList(ifClassNotAvailable);
     }
 
     public List<IfSystemProperty> getIfSystemProperty() {
-        return ifSystemProperty;
-    }
-
-    public void setIfSystemProperty(List<IfSystemProperty> ifSystemProperty) {
-        this.ifSystemProperty = ifSystemProperty;
+        return Collections.unmodifiableList(ifSystemProperty);
     }
 
     // ============================================
@@ -172,7 +157,7 @@ public class Exclude {
      *   <li>Multi-level wildcard: "com.example.**"</li>
      * </ul>
      *
-     * @param className the fully-qualified class name to check
+     * @param className the fully qualified class name to check
      * @return true if the pattern matches
      */
     public boolean matches(String className) {

@@ -4,6 +4,7 @@ import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlElement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -37,8 +38,8 @@ import java.util.List;
  * <h2>Pattern Syntax:</h2>
  * <ul>
  *   <li><b>com.example.Foo</b> - Exact class match</li>
- *   <li><b>com.example.*</b> - All classes directly in package (no subpackages)</li>
- *   <li><b>com.example.**</b> - All classes in package and all subpackages (recursive)</li>
+ *   <li><b>com.example.*</b> - All classes directly in the package (no subpackages)</li>
+ *   <li><b>com.example.**</b> - All classes in the package and all subpackages (recursive)</li>
  * </ul>
  *
  * @author Stefano Reksten
@@ -58,15 +59,11 @@ public class Scan {
     private List<Exclude> excludes = new ArrayList<>();
 
     // ============================================
-    // Getters and Setters
+    // Getters
     // ============================================
 
     public List<Exclude> getExcludes() {
-        return excludes;
-    }
-
-    public void setExcludes(List<Exclude> excludes) {
-        this.excludes = excludes;
+        return Collections.unmodifiableList(excludes);
     }
 
     // ============================================

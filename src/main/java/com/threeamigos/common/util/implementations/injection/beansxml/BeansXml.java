@@ -60,7 +60,7 @@ public class BeansXml {
      * The bean discovery mode.
      *
      * <p>Valid values: "all", "annotated", "none"
-     * <p>Default: "all" (if the attribute is missing or empty)
+     * <p>Default: "annotated" (if the attribute is missing or empty)
      *
      * <p>CDI 4.1 Section 12.1:
      * <ul>
@@ -70,7 +70,7 @@ public class BeansXml {
      * </ul>
      */
     @XmlAttribute(name = "bean-discovery-mode")
-    private String beanDiscoveryMode = "all";
+    private String beanDiscoveryMode = "annotated";
 
     /**
      * The CDI version (e.g., "4.0", "3.0", "2.0", "1.1").
@@ -90,7 +90,7 @@ public class BeansXml {
      * </ul>
      */
     @XmlElement(name = "alternatives")
-    private Alternatives alternatives;
+    private Alternatives alternatives = new Alternatives();
 
     /**
      * Interceptor classes with explicit ordering.
@@ -104,7 +104,7 @@ public class BeansXml {
      * <p>The order in the XML determines interceptor precedence (first = highest priority).
      */
     @XmlElement(name = "interceptors")
-    private Interceptors interceptors;
+    private Interceptors interceptors = new Interceptors();
 
     /**
      * Decorator classes with explicit ordering.
@@ -118,13 +118,30 @@ public class BeansXml {
      * <p>The order in the XML determines decorator precedence (first = highest priority).
      */
     @XmlElement(name = "decorators")
-    private Decorators decorators;
+    private Decorators decorators = new Decorators();
 
     /**
      * Scan configuration for excluding packages/classes.
      *
      * <p>CDI 4.1 Section 12.4: Allows fine-grained control over bean scanning.
      * Useful for excluding legacy code, test classes, or unwanted dependencies.
+     *
+     * <p><b>Examples:</b></p>
+     * <pre>
+     * &lt;scan&gt;
+     *   &lt;exclude name=&quot;com.myapp.internal.**&quot;/&gt;
+     *   &lt;if-class-available name=&quot;com.acme.FeatureFlag&quot;/&gt;
+     *   &lt;if-class-not-available name=&quot;com.legacy.DeprecatedFeature&quot;/&gt;
+     *   &lt;if-system-property name=&quot;env&quot; value=&quot;prod&quot;/&gt;
+     * &lt;/scan&gt;
+     *
+     * &lt;scan&gt;
+     *   &lt;exclude name=&quot;com.example.tests.**&quot;/&gt;
+     *   &lt;if-class-available name=&quot;org.slf4j.Logger&quot;/&gt;        &lt;!-- include only if SLF4J present --&gt;
+     *   &lt;if-class-not-available name=&quot;com.example.DebugMode&quot;/&gt; &lt;!-- skip when debug module absent --&gt;
+     *   &lt;if-system-property name=&quot;featureX.enabled&quot; value=&quot;true&quot;/&gt; &lt;!-- include only when featureX on --&gt;
+     * &lt;/scan&gt;
+     * </pre>
      */
     @XmlElement(name = "scan")
     private Scan scan;
@@ -132,12 +149,12 @@ public class BeansXml {
     /**
      * Trim element for optimization.
      *
-     * <p>CDI 4.1 Section 12.4: When present, only beans that are:
+     * <p>CDI 4.1 Section 12.4: When present, beans are enabled if they are:
      * <ul>
      *   <li>Explicitly declared in beans.xml (alternatives, interceptors, decorators)</li>
      *   <li>Directly injected somewhere in the application</li>
      * </ul>
-     * are enabled. All other beans are excluded.
+     * All other beans are excluded.
      *
      * <p>This is an optimization for large applications with many unused beans.
      */
@@ -145,63 +162,38 @@ public class BeansXml {
     private Trim trim;
 
     // ============================================
-    // Getters and Setters
+    // Getters
     // ============================================
 
     public String getBeanDiscoveryMode() {
+        if (beanDiscoveryMode == null || beanDiscoveryMode.trim().isEmpty()) {
+            beanDiscoveryMode = "annotated";
+        }
         return beanDiscoveryMode;
-    }
-
-    public void setBeanDiscoveryMode(String beanDiscoveryMode) {
-        this.beanDiscoveryMode = beanDiscoveryMode;
     }
 
     public String getVersion() {
         return version;
     }
 
-    public void setVersion(String version) {
-        this.version = version;
-    }
-
     public Alternatives getAlternatives() {
         return alternatives;
-    }
-
-    public void setAlternatives(Alternatives alternatives) {
-        this.alternatives = alternatives;
     }
 
     public Interceptors getInterceptors() {
         return interceptors;
     }
 
-    public void setInterceptors(Interceptors interceptors) {
-        this.interceptors = interceptors;
-    }
-
     public Decorators getDecorators() {
         return decorators;
-    }
-
-    public void setDecorators(Decorators decorators) {
-        this.decorators = decorators;
     }
 
     public Scan getScan() {
         return scan;
     }
 
-    public void setScan(Scan scan) {
-        this.scan = scan;
-    }
-
     public Trim getTrim() {
         return trim;
-    }
-
-    public void setTrim(Trim trim) {
-        this.trim = trim;
     }
 
     // ============================================

@@ -4,13 +4,14 @@ import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlElement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
  * Model class for the &lt;interceptors&gt; section of beans.xml.
  *
  * <p>CDI 4.1 Section 9.5: Interceptors can be enabled and ordered via beans.xml.
- * The order in the list determines interceptor precedence - first entry has highest priority.
+ * The order in the list determines interceptor precedence - the first entry has the highest priority.
  *
  * <h2>Example XML:</h2>
  * <pre>{@code
@@ -46,9 +47,9 @@ import java.util.List;
 public class Interceptors {
 
     /**
-     * Ordered list of interceptor classes to enable.
+     * An ordered list of interceptor classes to enable.
      *
-     * <p>Each entry is a fully-qualified class name (e.g., "com.example.TransactionalInterceptor").
+     * <p>Each entry is a fully qualified class name (e.g., "com.example.TransactionalInterceptor").
      *
      * <p>The order in this list determines interceptor execution order:
      * <ul>
@@ -66,15 +67,11 @@ public class Interceptors {
     private List<String> classes = new ArrayList<>();
 
     // ============================================
-    // Getters and Setters
+    // Getters
     // ============================================
 
     public List<String> getClasses() {
-        return classes;
-    }
-
-    public void setClasses(List<String> classes) {
-        this.classes = classes;
+        return Collections.unmodifiableList(classes);
     }
 
     // ============================================
@@ -88,18 +85,6 @@ public class Interceptors {
      */
     public boolean isEmpty() {
         return classes.isEmpty();
-    }
-
-    /**
-     * Gets the priority/order of a specific interceptor class.
-     *
-     * <p>Lower index = higher priority (outermost interceptor).
-     *
-     * @param className the fully-qualified interceptor class name
-     * @return the index (0-based), or -1 if not found
-     */
-    public int getOrder(String className) {
-        return classes.indexOf(className);
     }
 
     @Override

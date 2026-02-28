@@ -1,43 +1,43 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.Holder;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesAbstractClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed1;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed2;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesStandardClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.multipleconcreteclasses.subpackage.MultipleConcreteClassesNamed3;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.noconcreteclasses.NoConcreteClassesAbstractClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
-import com.threeamigos.common.util.implementations.injection.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesAlternativeImplementation1;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesInterface;
-import com.threeamigos.common.util.implementations.injection.alternatives.AlternativesStandardImplementation;
-import com.threeamigos.common.util.implementations.injection.circulardependencies.A;
-import com.threeamigos.common.util.implementations.injection.circulardependencies.AWithBProvider;
-import com.threeamigos.common.util.implementations.injection.circulardependencies.B;
-import com.threeamigos.common.util.implementations.injection.circulardependencies.BWithAProvider;
-import com.threeamigos.common.util.implementations.injection.fields.*;
-import com.threeamigos.common.util.implementations.injection.generics.GenericsClass;
-import com.threeamigos.common.util.implementations.injection.generics.Object1;
-import com.threeamigos.common.util.implementations.injection.generics.Object2;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleAlternativesAlternativeImplementation;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsNamed2;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsInterface;
-import com.threeamigos.common.util.implementations.injection.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesAbstractClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed1;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesNamed2;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.MultipleConcreteClassesStandardClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses.subpackage.MultipleConcreteClassesNamed3;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.noconcreteclasses.NoConcreteClassesAbstractClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.singleimplementation.SingleImplementationAbstractClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.singleimplementation.SingleImplementationConcreteClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.alternatives.AlternativesAlternativeImplementation1;
+import com.threeamigos.common.util.implementations.injection.testpackages.alternatives.AlternativesInterface;
+import com.threeamigos.common.util.implementations.injection.testpackages.alternatives.AlternativesStandardImplementation;
+import com.threeamigos.common.util.implementations.injection.testpackages.circulardependencies.A;
+import com.threeamigos.common.util.implementations.injection.testpackages.circulardependencies.AWithBProvider;
+import com.threeamigos.common.util.implementations.injection.testpackages.circulardependencies.B;
+import com.threeamigos.common.util.implementations.injection.testpackages.circulardependencies.BWithAProvider;
+import com.threeamigos.common.util.implementations.injection.testpackages.fields.*;
+import com.threeamigos.common.util.implementations.injection.testpackages.generics.GenericsClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.generics.Object1;
+import com.threeamigos.common.util.implementations.injection.testpackages.generics.Object2;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.multipleimplementations.MultipleAlternativesAlternativeImplementation;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.multipleimplementations.MultipleImplementationsNamed2;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.multipleimplementations.MultipleImplementationsInterface;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.multipleimplementations.MultipleImplementationsStandardImplementation;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.testpackages.optional.*;
+import com.threeamigos.common.util.implementations.injection.testpackages.scopes.*;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
-import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithInvalidParameter;
-import com.threeamigos.common.util.implementations.injection.methods.ClassWithMethodWithValidParameters;
-import com.threeamigos.common.util.implementations.injection.methods.FirstMethodParameter;
-import com.threeamigos.common.util.implementations.injection.methods.SecondMethodParameter;
-import com.threeamigos.common.util.implementations.injection.optional.*;
-import com.threeamigos.common.util.implementations.injection.parameters.TestClassWithInvalidParametersInConstructor;
-import com.threeamigos.common.util.implementations.injection.scopes.*;
+import com.threeamigos.common.util.implementations.injection.testpackages.methods.ClassWithMethodWithInvalidParameter;
+import com.threeamigos.common.util.implementations.injection.testpackages.methods.ClassWithMethodWithValidParameters;
+import com.threeamigos.common.util.implementations.injection.testpackages.methods.FirstMethodParameter;
+import com.threeamigos.common.util.implementations.injection.testpackages.methods.SecondMethodParameter;
+import com.threeamigos.common.util.implementations.injection.testpackages.parameters.TestClassWithInvalidParametersInConstructor;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.ConversationScopeHandler;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.RequestScopeHandler;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.SessionScopeHandler;
-import com.threeamigos.common.util.implementations.injection.superclasses.MyClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.superclasses.MyClass;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.ScopeHandler;
 import jakarta.enterprise.context.Dependent;
@@ -1556,7 +1556,7 @@ class InjectorImplUnitTest {
         @DisplayName("Should inject Optional.of() when dependency exists - field injection")
         void shouldInjectOptionalOfWhenDependencyExistsFieldInjection() {
             // Given
-            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.testpackages.optional");
             // When
             ClassWithOptionalFieldInjection instance = sut.inject(ClassWithOptionalFieldInjection.class);
             // Then
@@ -1571,7 +1571,7 @@ class InjectorImplUnitTest {
         @DisplayName("Should inject Optional.empty() when dependency missing - field injection")
         void shouldInjectOptionalEmptyWhenDependencyMissingFieldInjection() {
             // Given
-            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.testpackages.optional");
             // When
             ClassWithOptionalFieldInjection instance = sut.inject(ClassWithOptionalFieldInjection.class);
             // Then
@@ -1584,7 +1584,7 @@ class InjectorImplUnitTest {
         @DisplayName("Should inject Optional dependencies via constructor")
         void shouldInjectOptionalDependenciesViaConstructor() {
             // Given
-            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.testpackages.optional");
             // When
             ClassWithOptionalConstructorInjection instance =
                 sut.inject(ClassWithOptionalConstructorInjection.class);
@@ -1601,7 +1601,7 @@ class InjectorImplUnitTest {
         @DisplayName("Should inject Optional dependencies via method injection")
         void shouldInjectOptionalDependenciesViaMethodInjection() {
             // Given
-            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.testpackages.optional");
             // When
             ClassWithOptionalMethodInjection instance =
                 sut.inject(ClassWithOptionalMethodInjection.class);
@@ -1649,7 +1649,7 @@ class InjectorImplUnitTest {
         @DisplayName("Should handle multiple Optional injections consistently")
         void shouldHandleMultipleOptionalInjectionsConsistently() {
             // Given
-            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.optional");
+            Injector sut = new InjectorImpl("com.threeamigos.common.util.implementations.injection.testpackages.optional");
             // When - inject same Optional type multiple times
             Optional<OptionalService> optional1 =
                 sut.inject(new TypeLiteral<Optional<OptionalService>>() {});

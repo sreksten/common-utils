@@ -2,7 +2,8 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.injection.discovery.ParallelClasspathScanner;
 import com.threeamigos.common.util.implementations.injection.discovery.SimpleClassConsumer;
-import com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation.SingleImplementationClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.singleimplementation.SingleImplementationClass;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -39,11 +40,13 @@ class ParallelClasspathScannerUnitTest {
     Path tempDir;
 
     private ClassLoader classLoader;
+    private KnowledgeBase knowledgeBase;
     private SimpleClassConsumer sink;
 
     @BeforeEach
     void setUp() {
         classLoader = Thread.currentThread().getContextClassLoader();
+        knowledgeBase = new KnowledgeBase();
         sink = new SimpleClassConsumer();
     }
 
@@ -56,7 +59,7 @@ class ParallelClasspathScannerUnitTest {
         void shouldThrowExceptionForPackageNameStartingWithDigit() {
             // When/Then
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> new ParallelClasspathScanner(classLoader, sink, "123invalid"));
+                () -> new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "123invalid"));
             assertTrue(exception.getMessage().contains("Invalid package name"));
         }
 
@@ -65,7 +68,7 @@ class ParallelClasspathScannerUnitTest {
         void shouldThrowExceptionForPackageNameWithSpecialChars() {
             // When/Then
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> new ParallelClasspathScanner(classLoader, sink, "com.example.@invalid"));
+                () -> new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "com.example.@invalid"));
             assertTrue(exception.getMessage().contains("Invalid package name"));
         }
 
@@ -74,7 +77,7 @@ class ParallelClasspathScannerUnitTest {
         void shouldThrowExceptionForPackageNameWithDoubleDots() {
             // When/Then
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> new ParallelClasspathScanner(classLoader, sink, "com..double.dot"));
+                () -> new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "com..double.dot"));
             assertTrue(exception.getMessage().contains("Invalid package name"));
         }
 
@@ -83,7 +86,7 @@ class ParallelClasspathScannerUnitTest {
         void shouldThrowExceptionForPackageNameEndingWithDot() {
             // When/Then
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> new ParallelClasspathScanner(classLoader, sink, "com.example."));
+                () -> new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "com.example."));
             assertTrue(exception.getMessage().contains("Invalid package name"));
         }
 
@@ -91,14 +94,14 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should accept valid package name with underscores and numbers")
         void shouldAcceptValidPackageNameWithUnderscoresAndNumbers() throws Exception {
             // When/Then - Should not throw
-            assertDoesNotThrow(() -> new ParallelClasspathScanner(classLoader, sink, "com.threeamigos.util_1.test_2"));
+            assertDoesNotThrow(() -> new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "com.threeamigos.util_1.test_2"));
         }
 
         @Test
         @DisplayName("Should accept package name starting with underscore")
         void shouldAcceptPackageNameStartingWithUnderscore() throws Exception {
             // When/Then - Should not throw
-            assertDoesNotThrow(() -> new ParallelClasspathScanner(classLoader, sink, "_private.com.example"));
+            assertDoesNotThrow(() -> new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "_private.com.example"));
         }
     }
 
@@ -110,7 +113,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should return an empty collection if package to search does not exist")
         void shouldReturnEmptyCollectionIfPackageToSearchDoesNotExist() throws Exception {
             // Given
-            new ParallelClasspathScanner(classLoader, sink, "com.threeamigos.common.util.implementations.injection.notexistingpackage");
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "com.threeamigos.common.util.implementations.injection.notexistingpackage");
 
             // Then
             assertTrue(sink.getClasses().isEmpty());
@@ -120,7 +123,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should return an empty collection if package to search is a file")
         void shouldReturnEmptyCollectionIfPackageToSearchIsAFile() throws Exception {
             // Given
-            new ParallelClasspathScanner(classLoader, sink, "com.threeamigos.common.util.implementations.injection.wrongdirectory.fakeFileToSkip");
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "com.threeamigos.common.util.implementations.injection.wrongdirectory.fakeFileToSkip");
 
             // Then
             assertTrue(sink.getClasses().isEmpty());
@@ -135,7 +138,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should work if package is null")
         void shouldFindALotOfClassesIfPackageIsNull() throws Exception {
             // Given
-            new ParallelClasspathScanner(classLoader, sink, (String) null);
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase, (String) null);
 
             // When
             Collection<Class<?>> classes = sink.getClasses();
@@ -148,7 +151,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should work if package is empty")
         void shouldFindALotOfClassesIfPackageIsEmpty() throws Exception {
             // Given
-            new ParallelClasspathScanner(classLoader, sink, "");
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "");
 
             // When
             Collection<Class<?>> classes = sink.getClasses();
@@ -161,7 +164,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should handle multiple null package names by filtering them")
         void shouldHandleMultipleNullPackages() throws Exception {
             // Given
-            new ParallelClasspathScanner(classLoader, sink, null, null, "com.threeamigos.common.util.implementations.injection");
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase, null, null, "com.threeamigos.common.util.implementations.injection");
 
             // When
             Collection<Class<?>> classes = sink.getClasses();
@@ -174,10 +177,10 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should handle mix of valid and null package names")
         void shouldHandleMixOfValidAndNullPackages() throws Exception {
             // Given
-            new ParallelClasspathScanner(classLoader, sink,
-                    "com.threeamigos.common.util.implementations.injection.interfaces",
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase,
+                    "com.threeamigos.common.util.implementations.injection.testpackages.interfaces",
                     null,
-                    "com.threeamigos.common.util.implementations.injection.abstractclasses"
+                    "com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses"
             );
 
             // When
@@ -196,9 +199,9 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should scan multiple packages successfully")
         void shouldScanMultiplePackages() throws Exception {
             // Given
-            new ParallelClasspathScanner(classLoader, sink,
-                    "com.threeamigos.common.util.implementations.injection.interfaces",
-                    "com.threeamigos.common.util.implementations.injection.abstractclasses"
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase,
+                    "com.threeamigos.common.util.implementations.injection.testpackages.interfaces",
+                    "com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses"
             );
 
             // When
@@ -218,7 +221,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should handle empty directory gracefully")
         void shouldHandleEmptyDirectory() throws Exception {
             // Given
-            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink);
+            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink, knowledgeBase);
             sink.getClasses().clear();
 
             File emptyDir = tempDir.resolve("empty").toFile();
@@ -236,7 +239,7 @@ class ParallelClasspathScannerUnitTest {
         @SuppressWarnings("ResultOfMethodCallIgnored")
         void shouldSkipNonClassFiles() throws Exception {
             // Given
-            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink);
+            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink, knowledgeBase);
             sink.getClasses().clear();
 
             File dir = tempDir.resolve("nonclass").toFile();
@@ -258,7 +261,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should handle empty package name in directory scanning")
         void shouldHandleEmptyPackageInDirectory() throws Exception {
             // Given - Create a simple test directory structure
-            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink);
+            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink, knowledgeBase);
             sink.getClasses().clear();
 
             File testDir = tempDir.resolve("testpkg").toFile();
@@ -276,7 +279,7 @@ class ParallelClasspathScannerUnitTest {
         @SuppressWarnings("ResultOfMethodCallIgnored")
         void shouldHandleUnreadableDirectory() throws Exception {
             // Given
-            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink);
+            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink, knowledgeBase);
             sink.getClasses().clear();
 
             File unreadableDir = tempDir.resolve("unreadable").toFile();
@@ -336,14 +339,14 @@ class ParallelClasspathScannerUnitTest {
             };
 
             // When / Then
-            assertThrows(IOException.class, () -> new ParallelClasspathScanner(mockLoader, sink, "test.package"));
+            assertThrows(IOException.class, () -> new ParallelClasspathScanner(mockLoader, sink,  knowledgeBase,"test.package"));
         }
 
         @Test
         @DisplayName("Should handle directory with null listFiles result")
         void shouldHandleNullListFilesResult() throws Exception {
             // Given
-            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink);
+            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink, knowledgeBase);
             sink.getClasses().clear();
 
             // When - Try to scan a path that will cause listFiles() to return null
@@ -379,7 +382,7 @@ class ParallelClasspathScannerUnitTest {
                         ClassLoader loader = Thread.currentThread().getContextClassLoader();
                         SimpleClassConsumer localSink = new SimpleClassConsumer();
 
-                        new ParallelClasspathScanner(loader, localSink, "com.threeamigos.common.util.implementations.injection");
+                        new ParallelClasspathScanner(loader, localSink, knowledgeBase, "com.threeamigos.common.util.implementations.injection");
 
                         Collection<Class<?>> classes = localSink.getClasses();
                         if (!classes.isEmpty()) {
@@ -412,7 +415,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should handle package name with numbers and underscores")
         void shouldHandleUnusualPackageNames() throws Exception {
             // Given - While not common, package names can have numbers and underscores
-            new ParallelClasspathScanner(classLoader, sink, "com.threeamigos");
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "com.threeamigos");
 
             // When
             Collection<Class<?>> classes = sink.getClasses();
@@ -430,11 +433,11 @@ class ParallelClasspathScannerUnitTest {
             SimpleClassConsumer sink2 = new SimpleClassConsumer();
 
             // When - Call multiple times
-            new ParallelClasspathScanner(classLoader, sink1, "com.threeamigos.common.util.implementations.injection");
+            new ParallelClasspathScanner(classLoader, sink1,  knowledgeBase,"com.threeamigos.common.util.implementations.injection");
 
-            new ParallelClasspathScanner(classLoader, sink2, "com.threeamigos.common.util.implementations.injection");
+            new ParallelClasspathScanner(classLoader, sink2,  knowledgeBase,"com.threeamigos.common.util.implementations.injection");
 
-            new ParallelClasspathScanner(classLoader, sink3, "com.threeamigos.common.util.implementations.injection");
+            new ParallelClasspathScanner(classLoader, sink3,  knowledgeBase,"com.threeamigos.common.util.implementations.injection");
 
             Collection<Class<?>> result1 = sink1.getClasses();
             Collection<Class<?>> result2 = sink2.getClasses();
@@ -450,7 +453,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should handle deeply nested package structure")
         void shouldHandleDeeplyNestedPackages() throws Exception {
             // Given - Test with deeply nested package
-            new ParallelClasspathScanner(classLoader, sink, "com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation");
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation");
 
             // When
             Collection<Class<?>> classes = sink.getClasses();
@@ -469,7 +472,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should handle file protocol correctly")
         void shouldHandleFileProtocol() throws Exception {
             // Given
-            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink);
+            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink, knowledgeBase);
             URL classUrl = getClass().getClassLoader().getResource("com/threeamigos/common/util/implementations/injection");
             assertNotNull(classUrl);
             assertEquals("file", classUrl.getProtocol());
@@ -485,7 +488,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should throw exception for unknown protocol")
         void shouldThrowExceptionForUnknownProtocol() throws Exception {
             // Given
-            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink);
+            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink, knowledgeBase);
             URL mockUrl = new URL("http://example.com/test");
 
             // When/Then
@@ -513,7 +516,7 @@ class ParallelClasspathScannerUnitTest {
             try (URLClassLoader testLoader = createURLClassLoader(urls, packageName, baseEntryName)) {
                 SimpleClassConsumer jarSink = new SimpleClassConsumer();
 
-                new ParallelClasspathScanner(testLoader, jarSink, packageNameToFilter);
+                new ParallelClasspathScanner(testLoader, jarSink, knowledgeBase, packageNameToFilter);
 
                 Collection<Class<?>> classes = jarSink.getClasses();
                 String classNameToFind = SingleImplementationClass.class.getSimpleName();
@@ -530,7 +533,7 @@ class ParallelClasspathScannerUnitTest {
         @Test
         @DisplayName("Should handle non-standard JAR URLs using fallback logic")
         void shouldHandleNonStandardJarUrl() throws Exception {
-            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink);
+            ParallelClasspathScanner sut = new ParallelClasspathScanner(classLoader, sink, knowledgeBase);
 
             // 1. Create a URL string with an unencoded space.
             String nonStandardUrl = "jar:file:/C:/My Documents/test.jar!/com/package";
@@ -612,7 +615,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should successfully scan entire common-utils injection package")
         void shouldScanEntireInjectionPackage() throws Exception {
             // Given
-            new ParallelClasspathScanner(classLoader, sink, "com.threeamigos.common.util.implementations.injection");
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase, "com.threeamigos.common.util.implementations.injection");
 
             // When
             Collection<Class<?>> classes = sink.getClasses();
@@ -629,7 +632,7 @@ class ParallelClasspathScannerUnitTest {
         @DisplayName("Should handle no packages specified (scan everything)")
         void shouldHandleNoPackagesSpecified() throws Exception {
             // Given
-            new ParallelClasspathScanner(classLoader, sink);
+            new ParallelClasspathScanner(classLoader, sink, knowledgeBase);
 
             // When
             Collection<Class<?>> classes = sink.getClasses();

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.inject.Vetoed;
 
 import java.io.File;
@@ -69,6 +70,7 @@ public class ParallelClasspathScanner {
 
     public ParallelClasspathScanner(ClassLoader classLoader,
                      ClassConsumer sink,
+                     KnowledgeBase knowledgeBase,
                      String... packageNames) throws IOException, ClassNotFoundException {
         Objects.requireNonNull(sink, "sink cannot be null");
         Objects.requireNonNull(packageNames, "packageNames cannot be null");

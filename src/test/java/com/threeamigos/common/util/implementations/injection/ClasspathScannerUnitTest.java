@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.injection.discovery.ClasspathScanner;
-import com.threeamigos.common.util.implementations.injection.interfaces.singleimplementation.SingleImplementationClass;
+import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.singleimplementation.SingleImplementationClass;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -205,9 +205,9 @@ class ClasspathScannerUnitTest {
         void shouldHandleMixOfValidAndNullPackages() throws Exception {
             // Given
             ClasspathScanner sut = new ClasspathScanner(
-                    "com.threeamigos.common.util.implementations.injection.interfaces",
+                    "com.threeamigos.common.util.implementations.injection.testpackages.interfaces",
                     null,
-                    "com.threeamigos.common.util.implementations.injection.abstractclasses"
+                    "com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses"
             );
 
             // When
@@ -227,8 +227,8 @@ class ClasspathScannerUnitTest {
         void shouldScanMultiplePackages() throws Exception {
             // Given
             ClasspathScanner sut = new ClasspathScanner(
-                    "com.threeamigos.common.util.implementations.injection.interfaces",
-                    "com.threeamigos.common.util.implementations.injection.abstractclasses"
+                    "com.threeamigos.common.util.implementations.injection.testpackages.interfaces",
+                    "com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses"
             );
 
             // When

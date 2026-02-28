@@ -7,7 +7,10 @@ import javax.xml.XMLConstants;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.net.URL;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -42,13 +45,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * BeansXml validated = parser.parseWithValidation(is, schemaUrl);
  * }</pre>
  *
- * <h2>Error Handling:</h2>
- * <p>If parsing fails (malformed XML, invalid structure), this parser:
- * <ul>
- *   <li>Logs a warning with details</li>
- *   <li>Returns a default BeansXml with bean-discovery-mode="all"</li>
- *   <li>Never throws exceptions (fail-safe behavior)</li>
- * </ul>
+     * <h2>Error Handling:</h2>
+     * <p>If parsing fails (malformed XML, invalid structure), this parser returns
+     * a default BeansXml with bean-discovery-mode="annotated" and no other config.
  *
  * @author Stefano Reksten
  * @see BeansXml
@@ -66,11 +65,11 @@ public class BeansXmlParser {
      * Whether to enable XSD validation during parsing.
      * Default: false (for performance and backward compatibility).
      */
-    private boolean validationEnabled = false;
+    private boolean validationEnabled;
 
     /**
      * URL to the CDI beans XSD schema (if validation is enabled).
-     * Can be loaded from classpath or external URL.
+     * Can be loaded from the classpath or an external URL.
      */
     private URL schemaUrl;
 
@@ -114,46 +113,8 @@ public class BeansXmlParser {
         }
 
         try {
-            // Get or create JAXB context (cached for performance)
-            JAXBContext jaxbContext = jaxbContextCache.computeIfAbsent(
-                BeansXml.class,
-                clazz -> {
-                    try {
-                        return JAXBContext.newInstance(BeansXml.class);
-                    } catch (JAXBException e) {
-                        throw new RuntimeException("Failed to create JAXB context for BeansXml", e);
-                    }
-                }
-            );
-
-            // Create unmarshaller
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-
-            // Enable validation if configured
-            if (validationEnabled && schemaUrl != null) {
-                Schema schema = createSchema(schemaUrl);
-                unmarshaller.setSchema(schema);
-            }
-
-            // Unmarshal the XML
-            BeansXml beansXml = (BeansXml) unmarshaller.unmarshal(inputStream);
-
-            // Ensure non-null discovery mode
-            if (beansXml.getBeanDiscoveryMode() == null ||
-                beansXml.getBeanDiscoveryMode().trim().isEmpty()) {
-                beansXml.setBeanDiscoveryMode("all");
-            }
-
-            return beansXml;
-
+            return parseInternal(inputStream);
         } catch (Exception e) {
-            // Log the error but don't fail - return default instead
-            System.err.println("[BeansXmlParser] Failed to parse beans.xml: " + e.getMessage());
-            System.err.println("[BeansXmlParser] Falling back to default configuration (bean-discovery-mode=all)");
-
-            // In production, you might want to use a proper logger:
-            // logger.warn("Failed to parse beans.xml, using defaults", e);
-
             return createDefault();
         }
     }
@@ -173,7 +134,7 @@ public class BeansXmlParser {
             throws BeansXmlParseException {
         try {
             setSchemaUrl(schemaUrl);
-            return parse(inputStream);
+            return parseInternal(inputStream);
         } catch (Exception e) {
             throw new BeansXmlParseException("Failed to parse and validate beans.xml", e);
         }
@@ -188,7 +149,13 @@ public class BeansXmlParser {
      */
     private Schema createSchema(URL schemaUrl) throws Exception {
         SchemaFactory schemaFactory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-        return schemaFactory.newSchema(new StreamSource(schemaUrl.openStream()));
+        schemaFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        schemaFactory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        schemaFactory.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+
+        try (InputStream is = schemaUrl.openStream()) {
+            return schemaFactory.newSchema(new StreamSource(is));
+        }
     }
 
     /**
@@ -196,12 +163,69 @@ public class BeansXmlParser {
      *
      * <p>Used as a fallback when parsing fails or when no beans.xml exists.
      *
-     * @return a BeansXml with bean-discovery-mode="all" and no other configuration
+     * @return a BeansXml with bean-discovery-mode="annotated" and no other configuration
      */
     private BeansXml createDefault() {
-        BeansXml beansXml = new BeansXml();
-        beansXml.setBeanDiscoveryMode("all");
-        return beansXml;
+        return new BeansXml();
+    }
+
+    private void ensureValidDiscoveryMode(BeansXml beansXml) throws BeansXmlParseException {
+        String mode = beansXml.getBeanDiscoveryMode();
+        switch (mode) {
+            case "all":
+            case "annotated":
+            case "none":
+                return;
+            default:
+                throw new BeansXmlParseException(
+                    "Invalid bean-discovery-mode '" + mode + "'. Allowed: all, annotated, none.", null);
+        }
+    }
+
+    private BeansXml parseInternal(InputStream inputStream) throws Exception {
+        // Get or create JAXB context (cached for performance)
+        JAXBContext jaxbContext = jaxbContextCache.computeIfAbsent(
+            BeansXml.class,
+            clazz -> {
+                try {
+                    return JAXBContext.newInstance(BeansXml.class);
+                } catch (JAXBException e) {
+                    throw new RuntimeException("Failed to create JAXB context for BeansXml", e);
+                }
+            }
+        );
+
+        Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+
+        boolean stripVendorScan = validationEnabled && schemaUrl != null;
+
+        if (validationEnabled && schemaUrl != null) {
+            Schema schema = createSchema(schemaUrl);
+            unmarshaller.setSchema(schema);
+        }
+
+        try (InputStream normalized = normalizeNamespaces(inputStream, stripVendorScan)) {
+            BeansXml beansXml = (BeansXml) unmarshaller.unmarshal(normalized);
+            ensureValidDiscoveryMode(beansXml);
+            return beansXml;
+        }
+    }
+
+    private InputStream normalizeNamespaces(InputStream inputStream, boolean stripVendorScan) throws Exception {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int read;
+        while ((read = inputStream.read(buffer)) != -1) {
+            baos.write(buffer, 0, read);
+        }
+        String xml = new String(baos.toByteArray(), StandardCharsets.UTF_8);
+        String normalized = xml
+            .replace("http://xmlns.jcp.org/xml/ns/javaee", "https://jakarta.ee/xml/ns/jakartaee")
+            .replace("http://java.sun.com/xml/ns/javaee", "https://jakarta.ee/xml/ns/jakartaee");
+        if (stripVendorScan) {
+            normalized = normalized.replaceAll("(?s)<scan>.*?</scan>", "");
+        }
+        return new ByteArrayInputStream(normalized.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

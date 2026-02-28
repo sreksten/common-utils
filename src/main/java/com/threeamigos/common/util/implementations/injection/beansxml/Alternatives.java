@@ -4,6 +4,7 @@ import jakarta.xml.bind.annotation.XmlAccessType;
 import jakarta.xml.bind.annotation.XmlAccessorType;
 import jakarta.xml.bind.annotation.XmlElement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -39,7 +40,7 @@ public class Alternatives {
     /**
      * List of alternative bean classes to enable.
      *
-     * <p>Each entry is a fully-qualified class name (e.g., "com.example.MockService").
+     * <p>Each entry is a fully qualified class name (e.g., "com.example.MockService").
      *
      * <p>When a class is listed here, it is enabled as an alternative and will be
      * selected instead of non-alternative beans of the same type.
@@ -50,7 +51,7 @@ public class Alternatives {
     /**
      * List of alternative stereotypes to enable.
      *
-     * <p>Each entry is a fully-qualified stereotype annotation class name.
+     * <p>Each entry is a fully qualified stereotype annotation class name.
      *
      * <p>When a stereotype is listed here, ALL beans annotated with that stereotype
      * are enabled as alternatives.
@@ -75,23 +76,15 @@ public class Alternatives {
     private List<String> stereotypes = new ArrayList<>();
 
     // ============================================
-    // Getters and Setters
+    // Getters
     // ============================================
 
     public List<String> getClasses() {
-        return classes;
-    }
-
-    public void setClasses(List<String> classes) {
-        this.classes = classes;
+        return Collections.unmodifiableList(classes);
     }
 
     public List<String> getStereotypes() {
-        return stereotypes;
-    }
-
-    public void setStereotypes(List<String> stereotypes) {
-        this.stereotypes = stereotypes;
+        return Collections.unmodifiableList(stereotypes);
     }
 
     // ============================================

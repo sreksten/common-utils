@@ -239,7 +239,7 @@ public class InjectorImpl implements Injector {
             // which detects the mode for each JAR/directory by examining META-INF/beans.xml
             ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase);
             new ParallelClasspathScanner(
-                    Thread.currentThread().getContextClassLoader(), classProcessor, packageNames);
+                    Thread.currentThread().getContextClassLoader(), classProcessor, knowledgeBase, packageNames);
             parallelTaskExecutor.awaitCompletion();
         } catch (Exception e) {
             throw new RuntimeException(e);
