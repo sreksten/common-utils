@@ -95,12 +95,15 @@ public class Syringe {
      */
     private KnowledgeBase knowledgeBase;
 
+    /**
+     * The ContextManager, responsible for handling Scopes
+     */
     private ContextManager contextManager;
 
     /**
      * Package names to scan for beans.
      */
-    private String[] packageNames;
+    private final String[] packageNames;
 
     /**
      * Whether the container has been initialized.
@@ -398,7 +401,7 @@ public class Syringe {
 
         for (Extension extension : serviceLoader) {
             extensions.add(extension);
-            System.out.println("[Syringe]   Loaded extension: " + extension.getClass().getName());
+            System.out.println("[Syringe] Loaded extension: " + extension.getClass().getName());
         }
 
         // Load explicitly registered extensions
@@ -412,7 +415,7 @@ public class Syringe {
                 }
                 Extension extension = (Extension) extensionClass.getDeclaredConstructor().newInstance();
                 extensions.add(extension);
-                System.out.println("[Syringe]   Loaded extension: " + className);
+                System.out.println("[Syringe] Loaded extension: " + className);
             } catch (Exception e) {
                 throw new DeploymentException("Failed to load extension: " + className, e);
             }

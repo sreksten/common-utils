@@ -2,9 +2,10 @@ package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.*;
-
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Type;
 import java.util.*;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -97,31 +98,31 @@ public class AnnotatedTypeConfiguratorImpl<T> implements AnnotatedTypeConfigurat
     @Override
     public java.util.stream.Stream<AnnotatedFieldConfigurator<? super T>> filterFields(Predicate<AnnotatedField<? super T>> predicate) {
         if (predicate == null) {
-            return fieldConfigurators.stream().map(c -> (AnnotatedFieldConfigurator<? super T>) c);
+            return fieldConfigurators.stream().map(Function.identity());
         }
         return fieldConfigurators.stream()
                 .filter(configurator -> predicate.test(configurator.getAnnotated()))
-                .map(c -> (AnnotatedFieldConfigurator<? super T>) c);
+                .map(Function.identity());
     }
 
     @Override
     public java.util.stream.Stream<AnnotatedMethodConfigurator<? super T>> filterMethods(Predicate<AnnotatedMethod<? super T>> predicate) {
         if (predicate == null) {
-            return methodConfigurators.stream().map(c -> (AnnotatedMethodConfigurator<? super T>) c);
+            return methodConfigurators.stream().map(Function.identity());
         }
         return methodConfigurators.stream()
                 .filter(configurator -> predicate.test(configurator.getAnnotated()))
-                .map(c -> (AnnotatedMethodConfigurator<? super T>) c);
+                .map(Function.identity());
     }
 
     @Override
     public java.util.stream.Stream<AnnotatedConstructorConfigurator<T>> filterConstructors(Predicate<AnnotatedConstructor<T>> predicate) {
         if (predicate == null) {
-            return constructorConfigurators.stream().map(c -> (AnnotatedConstructorConfigurator<T>) c);
+            return constructorConfigurators.stream().map(Function.identity());
         }
         return constructorConfigurators.stream()
                 .filter(configurator -> predicate.test(configurator.getAnnotated()))
-                .map(c -> (AnnotatedConstructorConfigurator<T>) c);
+                .map(Function.identity());
     }
 
     /**
@@ -169,9 +170,6 @@ public class AnnotatedTypeConfiguratorImpl<T> implements AnnotatedTypeConfigurat
      * @return the configured AnnotatedType
      */
     public AnnotatedType<T> complete() {
-        // For now, return the original type
-        // A full implementation would create a custom AnnotatedType implementation
-        // that wraps the original and applies all the configuration changes
         System.out.println("[AnnotatedTypeConfigurator] Configuration completed for: " +
                           originalType.getJavaClass().getName());
         System.out.println("[AnnotatedTypeConfigurator]   Type annotations modified: " + annotations.size());
@@ -179,7 +177,13 @@ public class AnnotatedTypeConfiguratorImpl<T> implements AnnotatedTypeConfigurat
         System.out.println("[AnnotatedTypeConfigurator]   Methods configured: " + methodConfigurators.size());
         System.out.println("[AnnotatedTypeConfigurator]   Constructors configured: " + constructorConfigurators.size());
 
-        // TODO: Create a ConfiguredAnnotatedType wrapper that applies all changes
-        return originalType;
+        return new ConfiguredAnnotatedType<>(
+            originalType,
+            annotations,
+            fieldConfigurators,
+            methodConfigurators,
+            constructorConfigurators
+        );
     }
+
 }
