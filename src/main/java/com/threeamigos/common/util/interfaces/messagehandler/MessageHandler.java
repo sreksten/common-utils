@@ -10,5 +10,5 @@ public interface MessageHandler extends InfoMessageHandler, SupplierInfoMessageH
         ErrorMessageHandler, SupplierErrorMessageHandler,
         DebugMessageHandler, SupplierDebugMessageHandler,
         TraceMessageHandler, SupplierTraceMessageHandler,
-        ExceptionHandler {
+        ExceptionHandler, ExceptionWithMessageHandler {
 }
