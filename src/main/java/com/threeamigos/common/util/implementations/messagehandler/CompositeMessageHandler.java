@@ -147,6 +147,11 @@ public class CompositeMessageHandler extends AbstractMessageHandler {
         forEachHandler(mh -> mh.handleException(exception));
     }
 
+    @Override
+    protected void handleExceptionImpl(final String message, final Exception exception) {
+        forEachHandler(mh -> mh.handleException(message, exception));
+    }
+
     private void forEachHandler(java.util.function.Consumer<MessageHandler> consumer) {
         List<MessageHandler> snapshot;
         lock.readLock().lock();

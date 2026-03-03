@@ -124,6 +124,17 @@ public class FileMessageHandler extends AbstractMessageHandler implements AutoCl
         });
     }
 
+    @Override
+    protected void handleExceptionImpl(final String message, final Exception exception) {
+        writeLine(format("EXCEP", message + ": " + exception.getMessage()));
+        dispatch(() -> {
+            synchronized (writeLock) {
+                exception.printStackTrace(writer);
+                writer.flush();
+            }
+        });
+    }
+
     private String format(String level, String message) {
         String date = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         return String.format("[%s] [%s] %s", date, level, message);

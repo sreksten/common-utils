@@ -23,32 +23,37 @@ public class JULMessageHandler extends AbstractMessageHandler {
     }
 
     @Override
-    protected void handleInfoMessageImpl(String message) {
+    protected void handleInfoMessageImpl(final String message) {
         logger.log(Level.INFO, message);
     }
 
     @Override
-    protected void handleWarnMessageImpl(String message) {
+    protected void handleWarnMessageImpl(final String message) {
         logger.log(Level.WARNING, message);
     }
 
     @Override
-    protected void handleErrorMessageImpl(String message) {
+    protected void handleErrorMessageImpl(final String message) {
         logger.log(Level.SEVERE, message);
     }
 
     @Override
-    protected void handleDebugMessageImpl(String message) {
+    protected void handleDebugMessageImpl(final String message) {
         logger.log(Level.FINE, message);
     }
 
     @Override
-    protected void handleTraceMessageImpl(String message) {
+    protected void handleTraceMessageImpl(final String message) {
         logger.log(Level.FINER, message);
     }
 
     @Override
-    protected void handleExceptionImpl(Exception exception) {
+    protected void handleExceptionImpl(final Exception exception) {
         logger.log(Level.SEVERE, exception.getMessage(), exception);
+    }
+
+    @Override
+    protected void handleExceptionImpl(final String message, final Exception exception) {
+        logger.log(Level.SEVERE, message + ": " + exception.getMessage(), exception);
     }
 }

@@ -207,4 +207,17 @@ public abstract class AbstractMessageHandler implements MessageHandler {
 
     protected abstract void handleExceptionImpl(final Exception exception);
 
+    public void handleException(final @Nonnull String message, final @Nonnull Exception exception) {
+        if (message == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullMessageProvided"));
+        }
+        if (exception == null) {
+            throw new IllegalArgumentException(getBundle().getString("nullExceptionProvided"));
+        }
+        if (isExceptionEnabled) {
+            handleExceptionImpl(message, exception);
+        }
+    }
+
+    protected abstract void handleExceptionImpl(final String message, final Exception exception);
 }

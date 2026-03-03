@@ -73,4 +73,8 @@ public class SwingMessageHandler extends AbstractMessageHandler {
     protected void handleExceptionImpl(final Exception exception) {
         AWTCalls.showOptionPane(parentComponent, exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
     }
+
+    protected void handleExceptionImpl(final String message, final Exception exception) {
+        AWTCalls.showOptionPane(parentComponent, message + ": " +exception.getMessage(), getBundle().getString("exception"), JOptionPane.ERROR_MESSAGE);
+    }
 }

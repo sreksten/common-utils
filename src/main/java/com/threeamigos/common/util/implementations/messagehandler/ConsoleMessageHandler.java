@@ -102,6 +102,18 @@ public class ConsoleMessageHandler extends AbstractMessageHandler implements Aut
         dispatch(task);
     }
 
+    @Override
+    protected void handleExceptionImpl(final String message, final Exception exception) {
+        Runnable task = () -> {
+            synchronized (PRINT_LOCK) {
+                System.err.println(format("EXCEP", message));
+                System.err.println(format("EXCEP", exception.getMessage()));
+                exception.printStackTrace(System.err); //NOSONAR
+            }
+        };
+        dispatch(task);
+    }
+
     private String format(String level, String message) {
         String date = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         return String.format("[%s] [%s] %s", date, level, message);

@@ -109,6 +109,22 @@ public class InMemoryMessageHandler extends AbstractMessageHandler {
         }
     }
 
+    @Override
+    protected void handleExceptionImpl(final String message, final Exception exception) {
+        lock.lock();
+        try {
+            String msg = exception.getMessage();
+            if (msg == null) {
+                msg = exception.toString();
+            }
+            addWithLimit(allExceptionMessages, message + ": " + msg);
+            addWithLimit(allExceptions, exception);
+            handleImpl(msg);
+        } finally {
+            lock.unlock();
+        }
+    }
+
     private void handleImpl(final String message) {
         addWithLimit(allMessages, message);
         lastMessage = message;
