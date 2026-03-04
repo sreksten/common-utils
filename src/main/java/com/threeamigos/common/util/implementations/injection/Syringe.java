@@ -1252,7 +1252,7 @@ public class Syringe {
             if (bean.getScope() == null || bean.getScope().getName().equals(Dependent.class.getName())) {
                 try {
                     // Dependent beans aren't stored in contexts; nothing to release beyond CreationalContext
-                    // but if a bean holds resources, call destroy with null ctx (BeanImpl handles @PreDestroy)
+                    // but if a bean holds resources, call destroy() with null ctx (BeanImpl handles @PreDestroy)
                     bean.destroy(null, null);
                 } catch (Exception e) {
                     log("Error destroying dependent bean " + bean.getBeanClass().getName(), e);
@@ -1269,9 +1269,9 @@ public class Syringe {
      * Fires an event to all registered extensions by invoking their observer methods.
      *
      * <p>This method scans each extension for methods with parameters annotated with @Observes
-     * that match the event type, and invokes them with the event object.
+     * that match the event type and invokes them with the event object.
      *
-     * @param event the event object to fire
+     * @param event event object to fire
      * @param <T> the event type
      */
     private <T> void fireEventToExtensions(T event) {
