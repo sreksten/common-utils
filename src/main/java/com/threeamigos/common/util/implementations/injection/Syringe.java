@@ -995,7 +995,7 @@ public class Syringe {
             b.setScope(attrs.getScope());
             b.setStereotypes(attrs.getStereotypes());
             b.setTypes(attrs.getTypes());
-            // alternative flag is final; cannot be changed post-creation
+            // the alternative flag is final; cannot be changed post-creation
         } else {
             // Synthetic or built-in beans: no-op
         }
