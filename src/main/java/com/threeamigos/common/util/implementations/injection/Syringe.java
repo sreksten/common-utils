@@ -13,6 +13,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.Producer
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.InjectionTargetFactoryImpl;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
+import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -839,13 +840,12 @@ public class Syringe {
 
                         fireEventToExtensions(event);
 
-                        //FIXME
-                        // If extensions wrapped the producer, we would use event.getFinalProducer()
-                        // For now, we log if producer was replaced
-                        if (event.getFinalProducer() != producer) {
+                        Producer finalProducer = event.getFinalProducer();
+                        if (finalProducer != producer) {
                             info("Producer wrapped for method: " + declaringClass.getSimpleName() + "." +
                                     method.getName());
                         }
+                        replaceProducerBean(producerBean, finalProducer);
                     }
                 } else if (producerBean.isField()) {
                     // Process producer field
@@ -864,12 +864,12 @@ public class Syringe {
 
                         fireEventToExtensions(event);
 
-                        //FIXME
-                        // If extensions wrapped the producer, we would use event.getFinalProducer()
-                        if (event.getFinalProducer() != producer) {
+                        Producer finalProducer = event.getFinalProducer();
+                        if (finalProducer != producer) {
                             info("Producer wrapped for field: " + declaringClass.getSimpleName() + "." +
                                     field.getName());
                         }
+                        replaceProducerBean(producerBean, finalProducer);
                     }
                 }
             } catch (Exception e) {
@@ -900,6 +900,25 @@ public class Syringe {
             }
         }
         return null;
+    }
+
+    /**
+     * Replaces a discovered ProducerBean with a synthetic bean that delegates to the
+     * final Producer selected by extensions via ProcessProducer events.
+     * This ensures the container uses the wrapped/replaced Producer for lifecycle operations.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void replaceProducerBean(ProducerBean<?> original, Producer<?> finalProducer) {
+        if (original == null || finalProducer == null) {
+            return;
+        }
+
+        // Remove the original bean from the resolvable set
+        knowledgeBase.getBeans().remove(original);
+
+        // Create a synthetic bean that delegates create/destroy/injection points to the final producer
+        Bean synthetic = new SyntheticProducerBeanImpl(original, original.getBeanClass(), finalProducer);
+        knowledgeBase.addBean(synthetic);
     }
 
     /**
