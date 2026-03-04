@@ -1,11 +1,11 @@
-package com.threeamigos.common.util.implementations.injection.spi.spievents;
+package com.threeamigos.common.util.implementations.injection.spi.wrappers;
 
-import jakarta.enterprise.inject.spi.AnnotatedMethod;
+import jakarta.enterprise.inject.spi.AnnotatedConstructor;
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -14,32 +14,32 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Simple wrapper for Method implementing AnnotatedMethod.
+ * Simple wrapper for Constructor implementing AnnotatedConstructor.
  *
  * @param <X> declaring type
  */
-public class AnnotatedMethodWrapper<X> implements AnnotatedMethod<X> {
+public class AnnotatedConstructorWrapper<X> implements AnnotatedConstructor<X> {
 
-    private final Method method;
+    private final Constructor<X> constructor;
     private final AnnotatedType<X> declaringType;
     private final List<AnnotatedParameter<X>> parameters;
 
-    public AnnotatedMethodWrapper(Method method, AnnotatedType<X> declaringType) {
-        this.method = method;
+    public AnnotatedConstructorWrapper(Constructor<X> constructor, AnnotatedType<X> declaringType) {
+        this.constructor = constructor;
         this.declaringType = declaringType;
-        this.parameters = Arrays.stream(method.getParameters())
+        this.parameters = Arrays.stream(constructor.getParameters())
                 .map(p -> new AnnotatedParameterWrapper<X>(p, this))
                 .collect(Collectors.toList());
     }
 
     @Override
-    public Method getJavaMember() {
-        return method;
+    public Constructor<X> getJavaMember() {
+        return constructor;
     }
 
     @Override
     public boolean isStatic() {
-        return java.lang.reflect.Modifier.isStatic(method.getModifiers());
+        return false;
     }
 
     @Override
@@ -49,13 +49,13 @@ public class AnnotatedMethodWrapper<X> implements AnnotatedMethod<X> {
 
     @Override
     public Type getBaseType() {
-        return method.getGenericReturnType();
+        return constructor.getDeclaringClass();
     }
 
     @Override
     public Set<Type> getTypeClosure() {
         Set<Type> types = new HashSet<>();
-        types.add(method.getGenericReturnType());
+        types.add(constructor.getDeclaringClass());
         types.add(Object.class);
         return types;
     }
@@ -67,16 +67,16 @@ public class AnnotatedMethodWrapper<X> implements AnnotatedMethod<X> {
 
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationType) {
-        return method.getAnnotation(annotationType);
+        return constructor.getAnnotation(annotationType);
     }
 
     @Override
     public Set<Annotation> getAnnotations() {
-        return new HashSet<>(Arrays.asList(method.getAnnotations()));
+        return new HashSet<>(Arrays.asList(constructor.getAnnotations()));
     }
 
     @Override
     public boolean isAnnotationPresent(Class<? extends Annotation> annotationType) {
-        return method.isAnnotationPresent(annotationType);
+        return constructor.isAnnotationPresent(annotationType);
     }
 }

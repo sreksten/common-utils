@@ -1,12 +1,16 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
 
 import java.lang.annotation.Annotation;
+
+import static com.threeamigos.common.util.implementations.injection.util.AnnotationHelper.toList;
 
 /**
  * BeforeBeanDiscovery event implementation.
@@ -22,30 +26,23 @@ import java.lang.annotation.Annotation;
  *
  * @see jakarta.enterprise.inject.spi.BeforeBeanDiscovery
  */
-public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
+public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDiscovery {
 
-    private final MessageHandler messageHandler;
     private final KnowledgeBase knowledgeBase;
     private final BeanManager beanManager;
 
     public BeforeBeanDiscoveryImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, BeanManager beanManager) {
-        this.messageHandler = messageHandler;
+        super(messageHandler);
         this.knowledgeBase = knowledgeBase;
         this.beanManager = beanManager;
     }
 
     @Override
     public void addAnnotatedType(AnnotatedType<?> type, String id) {
-        if (type == null) {
-            throw new IllegalArgumentException("AnnotatedType cannot be null");
-        }
-        if (id == null) {
-            throw new IllegalArgumentException("ID cannot be null");
-        }
-
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Adding annotated type: " + type.getJavaClass().getName() +
+        checkNotNull(type, "AnnotatedType");
+        checkNotNull(id, "ID");
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Adding annotated type: " + type.getJavaClass().getName() +
                 " with ID: " + id);
-
         knowledgeBase.addAnnotatedType(type, id);
     }
 
@@ -60,14 +57,10 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
      */
     @Override
     public <T> AnnotatedTypeConfigurator<T> addAnnotatedType(Class<T> type, String id) {
-        if (type == null) {
-            throw new IllegalArgumentException("Type cannot be null");
-        }
-        if (id == null) {
-            throw new IllegalArgumentException("ID cannot be null");
-        }
+        checkNotNull(type, "Class");
+        checkNotNull(id, "ID");
 
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Creating AnnotatedTypeConfigurator for: " +
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Creating AnnotatedTypeConfigurator for: " +
                 type.getName() + " with ID: " + id);
 
         // Create an AnnotatedType from the class using BeanManager
@@ -85,23 +78,16 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
 
     @Override
     public void addQualifier(Class<? extends Annotation> qualifier) {
-        if (qualifier == null) {
-            throw new IllegalArgumentException("Qualifier cannot be null");
-        }
-
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Adding qualifier: " + qualifier.getSimpleName());
+        checkNotNull(qualifier, "Qualifier");
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Adding qualifier: " + qualifier.getSimpleName());
         knowledgeBase.addQualifier(qualifier);
     }
 
     @Override
     public void addQualifier(AnnotatedType<? extends Annotation> qualifier) {
-        if (qualifier == null) {
-            throw new IllegalArgumentException("Qualifier AnnotatedType cannot be null");
-        }
-
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Adding qualifier from AnnotatedType: " +
+        checkNotNull(qualifier, "Qualifier");
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Adding qualifier from AnnotatedType: " +
                 qualifier.getJavaClass().getSimpleName());
-
         // Extract the qualifier class from the AnnotatedType and register it
         knowledgeBase.addQualifier(qualifier.getJavaClass());
     }
@@ -116,11 +102,8 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
      */
     @Override
     public <T extends Annotation> AnnotatedTypeConfigurator<T> configureQualifier(Class<T> qualifier) {
-        if (qualifier == null) {
-            throw new IllegalArgumentException("Qualifier class cannot be null");
-        }
-
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Configuring qualifier: " + qualifier.getSimpleName());
+        checkNotNull(qualifier, "Qualifier");
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Configuring qualifier: " + qualifier.getSimpleName());
 
         // Create an AnnotatedType for the qualifier annotation class
         AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(qualifier);
@@ -129,14 +112,15 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
             @Override
             public AnnotatedType<T> complete() {
                 AnnotatedType<T> configured = super.complete();
-
                 // After configuration, register this as a qualifier if not already one
                 if (!knowledgeBase.isRegisteredQualifier(qualifier)) {
                     knowledgeBase.addQualifier(qualifier);
+                    info(Phase.BEFORE_BEAN_DISCOVERY, "Completed qualifier configuration: " +
+                            qualifier.getSimpleName());
+                } else {
+                    info(Phase.BEFORE_BEAN_DISCOVERY, "Qualifier already configured: " +
+                            qualifier.getSimpleName());
                 }
-
-                messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Completed qualifier configuration: " +
-                        qualifier.getSimpleName());
                 return configured;
             }
         };
@@ -144,54 +128,35 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
 
     @Override
     public void addScope(Class<? extends Annotation> scopeType, boolean normal, boolean passivating) {
-        if (scopeType == null) {
-            throw new IllegalArgumentException("Scope type cannot be null");
-        }
-
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Adding scope: " + scopeType.getSimpleName() +
+        checkNotNull(scopeType, "Scope type");
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Adding scope: " + scopeType.getSimpleName() +
                 " (normal=" + normal + ", passivating=" + passivating + ")");
-
         knowledgeBase.addScope(scopeType, normal, passivating);
     }
 
     @Override
     public void addStereotype(Class<? extends Annotation> stereotype, Annotation... stereotypeDef) {
-        if (stereotype == null) {
-            throw new IllegalArgumentException("Stereotype cannot be null");
-        }
-
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Adding stereotype: " + stereotype.getSimpleName() +
+        checkNotNull(stereotype, "Stereotype");
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Adding stereotype: " + stereotype.getSimpleName() +
                 " with meta-annotations: " + toList(stereotypeDef));
-
-        // Register the stereotype with its meta-annotations in the knowledge base
         knowledgeBase.addStereotype(stereotype, stereotypeDef);
     }
 
     @Override
     public void addInterceptorBinding(AnnotatedType<? extends Annotation> bindingType) {
-        if (bindingType == null) {
-            throw new IllegalArgumentException("Interceptor binding AnnotatedType cannot be null");
-        }
-
+        checkNotNull(bindingType, "AnnotatedType");
         // Extract meta-annotations from the AnnotatedType
         Annotation[] metaAnnotations = bindingType.getAnnotations().toArray(new Annotation[0]);
-
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Adding interceptor binding from AnnotatedType: " +
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Adding interceptor binding from AnnotatedType: " +
                 bindingType.getJavaClass().getSimpleName() + " with meta-annotations: " + toList(metaAnnotations));
-
-        // Register the interceptor binding with its meta-annotations
         knowledgeBase.addInterceptorBinding(bindingType.getJavaClass(), metaAnnotations);
     }
 
     @Override
     public void addInterceptorBinding(Class<? extends Annotation> bindingType, Annotation... bindingTypeDef) {
-        if (bindingType == null) {
-            throw new IllegalArgumentException("Interceptor binding type cannot be null");
-        }
-
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Adding interceptor binding: " + bindingType.getSimpleName() +
+        checkNotNull(bindingType, "Interceptor binding type");
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Adding interceptor binding: " + bindingType.getSimpleName() +
                 " with meta-annotations: " + toList(bindingTypeDef));
-
         knowledgeBase.addInterceptorBinding(bindingType, bindingTypeDef);
     }
 
@@ -205,16 +170,11 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
      */
     @Override
     public <T extends Annotation> AnnotatedTypeConfigurator<T> configureInterceptorBinding(Class<T> bindingType) {
-        if (bindingType == null) {
-            throw new IllegalArgumentException("Interceptor binding type cannot be null");
-        }
-
-        messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Configuring interceptor binding: " +
-                          bindingType.getSimpleName());
+        checkNotNull(bindingType, "Interceptor binding type");
+        info(Phase.BEFORE_BEAN_DISCOVERY, "Configuring interceptor binding: " + bindingType.getSimpleName());
 
         // Create an AnnotatedType for the interceptor binding annotation class
         AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(bindingType);
-
         return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
             @Override
             public AnnotatedType<T> complete() {
@@ -227,35 +187,14 @@ public class BeforeBeanDiscoveryImpl implements BeforeBeanDiscovery {
                 if (!knowledgeBase.isRegisteredInterceptorBinding(bindingType)) {
                     knowledgeBase.addInterceptorBinding(bindingType, metaAnnotations);
 
-                    messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Completed interceptor binding configuration: " +
+                    info(Phase.BEFORE_BEAN_DISCOVERY, "Completed interceptor binding configuration: " +
                             bindingType.getSimpleName() + " with meta-annotations: " + toList(metaAnnotations));
                 } else {
-                    messageHandler.handleInfoMessage("[BeforeBeanDiscovery] Interceptor with meta-annotations " +
+                    info(Phase.BEFORE_BEAN_DISCOVERY, "Interceptor with meta-annotations " +
                             toList(metaAnnotations) + " already configured");
                 }
                 return configured;
             }
         };
     }
-
-    @Nonnull
-    private String toList(Annotation[] stereotypeDef) {
-        String metaAnnotationList;
-        if (stereotypeDef != null && stereotypeDef.length > 0) {
-            StringBuilder builder = new StringBuilder("[");
-            for (int i = 0; i < stereotypeDef.length; i++) {
-                if (i > 0) {
-                    builder.append(", ");
-                }
-                Annotation annotation = stereotypeDef[i];
-                builder.append("@").append(annotation.annotationType().getSimpleName());
-            }
-            builder.append("]");
-            metaAnnotationList = builder.toString();
-        } else {
-            metaAnnotationList = "[]";
-        }
-        return metaAnnotationList;
-    }
-
 }

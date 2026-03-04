@@ -1,6 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.*;
 
 /**
@@ -13,26 +16,20 @@ import jakarta.enterprise.inject.spi.*;
  *   <li>Validate bean configuration</li>
  * </ul>
  *
- * @param <X> the bean class type
+ * @param <T> the bean class type
  * @see jakarta.enterprise.inject.spi.ProcessBean
  */
-public class ProcessBeanImpl<X> implements ProcessBean<X> {
+public class ProcessBeanImpl<T> extends PhaseAware implements ProcessBean<T> {
 
-    private final Bean<X> bean;
+    protected final Bean<T> bean;
     private final Annotated annotated;
-    private final BeanManager beanManager;
-    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
+    protected final KnowledgeBase knowledgeBase;
 
-    public ProcessBeanImpl(Bean<X> bean, Annotated annotated, BeanManager beanManager) {
+    public ProcessBeanImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<T> bean, Annotated annotated) {
+        super(messageHandler);
+        this.knowledgeBase = knowledgeBase;
         this.bean = bean;
         this.annotated = annotated;
-        this.beanManager = beanManager;
-        // Extract KnowledgeBase from BeanManager
-        if (beanManager instanceof BeanManagerImpl) {
-            this.knowledgeBase = ((BeanManagerImpl) beanManager).getKnowledgeBase();
-        } else {
-            this.knowledgeBase = null;
-        }
     }
 
     @Override
@@ -41,26 +38,13 @@ public class ProcessBeanImpl<X> implements ProcessBean<X> {
     }
 
     @Override
-    public Bean<X> getBean() {
+    public Bean<T> getBean() {
         return bean;
     }
 
     @Override
     public void addDefinitionError(Throwable t) {
-        String errorMsg = "ProcessBean definition error for " +
-                         bean.getBeanClass().getName() + ": " +
-                         (t != null ? t.getMessage() : "null");
-        System.err.println("[ProcessBean] " + errorMsg);
-
-        if (knowledgeBase != null) {
-            knowledgeBase.addDefinitionError(errorMsg);
-        } else {
-            System.err.println("[ProcessBean] WARNING: Cannot propagate error - KnowledgeBase not available");
-        }
-
-        // Also print stack trace for debugging
-        if (t != null) {
-            t.printStackTrace();
-        }
+        knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN, "Definition error for " +
+                bean.getBeanClass().getName(), t);
     }
 }

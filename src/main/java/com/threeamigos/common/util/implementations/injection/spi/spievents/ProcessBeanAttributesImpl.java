@@ -1,6 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.BeanAttributesConfiguratorImpl;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.BeanAttributes;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -10,7 +13,7 @@ import jakarta.enterprise.inject.spi.configurator.BeanAttributesConfigurator;
 /**
  * ProcessBeanAttributes event implementation.
  */
-public class ProcessBeanAttributesImpl<T> implements ProcessBeanAttributes<T> {
+public class ProcessBeanAttributesImpl<T> extends PhaseAware implements ProcessBeanAttributes<T> {
 
     private final Annotated annotated;
     private BeanAttributes<T> beanAttributes;
@@ -18,16 +21,13 @@ public class ProcessBeanAttributesImpl<T> implements ProcessBeanAttributes<T> {
     private boolean ignoreFinalMethods = false;
     private final KnowledgeBase knowledgeBase;
 
-    public ProcessBeanAttributesImpl(Annotated annotated,
+    public ProcessBeanAttributesImpl(MessageHandler messageHandler, Annotated annotated,
                                      BeanAttributes<T> beanAttributes,
                                      BeanManager beanManager,
                                      KnowledgeBase knowledgeBase) {
-        if (annotated == null) {
-            throw new IllegalArgumentException("annotated cannot be null");
-        }
-        if (beanAttributes == null) {
-            throw new IllegalArgumentException("beanAttributes cannot be null");
-        }
+        super(messageHandler);
+        checkNotNull(annotated, "Annotated");
+        checkNotNull(beanAttributes, "BeanAttributes");
         this.annotated = annotated;
         this.beanAttributes = beanAttributes;
         this.knowledgeBase = knowledgeBase;
@@ -45,9 +45,7 @@ public class ProcessBeanAttributesImpl<T> implements ProcessBeanAttributes<T> {
 
     @Override
     public void setBeanAttributes(BeanAttributes<T> beanAttributes) {
-        if (beanAttributes == null) {
-            throw new IllegalArgumentException("beanAttributes cannot be null");
-        }
+        checkNotNull(beanAttributes, "BeanAttributes");
         this.beanAttributes = beanAttributes;
     }
 
@@ -66,24 +64,20 @@ public class ProcessBeanAttributesImpl<T> implements ProcessBeanAttributes<T> {
 
     @Override
     public void veto() {
+        info(Phase.PROCESS_BEAN_ATTRIBUTES, "Veto on " + annotated.getBaseType().getClass().getName());
         this.vetoed = true;
     }
 
     @Override
     public void ignoreFinalMethods() {
+        info(Phase.PROCESS_BEAN_ATTRIBUTES, "Ignoring final methods on " +
+                annotated.getBaseType().getClass().getName());
         this.ignoreFinalMethods = true;
     }
 
     @Override
     public void addDefinitionError(Throwable t) {
-        String message = "ProcessBeanAttributes definition error: " + (t != null ? t.getMessage() : "null");
-        System.err.println("[ProcessBeanAttributes] " + message);
-        if (knowledgeBase != null) {
-            knowledgeBase.addDefinitionError(message);
-        }
-        if (t != null) {
-            t.printStackTrace();
-        }
+        knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN_ATTRIBUTES, "Definition error from extension", t);
     }
 
     public boolean isVetoed() {

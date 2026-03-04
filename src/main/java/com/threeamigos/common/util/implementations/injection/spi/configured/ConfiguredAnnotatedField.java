@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection.spi.spievents;
+package com.threeamigos.common.util.implementations.injection.spi.configured;
 
 import jakarta.enterprise.inject.spi.AnnotatedField;
 import jakarta.enterprise.inject.spi.AnnotatedType;

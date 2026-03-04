@@ -38,8 +38,10 @@ import com.threeamigos.common.util.implementations.injection.scopehandlers.Conve
 import com.threeamigos.common.util.implementations.injection.scopehandlers.RequestScopeHandler;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.SessionScopeHandler;
 import com.threeamigos.common.util.implementations.injection.testpackages.superclasses.MyClass;
+import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.ScopeHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.Dependent;
 import org.atinject.tck.auto.*;
 import org.atinject.tck.auto.accessories.SpareTire;
@@ -1869,7 +1871,8 @@ class InjectorImplUnitTest {
             @DisplayName("If an exception is thrown, isUnsatisfied() is true")
             void ifExceptionThrownIsUnsatisfiedIsTrue() {
                 // Given
-                ClassResolver mockResolver = spy(new ClassResolver(new KnowledgeBase()));
+                MessageHandler messageHandler = new InMemoryMessageHandler();
+                ClassResolver mockResolver = spy(new ClassResolver(new KnowledgeBase(messageHandler)));
                 // resolveImplementations throws an exception
                 // Use RuntimeException instead of checked Exception to avoid Mockito validation error
                 doThrow(new RuntimeException("Test exception"))
@@ -1921,7 +1924,8 @@ class InjectorImplUnitTest {
             @DisplayName("If an exception is thrown, isAmbiguous() is false")
             void ifExceptionThrownIsAmbiguousIsFalse() {
                 // Given
-                ClassResolver mockResolver = spy(new ClassResolver(new KnowledgeBase()));
+                MessageHandler messageHandler = new InMemoryMessageHandler();
+                ClassResolver mockResolver = spy(new ClassResolver(new KnowledgeBase(messageHandler)));
                 // resolveImplementations throws an exception
                 // Use RuntimeException instead of checked Exception to avoid Mockito validation error
                 doThrow(new RuntimeException("Test exception"))

@@ -1,8 +1,8 @@
-package com.threeamigos.common.util.implementations.injection.spi.spievents;
+package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
-import jakarta.enterprise.inject.spi.AnnotatedConstructor;
+import jakarta.enterprise.inject.spi.AnnotatedMethod;
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
-import jakarta.enterprise.inject.spi.configurator.AnnotatedConstructorConfigurator;
+import jakarta.enterprise.inject.spi.configurator.AnnotatedMethodConfigurator;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedParameterConfigurator;
 
 import java.lang.annotation.Annotation;
@@ -10,36 +10,36 @@ import java.util.*;
 import java.util.function.Predicate;
 
 /**
- * Implementation of AnnotatedConstructorConfigurator for modifying constructor metadata.
+ * Implementation of AnnotatedMethodConfigurator for modifying method metadata.
  *
  * <p>Provides a fluent API for:
  * <ul>
- *   <li>Adding/removing constructor annotations via {@link #add(Annotation)} / {@link #remove(Predicate)}</li>
- *   <li>Configuring constructor parameters via {@link #params()}</li>
+ *   <li>Adding/removing method annotations via {@link #add(Annotation)} / {@link #remove(Predicate)}</li>
+ *   <li>Configuring method parameters via {@link #params()}</li>
  * </ul>
  *
  * @param <T> the declaring type
- * @see jakarta.enterprise.inject.spi.configurator.AnnotatedConstructorConfigurator
+ * @see jakarta.enterprise.inject.spi.configurator.AnnotatedMethodConfigurator
  */
-public class AnnotatedConstructorConfiguratorImpl<T> implements AnnotatedConstructorConfigurator<T> {
+public class AnnotatedMethodConfiguratorImpl<T> implements AnnotatedMethodConfigurator<T> {
 
-    private final AnnotatedConstructor<T> originalConstructor;
+    private final AnnotatedMethod<T> originalMethod;
     private final Set<Annotation> annotations;
     private final List<AnnotatedParameterConfiguratorImpl<T>> parameterConfigurators;
 
-    public AnnotatedConstructorConfiguratorImpl(AnnotatedConstructor<T> constructor) {
-        this.originalConstructor = constructor;
-        this.annotations = new HashSet<>(constructor.getAnnotations());
+    public AnnotatedMethodConfiguratorImpl(AnnotatedMethod<T> method) {
+        this.originalMethod = method;
+        this.annotations = new HashSet<>(method.getAnnotations());
 
         // Create parameter configurators
         this.parameterConfigurators = new ArrayList<>();
-        for (AnnotatedParameter<T> param : constructor.getParameters()) {
+        for (AnnotatedParameter<T> param : method.getParameters()) {
             this.parameterConfigurators.add(new AnnotatedParameterConfiguratorImpl<>(param));
         }
     }
 
     @Override
-    public AnnotatedConstructorConfigurator<T> add(Annotation annotation) {
+    public AnnotatedMethodConfigurator<T> add(Annotation annotation) {
         if (annotation != null) {
             annotations.add(annotation);
         }
@@ -47,7 +47,7 @@ public class AnnotatedConstructorConfiguratorImpl<T> implements AnnotatedConstru
     }
 
     @Override
-    public AnnotatedConstructorConfigurator<T> remove(Predicate<Annotation> predicate) {
+    public AnnotatedMethodConfigurator<T> remove(Predicate<Annotation> predicate) {
         if (predicate != null) {
             annotations.removeIf(predicate);
         }
@@ -55,14 +55,14 @@ public class AnnotatedConstructorConfiguratorImpl<T> implements AnnotatedConstru
     }
 
     @Override
-    public AnnotatedConstructorConfigurator<T> removeAll() {
+    public AnnotatedMethodConfigurator<T> removeAll() {
         annotations.clear();
         return this;
     }
 
     @Override
-    public AnnotatedConstructor<T> getAnnotated() {
-        return originalConstructor;
+    public AnnotatedMethod<T> getAnnotated() {
+        return originalMethod;
     }
 
     @Override
@@ -81,12 +81,12 @@ public class AnnotatedConstructorConfiguratorImpl<T> implements AnnotatedConstru
     }
 
     /**
-     * Returns the original annotated constructor.
+     * Returns the original annotated method.
      *
-     * @return the original constructor
+     * @return the original method
      */
-    public AnnotatedConstructor<T> getOriginalConstructor() {
-        return originalConstructor;
+    public AnnotatedMethod<T> getOriginalMethod() {
+        return originalMethod;
     }
 
     /**

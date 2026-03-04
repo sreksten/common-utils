@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.AnnotatedMethod;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
@@ -17,27 +20,31 @@ import java.lang.reflect.InvocationTargetException;
  * <p>Fired for each discovered managed bean (non-producer). Extensions can
  * inspect or veto via {@link #addDefinitionError(Throwable)}.</p>
  *
- * @param <X> bean type
+ * @param <T> bean type
  */
-public class ProcessManagedBeanImpl<X> extends ProcessBeanImpl<X> implements ProcessManagedBean<X> {
+public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements ProcessManagedBean<T> {
 
-    private final AnnotatedType<X> annotatedType;
+    private final AnnotatedType<T> annotatedType;
 
-    public ProcessManagedBeanImpl(Bean<X> bean, AnnotatedType<X> annotatedType, BeanManager beanManager) {
-        super(bean, annotatedType, beanManager);
+    public ProcessManagedBeanImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<T> bean,
+                                  AnnotatedType<T> annotatedType) {
+        super(messageHandler, knowledgeBase, bean, annotatedType);
         this.annotatedType = annotatedType;
     }
 
     @Override
-    public AnnotatedType<X> getAnnotatedBeanClass() {
+    public AnnotatedType<T> getAnnotatedBeanClass() {
         return annotatedType;
     }
 
     @Override
-    public InvokerBuilder<Invoker<X, ?>> createInvoker(AnnotatedMethod<? super X> method) {
-        if (method == null) {
-            throw new IllegalArgumentException("AnnotatedMethod cannot be null");
-        }
+    public void addDefinitionError(Throwable t) {
+        knowledgeBase.addDefinitionError(Phase.PROCESS_MANAGED_BEAN, "Definition error for " +
+                bean.getBeanClass().getName(), t);
+    }
+    @Override
+    public InvokerBuilder<Invoker<T, ?>> createInvoker(AnnotatedMethod<? super T> method) {
+        checkNotNull(method, "AnnotatedMethod");
         Method javaMethod = method.getJavaMember();
         return new SimpleInvokerBuilder<>(javaMethod);
     }
@@ -46,7 +53,7 @@ public class ProcessManagedBeanImpl<X> extends ProcessBeanImpl<X> implements Pro
      * Minimal InvokerBuilder that reflects directly on the underlying Java Method.
      * withInstanceLookup/withArgumentLookup are no-ops for this simple implementation.
      */
-    private static class SimpleInvokerBuilder<X> implements InvokerBuilder<Invoker<X, ?>> {
+    private static class SimpleInvokerBuilder<T> implements InvokerBuilder<Invoker<T, ?>> {
         private final Method javaMethod;
 
         SimpleInvokerBuilder(Method javaMethod) {
@@ -54,17 +61,17 @@ public class ProcessManagedBeanImpl<X> extends ProcessBeanImpl<X> implements Pro
         }
 
         @Override
-        public InvokerBuilder<Invoker<X, ?>> withInstanceLookup() {
+        public InvokerBuilder<Invoker<T, ?>> withInstanceLookup() {
             return this;
         }
 
         @Override
-        public InvokerBuilder<Invoker<X, ?>> withArgumentLookup(int position) {
+        public InvokerBuilder<Invoker<T, ?>> withArgumentLookup(int position) {
             return this;
         }
 
         @Override
-        public Invoker<X, ?> build() {
+        public Invoker<T, ?> build() {
             return (instance, parameters) -> {
                 try {
                     if (!javaMethod.isAccessible()) {
@@ -77,8 +84,6 @@ public class ProcessManagedBeanImpl<X> extends ProcessBeanImpl<X> implements Pro
                         throw (Exception) target;
                     }
                     throw new RuntimeException(target);
-                } catch (Exception e) {
-                    throw e;
                 }
             };
         }

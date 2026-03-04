@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.*;
 
 /**
@@ -28,27 +31,23 @@ public class ProcessProducerFieldImpl<T, X> extends ProcessProducerImpl<T, X>
     private final AnnotatedParameter<T> disposerParameter;
 
     /**
-     * Constructor for producer field without disposer.
+     * Constructor for a producer field without a disposer.
      */
-    public ProcessProducerFieldImpl(Bean<X> bean,
-                                    AnnotatedField<T> annotatedField,
-                                    Producer<X> producer,
-                                    BeanManager beanManager) {
-        super(annotatedField, producer, beanManager);
+    public ProcessProducerFieldImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<X> bean,
+                                    AnnotatedField<T> annotatedField, Producer<X> producer) {
+        super(messageHandler, knowledgeBase, Phase.PROCESS_PRODUCER_FIELD, annotatedField, producer);
         this.bean = bean;
         this.annotatedField = annotatedField;
         this.disposerParameter = null;
     }
 
     /**
-     * Constructor for producer field with disposer.
+     * Constructor for a producer field with a disposer.
      */
-    public ProcessProducerFieldImpl(Bean<X> bean,
-                                    AnnotatedField<T> annotatedField,
-                                    Producer<X> producer,
-                                    AnnotatedParameter<T> disposerParameter,
-                                    BeanManager beanManager) {
-        super(annotatedField, producer, beanManager);
+    public ProcessProducerFieldImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<X> bean,
+                                    AnnotatedField<T> annotatedField, Producer<X> producer,
+                                    AnnotatedParameter<T> disposerParameter) {
+        super(messageHandler, knowledgeBase, Phase.PROCESS_PRODUCER_FIELD, annotatedField, producer);
         this.bean = bean;
         this.annotatedField = annotatedField;
         this.disposerParameter = disposerParameter;

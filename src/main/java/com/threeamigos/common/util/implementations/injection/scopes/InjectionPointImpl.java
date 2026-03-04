@@ -4,8 +4,8 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
 
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
-import com.threeamigos.common.util.implementations.injection.spi.spievents.AnnotatedFieldWrapper;
-import com.threeamigos.common.util.implementations.injection.spi.spievents.AnnotatedParameterWrapper;
+import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
+import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedParameterWrapper;
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;

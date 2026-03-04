@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import jakarta.enterprise.inject.spi.AfterDeploymentValidation;
 import jakarta.enterprise.inject.spi.BeanManager;
 
@@ -21,16 +22,13 @@ import jakarta.enterprise.inject.spi.BeanManager;
 public class AfterDeploymentValidationImpl implements AfterDeploymentValidation {
 
     private final KnowledgeBase knowledgeBase;
-    private final BeanManager beanManager;
 
-    public AfterDeploymentValidationImpl(KnowledgeBase knowledgeBase, BeanManager beanManager) {
+    public AfterDeploymentValidationImpl(KnowledgeBase knowledgeBase) {
         this.knowledgeBase = knowledgeBase;
-        this.beanManager = beanManager;
     }
 
     @Override
     public void addDeploymentProblem(Throwable t) {
-        knowledgeBase.addError("Deployment problem from extension: " + t.getMessage());
-        System.out.println("AfterDeploymentValidation: addDeploymentProblem(" + t.getMessage() + ")");
+        knowledgeBase.addError(Phase.AFTER_DEPLOYMENT_VALIDATION, "Deployment problem from extension: ", t);
     }
 }

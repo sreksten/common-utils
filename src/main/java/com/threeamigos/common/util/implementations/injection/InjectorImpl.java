@@ -14,10 +14,12 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanReso
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.SingletonScopeHandler;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.injection.Injector;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.ScopeHandler;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -233,7 +235,9 @@ public class InjectorImpl implements Injector {
      */
     public InjectorImpl(final String ... packageNames) {
 
-        knowledgeBase = new KnowledgeBase();
+        MessageHandler messageHandler = new ConsoleMessageHandler();
+
+        knowledgeBase = new KnowledgeBase(messageHandler);
         try (ParallelTaskExecutor parallelTaskExecutor = ParallelTaskExecutor.createExecutor()) {
             // ClassProcessor now receives BeanArchiveMode per-class from ParallelClasspathScanner
             // which detects the mode for each JAR/directory by examining META-INF/beans.xml
@@ -285,7 +289,7 @@ public class InjectorImpl implements Injector {
         }
 
         this.classResolver = new ClassResolver(knowledgeBase);
-        this.contextManager = new ContextManager();
+        this.contextManager = new ContextManager(messageHandler);
         this.transactionServices = TransactionServicesFactory.create();
         this.beanResolver = new BeanResolver(knowledgeBase, contextManager, transactionServices);
         registerDefaultScopes();
@@ -300,12 +304,15 @@ public class InjectorImpl implements Injector {
      * @throws IllegalArgumentException if classResolver is null
      */
     InjectorImpl(final @Nonnull ClassResolver classResolver) {
-        knowledgeBase = new KnowledgeBase();
+
+        MessageHandler messageHandler = new ConsoleMessageHandler();
+
+        knowledgeBase = new KnowledgeBase(messageHandler);
         if (classResolver == null) {
             throw new IllegalArgumentException("Class resolver cannot be null");
         }
         this.classResolver = classResolver;
-        this.contextManager = new ContextManager();
+        this.contextManager = new ContextManager(messageHandler);
         this.transactionServices = TransactionServicesFactory.create();
         this.beanResolver = new BeanResolver(knowledgeBase, contextManager, transactionServices);
         registerDefaultScopes();
@@ -326,7 +333,7 @@ public class InjectorImpl implements Injector {
         scopeRegistry.put(Singleton.class, singletonHandler);
         // ApplicationScoped behaves like Singleton in CDI - uses the same handler instance
         scopeRegistry.put(ApplicationScoped.class, singletonHandler);
-        // RequestScoped and SessionScoped must be registered manually by the user
+        // The user must register RequestScoped and SessionScoped manually
         // with appropriate scope handlers (BasicScopeHandler or SessionScopeHandler)
     }
 

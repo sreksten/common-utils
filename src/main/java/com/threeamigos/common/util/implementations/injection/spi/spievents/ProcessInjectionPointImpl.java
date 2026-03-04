@@ -1,6 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.InjectionPointConfiguratorImpl;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.ProcessInjectionPoint;
@@ -9,20 +12,16 @@ import jakarta.enterprise.inject.spi.configurator.InjectionPointConfigurator;
 /**
  * ProcessInjectionPoint event implementation.
  */
-public class ProcessInjectionPointImpl<T, X> implements ProcessInjectionPoint<T, X> {
+public class ProcessInjectionPointImpl<T, X> extends PhaseAware implements ProcessInjectionPoint<T, X> {
 
     private InjectionPoint injectionPoint;
-    private final BeanManager beanManager;
     private final KnowledgeBase knowledgeBase;
 
-    public ProcessInjectionPointImpl(InjectionPoint injectionPoint,
-                                     BeanManager beanManager,
+    public ProcessInjectionPointImpl(MessageHandler messageHandler, InjectionPoint injectionPoint,
                                      KnowledgeBase knowledgeBase) {
-        if (injectionPoint == null) {
-            throw new IllegalArgumentException("injectionPoint cannot be null");
-        }
+        super(messageHandler);
+        checkNotNull(injectionPoint, "InjectionPoint");
         this.injectionPoint = injectionPoint;
-        this.beanManager = beanManager;
         this.knowledgeBase = knowledgeBase;
     }
 
@@ -33,15 +32,15 @@ public class ProcessInjectionPointImpl<T, X> implements ProcessInjectionPoint<T,
 
     @Override
     public void setInjectionPoint(InjectionPoint injectionPoint) {
-        if (injectionPoint == null) {
-            throw new IllegalArgumentException("injectionPoint cannot be null");
-        }
+        checkNotNull(injectionPoint, "InjectionPoint");
+        info(Phase.PROCESS_INJECTION_POINT, "Changing injection point for " + injectionPoint.getMember());
         this.injectionPoint = injectionPoint;
     }
 
     @Override
     public InjectionPointConfigurator configureInjectionPoint() {
-        InjectionPointConfiguratorImpl configurator = new InjectionPointConfiguratorImpl(injectionPoint) {
+        info(Phase.PROCESS_INJECTION_POINT, "Configuring injection point for " + injectionPoint.getMember());
+        return new InjectionPointConfiguratorImpl(injectionPoint) {
             @Override
             public InjectionPoint complete() {
                 InjectionPoint configured = super.complete();
@@ -49,18 +48,11 @@ public class ProcessInjectionPointImpl<T, X> implements ProcessInjectionPoint<T,
                 return configured;
             }
         };
-        return configurator;
     }
 
     @Override
     public void addDefinitionError(Throwable t) {
-        String message = "ProcessInjectionPoint definition error: " + (t != null ? t.getMessage() : "null");
-        System.err.println("[ProcessInjectionPoint] " + message);
-        if (knowledgeBase != null) {
-            knowledgeBase.addDefinitionError(message);
-        }
-        if (t != null) {
-            t.printStackTrace();
-        }
+        knowledgeBase.addDefinitionError(Phase.PROCESS_INJECTION_POINT, "Definition error for " +
+                injectionPoint.getMember(), t);
     }
 }

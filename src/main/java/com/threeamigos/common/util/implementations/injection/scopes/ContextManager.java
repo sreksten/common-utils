@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.Dependent;
@@ -19,13 +20,19 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ContextManager {
 
+    private final MessageHandler messageHandler;
+
     private final Map<Class<? extends Annotation>, ScopeContext> contexts = new ConcurrentHashMap<>();
     private final ConversationScopedContext conversationContext;
     private final SessionScopedContext sessionContext;
     private final RequestScopedContext requestContext;
+
     private final ClientProxyGenerator proxyGenerator;
 
-    public ContextManager() {
+    public ContextManager(MessageHandler messageHandler) {
+
+        this.messageHandler = messageHandler;
+
         // Initialize built-in contexts
         contexts.put(ApplicationScoped.class, new ApplicationScopedContext());
         contexts.put(Dependent.class, new DependentContext());
@@ -66,7 +73,7 @@ public class ContextManager {
             try {
                 context.destroy();
             } catch (Exception e) {
-                System.err.println("Error destroying context: " + e.getMessage());
+                messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
             }
         }
     }

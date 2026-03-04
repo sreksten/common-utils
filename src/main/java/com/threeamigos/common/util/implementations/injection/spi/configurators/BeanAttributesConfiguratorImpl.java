@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection.spi.spievents;
+package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
 import com.threeamigos.common.util.implementations.injection.resolution.BeanAttributesImpl;
 import jakarta.enterprise.inject.spi.BeanAttributes;
@@ -9,6 +9,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -51,7 +52,7 @@ public class BeanAttributesConfiguratorImpl<T> implements BeanAttributesConfigur
     @Override
     public BeanAttributesConfigurator<T> addTypes(Type... types) {
         if (types != null) {
-            Arrays.stream(types).filter(t -> t != null).forEach(this.types::add);
+            Arrays.stream(types).filter(Objects::nonNull).forEach(this.types::add);
         }
         return this;
     }
@@ -59,7 +60,7 @@ public class BeanAttributesConfiguratorImpl<T> implements BeanAttributesConfigur
     @Override
     public BeanAttributesConfigurator<T> addTypes(Set<Type> types) {
         if (types != null) {
-            types.stream().filter(t -> t != null).forEach(this.types::add);
+            types.stream().filter(Objects::nonNull).forEach(this.types::add);
         }
         return this;
     }
@@ -67,17 +68,15 @@ public class BeanAttributesConfiguratorImpl<T> implements BeanAttributesConfigur
     @Override
     public BeanAttributesConfigurator<T> addTransitiveTypeClosure(Type type) {
         if (type != null) {
-            this.types.add(type);
+            types.add(type);
             if (type instanceof Class<?>) {
                 Class<?> clazz = (Class<?>) type;
                 Class<?> current = clazz.getSuperclass();
                 while (current != null && current != Object.class) {
-                    this.types.add(current);
+                    types.add(current);
                     current = current.getSuperclass();
                 }
-                for (Class<?> iface : clazz.getInterfaces()) {
-                    this.types.add(iface);
-                }
+                types.addAll(Arrays.asList(clazz.getInterfaces()));
             }
         }
         return this;
@@ -116,7 +115,7 @@ public class BeanAttributesConfiguratorImpl<T> implements BeanAttributesConfigur
     @Override
     public BeanAttributesConfigurator<T> addQualifiers(Annotation... qualifiers) {
         if (qualifiers != null) {
-            Arrays.stream(qualifiers).filter(q -> q != null).forEach(this.qualifiers::add);
+            Arrays.stream(qualifiers).filter(Objects::nonNull).forEach(this.qualifiers::add);
         }
         return this;
     }
@@ -124,7 +123,7 @@ public class BeanAttributesConfiguratorImpl<T> implements BeanAttributesConfigur
     @Override
     public BeanAttributesConfigurator<T> addQualifiers(Set<Annotation> qualifiers) {
         if (qualifiers != null) {
-            qualifiers.stream().filter(q -> q != null).forEach(this.qualifiers::add);
+            qualifiers.stream().filter(Objects::nonNull).forEach(this.qualifiers::add);
         }
         return this;
     }
@@ -154,7 +153,7 @@ public class BeanAttributesConfiguratorImpl<T> implements BeanAttributesConfigur
     @Override
     public BeanAttributesConfigurator<T> addStereotypes(Set<Class<? extends Annotation>> stereotypes) {
         if (stereotypes != null) {
-            stereotypes.stream().filter(s -> s != null).forEach(this.stereotypes::add);
+            stereotypes.stream().filter(Objects::nonNull).forEach(this.stereotypes::add);
         }
         return this;
     }

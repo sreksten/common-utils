@@ -1,5 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.*;
 
 /**
@@ -28,27 +31,23 @@ public class ProcessProducerMethodImpl<T, X> extends ProcessProducerImpl<T, X>
     private final AnnotatedParameter<T> disposerParameter;
 
     /**
-     * Constructor for producer method without disposer.
+     * Constructor for a producer method without a disposer.
      */
-    public ProcessProducerMethodImpl(Bean<X> bean,
-                                     AnnotatedMethod<T> annotatedMethod,
-                                     Producer<X> producer,
-                                     BeanManager beanManager) {
-        super(annotatedMethod, producer, beanManager);
+    public ProcessProducerMethodImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<X> bean,
+                                     AnnotatedMethod<T> annotatedMethod, Producer<X> producer) {
+        super(messageHandler, knowledgeBase, Phase.PROCESS_PRODUCER_METHOD, annotatedMethod, producer);
         this.bean = bean;
         this.annotatedMethod = annotatedMethod;
         this.disposerParameter = null;
     }
 
     /**
-     * Constructor for producer method with disposer.
+     * Constructor for a producer method with a disposer.
      */
-    public ProcessProducerMethodImpl(Bean<X> bean,
-                                     AnnotatedMethod<T> annotatedMethod,
-                                     Producer<X> producer,
-                                     AnnotatedParameter<T> disposerParameter,
-                                     BeanManager beanManager) {
-        super(annotatedMethod, producer, beanManager);
+    public ProcessProducerMethodImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<X> bean,
+                                     AnnotatedMethod<T> annotatedMethod, Producer<X> producer,
+                                     AnnotatedParameter<T> disposerParameter) {
+        super(messageHandler, knowledgeBase, Phase.PROCESS_PRODUCER_METHOD, annotatedMethod, producer);
         this.bean = bean;
         this.annotatedMethod = annotatedMethod;
         this.disposerParameter = disposerParameter;

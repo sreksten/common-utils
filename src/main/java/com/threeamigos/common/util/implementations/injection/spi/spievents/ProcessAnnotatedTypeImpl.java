@@ -1,6 +1,10 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
 
@@ -17,22 +21,14 @@ import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
  * @param <T> the type being processed
  * @see jakarta.enterprise.inject.spi.ProcessAnnotatedType
  */
-public class ProcessAnnotatedTypeImpl<T> implements ProcessAnnotatedType<T> {
+public class ProcessAnnotatedTypeImpl<T> extends PhaseAware implements ProcessAnnotatedType<T> {
 
-    private final BeanManager beanManager;
-    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
     private AnnotatedType<T> annotatedType;
     private boolean vetoed = false;
 
-    public ProcessAnnotatedTypeImpl(AnnotatedType<T> annotatedType, BeanManager beanManager) {
+    public ProcessAnnotatedTypeImpl(MessageHandler messageHandler, AnnotatedType<T> annotatedType) {
+        super(messageHandler);
         this.annotatedType = annotatedType;
-        this.beanManager = beanManager;
-        // Extract KnowledgeBase from BeanManager
-        if (beanManager instanceof BeanManagerImpl) {
-            this.knowledgeBase = ((BeanManagerImpl) beanManager).getKnowledgeBase();
-        } else {
-            this.knowledgeBase = null;
-        }
     }
 
     @Override
@@ -42,14 +38,15 @@ public class ProcessAnnotatedTypeImpl<T> implements ProcessAnnotatedType<T> {
 
     @Override
     public void setAnnotatedType(AnnotatedType<T> type) {
+        info(Phase.PROCESS_ANNOTATED_TYPE, "Changing AnnotatedType " + annotatedType.getJavaClass().getName() +
+                " with " + type.getJavaClass().getName());
         this.annotatedType = type;
-        System.out.println("ProcessAnnotatedType: setAnnotatedType(" + type.getJavaClass().getName() + ")");
     }
 
     @Override
     public AnnotatedTypeConfigurator<T> configureAnnotatedType() {
-        System.out.println("[ProcessAnnotatedType] Creating AnnotatedTypeConfigurator for: " + annotatedType.getJavaClass().getName());
-
+        info(Phase.PROCESS_ANNOTATED_TYPE, "Creating AnnotatedTypeConfigurator for " +
+                annotatedType.getJavaClass().getName());
         // Return a configurator that modifies the current annotatedType
         return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
             @Override
@@ -64,8 +61,8 @@ public class ProcessAnnotatedTypeImpl<T> implements ProcessAnnotatedType<T> {
 
     @Override
     public void veto() {
+        info(Phase.PROCESS_ANNOTATED_TYPE, "Veto on " + annotatedType.getJavaClass().getName());
         this.vetoed = true;
-        System.out.println("ProcessAnnotatedType: veto(" + annotatedType.getJavaClass().getName() + ")");
     }
 
     public boolean isVetoed() {

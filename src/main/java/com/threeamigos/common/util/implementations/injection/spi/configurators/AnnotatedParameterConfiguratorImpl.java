@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection.spi.spievents;
+package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedParameterConfigurator;

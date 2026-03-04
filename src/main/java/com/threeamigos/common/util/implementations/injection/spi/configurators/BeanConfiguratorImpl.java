@@ -1,7 +1,8 @@
-package com.threeamigos.common.util.implementations.injection.spi.spievents;
+package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Default;
@@ -39,6 +40,7 @@ import java.util.function.Function;
  */
 public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
 
+    private final MessageHandler messageHandler;
     private final KnowledgeBase knowledgeBase;
 
     // Bean configuration
@@ -59,7 +61,8 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
     // Injection points
     private final Set<InjectionPoint> injectionPoints = new LinkedHashSet<>();
 
-    public BeanConfiguratorImpl(KnowledgeBase knowledgeBase) {
+    public BeanConfiguratorImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase) {
+        this.messageHandler = messageHandler;
         this.knowledgeBase = knowledgeBase;
     }
 
@@ -123,25 +126,23 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
     public BeanConfigurator<T> addTransitiveTypeClosure(Type type) {
         if (type != null) {
             // Add the type itself
-            this.types.add(type);
+            types.add(type);
 
             // Add all supertypes if it's a class
             if (type instanceof Class<?>) {
                 Class<?> clazz = (Class<?>) type;
                 Class<?> current = clazz.getSuperclass();
                 while (current != null && current != Object.class) {
-                    this.types.add(current);
+                    types.add(current);
                     current = current.getSuperclass();
                 }
 
                 // Add interfaces
-                for (Class<?> iface : clazz.getInterfaces()) {
-                    this.types.add(iface);
-                }
+                types.addAll(Arrays.asList(clazz.getInterfaces()));
             }
 
             // Always add Object
-            this.types.add(Object.class);
+            types.add(Object.class);
         }
         return this;
     }
@@ -332,23 +333,21 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
         if (type != null) {
             // Read configuration from AnnotatedType
             this.beanClass = type.getJavaClass();
-            this.types.clear();
-            this.types.add(type.getJavaClass());
+            types.clear();
+            types.add(type.getJavaClass());
 
             // Add all supertypes
             Class<?> current = type.getJavaClass().getSuperclass();
             while (current != null && current != Object.class) {
-                this.types.add(current);
+                types.add(current);
                 current = current.getSuperclass();
             }
 
             // Add interfaces
-            for (Class<?> iface : type.getJavaClass().getInterfaces()) {
-                this.types.add(iface);
-            }
+            types.addAll(Arrays.asList(type.getJavaClass().getInterfaces()));
 
             // Always add Object
-            this.types.add(Object.class);
+            types.add(Object.class);
         }
         @SuppressWarnings("unchecked")
         BeanConfigurator<U> result = (BeanConfigurator<U>) this;
@@ -422,7 +421,7 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
         // Register with knowledge base
         knowledgeBase.addBean(syntheticBean);
 
-        System.out.println("[BeanConfigurator] Created synthetic bean: " +
+        messageHandler.handleInfoMessage("[BeanConfigurator] Created synthetic bean: " +
                           beanClass.getSimpleName() +
                           " with scope @" + scope.getSimpleName());
     }

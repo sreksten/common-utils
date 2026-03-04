@@ -5,7 +5,12 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.util.AnnotationHelper;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import jakarta.annotation.Nonnull;
+import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InterceptionType;
 
@@ -17,6 +22,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.Collectors;
 
 public class KnowledgeBase {
+
+    private final MessageHandler messageHandler;
 
     // Use Set to prevent duplicate class registrations
     private final Set<Class<?>> classes = ConcurrentHashMap.newKeySet();
@@ -46,6 +53,7 @@ public class KnowledgeBase {
     private final List<String> warnings = new ArrayList<>();
     private final List<String> errors = new ArrayList<>();
     private final List<String> definitionErrors = new ArrayList<>();
+    private final List<String> deploymentErrors = new ArrayList<>();
     private final List<String> injectionErrors = new ArrayList<>();
 
     // Programmatically registered stereotypes (via BeforeBeanDiscovery.addStereotype)
@@ -77,6 +85,10 @@ public class KnowledgeBase {
     // Vetoed types (types vetoed by extensions during ProcessAnnotatedType)
     private final Set<Class<?>> vetoedTypes = ConcurrentHashMap.newKeySet();
 
+    public KnowledgeBase(MessageHandler messageHandler) {
+        this.messageHandler = messageHandler;
+    }
+
     public void add(Class<?> clazz) {
         classes.add(clazz);
     }
@@ -96,15 +108,15 @@ public class KnowledgeBase {
         return classArchiveModes.getOrDefault(clazz, BeanArchiveMode.IMPLICIT);
     }
 
-    public void setAnnotatedTypeOverride(Class<?> clazz, jakarta.enterprise.inject.spi.AnnotatedType<?> annotatedType) {
+    public void setAnnotatedTypeOverride(Class<?> clazz, AnnotatedType<?> annotatedType) {
         if (clazz != null && annotatedType != null) {
             annotatedTypeOverrides.put(clazz, annotatedType);
         }
     }
 
     @SuppressWarnings("unchecked")
-    public <T> jakarta.enterprise.inject.spi.AnnotatedType<T> getAnnotatedTypeOverride(Class<T> clazz) {
-        return (jakarta.enterprise.inject.spi.AnnotatedType<T>) annotatedTypeOverrides.get(clazz);
+    public <T> AnnotatedType<T> getAnnotatedTypeOverride(Class<T> clazz) {
+        return (AnnotatedType<T>) annotatedTypeOverrides.get(clazz);
     }
 
     public void addBean(Bean<?> bean) {
@@ -128,12 +140,24 @@ public class KnowledgeBase {
         warnings.add(warning);
     }
 
+    public void addWarning(Phase phase, String warning) {
+        warnings.add("[" + phase.getDescription() + "] " + warning);
+    }
+
     public List<String> getWarnings() {
         return warnings;
     }
 
     public void addError(String error) {
         errors.add(error);
+    }
+
+    public void addError(@Nonnull Phase phase, @Nonnull String error, Throwable t) {
+        if (t != null) {
+            definitionErrors.add("[" + phase.getDescription() + "] " + error + ": " + t.getMessage());
+        } else {
+            definitionErrors.add("[" + phase.getDescription() + "] " + error);
+        }
     }
 
     public List<String> getErrors() {
@@ -144,8 +168,32 @@ public class KnowledgeBase {
         definitionErrors.add(error);
     }
 
+    public void addDefinitionError(@Nonnull Phase phase, @Nonnull String error, Throwable t) {
+        if (t != null) {
+            definitionErrors.add("[" + phase.getDescription() + "] " + error + ": " + t.getMessage());
+        } else {
+            definitionErrors.add("[" + phase.getDescription() + "] " + error);
+        }
+    }
+
+    public void addDefinitionError(String error, Throwable t) {
+        if (t != null) {
+            definitionErrors.add(error + ": " + t.getMessage());
+        } else {
+            definitionErrors.add(error);
+        }
+    }
+
     public List<String> getDefinitionErrors() {
         return definitionErrors;
+    }
+
+    public void addDeploymentError(@Nonnull Phase phase, @Nonnull String error, Throwable t) {
+        if (t != null) {
+            definitionErrors.add("[" + phase.getDescription() + "] " + error + ": " + t.getMessage());
+        } else {
+            definitionErrors.add("[" + phase.getDescription() + "] " + error);
+        }
     }
 
     public void addInjectionError(String error) {
@@ -612,8 +660,8 @@ public class KnowledgeBase {
 
         registeredStereotypes.put(stereotype, definitions);
 
-        System.out.println("[KnowledgeBase] Registered stereotype: " + stereotype.getSimpleName() +
-                          " with " + definitions.size() + " meta-annotation(s)");
+        messageHandler.handleInfoMessage("[KnowledgeBase] Registered stereotype: " + stereotype.getSimpleName() +
+                          " with meta-annotation(s) " + AnnotationHelper.toList(stereotypeDef));
     }
 
     /**
@@ -660,7 +708,7 @@ public class KnowledgeBase {
 
         registeredQualifiers.add(qualifier);
 
-        System.out.println("[KnowledgeBase] Registered qualifier: " + qualifier.getSimpleName());
+        messageHandler.handleInfoMessage("[KnowledgeBase] Registered qualifier: " + qualifier.getSimpleName());
     }
 
     /**
@@ -700,7 +748,7 @@ public class KnowledgeBase {
         ScopeMetadata metadata = new ScopeMetadata(scopeType, normal, passivating);
         registeredScopes.put(scopeType, metadata);
 
-        System.out.println("[KnowledgeBase] Registered scope: " + scopeType.getSimpleName() +
+        messageHandler.handleInfoMessage("[KnowledgeBase] Registered scope: " + scopeType.getSimpleName() +
                           " (normal=" + normal + ", passivating=" + passivating + ")");
     }
 
@@ -754,8 +802,8 @@ public class KnowledgeBase {
 
         registeredInterceptorBindings.put(bindingType, definitions);
 
-        System.out.println("[KnowledgeBase] Registered interceptor binding: " + bindingType.getSimpleName() +
-                          " with " + definitions.size() + " meta-annotation(s)");
+        messageHandler.handleInfoMessage("[KnowledgeBase] Registered interceptor binding: " + bindingType.getSimpleName() +
+                          " with  meta-annotation(s) " + AnnotationHelper.toList(definitions));
     }
 
     /**
@@ -810,7 +858,7 @@ public class KnowledgeBase {
 
         registeredAnnotatedTypes.put(id, type);
 
-        System.out.println("[KnowledgeBase] Registered annotated type: " + type.getJavaClass().getName() +
+        messageHandler.handleInfoMessage("[KnowledgeBase] Registered annotated type: " + type.getJavaClass().getName() +
                           " with ID: " + id);
     }
 
@@ -848,7 +896,7 @@ public class KnowledgeBase {
 
         syntheticObserverMethods.add(observerMethod);
 
-        System.out.println("[KnowledgeBase] Registered synthetic observer method: " +
+        messageHandler.handleInfoMessage("[KnowledgeBase] Registered synthetic observer method: " +
                           "observedType=" + observerMethod.getObservedType() +
                           ", async=" + observerMethod.isAsync());
     }
@@ -879,7 +927,7 @@ public class KnowledgeBase {
         // Only add non-empty configurations to avoid clutter
         if (!beansXml.isEmpty()) {
             beansXmlConfigurations.add(beansXml);
-            System.out.println("[KnowledgeBase] Registered beans.xml configuration: " + beansXml);
+            messageHandler.handleInfoMessage("[KnowledgeBase] Registered beans.xml configuration: " + beansXml);
         }
     }
 

@@ -1,6 +1,10 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.ProducerConfiguratorImpl;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.ProducerConfigurator;
 
@@ -21,23 +25,22 @@ import jakarta.enterprise.inject.spi.configurator.ProducerConfigurator;
  * @param <X> the return type of the producer method/field
  * @see jakarta.enterprise.inject.spi.ProcessProducer
  */
-public class ProcessProducerImpl<T, X> implements ProcessProducer<T, X> {
+public class ProcessProducerImpl<T, X> extends PhaseAware implements ProcessProducer<T, X> {
 
+    private final KnowledgeBase knowledgeBase;
+    private final Phase phase;
     private final AnnotatedMember<T> annotatedMember;
     private Producer<X> producer;
-    private final BeanManager beanManager;
-    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
 
-    public ProcessProducerImpl(AnnotatedMember<T> annotatedMember, Producer<X> producer, BeanManager beanManager) {
+    public ProcessProducerImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Phase phase,
+                               AnnotatedMember<T> annotatedMember, Producer<X> producer) {
+        super(messageHandler);
+        checkNotNull(annotatedMember, "AnnotatedMember");
+        checkNotNull(producer, "Producer");
+        this.knowledgeBase = knowledgeBase;
+        this.phase = phase;
         this.annotatedMember = annotatedMember;
         this.producer = producer;
-        this.beanManager = beanManager;
-        // Extract KnowledgeBase from BeanManager
-        if (beanManager instanceof BeanManagerImpl) {
-            this.knowledgeBase = ((BeanManagerImpl) beanManager).getKnowledgeBase();
-        } else {
-            this.knowledgeBase = null;
-        }
     }
 
     @Override
@@ -52,20 +55,14 @@ public class ProcessProducerImpl<T, X> implements ProcessProducer<T, X> {
 
     @Override
     public void setProducer(Producer<X> producer) {
-        if (producer == null) {
-            throw new IllegalArgumentException("Producer cannot be null");
-        }
-        System.out.println("[ProcessProducer] Producer wrapped/replaced for: " +
-                          annotatedMember.getJavaMember().getName());
+        checkNotNull(producer, "Producer");
+        info(phase, "Changing Producer for " + annotatedMember.getJavaMember().getName());
         this.producer = producer;
     }
 
     @Override
     public ProducerConfigurator<X> configureProducer() {
-        System.out.println("[ProcessProducer] Creating ProducerConfigurator");
-
-        // Create a configurator wrapping the current producer
-        // The configurator allows fluent modification of producer behavior
+        info(phase, "Configuring Producer for " + annotatedMember.getJavaMember().getName());
         return new ProducerConfiguratorImpl<X>(producer) {
             @Override
             public Producer<X> complete() {
@@ -79,21 +76,7 @@ public class ProcessProducerImpl<T, X> implements ProcessProducer<T, X> {
 
     @Override
     public void addDefinitionError(Throwable t) {
-        String errorMsg = "ProcessProducer definition error for " +
-                         annotatedMember.getJavaMember().getName() + ": " +
-                         (t != null ? t.getMessage() : "null");
-        System.err.println("[ProcessProducer] " + errorMsg);
-
-        if (knowledgeBase != null) {
-            knowledgeBase.addDefinitionError(errorMsg);
-        } else {
-            System.err.println("[ProcessProducer] WARNING: Cannot propagate error - KnowledgeBase not available");
-        }
-
-        // Also print stack trace for debugging
-        if (t != null) {
-            t.printStackTrace();
-        }
+        knowledgeBase.addDefinitionError(phase, "Definition error for " + annotatedMember.getJavaMember().getName(), t);
     }
 
     /**

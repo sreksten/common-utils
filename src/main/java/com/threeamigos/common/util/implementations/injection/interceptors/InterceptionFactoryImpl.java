@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
-import com.threeamigos.common.util.implementations.injection.spi.spievents.AnnotatedTypeConfiguratorImpl;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;

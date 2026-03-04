@@ -27,6 +27,8 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
+import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -66,9 +68,10 @@ class ClassResolverUnitTest {
     @BeforeEach
     void setUp() throws Exception {
         // Given
-        KnowledgeBase knowledgeBase = new KnowledgeBase();
+        MessageHandler messageHandler = new InMemoryMessageHandler();
+        KnowledgeBase knowledgeBase = new KnowledgeBase(messageHandler);
         SimpleClassConsumer sink = new SimpleClassConsumer();
-        new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink, new KnowledgeBase(), getPackageName(ClassResolverUnitTest.class));
+        new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink, knowledgeBase, getPackageName(ClassResolverUnitTest.class));
         // Populate knowledgeBase from sink
         for (Class<?> clazz : sink.getClasses()) {
             knowledgeBase.add(clazz);
@@ -669,7 +672,8 @@ class ClassResolverUnitTest {
             @DisplayName("Should work if qualifiers collection is null")
             void shouldFindALotOfClassesIfPackageIsNull() throws Exception {
                 // Given
-                KnowledgeBase kb = new KnowledgeBase();
+                MessageHandler messageHandler = new InMemoryMessageHandler();
+                KnowledgeBase kb = new KnowledgeBase(messageHandler);
                 SimpleClassConsumer sink = new SimpleClassConsumer();
                 new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(),
                     sink, kb, getPackageName(SingleImplementationInterface.class));
@@ -687,7 +691,8 @@ class ClassResolverUnitTest {
             @DisplayName("Should work if qualifiers collection is empty")
             void shouldFindALotOfClassesIfPackageIsEmpty() throws Exception {
                 // Given
-                KnowledgeBase kb = new KnowledgeBase();
+                MessageHandler messageHandler = new InMemoryMessageHandler();
+                KnowledgeBase kb = new KnowledgeBase(messageHandler);
                 SimpleClassConsumer sink = new SimpleClassConsumer();
                 new ParallelClasspathScanner(Thread.currentThread().getContextClassLoader(), sink, kb);
                 for (Class<?> clazz : sink.getClasses()) {
@@ -705,7 +710,8 @@ class ClassResolverUnitTest {
     @DisplayName("Should remember already resolved classes")
     void shouldRememberAlreadyResolvedClasses() throws Exception {
         // Given
-        KnowledgeBase kb = new KnowledgeBase() {
+        MessageHandler messageHandler = new InMemoryMessageHandler();
+        KnowledgeBase kb = new KnowledgeBase(messageHandler) {
             @Override
             public Collection<Class<?>> getClasses() {
                 return Collections.singletonList(SingleImplementationClass.class);
@@ -719,7 +725,7 @@ class ClassResolverUnitTest {
         Collection<Class<? extends SingleImplementationInterface>> result2 =
                 sut.resolveImplementations(SingleImplementationInterface.class);
 
-        // Then - caching should return same content both times
+        // Then - caching should return the same content both times
         assertEquals(result1, result2);
     }
     }
@@ -741,7 +747,8 @@ class ClassResolverUnitTest {
         @DisplayName("Should cache resolved implementations and return same result on subsequent calls")
         void shouldCacheResolvedImplementations() throws Exception {
             // Given
-            KnowledgeBase kb = new KnowledgeBase() {
+            MessageHandler messageHandler = new InMemoryMessageHandler();
+            KnowledgeBase kb = new KnowledgeBase(messageHandler) {
                 @Override
                 public Collection<Class<?>> getClasses() {
                     return Collections.singletonList(SingleImplementationClass.class);
@@ -1061,7 +1068,8 @@ class ClassResolverUnitTest {
         @DisplayName("Should handle exceptions from KnowledgeBase gracefully")
         void shouldHandleExceptionsFromKnowledgeBase() throws Exception {
             // Given
-            KnowledgeBase failingKb = new KnowledgeBase() {
+            MessageHandler messageHandler = new InMemoryMessageHandler();
+            KnowledgeBase failingKb = new KnowledgeBase(messageHandler) {
                 @Override
                 public Collection<Class<?>> getClasses() {
                     throw new RuntimeException("KnowledgeBase failed");
@@ -1208,7 +1216,8 @@ class ClassResolverUnitTest {
         @DisplayName("Should handle empty KnowledgeBase")
         void shouldHandleEmptyKnowledgeBase() {
             // Given
-            KnowledgeBase emptyKb = new KnowledgeBase();
+            MessageHandler messageHandler = new InMemoryMessageHandler();
+            KnowledgeBase emptyKb = new KnowledgeBase(messageHandler);
             // When/Then - should not crash
             assertDoesNotThrow(() -> new ClassResolver(emptyKb));
         }
@@ -1217,7 +1226,8 @@ class ClassResolverUnitTest {
         @DisplayName("Should handle KnowledgeBase with no classes")
         void shouldHandleKnowledgeBaseWithNoClasses() {
             // Given
-            KnowledgeBase emptyKb = new KnowledgeBase();
+            MessageHandler messageHandler = new InMemoryMessageHandler();
+            KnowledgeBase emptyKb = new KnowledgeBase(messageHandler);
             ClassResolver resolver = new ClassResolver(emptyKb);
 
             // When - should return empty collection
@@ -1232,7 +1242,8 @@ class ClassResolverUnitTest {
         @DisplayName("Should handle mock KnowledgeBase with empty collection")
         void shouldHandleMockKnowledgeBaseWithEmptyCollection() {
             // Given
-            KnowledgeBase mockKb = new KnowledgeBase() {
+            MessageHandler messageHandler = new InMemoryMessageHandler();
+            KnowledgeBase mockKb = new KnowledgeBase(messageHandler) {
                 @Override
                 public Collection<Class<?>> getClasses() {
                     return Collections.emptyList();
@@ -1310,9 +1321,10 @@ class ClassResolverUnitTest {
         @Test
         @DisplayName("Constructor should throw IllegalArgumentException for null TypeChecker")
         void constructorShouldRejectNullTypeChecker() {
+            MessageHandler messageHandler = new InMemoryMessageHandler();
             // When/Then
             IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> new ClassResolver(new KnowledgeBase(), null));
+                () -> new ClassResolver(new KnowledgeBase(messageHandler), null));
 
             assertEquals("TypeChecker cannot be null", exception.getMessage());
         }
@@ -1452,7 +1464,8 @@ class ClassResolverUnitTest {
         @DisplayName("Should wrap KnowledgeBase exceptions in ResolutionException")
         void shouldWrapKnowledgeBaseExceptions() {
             // Given
-            KnowledgeBase failingKb = new KnowledgeBase() {
+            MessageHandler messageHandler = new InMemoryMessageHandler();
+            KnowledgeBase failingKb = new KnowledgeBase(messageHandler) {
                 @Override
                 public Collection<Class<?>> getClasses() {
                     throw new RuntimeException("KnowledgeBase failed");

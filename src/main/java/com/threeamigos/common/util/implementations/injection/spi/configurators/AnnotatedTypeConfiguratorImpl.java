@@ -1,9 +1,9 @@
-package com.threeamigos.common.util.implementations.injection.spi.spievents;
+package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
+import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredAnnotatedType;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.*;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Type;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;

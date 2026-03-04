@@ -4,6 +4,8 @@ import com.threeamigos.common.util.implementations.injection.discovery.ParallelC
 import com.threeamigos.common.util.implementations.injection.discovery.SimpleClassConsumer;
 import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.singleimplementation.SingleImplementationClass;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -45,8 +47,9 @@ class ParallelClasspathScannerUnitTest {
 
     @BeforeEach
     void setUp() {
+        MessageHandler messageHandler = new InMemoryMessageHandler();
         classLoader = Thread.currentThread().getContextClassLoader();
-        knowledgeBase = new KnowledgeBase();
+        knowledgeBase = new KnowledgeBase(messageHandler);
         sink = new SimpleClassConsumer();
     }
 

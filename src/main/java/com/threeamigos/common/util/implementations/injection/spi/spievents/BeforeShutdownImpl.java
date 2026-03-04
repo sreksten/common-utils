@@ -19,10 +19,4 @@ import jakarta.enterprise.inject.spi.BeanManager;
  * @see jakarta.enterprise.inject.spi.BeforeShutdown
  */
 public class BeforeShutdownImpl implements BeforeShutdown {
-
-    private final BeanManager beanManager;
-
-    public BeforeShutdownImpl(BeanManager beanManager) {
-        this.beanManager = beanManager;
-    }
 }

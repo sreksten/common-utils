@@ -1,6 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.*;
 
 /**
@@ -21,37 +24,31 @@ import jakarta.enterprise.inject.spi.*;
  * ProcessSyntheticBean does not provide setters or configurators since the bean
  * was already fully configured when it was added.
  *
- * @param <X> the bean type
+ * @param <T> the bean type
  * @see jakarta.enterprise.inject.spi.ProcessSyntheticBean
  */
-public class ProcessSyntheticBeanImpl<X> implements ProcessSyntheticBean<X> {
+public class ProcessSyntheticBeanImpl<T> extends PhaseAware implements ProcessSyntheticBean<T> {
 
-    private final Bean<X> bean;
+    private final Bean<T> bean;
     private final Extension source;
-    private final BeanManager beanManager;
-    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
+    private final KnowledgeBase knowledgeBase;
 
     /**
      * Constructor for ProcessSyntheticBean event.
      *
      * @param bean the synthetic bean
-     * @param source the extension that registered this bean (may be null if unknown)
-     * @param beanManager the bean manager
+     * @param source the extension that registered this bean (can be null if unknown)
      */
-    public ProcessSyntheticBeanImpl(Bean<X> bean, Extension source, BeanManager beanManager) {
+    public ProcessSyntheticBeanImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<T> bean,
+                                    Extension source) {
+        super(messageHandler);
+        this.knowledgeBase = knowledgeBase;
         this.bean = bean;
         this.source = source;
-        this.beanManager = beanManager;
-        // Extract KnowledgeBase from BeanManager
-        if (beanManager instanceof BeanManagerImpl) {
-            this.knowledgeBase = ((BeanManagerImpl) beanManager).getKnowledgeBase();
-        } else {
-            this.knowledgeBase = null;
-        }
     }
 
     @Override
-    public Bean<X> getBean() {
+    public Bean<T> getBean() {
         return bean;
     }
 
@@ -69,21 +66,8 @@ public class ProcessSyntheticBeanImpl<X> implements ProcessSyntheticBean<X> {
 
     @Override
     public void addDefinitionError(Throwable t) {
-        String errorMsg = "ProcessSyntheticBean definition error for " +
-                         bean.getBeanClass().getName() + ": " +
-                         (t != null ? t.getMessage() : "null");
-        System.err.println("[ProcessSyntheticBean] " + errorMsg);
-
-        if (knowledgeBase != null) {
-            knowledgeBase.addDefinitionError(errorMsg);
-        } else {
-            System.err.println("[ProcessSyntheticBean] WARNING: Cannot propagate error - KnowledgeBase not available");
-        }
-
-        // Also print stack trace for debugging
-        if (t != null) {
-            t.printStackTrace();
-        }
+        knowledgeBase.addDefinitionError(Phase.PROCESS_SYNTHETIC_BEAN, "Definition error for " +
+                         bean.getBeanClass().getName(), t);
     }
 
     @Override

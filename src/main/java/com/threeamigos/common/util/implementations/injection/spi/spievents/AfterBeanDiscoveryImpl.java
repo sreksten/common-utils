@@ -4,10 +4,17 @@ import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.CustomContextAdapter;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.BeanConfiguratorImpl;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.ObserverMethodConfiguratorImpl;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.BeanConfigurator;
 import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * AfterBeanDiscovery event implementation.
@@ -22,55 +29,53 @@ import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
  *
  * @see jakarta.enterprise.inject.spi.AfterBeanDiscovery
  */
-public class AfterBeanDiscoveryImpl implements AfterBeanDiscovery {
+public class AfterBeanDiscoveryImpl extends PhaseAware implements AfterBeanDiscovery {
 
     private final KnowledgeBase knowledgeBase;
     private final BeanManager beanManager;
 
-    public AfterBeanDiscoveryImpl(KnowledgeBase knowledgeBase, BeanManager beanManager) {
+    public AfterBeanDiscoveryImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, BeanManager beanManager) {
+        super(messageHandler);
         this.knowledgeBase = knowledgeBase;
         this.beanManager = beanManager;
     }
 
     @Override
     public void addDefinitionError(Throwable t) {
-        knowledgeBase.addError("Definition error from extension: " + t.getMessage());
-        System.out.println("AfterBeanDiscovery: addDefinitionError(" + t.getMessage() + ")");
+        knowledgeBase.addDefinitionError(Phase.AFTER_BEAN_DISCOVERY, "Definition error from extension", t);
     }
 
     @Override
     public void addBean(Bean<?> bean) {
-        if (bean == null) {
-            throw new IllegalArgumentException("Bean cannot be null");
-        }
-
-        System.out.println("[AfterBeanDiscovery] Adding synthetic bean: " + bean.getBeanClass().getName());
-
-        // Register the synthetic bean in the knowledge base
+        checkNotNull(bean, "Bean");
+        info(Phase.AFTER_BEAN_DISCOVERY, "Registering synthetic bean: " + bean.getBeanClass().getSimpleName() +
+                " with types: " + bean.getTypes());
         knowledgeBase.addBean(bean);
-
-        System.out.println("[AfterBeanDiscovery] Successfully registered synthetic bean: " +
-                          bean.getBeanClass().getSimpleName() +
-                          " with types: " + bean.getTypes());
     }
 
+    /**
+     * Return the configurator directly.<br/>
+     * Note: The configurator's complete() method will be called when the extension method returns.<br/>
+     * Extensions are responsible for calling createWith() to provide the creation callback.<br/>
+     * @return the configurator
+     * @param <T> the bean type
+     */
     @Override
     public <T> BeanConfigurator<T> addBean() {
-        System.out.println("[AfterBeanDiscovery] Creating BeanConfigurator for synthetic bean");
-
-        // Return the configurator directly
-        // Note: The configurator's complete() method will be called when the extension method returns
-        // Extensions are responsible for calling createWith() to provide the creation callback
-        return new BeanConfiguratorImpl<>(knowledgeBase);
+        info(Phase.AFTER_BEAN_DISCOVERY, "Creating BeanConfigurator for synthetic bean");
+        return new BeanConfiguratorImpl<>(messageHandler, knowledgeBase);
     }
 
+    /**
+     * Return the configurator directly.<br/>
+     * Note: The configurator's complete() method returns an ObserverMethod which should be added via
+     * addObserverMethod(ObserverMethod)
+     * @return the configurator
+     * @param <T> the observed type
+     */
     @Override
     public <T> ObserverMethodConfigurator<T> addObserverMethod() {
-        System.out.println("[AfterBeanDiscovery] Creating ObserverMethodConfigurator for synthetic observer");
-
-        // Return the configurator directly
-        // Note: The configurator's complete() method returns an ObserverMethod
-        // which should be added via addObserverMethod(ObserverMethod)
+        info(Phase.AFTER_BEAN_DISCOVERY, "Creating ObserverMethodConfigurator for synthetic observer");
         return new ObserverMethodConfiguratorImpl<T>(knowledgeBase) {
             @Override
             public ObserverMethod<T> complete() {
@@ -83,15 +88,9 @@ public class AfterBeanDiscoveryImpl implements AfterBeanDiscovery {
 
     @Override
     public void addObserverMethod(ObserverMethod<?> observerMethod) {
-        if (observerMethod == null) {
-            throw new IllegalArgumentException("Observer method cannot be null");
-        }
-
-        System.out.println("[AfterBeanDiscovery] Adding synthetic observer method: " +
-                          "observedType=" + observerMethod.getObservedType() +
-                          ", async=" + observerMethod.isAsync());
-
-        // Register the synthetic observer method in the knowledge base
+        checkNotNull(observerMethod, "ObserverMethod");
+        info(Phase.AFTER_BEAN_DISCOVERY, "Registering synthetic observer method: observedType=" +
+                observerMethod.getObservedType() + ", async=" + observerMethod.isAsync());
         knowledgeBase.addSyntheticObserverMethod(observerMethod);
     }
 
@@ -136,20 +135,9 @@ public class AfterBeanDiscoveryImpl implements AfterBeanDiscovery {
      */
     @Override
     public void addContext(Context context) {
-        if (context == null) {
-            throw new IllegalArgumentException("Context cannot be null");
-        }
-
-        System.out.println("[AfterBeanDiscovery] Registering custom context for scope: " +
-                          context.getScope().getName());
-
-        // Get the ContextManager from BeanManager
-        if (!(beanManager instanceof BeanManagerImpl)) {
-            throw new IllegalStateException(
-                "Cannot register context: BeanManager is not BeanManagerImpl. " +
-                "This should never happen and indicates a container bug."
-            );
-        }
+        checkNotNull(context, "Context");
+        info(Phase.AFTER_BEAN_DISCOVERY, "Registering custom context: " + context.getClass().getName() +
+                " for scope @" + context.getScope().getSimpleName());
 
         BeanManagerImpl beanManagerImpl = (BeanManagerImpl) beanManager;
         ContextManager contextManager = beanManagerImpl.getContextManager();
@@ -158,71 +146,49 @@ public class AfterBeanDiscoveryImpl implements AfterBeanDiscovery {
         CustomContextAdapter adaptedContext = new CustomContextAdapter(context);
 
         try {
-            // Register the custom context with the scope annotation
             contextManager.registerContext(context.getScope(), adaptedContext);
-
-            System.out.println("[AfterBeanDiscovery] Successfully registered custom context: " +
-                              context.getClass().getName() +
-                              " for scope @" + context.getScope().getSimpleName());
         } catch (Exception e) {
-            String errorMsg = "Failed to register custom context for scope @" +
-                             context.getScope().getSimpleName() + ": " + e.getMessage();
-            System.err.println("[AfterBeanDiscovery] " + errorMsg);
-            knowledgeBase.addError(errorMsg);
-            throw new IllegalStateException(errorMsg, e);
+            knowledgeBase.addError(Phase.AFTER_BEAN_DISCOVERY, "Failed to register custom context for scope @" +
+                    context.getScope().getSimpleName(), e);
         }
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> java.util.List<AnnotatedType<T>> getAnnotatedTypes(Class<T> type) {
-        if (type == null) {
-            throw new IllegalArgumentException("Type cannot be null");
-        }
-
-        System.out.println("[AfterBeanDiscovery] Getting annotated types for: " + type.getName());
-
-        java.util.List<AnnotatedType<T>> result = new java.util.ArrayList<>();
-
-        // Query all registered AnnotatedTypes from KnowledgeBase
+    public <T> List<AnnotatedType<T>> getAnnotatedTypes(Class<T> type) {
+        checkNotNull(type, "Class");
+        info(Phase.AFTER_BEAN_DISCOVERY, "Getting annotated types for: " + type.getName());
+        List<AnnotatedType<T>> result = new ArrayList<>();
         for (AnnotatedType<?> annotatedType : knowledgeBase.getRegisteredAnnotatedTypes().values()) {
-            // Check if the AnnotatedType's class matches the requested type
             if (annotatedType.getJavaClass().equals(type)) {
                 result.add((AnnotatedType<T>) annotatedType);
             }
         }
-
-        System.out.println("[AfterBeanDiscovery] Found " + result.size() + " annotated type(s) for: " + type.getName());
+        info(Phase.AFTER_BEAN_DISCOVERY, "Found " + result.size() + " annotated type(s) for: " + type.getName());
         return result;
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> AnnotatedType<T> getAnnotatedType(Class<T> type, String id) {
-        if (type == null) {
-            throw new IllegalArgumentException("Type cannot be null");
-        }
-        if (id == null) {
-            throw new IllegalArgumentException("ID cannot be null");
-        }
+        checkNotNull(type, "Class");
+        checkNotNull(id, "ID");
 
-        System.out.println("[AfterBeanDiscovery] Getting annotated type: " + type.getName() + " with ID: " + id);
+        info(Phase.AFTER_BEAN_DISCOVERY, "Getting annotated type: " + type.getName() + " with ID: " + id);
 
-        // Query the specific AnnotatedType by ID from KnowledgeBase
         AnnotatedType<?> annotatedType = knowledgeBase.getRegisteredAnnotatedType(id);
-
         if (annotatedType != null) {
             // Verify the class matches
             if (!annotatedType.getJavaClass().equals(type)) {
-                System.err.println("[AfterBeanDiscovery] WARNING: AnnotatedType with ID '" + id +
-                                  "' has class " + annotatedType.getJavaClass().getName() +
-                                  " but requested type is " + type.getName());
+                knowledgeBase.addWarning(Phase.AFTER_BEAN_DISCOVERY, "AnnotatedType with ID '" + id +
+                        "' has class " + annotatedType.getJavaClass().getName() + " but requested type is " +
+                        type.getName());
                 return null;
             }
             return (AnnotatedType<T>) annotatedType;
         }
 
-        System.out.println("[AfterBeanDiscovery] No annotated type found with ID: " + id);
+        info(Phase.AFTER_BEAN_DISCOVERY, "No annotated type found with ID: " + id);
         return null;
     }
 }

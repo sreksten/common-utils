@@ -2,6 +2,9 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.injection.discovery.JSR330Validator;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
+import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,7 +26,8 @@ class JSR330ValidatorInheritanceTest {
 
     @BeforeEach
     void setUp() {
-        knowledgeBase = new KnowledgeBase();
+        MessageHandler messageHandler = new InMemoryMessageHandler();
+        knowledgeBase = new KnowledgeBase(messageHandler);
         validator = new JSR330Validator(knowledgeBase);
         validator.setStrict(true);
     }

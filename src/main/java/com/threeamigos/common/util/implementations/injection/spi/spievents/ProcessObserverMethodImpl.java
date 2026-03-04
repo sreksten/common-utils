@@ -1,6 +1,10 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.ObserverMethodConfiguratorImpl;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
 
@@ -19,24 +23,19 @@ import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
  * @param <X> the bean class containing the observer method
  * @see jakarta.enterprise.inject.spi.ProcessObserverMethod
  */
-public class ProcessObserverMethodImpl<T, X> implements ProcessObserverMethod<T, X> {
+public class ProcessObserverMethodImpl<T, X> extends PhaseAware implements ProcessObserverMethod<T, X> {
 
-    private ObserverMethod<T> observerMethod;
     private final AnnotatedMethod<X> annotatedMethod;
-    private final BeanManager beanManager;
-    private final com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase knowledgeBase;
+    private final KnowledgeBase knowledgeBase;
+    private ObserverMethod<T> observerMethod;
     private boolean vetoed = false;
 
-    public ProcessObserverMethodImpl(ObserverMethod<T> observerMethod, AnnotatedMethod<X> annotatedMethod, BeanManager beanManager) {
+    public ProcessObserverMethodImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase,
+                                     ObserverMethod<T> observerMethod, AnnotatedMethod<X> annotatedMethod) {
+        super(messageHandler);
+        this.knowledgeBase = knowledgeBase;
         this.observerMethod = observerMethod;
         this.annotatedMethod = annotatedMethod;
-        this.beanManager = beanManager;
-        // Extract KnowledgeBase from BeanManager
-        if (beanManager instanceof BeanManagerImpl) {
-            this.knowledgeBase = ((BeanManagerImpl) beanManager).getKnowledgeBase();
-        } else {
-            this.knowledgeBase = null;
-        }
     }
 
     @Override
@@ -51,26 +50,13 @@ public class ProcessObserverMethodImpl<T, X> implements ProcessObserverMethod<T,
 
     @Override
     public void addDefinitionError(Throwable t) {
-        String errorMsg = "ProcessObserverMethod definition error for " +
-                         annotatedMethod.getJavaMember().getName() + ": " +
-                         (t != null ? t.getMessage() : "null");
-        System.err.println("[ProcessObserverMethod] " + errorMsg);
-
-        if (knowledgeBase != null) {
-            knowledgeBase.addDefinitionError(errorMsg);
-        } else {
-            System.err.println("[ProcessObserverMethod] WARNING: Cannot propagate error - KnowledgeBase not available");
-        }
-
-        // Also print stack trace for debugging
-        if (t != null) {
-            t.printStackTrace();
-        }
+        knowledgeBase.addDefinitionError(Phase.PROCESS_OBSERVER_METHOD, "Definition error for " +
+                annotatedMethod.getJavaMember().getName(), t);
     }
 
     @Override
     public ObserverMethodConfigurator<T> configureObserverMethod() {
-        System.out.println("[ProcessObserverMethod] Creating ObserverMethodConfigurator");
+        info(Phase.PROCESS_OBSERVER_METHOD, "Creating ObserverMethodConfigurator");
 
         // Create a configurator reading from the current observer method
         return new ObserverMethodConfiguratorImpl<T>(null) {
@@ -91,16 +77,15 @@ public class ProcessObserverMethodImpl<T, X> implements ProcessObserverMethod<T,
 
     @Override
     public void veto() {
+        info(Phase.PROCESS_OBSERVER_METHOD, "Veto on " + annotatedMethod.getJavaMember().getName());
         this.vetoed = true;
-        System.out.println("[ProcessObserverMethod] Observer method vetoed");
     }
 
     @Override
     public void setObserverMethod(ObserverMethod<T> observerMethod) {
-        if (observerMethod == null) {
-            throw new IllegalArgumentException("Observer method cannot be null");
-        }
-        System.out.println("[ProcessObserverMethod] Observer method replaced");
+        checkNotNull(observerMethod, "ObserverMethod");
+        info(Phase.PROCESS_OBSERVER_METHOD, "Changing observer method for " +
+                annotatedMethod.getJavaMember().getName());
         this.observerMethod = observerMethod;
     }
 

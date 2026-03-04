@@ -1,5 +1,6 @@
-package com.threeamigos.common.util.implementations.injection.spi.spievents;
+package com.threeamigos.common.util.implementations.injection.spi.configured;
 
+import com.threeamigos.common.util.implementations.injection.spi.configurators.InjectionPointConfiguratorImpl;
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;

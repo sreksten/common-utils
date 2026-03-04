@@ -1,5 +1,8 @@
-package com.threeamigos.common.util.implementations.injection.spi.spievents;
+package com.threeamigos.common.util.implementations.injection.spi.configured;
 
+import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedConstructorConfiguratorImpl;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedFieldConfiguratorImpl;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedMethodConfiguratorImpl;
 import jakarta.enterprise.inject.spi.AnnotatedConstructor;
 import jakarta.enterprise.inject.spi.AnnotatedField;
 import jakarta.enterprise.inject.spi.AnnotatedMethod;
