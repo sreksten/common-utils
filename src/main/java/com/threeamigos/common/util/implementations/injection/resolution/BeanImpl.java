@@ -14,6 +14,7 @@ import com.threeamigos.common.util.implementations.injection.util.LifecycleMetho
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.enterprise.inject.spi.InjectionTarget;
 import jakarta.enterprise.inject.spi.InterceptionType;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
@@ -184,7 +185,7 @@ public class BeanImpl<T> implements Bean<T> {
         }
     }
 
-    public void setCustomInjectionTarget(jakarta.enterprise.inject.spi.InjectionTarget<T> injectionTarget) {
+    public void setCustomInjectionTarget(InjectionTarget<T> injectionTarget) {
         this.customInjectionTarget = injectionTarget;
     }
 
