@@ -5,8 +5,7 @@ import com.threeamigos.common.util.implementations.injection.events.propagation.
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
-import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
@@ -30,6 +29,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.*;
 
 /**
  * Resolves dependencies by finding matching beans from the KnowledgeBase.
@@ -218,72 +218,6 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
     }
 
     /**
-     * Extracts qualifier annotations from an array of annotations.
-     */
-    private Set<Annotation> extractQualifiers(Annotation[] annotations) {
-        Set<Annotation> qualifiers = new HashSet<>();
-        for (Annotation ann : annotations) {
-            if (hasQualifierAnnotation(ann.annotationType())) {
-                qualifiers.add(ann);
-            }
-        }
-
-        // If no qualifiers specified, use @Default
-        if (qualifiers.isEmpty()) {
-            qualifiers.add(new DefaultLiteral());
-        }
-
-        return qualifiers;
-    }
-
-    /**
-     * Checks if bean qualifiers match the required qualifiers.
-     * A bean matches if it has all the required qualifiers.
-     */
-    private boolean qualifiersMatch(Set<Annotation> requiredQualifiers, Set<Annotation> beanQualifiers) {
-        // Special case: @Named requires exact match
-        Annotation requiredNamed = findAnnotation(requiredQualifiers, Named.class);
-        Annotation beanNamed = findAnnotation(beanQualifiers, Named.class);
-
-        if (requiredNamed != null) {
-            if (beanNamed == null) {
-                return false;
-            }
-            // Compare @Named values
-            String requiredName = getNamedValue(requiredNamed);
-            String beanName = getNamedValue(beanNamed);
-            if (!requiredName.equals(beanName)) {
-                return false;
-            }
-        }
-
-        // Check all other qualifiers (ignoring @Any which is always present)
-        for (Annotation required : requiredQualifiers) {
-            if (required.annotationType().equals(jakarta.enterprise.inject.Any.class)) {
-                continue; // @Any matches everything
-            }
-            if (required instanceof Named) {
-                continue; // Already handled above
-            }
-
-            // Find matching qualifier in bean
-            boolean found = false;
-            for (Annotation beanQual : beanQualifiers) {
-                if (qualifiersEqual(required, beanQual)) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
      * Formats an array of qualifiers for human-friendly CDI-style error messages.
      */
     private String formatQualifiers(Annotation[] qualifiers) {
@@ -354,39 +288,6 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
             qualifiers = "@Default";
         }
         return bean.getBeanClass().getName() + " {" + qualifiers + "}";
-    }
-
-    /**
-     * Finds an annotation of a specific type in a set.
-     */
-    private Annotation findAnnotation(Set<Annotation> annotations, Class<? extends Annotation> annotationType) {
-        for (Annotation ann : annotations) {
-            if (ann.annotationType().equals(annotationType)) {
-                return ann;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Gets the value from a @Named annotation.
-     */
-    private String getNamedValue(Annotation namedAnnotation) {
-        try {
-            return (String) namedAnnotation.annotationType().getMethod("value").invoke(namedAnnotation);
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    /**
-     * Checks if two qualifiers are equal, respecting @Nonbinding members.
-     *
-     * <p>According to CDI 4.1 specification, qualifier members marked with @Nonbinding
-     * must be ignored when comparing qualifiers for bean resolution.
-     */
-    private boolean qualifiersEqual(Annotation q1, Annotation q2) {
-        return AnnotationComparator.equals(q1, q2);
     }
 
     /**
@@ -485,7 +386,6 @@ public class BeanResolver implements ProducerBean.DependencyResolver {
      * @param qualifiers the qualifiers for event filtering
      * @return Event instance configured for the specified type and qualifiers
      */
-    @SuppressWarnings("unchecked")
     private <T> Event<T> createEventWrapper(Type eventType, Set<Annotation> qualifiers) {
         return new EventImpl<>(eventType, qualifiers, knowledgeBase, this, contextManager, transactionServices, contextTokenProvider);
     }

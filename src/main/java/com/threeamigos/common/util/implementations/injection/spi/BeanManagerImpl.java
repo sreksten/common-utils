@@ -30,11 +30,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.extractQualifiers;
+import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.qualifiersMatch;
 
 /**
  * Implementation of the CDI 4.1 BeanManager interface.
  *
- * <p>This class provides access to the CDI container's core functionality including:
+ * <p>This class provides access to the CDI container's core functionality, including:
  * <ul>
  *   <li>Bean discovery and resolution</li>
  *   <li>Dependency injection</li>
@@ -205,7 +207,7 @@ public class BeanManagerImpl implements BeanManager {
      *
      * @param beanType the required type
      * @param qualifiers the required qualifiers (empty = @Default)
-     * @return set of matching beans (may be empty, never null)
+     * @return set of matching beans (can be empty, never null)
      * @throws IllegalArgumentException if beanType is null
      */
     @Override
@@ -1632,53 +1634,6 @@ public class BeanManagerImpl implements BeanManager {
     }
 
     // ==================== Helper Methods ====================
-
-    /**
-     * Extracts qualifier annotations from an array of annotations.
-     * If no qualifiers are present, adds @Default.
-     */
-    private Set<Annotation> extractQualifiers(Annotation[] annotations) {
-        Set<Annotation> qualifiers = new HashSet<>();
-        for (Annotation ann : annotations) {
-            if (hasQualifierAnnotation(ann.annotationType())) {
-                qualifiers.add(ann);
-            }
-        }
-
-        // If no qualifiers specified, use @Default
-        if (qualifiers.isEmpty()) {
-            qualifiers.add(new DefaultLiteral());
-        }
-
-        return qualifiers;
-    }
-
-    /**
-     * Checks if a bean has all required qualifiers.
-     * The @Any qualifier matches everything.
-     */
-    private boolean qualifiersMatch(Set<Annotation> required, Set<Annotation> available) {
-        for (Annotation req : required) {
-            // @Any matches everything
-            if (req.annotationType().equals(jakarta.enterprise.inject.Any.class)) {
-                continue;
-            }
-
-            boolean found = false;
-            for (Annotation avail : available) {
-                if (areQualifiersEquivalent(req, avail)) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
-                return false;
-            }
-        }
-
-        return true;
-    }
 
     /**
      * Checks if event qualifiers match observer qualifiers.

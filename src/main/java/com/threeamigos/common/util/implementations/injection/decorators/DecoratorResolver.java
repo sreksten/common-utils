@@ -8,11 +8,10 @@ import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import jakarta.inject.Named;
-import jakarta.inject.Qualifier;
+import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 
-import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.normalizeQualifiers;
+import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.qualifiersMatch;
 
 /**
  * Resolves decorators for target beans based on type matching.
@@ -224,74 +223,6 @@ public class DecoratorResolver {
         return qualifiersMatch(required, available);
     }
 
-    private Set<Annotation> normalizeQualifiers(Collection<Annotation> anns) {
-        Set<Annotation> qualifiers = anns == null ? new HashSet<>() :
-                anns.stream()
-                        .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
-                        .collect(Collectors.toSet());
-        if (qualifiers.isEmpty()) {
-            qualifiers.add(new DefaultLiteral());
-        }
-        return qualifiers;
-    }
-
-    private boolean qualifiersMatch(Set<Annotation> requiredQualifiers, Set<Annotation> beanQualifiers) {
-        Annotation requiredNamed = findAnnotation(requiredQualifiers, Named.class);
-        Annotation beanNamed = findAnnotation(beanQualifiers, Named.class);
-
-        if (requiredNamed != null) {
-            if (beanNamed == null) {
-                return false;
-            }
-            String requiredName = getNamedValue(requiredNamed);
-            String beanName = getNamedValue(beanNamed);
-            if (!requiredName.equals(beanName)) {
-                return false;
-            }
-        }
-
-        for (Annotation required : requiredQualifiers) {
-            if (required.annotationType().equals(jakarta.enterprise.inject.Any.class)) {
-                continue;
-            }
-            if (required instanceof Named) {
-                continue;
-            }
-            boolean found = false;
-            for (Annotation beanQual : beanQualifiers) {
-                if (qualifiersEqual(required, beanQual)) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private Annotation findAnnotation(Set<Annotation> annotations, Class<? extends Annotation> type) {
-        for (Annotation ann : annotations) {
-            if (ann.annotationType().equals(type)) {
-                return ann;
-            }
-        }
-        return null;
-    }
-
-    private String getNamedValue(Annotation namedAnnotation) {
-        try {
-            return (String) namedAnnotation.annotationType().getMethod("value").invoke(namedAnnotation);
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    private boolean qualifiersEqual(Annotation q1, Annotation q2) {
-        return AnnotationComparator.equals(q1, q2);
-    }
-
     /**
      * Checks if any decorators would apply to a bean with the given types.
      *
@@ -303,16 +234,5 @@ public class DecoratorResolver {
      */
     public boolean hasDecorators(Set<Type> beanTypes, Set<Annotation> qualifiers) {
         return !resolve(beanTypes, qualifiers).isEmpty();
-    }
-
-    /**
-     * Returns all decorators registered in the knowledge base.
-     *
-     * <p>This is useful for debugging and validation purposes.
-     *
-     * @return collection of all decorators
-     */
-    public Collection<DecoratorInfo> getAllDecorators() {
-        return knowledgeBase.getDecoratorInfos();
     }
 }
