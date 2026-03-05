@@ -8,6 +8,12 @@ import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import jakarta.inject.Named;
+import jakarta.inject.Qualifier;
+
+import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+
 /**
  * Resolves decorators for target beans based on type matching.
  *
@@ -109,16 +115,12 @@ public class DecoratorResolver {
             return Collections.emptyList();
         }
 
-        Collection<DecoratorInfo> allDecorators = knowledgeBase.getDecoratorInfos();
-
-        List<DecoratorInfo> matchingDecorators = allDecorators.stream()
-            .filter(decorator -> isEnabled(decorator)) // must be enabled via beans.xml or @Priority
+        return knowledgeBase.getDecoratorInfos().stream()
+            .filter(this::isEnabled) // must be enabled via beans.xml or @Priority
             .filter(decorator -> matchesTypes(decorator, beanTypes))
             .filter(decorator -> matchesQualifiers(decorator, qualifiers))
             .sorted(decoratorOrderingComparator())
             .collect(Collectors.toList());
-
-        return matchingDecorators;
     }
 
     /**
@@ -160,7 +162,7 @@ public class DecoratorResolver {
      *
      * @param decorator the decorator to check
      * @param beanTypes the bean's types
-     * @return true if decorator matches any bean type
+     * @return true if the decorator matches any bean type
      */
     private boolean matchesTypes(DecoratorInfo decorator, Set<Type> beanTypes) {
         Set<Type> decoratedTypes = decorator.getDecoratedTypes();
@@ -205,25 +207,89 @@ public class DecoratorResolver {
     }
 
     /**
-     * Checks if a decorator matches the bean's qualifiers.
+     * Checks if a decorator matches the bean's qualifiers per CDI 4.1.
      *
-     * <p>Currently, decorators typically don't have qualifiers (they match by type only).
-     * This method is provided for future CDI spec enhancements where decorators might
-     * support qualifiers.
-     *
-     * <p><b>Current behavior:</b> Always returns true (no qualifier filtering).
+     * <p>Qualifier matching uses the qualifiers on the decorator's single {@code @Delegate}
+     * injection point. A decorator applies only if the bean has all qualifiers declared on
+     * that delegate injection point (including {@code @Named} value matching). {@code @Any}
+     * is ignored; {@code @Default} is assumed when no qualifier is present.</p>
      *
      * @param decorator the decorator to check
      * @param qualifiers the bean's qualifiers
-     * @return true if decorator matches qualifiers
+     * @return true if the bean's qualifiers satisfy the delegate's qualifier set
      */
     private boolean matchesQualifiers(DecoratorInfo decorator, Set<Annotation> qualifiers) {
-        // CDI 4.1: Decorators are primarily type-based, not qualifier-based
-        // In most cases, decorators don't filter by qualifiers
-        // This method is here for potential future extensions
+        Set<Annotation> required = normalizeQualifiers(decorator.getDelegateInjectionPoint().getQualifiers());
+        Set<Annotation> available = normalizeQualifiers(qualifiers);
+        return qualifiersMatch(required, available);
+    }
 
-        // For now, always match (no qualifier filtering)
+    private Set<Annotation> normalizeQualifiers(Collection<Annotation> anns) {
+        Set<Annotation> qualifiers = anns == null ? new HashSet<>() :
+                anns.stream()
+                        .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
+                        .collect(Collectors.toSet());
+        if (qualifiers.isEmpty()) {
+            qualifiers.add(new DefaultLiteral());
+        }
+        return qualifiers;
+    }
+
+    private boolean qualifiersMatch(Set<Annotation> requiredQualifiers, Set<Annotation> beanQualifiers) {
+        Annotation requiredNamed = findAnnotation(requiredQualifiers, Named.class);
+        Annotation beanNamed = findAnnotation(beanQualifiers, Named.class);
+
+        if (requiredNamed != null) {
+            if (beanNamed == null) {
+                return false;
+            }
+            String requiredName = getNamedValue(requiredNamed);
+            String beanName = getNamedValue(beanNamed);
+            if (!requiredName.equals(beanName)) {
+                return false;
+            }
+        }
+
+        for (Annotation required : requiredQualifiers) {
+            if (required.annotationType().equals(jakarta.enterprise.inject.Any.class)) {
+                continue;
+            }
+            if (required instanceof Named) {
+                continue;
+            }
+            boolean found = false;
+            for (Annotation beanQual : beanQualifiers) {
+                if (qualifiersEqual(required, beanQual)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        }
         return true;
+    }
+
+    private Annotation findAnnotation(Set<Annotation> annotations, Class<? extends Annotation> type) {
+        for (Annotation ann : annotations) {
+            if (ann.annotationType().equals(type)) {
+                return ann;
+            }
+        }
+        return null;
+    }
+
+    private String getNamedValue(Annotation namedAnnotation) {
+        try {
+            return (String) namedAnnotation.annotationType().getMethod("value").invoke(namedAnnotation);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private boolean qualifiersEqual(Annotation q1, Annotation q2) {
+        return AnnotationComparator.equals(q1, q2);
     }
 
     /**

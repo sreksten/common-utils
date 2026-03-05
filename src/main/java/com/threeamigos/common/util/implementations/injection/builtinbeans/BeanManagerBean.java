@@ -26,7 +26,7 @@ import java.util.*;
  * <ul>
  *   <li>Type: BeanManager</li>
  *   <li>Scope: @Dependent (new proxy per injection point)</li>
- *   <li>Qualifiers: @Default</li>
+ *   <li>Qualifiers: @Default, @Any</li>
  *   <li>Stereotypes: None</li>
  *   <li>Alternative: No</li>
  * </ul>
@@ -44,7 +44,7 @@ public class BeanManagerBean implements Bean<BeanManager> {
      * @param beanManager the BeanManager instance to inject
      */
     public BeanManagerBean(BeanManager beanManager) {
-        this.beanManager = Objects.requireNonNull(beanManager, "beanManager cannot be null");
+        this.beanManager = Objects.requireNonNull(beanManager, "BeanManager cannot be null");
     }
 
     @Override

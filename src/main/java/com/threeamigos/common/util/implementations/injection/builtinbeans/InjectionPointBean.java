@@ -43,7 +43,7 @@ import java.util.Set;
  * <ul>
  *   <li>Type: InjectionPoint</li>
  *   <li>Scope: @Dependent (contextual per injection)</li>
- *   <li>Qualifiers: @Default</li>
+ *   <li>Qualifiers: @Default, @Any</li>
  *   <li>Stereotypes: None</li>
  *   <li>Alternative: No</li>
  * </ul>
@@ -67,7 +67,7 @@ public class InjectionPointBean implements Bean<InjectionPoint> {
     }
 
     @Override
-    public Set<jakarta.enterprise.inject.spi.InjectionPoint> getInjectionPoints() {
+    public Set<InjectionPoint> getInjectionPoints() {
         return Collections.emptySet(); // Built-in beans have no injection points
     }
 
