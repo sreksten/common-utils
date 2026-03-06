@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.decorators;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
+import jakarta.annotation.Nonnull;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,41 +66,6 @@ import java.util.Objects;
  */
 public class DecoratorChain {
 
-    /**
-     * Represents a single decorator in the chain with its metadata and instance.
-     */
-    public static class DecoratorInstance {
-        private final DecoratorInfo decoratorInfo;
-        private final Object decoratorInstance;
-
-        /**
-         * Creates a decorator instance holder.
-         *
-         * @param decoratorInfo the decorator metadata
-         * @param decoratorInstance the actual decorator instance
-         */
-        public DecoratorInstance(DecoratorInfo decoratorInfo, Object decoratorInstance) {
-            this.decoratorInfo = Objects.requireNonNull(decoratorInfo, "decoratorInfo cannot be null");
-            this.decoratorInstance = Objects.requireNonNull(decoratorInstance, "decoratorInstance cannot be null");
-        }
-
-        public DecoratorInfo getDecoratorInfo() {
-            return decoratorInfo;
-        }
-
-        public Object getDecoratorInstance() {
-            return decoratorInstance;
-        }
-
-        @Override
-        public String toString() {
-            return "DecoratorInstance{" +
-                    "class=" + decoratorInfo.getDecoratorClass().getSimpleName() +
-                    ", priority=" + decoratorInfo.getPriority() +
-                    '}';
-        }
-    }
-
     private final List<DecoratorInstance> decorators;
     private final Object targetInstance;
 
@@ -109,9 +75,9 @@ public class DecoratorChain {
      * @param decorators ordered list of decorator instances (outermost first)
      * @param targetInstance the actual bean instance (innermost)
      */
-    private DecoratorChain(List<DecoratorInstance> decorators, Object targetInstance) {
+    DecoratorChain(List<DecoratorInstance> decorators, @Nonnull Object targetInstance) {
         this.decorators = Collections.unmodifiableList(new ArrayList<>(decorators));
-        this.targetInstance = Objects.requireNonNull(targetInstance, "targetInstance cannot be null");
+        this.targetInstance = targetInstance;
     }
 
     /**
@@ -175,7 +141,7 @@ public class DecoratorChain {
      *
      * @param decoratorIndex the index of the decorator (0-based)
      * @return the delegate instance for that decorator
-     * @throws IndexOutOfBoundsException if index is invalid
+     * @throws IndexOutOfBoundsException if the index is invalid
      */
     public Object getDelegateFor(int decoratorIndex) {
         if (decoratorIndex < 0 || decoratorIndex >= decorators.size()) {
@@ -187,7 +153,7 @@ public class DecoratorChain {
             return targetInstance;
         }
 
-        // Otherwise, delegate to next decorator in chain
+        // Otherwise, delegate to the next decorator in the chain
         return decorators.get(decoratorIndex + 1).getDecoratorInstance();
     }
 
@@ -210,75 +176,5 @@ public class DecoratorChain {
         sb.append("]}");
 
         return sb.toString();
-    }
-
-    /**
-     * Creates a new builder for constructing decorator chains.
-     *
-     * @return a new builder instance
-     */
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    /**
-     * Builder for constructing decorator chains in a fluent manner.
-     *
-     * <p><b>Usage Example:</b>
-     * <pre>{@code
-     * DecoratorChain chain = DecoratorChain.builder()
-     *     .addDecorator(timingDecoratorInfo, timingInstance)
-     *     .addDecorator(loggingDecoratorInfo, loggingInstance)
-     *     .setTarget(paymentProcessor)
-     *     .build();
-     * }</pre>
-     */
-    public static class Builder {
-        private final List<DecoratorInstance> decorators = new ArrayList<>();
-        private Object targetInstance;
-
-        /**
-         * Adds a decorator to the chain.
-         *
-         * <p>Decorators should be added in priority order (outermost first).
-         * The builder does NOT automatically sort by priority - caller must
-         * add decorators in the correct order (typically using DecoratorResolver).
-         *
-         * @param decoratorInfo the decorator metadata
-         * @param decoratorInstance the decorator instance
-         * @return this builder for chaining
-         * @throws NullPointerException if any parameter is null
-         */
-        public Builder addDecorator(DecoratorInfo decoratorInfo, Object decoratorInstance) {
-            decorators.add(new DecoratorInstance(decoratorInfo, decoratorInstance));
-            return this;
-        }
-
-        /**
-         * Sets the target bean instance.
-         *
-         * <p>This is the actual bean instance that will be decorated (innermost).
-         *
-         * @param targetInstance the target bean
-         * @return this builder for chaining
-         * @throws NullPointerException if targetInstance is null
-         */
-        public Builder setTarget(Object targetInstance) {
-            this.targetInstance = targetInstance;
-            return this;
-        }
-
-        /**
-         * Builds the decorator chain.
-         *
-         * @return the completed decorator chain
-         * @throws IllegalStateException if target instance is not set
-         */
-        public DecoratorChain build() {
-            if (targetInstance == null) {
-                throw new IllegalStateException("Target instance must be set");
-            }
-            return new DecoratorChain(decorators, targetInstance);
-        }
     }
 }

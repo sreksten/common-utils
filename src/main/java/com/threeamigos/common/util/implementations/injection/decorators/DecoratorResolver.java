@@ -2,13 +2,12 @@ package com.threeamigos.common.util.implementations.injection.decorators;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import jakarta.annotation.Nonnull;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
-
-import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 
 import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.normalizeQualifiers;
 import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.qualifiersMatch;
@@ -75,10 +74,9 @@ public class DecoratorResolver {
      * Creates a decorator resolver.
      *
      * @param knowledgeBase the knowledge base containing decorator metadata
-     * @throws NullPointerException if knowledgeBase is null
      */
-    public DecoratorResolver(KnowledgeBase knowledgeBase) {
-        this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
+    public DecoratorResolver(@Nonnull KnowledgeBase knowledgeBase) {
+        this.knowledgeBase = knowledgeBase;
     }
 
     /**
@@ -104,16 +102,11 @@ public class DecoratorResolver {
      * @param beanTypes the set of types implemented by the bean
      * @param qualifiers the set of qualifiers on the bean
      * @return list of matching decorators sorted by priority (can be empty, never null)
-     * @throws NullPointerException if beanTypes or qualifiers is null
      */
-    public List<DecoratorInfo> resolve(Set<Type> beanTypes, Set<Annotation> qualifiers) {
-        Objects.requireNonNull(beanTypes, "beanTypes cannot be null");
-        Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
-
+    public List<DecoratorInfo> resolve(@Nonnull Set<Type> beanTypes, @Nonnull Set<Annotation> qualifiers) {
         if (beanTypes.isEmpty()) {
             return Collections.emptyList();
         }
-
         return knowledgeBase.getDecoratorInfos().stream()
             .filter(this::isEnabled) // must be enabled via beans.xml or @Priority
             .filter(decorator -> matchesTypes(decorator, beanTypes))

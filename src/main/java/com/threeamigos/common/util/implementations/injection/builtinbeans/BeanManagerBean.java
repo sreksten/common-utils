@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.builtinbeans;
 
+import jakarta.annotation.Nonnull;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Any;
@@ -43,8 +44,8 @@ public class BeanManagerBean implements Bean<BeanManager> {
      *
      * @param beanManager the BeanManager instance to inject
      */
-    public BeanManagerBean(BeanManager beanManager) {
-        this.beanManager = Objects.requireNonNull(beanManager, "BeanManager cannot be null");
+    public BeanManagerBean(@Nonnull BeanManager beanManager) {
+        this.beanManager = beanManager;
     }
 
     @Override

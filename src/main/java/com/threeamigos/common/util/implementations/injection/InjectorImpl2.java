@@ -157,7 +157,7 @@ public class InjectorImpl2 implements Injector {
         this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
         this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
 
-        // Create BeanManager instance
+        // Create a BeanManager instance
         this.beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
 
         // Register container for proxy deserialization
@@ -169,18 +169,18 @@ public class InjectorImpl2 implements Injector {
         }
         ClientProxyGenerator.registerContainer(classLoader, beanManager, contextManager);
 
-        // PHASE 2: Create interceptor infrastructure (shared across all beans)
+        // PHASE 2: Create the interceptor infrastructure (shared across all beans)
         this.interceptorResolver = new InterceptorResolver(knowledgeBase);
         this.interceptorAwareProxyGenerator = new InterceptorAwareProxyGenerator();
 
-        // PHASE 3: Create decorator infrastructure (shared across all beans)
+        // PHASE 3: Create the decorator infrastructure (shared across all beans)
         this.decoratorResolver = new DecoratorResolver(knowledgeBase);
         this.decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
 
         // Register built-in beans (CDI 4.1 Section 3.10)
         registerBuiltInBeans();
 
-        // Register CDI provider for static container access (CDI 4.1 Section 12.1)
+        // Register a CDI provider for static container access (CDI 4.1 Section 12.1)
         registerCDIProvider();
 
         // PHASE 2: Initialize interceptor support for all beans
@@ -229,7 +229,7 @@ public class InjectorImpl2 implements Injector {
      * </ul>
      */
     private void registerCDIProvider() {
-        // Create CDI instance wrapping our BeanManager
+        // Create a CDI instance wrapping our BeanManager
         CDIImpl cdiInstance = new CDIImpl(beanManager);
 
         // Register globally so CDI.current() can find it
@@ -327,7 +327,7 @@ public class InjectorImpl2 implements Injector {
     /**
      * Registers a manual binding between a type and its implementation.
      *
-     * <p>This allows programmatic bean registration outside of classpath scanning:
+     * <p>This allows programmatic bean registration outside classpath scanning:
      * <pre>{@code
      * injector.bind(
      *     MyInterface.class,

@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.decorators;
 
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
+import jakarta.annotation.Nonnull;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -14,6 +15,7 @@ import java.lang.reflect.Parameter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -115,30 +117,24 @@ public class DecoratorAwareProxyGenerator {
      * @param beanManager the BeanManager for creating decorator instances
      * @param creationalContext the CreationalContext for managing decorator lifecycle
      * @return a DecoratorChain containing all decorator instances
-     * @throws NullPointerException if any required parameter is null
      * @throws IllegalStateException if decorator creation or injection fails
      */
     public DecoratorChain createDecoratorChain(
-            Object targetInstance,
-            List<DecoratorInfo> decoratorInfos,
-            BeanManager beanManager,
-            CreationalContext<?> creationalContext) {
-
-        Objects.requireNonNull(targetInstance, "targetInstance cannot be null");
-        Objects.requireNonNull(decoratorInfos, "decoratorInfos cannot be null");
-        Objects.requireNonNull(beanManager, "beanManager cannot be null");
-        Objects.requireNonNull(creationalContext, "creationalContext cannot be null");
+            @Nonnull Object targetInstance,
+            @Nonnull List<DecoratorInfo> decoratorInfos,
+            @Nonnull BeanManager beanManager,
+            @Nonnull CreationalContext<?> creationalContext) {
 
         // If no decorators, return a chain with just the target
         if (decoratorInfos.isEmpty()) {
-            return DecoratorChain.builder()
+            return new DecoratorChainBuilder()
                     .setTarget(targetInstance)
                     .build();
         }
 
-        // Build decorator chain from innermost to outermost
+        // Build a decorator chain from innermost to outermost
         // (We need to create decorators in reverse order for constructor injection)
-        DecoratorChain.Builder chainBuilder = DecoratorChain.builder();
+        DecoratorChainBuilder chainBuilder = new DecoratorChainBuilder();
         List<Object> decoratorInstances = new ArrayList<>();
 
         // Create decorators in reverse order (innermost first)
@@ -173,14 +169,14 @@ public class DecoratorAwareProxyGenerator {
                 injectDelegate(decoratorInstance, decoratorInfo, currentDelegate);
             }
 
-            // Add to list (will be reversed later)
+            // Add to the list (will be reversed later)
             decoratorInstances.add(0, decoratorInstance);
 
             // Update delegate for next decorator
             currentDelegate = decoratorInstance;
         }
 
-        // Add decorators to chain (now in correct order: outermost first)
+        // Add decorators to the chain (now in correct order: outermost first)
         for (int i = 0; i < decoratorInstances.size(); i++) {
             chainBuilder.addDecorator(decoratorInfos.get(i), decoratorInstances.get(i));
         }
@@ -201,7 +197,7 @@ public class DecoratorAwareProxyGenerator {
      * @param beanManager the BeanManager
      * @param creationalContext the CreationalContext
      * @return the decorator instance
-     * @throws IllegalStateException if decorator bean cannot be resolved
+     * @throws IllegalStateException if the decorator bean cannot be resolved
      */
     private Object createDecoratorInstance(
             DecoratorInfo decoratorInfo,
@@ -218,16 +214,15 @@ public class DecoratorAwareProxyGenerator {
             );
         }
 
-        // Create decorator instance via BeanManager
+        // Create a decorator instance via BeanManager
         // Note: We pass null for the @Delegate injection point here because we'll inject it manually
         // after all decorators are created
-        Object decoratorInstance = beanManager.getReference(
+
+        return beanManager.getReference(
                 decoratorBean,
                 decoratorClass,
                 creationalContext
         );
-
-        return decoratorInstance;
     }
 
     /**
@@ -271,7 +266,7 @@ public class DecoratorAwareProxyGenerator {
                 } else {
                     // Resolve other parameters via BeanManager
                     args[i] = beanManager.getInjectableReference(
-                            new InjectionPointImpl(parameters[i], decoratorBean),
+                            new InjectionPointImpl<>(parameters[i], decoratorBean),
                             creationalContext
                     );
                 }
@@ -283,7 +278,7 @@ public class DecoratorAwareProxyGenerator {
             // Perform field and method injection (non-@Delegate injections)
             // Note: This is handled by CDI automatically if we use BeanManager.getReference()
             // For manual instantiation, we'd need to call field/method injection
-            // For simplicity, we'll assume constructor injection is sufficient for now
+            // For simplicity, we'll assume constructor injection is enough for now
 
             return decoratorInstance;
 
@@ -302,9 +297,8 @@ public class DecoratorAwareProxyGenerator {
      * @param beanManager the BeanManager
      * @return the decorator bean, or null if not found
      */
-    @SuppressWarnings("unchecked")
     private Bean<?> resolveDecoratorBean(Class<?> decoratorClass, BeanManager beanManager) {
-        java.util.Set<Bean<?>> beans = beanManager.getBeans(decoratorClass);
+        Set<Bean<?>> beans = beanManager.getBeans(decoratorClass);
         if (beans.isEmpty()) {
             return null;
         }
@@ -364,7 +358,7 @@ public class DecoratorAwareProxyGenerator {
                 }
 
                 if (delegateParamIndex >= 0) {
-                    // Create args array with delegate at the correct position
+                    // Create an args array with delegate at the correct position
                     Object[] args = new Object[parameters.length];
                     args[delegateParamIndex] = delegate;
                     method.invoke(decoratorInstance, args);
