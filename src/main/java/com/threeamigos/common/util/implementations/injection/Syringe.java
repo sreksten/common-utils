@@ -1588,6 +1588,21 @@ public class Syringe {
         return beanManager;
     }
 
+    /**
+     * Returns the CDI instance for the container.
+     *
+     * <p>This enables static container access via {@code CDI.current()} when registered
+     * with {@link com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider}.
+     *
+     * @return the CDI instance
+     */
+    public jakarta.enterprise.inject.spi.CDI<Object> getCDI() {
+        if (!initialized) {
+            throw new IllegalStateException("Container not initialized. Call setup() first.");
+        }
+        return new com.threeamigos.common.util.implementations.injection.spi.CDIImpl(beanManager);
+    }
+
     private void info(String message) {
         messageHandler.handleInfoMessage("[Syringe] " + message);
     }
