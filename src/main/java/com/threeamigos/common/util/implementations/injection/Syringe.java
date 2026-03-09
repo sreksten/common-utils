@@ -130,8 +130,13 @@ public class Syringe {
      */
     private final Map<Class<? extends Annotation>, Context> customContextsToRegister = new HashMap<>();
 
+    public Syringe() {
+        this.messageHandler = new ConsoleMessageHandler();
+        this.packageNames = new String[0];
+    }
+
     public Syringe(String... packageNames) {
-        messageHandler = new ConsoleMessageHandler();
+        this.messageHandler = new ConsoleMessageHandler();
         this.packageNames = packageNames != null ? packageNames : new String[0];
     }
 
@@ -231,45 +236,99 @@ public class Syringe {
      *   <li>Validate deployment (check for errors)</li>
      *   <li>Fire AfterDeploymentValidation event</li>
      * </ol>
+     * <p>This method is used for standalone SE mode. It performs automatic bean
+     * discovery based on the package names provided in the constructor.
      *
      * @throws DeploymentException if validation fails or extensions cause errors
      */
     public void setup() {
+        initialize();
+        discoverBeans();
+        start();
+    }
+
+    /**
+     * PHASE 1: CONTAINER INITIALIZATION.
+     *
+     * <p>Initializes core infrastructure:
+     * <ul>
+     *   <li>Creates {@link KnowledgeBase} and {@link ContextManager}</li>
+     *   <li>Loads portable extensions via ServiceLoader</li>
+     *   <li>Creates {@link BeanManagerImpl}</li>
+     *   <li>Fires {@code BeforeBeanDiscovery} event</li>
+     * </ul>
+     *
+     * @throws IllegalStateException if the container is already initialized
+     */
+    public void initialize() {
+        if (initialized) {
+            throw new IllegalStateException("Container already initialized");
+        }
+
+        // ============================================================
+        // PHASE 1: CONTAINER INITIALIZATION
+        // ============================================================
+        info("Phase 1: Container Initialization");
+
+        knowledgeBase = new KnowledgeBase(messageHandler);
+        contextManager = new ContextManager(messageHandler);
+
+        // Step 1.1: Load portable extensions via ServiceLoader + explicitly registered
+        loadExtensions();
+
+        // Step 1.2: Create BeanManager
+        beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
+
+        // Step 2.1: Fire BeforeBeanDiscovery event
+        // Extensions can:
+        // - Add new qualifiers, scopes, stereotypes, interceptor bindings
+        // - Register additional beans programmatically
+        fireBeforeBeanDiscovery();
+    }
+
+    /**
+     * Adds a class to the container for bean discovery.
+     *
+     * <p>This method should be called after {@link #initialize()} and before
+     * {@link #start()}. It is intended for managed bootstrap environments
+     * (like WildFly) where discovery is performed externally.
+     *
+     * @param clazz the class to add
+     * @throws IllegalStateException if the container is already initialized or not yet initialized
+     */
+    public void addDiscoveredClass(Class<?> clazz) {
+        if (initialized) {
+            throw new IllegalStateException("Container already initialized");
+        }
+        if (knowledgeBase == null) {
+            throw new IllegalStateException("Container not yet initialized. Call initialize() first.");
+        }
+        knowledgeBase.add(clazz);
+    }
+
+    /**
+     * PHASE 2-6: BEAN PROCESSING AND VALIDATION.
+     *
+     * <p>Completes the CDI 4.1 lifecycle:
+     * <ul>
+     *   <li>Fires {@code ProcessAnnotatedType} events</li>
+     *   <li>Validates and registers beans</li>
+     *   <li>Fires {@code ProcessInjectionPoint}, {@code ProcessInjectionTarget}, etc.</li>
+     *   <li>Fires {@code AfterBeanDiscovery} and {@code AfterDeploymentValidation}</li>
+     * </ul>
+     *
+     * @throws DeploymentException if validation fails
+     */
+    public void start() {
         if (initialized) {
             throw new IllegalStateException("Container already initialized");
         }
 
         try {
             // ============================================================
-            // PHASE 1: CONTAINER INITIALIZATION
+            // PHASE 2 (CONT): PROCESS DISCOVERED TYPES
             // ============================================================
-            info("Phase 1: Container Initialization");
-
-            knowledgeBase = new KnowledgeBase(messageHandler);
-            contextManager = new ContextManager(messageHandler);
-
-            // Step 1.1: Load portable extensions via ServiceLoader + explicitly registered
-            loadExtensions();
-
-            // Step 1.2: Create BeanManager
-            beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
-
-            // ============================================================
-            // PHASE 2: BEAN DISCOVERY
-            // ============================================================
-            info("Phase 2: Bean Discovery");
-
-            // Step 2.1: Fire BeforeBeanDiscovery event
-            // Extensions can:
-            // - Add new qualifiers, scopes, stereotypes, interceptor bindings
-            // - Register additional beans programmatically
-            fireBeforeBeanDiscovery();
-
-            // Step 2.2: Perform bean discovery (classpath scanning)
-            // - Scan for classes in specified packages
-            // - Detect bean archives (explicit/implicit via beans.xml)
-            // - Discover annotated types
-            discoverBeans();
+            info("Phase 2: Processing Discovered Types");
 
             // Step 2.3: Fire ProcessAnnotatedType<T> for each discovered type
             // Extensions can:
@@ -472,6 +531,10 @@ public class Syringe {
      * </ol>
      */
     private void discoverBeans() {
+        // Step 2.2: Perform bean discovery (classpath scanning)
+        // - Scan for classes in specified packages
+        // - Detect bean archives (explicit/implicit via beans.xml)
+        // - Discover annotated types
         info("Discovering beans in packages: " + Arrays.toString(packageNames));
 
         ParallelClasspathScanner scanner;
