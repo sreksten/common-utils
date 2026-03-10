@@ -2,15 +2,18 @@ package com.threeamigos.common.util.implementations.injection.wildfly;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import jakarta.enterprise.inject.spi.BeanManager;
+import org.jboss.as.naming.ServiceBasedNamingStore;
+import org.jboss.as.naming.ValueManagedReferenceFactory;
 import org.jboss.as.naming.deployment.ContextNames;
+import org.jboss.as.naming.deployment.ContextNames.BindInfo;
 import org.jboss.as.naming.service.BinderService;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
 import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.DeploymentUnitProcessor;
 import org.jboss.msc.service.ServiceBuilder;
-import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
+import org.jboss.msc.value.ImmediateValue;
 
 /**
  * DeploymentUnitProcessor that registers the Syringe BeanManager in JNDI.
@@ -31,18 +34,23 @@ public class SyringeJndiBinderProcessor implements DeploymentUnitProcessor {
             return;
         }
 
-        final ServiceName beanManagerServiceName = ContextNames.JAVA_CONTEXT_SERVICE_NAME
-                .append("comp")
-                .append("BeanManager");
+        // Use per-deployment bind info to avoid clashes and ensure the parent naming store is wired
+        final BindInfo bindInfo = ContextNames.bindInfoFor("java:comp/BeanManager");
 
-        final BinderService binderService = new BinderService("BeanManager", beanManager);
+        final BinderService binderService = new BinderService(bindInfo.getBindName());
+        binderService.getManagedObjectInjector().inject(new ValueManagedReferenceFactory(new ImmediateValue<Object>(beanManager)));
+
         final ServiceTarget serviceTarget = phaseContext.getServiceTarget();
-        final ServiceBuilder<?> builder = serviceTarget.addService(beanManagerServiceName, binderService);
+        final ServiceBuilder<?> builder = serviceTarget.addService(bindInfo.getBinderServiceName(), binderService)
+                .addDependency(bindInfo.getParentContextServiceName(), ServiceBasedNamingStore.class, binderService.getNamingStoreInjector());
+
         builder.install();
     }
 
     @Override
     public void undeploy(DeploymentUnit context) {
-        // Unbinding logic if necessary
+        // The BinderService is tied to the deployment's naming store; it will
+        // be removed automatically with the deployment service lifecycle. No explicit
+        // teardown required here.
     }
 }

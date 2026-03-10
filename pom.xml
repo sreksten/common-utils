@@ -106,6 +106,12 @@
         </dependency>
         <dependency>
             <groupId>org.wildfly.core</groupId>
+            <artifactId>wildfly-controller-client</artifactId>
+            <version>23.0.0.Final</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wildfly.core</groupId>
             <artifactId>wildfly-server</artifactId>
             <version>23.0.0.Final</version>
             <scope>provided</scope>
@@ -138,6 +144,37 @@
             <groupId>org.wildfly</groupId>
             <artifactId>wildfly-ee</artifactId>
             <version>23.0.0.Final</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Arquillian dependencies -->
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-spi</artifactId>
+            <version>1.7.1.Final</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.test</groupId>
+            <artifactId>arquillian-test-spi</artifactId>
+            <version>1.7.1.Final</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.core</groupId>
+            <artifactId>arquillian-core-spi</artifactId>
+            <version>1.7.1.Final</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <version>1.2.6</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap.descriptors</groupId>
+            <artifactId>shrinkwrap-descriptors-api-base</artifactId>
+            <version>2.0.0</version>
             <scope>provided</scope>
         </dependency>
         <!-- Test dependencies -->
@@ -221,6 +258,28 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <executions>
+                    <execution>
+                        <id>arquillian-adapter</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>arquillian</classifier>
+                            <includes>
+                                <include>com/threeamigos/common/util/implementations/injection/arquillian/**</include>
+                                <include>META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension</include>
+                                <include>META-INF/services/org.jboss.arquillian.container.spi.client.container.DeployableContainer</include>
+                            </includes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

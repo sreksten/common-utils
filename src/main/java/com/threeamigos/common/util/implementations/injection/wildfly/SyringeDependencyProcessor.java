@@ -20,8 +20,18 @@ public class SyringeDependencyProcessor implements DeploymentUnitProcessor {
     @Override
     public void deploy(DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
         final DeploymentUnit deploymentUnit = phaseContext.getDeploymentUnit();
+        // Skip subdeployments (e.g., EAR modules) which inherit their parent's module spec
+        if (deploymentUnit.getParent() != null) {
+            return;
+        }
+
         final ModuleSpecification moduleSpecification = deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
         final ModuleLoader moduleLoader = deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
+
+        // Attachments can be absent for non-EE or special deployments; guard to avoid NPEs
+        if (moduleSpecification == null || moduleLoader == null) {
+            return;
+        }
 
         // Add the Syringe module as a dependency to the deployment
         moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, ModuleIdentifier.fromString(SYRINGE_MODULE), false, false, true, false));
