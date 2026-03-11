@@ -1134,6 +1134,13 @@ public class CDI41BeanValidator {
             return false;
         }
 
+        // Annotations (including stereotypes and scope annotations), enums, primitives, and arrays
+        // are not bean classes. Without this guard, stereotype annotations get treated as beans
+        // and later produce DefinitionErrors like "is not a valid CDI bean class type".
+        if (clazz.isAnnotation() || clazz.isEnum() || clazz.isPrimitive() || clazz.isArray()) {
+            return false;
+        }
+
         // Bean-defining annotations per CDI spec
         if (hasApplicationScopedAnnotation(clazz) ||
                 hasSessionScopedAnnotation(clazz) ||
