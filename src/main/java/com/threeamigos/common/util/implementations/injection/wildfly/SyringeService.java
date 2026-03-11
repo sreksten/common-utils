@@ -15,18 +15,16 @@ import java.util.logging.Logger;
  */
 public class SyringeService implements Service<SyringeService> {
 
-    private static final Logger log = Logger.getLogger(SyringeService.class.getName());
-
     @Override
     public void start(StartContext context) throws StartException {
-        log.info("Starting Syringe Service...");
+        System.out.println("Starting Syringe Service...");
         // This service represents the subsystem's presence in the server.
         // Actual containers are typically created per-deployment by DUPs.
     }
 
     @Override
     public void stop(StopContext context) {
-        log.info("Stopping Syringe Service...");
+        System.out.println("Stopping Syringe Service...");
     }
 
     @Override
