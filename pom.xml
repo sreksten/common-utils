@@ -278,6 +278,8 @@
                                 <include>com/threeamigos/common/util/implementations/injection/arquillian/**</include>
                                 <include>META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension</include>
                                 <include>META-INF/services/org.jboss.arquillian.container.spi.client.container.DeployableContainer</include>
+                                <include>META-INF/services/org.jboss.arquillian.container.spi.client.container.DeploymentExceptionTransformer</include>
+                                <include>META-INF/services/org.jboss.arquillian.container.spi.client.deployment.DeploymentExceptionTransformer</include>
                             </includes>
                         </configuration>
                     </execution>

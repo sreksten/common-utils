@@ -34,8 +34,8 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             try {
                 Class<?> clazz = module.getClassLoader().loadClass(classInfo.name().toString());
                 discoveredClasses.add(clazz);
-            } catch (ClassNotFoundException e) {
-                // Ignore classes that cannot be loaded from the deployment's classloader
+            } catch (ClassNotFoundException | NoClassDefFoundError e) {
+                // Ignore classes that cannot be resolved (optional dependencies like Ant/TestNG tasks)
             }
         }
 

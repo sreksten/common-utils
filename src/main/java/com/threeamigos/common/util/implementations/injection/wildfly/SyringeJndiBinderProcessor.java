@@ -5,6 +5,7 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import org.jboss.as.naming.ServiceBasedNamingStore;
 import org.jboss.as.naming.ValueManagedReferenceFactory;
 import org.jboss.as.naming.deployment.ContextNames;
+import org.jboss.as.naming.logging.NamingLogger;
 import org.jboss.as.naming.deployment.ContextNames.BindInfo;
 import org.jboss.as.naming.service.BinderService;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
@@ -13,7 +14,7 @@ import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.DeploymentUnitProcessor;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceTarget;
-import org.jboss.msc.value.ImmediateValue;
+import org.jboss.msc.value.Value;
 
 /**
  * DeploymentUnitProcessor that registers the Syringe BeanManager in JNDI.
@@ -34,17 +35,47 @@ public class SyringeJndiBinderProcessor implements DeploymentUnitProcessor {
             return;
         }
 
-        // Use per-deployment bind info to avoid clashes and ensure the parent naming store is wired
-        final BindInfo bindInfo = ContextNames.bindInfoFor("java:comp/BeanManager");
+        // Bind BeanManager into the module namespace (java:module/BeanManager). Using the 4-arg
+        // overload keeps the naming context service names consistent with WildFly's expectations.
+        final String moduleName = simpleName(deploymentUnit.getName());
+        final String appName = deploymentUnit.getParent() != null
+                ? simpleName(deploymentUnit.getParent().getName())
+                : moduleName;
+
+        final BindInfo bindInfo;
+        try {
+            bindInfo = ContextNames.bindInfoFor(appName, moduleName, null, "java:module/BeanManager");
+        } catch (RuntimeException e) {
+            // If the namespace is rejected (e.g., illegal context), do not fail deployment;
+            // just skip binding. CDI.current() and injection still work.
+            NamingLogger.ROOT_LOGGER.debug("Skipping BeanManager JNDI binding", e);
+            return;
+        }
 
         final BinderService binderService = new BinderService(bindInfo.getBindName());
-        binderService.getManagedObjectInjector().inject(new ValueManagedReferenceFactory(new ImmediateValue<Object>(beanManager)));
+        binderService.getManagedObjectInjector().inject(new ValueManagedReferenceFactory(new Value<Object>() {
+            @Override
+            public Object getValue() {
+                return beanManager;
+            }
+        }));
 
         final ServiceTarget serviceTarget = phaseContext.getServiceTarget();
         final ServiceBuilder<?> builder = serviceTarget.addService(bindInfo.getBinderServiceName(), binderService)
                 .addDependency(bindInfo.getParentContextServiceName(), ServiceBasedNamingStore.class, binderService.getNamingStoreInjector());
 
         builder.install();
+    }
+
+    private static String simpleName(String deploymentName) {
+        if (deploymentName == null) {
+            return "";
+        }
+        int dot = deploymentName.lastIndexOf('.');
+        if (dot > 0) {
+            return deploymentName.substring(0, dot);
+        }
+        return deploymentName;
     }
 
     @Override

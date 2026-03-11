@@ -486,12 +486,12 @@ public class Syringe {
                 } else {
                     Extension extension = (Extension) extensionClass.getDeclaredConstructor().newInstance();
                     extensions.add(extension);
-                    info("[Syringe] Loaded extension: " + className);
+                    info("Loaded extension: " + className);
                 }
                 loadedCount++;
             } catch (Exception e) {
                 knowledgeBase.addDefinitionError("Failed to load extension: " + className);
-                log("[Syringe] Failed to load extension: " + className, e);
+                log("Failed to load extension: " + className, e);
             }
         }
 
@@ -1360,11 +1360,13 @@ public class Syringe {
 
         // 2. Check definition errors
         if (knowledgeBase.hasErrors()) {
-            System.err.println("[Syringe] Deployment validation failed:");
+            error("Deployment validation failed:");
+            knowledgeBase.getErrors().forEach(error ->
+                    error("  - Generic Error: " + error));
             knowledgeBase.getDefinitionErrors().forEach(error ->
-                    System.err.println("  - Definition error: " + error));
+                    error("  - Definition error: " + error));
             knowledgeBase.getInjectionErrors().forEach(error ->
-                    System.err.println("  - Injection error: " + error));
+                    error("  - Injection error: " + error));
             throw new DeploymentException("Deployment validation failed. See errors above.");
         }
 
@@ -1605,6 +1607,10 @@ public class Syringe {
 
     private void info(String message) {
         messageHandler.handleInfoMessage("[Syringe] " + message);
+    }
+
+    private void error(String message) {
+        messageHandler.handleErrorMessage("[Syringe] " + message);
     }
 
     private void log(String error, Exception t) {
