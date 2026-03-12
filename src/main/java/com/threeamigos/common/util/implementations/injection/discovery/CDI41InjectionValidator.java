@@ -218,18 +218,18 @@ public class CDI41InjectionValidator {
         boolean allValid = true;
 
         // Group beans by their types to find alternatives (includes producer beans)
-        Map<Type, List<Bean<?>>> beansByType = new HashMap<>();
+        Map<Type, Set<Bean<?>>> beansByType = new HashMap<>();
 
         for (Bean<?> bean : validBeans) {
             for (Type type : bean.getTypes()) {
-                beansByType.computeIfAbsent(type, k -> new ArrayList<>()).add(bean);
+                beansByType.computeIfAbsent(type, k -> new LinkedHashSet<>()).add(bean);
             }
         }
 
         // Check each type for ambiguous alternatives
-        for (Map.Entry<Type, List<Bean<?>>> entry : beansByType.entrySet()) {
+        for (Map.Entry<Type, Set<Bean<?>>> entry : beansByType.entrySet()) {
             Type type = entry.getKey();
-            List<Bean<?>> beansOfType = entry.getValue();
+            List<Bean<?>> beansOfType = new ArrayList<>(entry.getValue());
 
             // Filter for alternative beans only
             List<Bean<?>> alternatives = beansOfType.stream()
