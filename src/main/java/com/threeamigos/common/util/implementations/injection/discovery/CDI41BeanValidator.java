@@ -711,12 +711,6 @@ public class CDI41BeanValidator {
     private boolean validateProducerField(Field field) {
         boolean valid = true;
 
-        // A producer field must not be final (container needs to read it; final often implies constant semantics)
-        if (Modifier.isFinal(field.getModifiers())) {
-            knowledgeBase.addDefinitionError(fmtField(field) + ": producer field must not be final");
-            valid = false;
-        }
-
         // Disallow @Inject on producer fields (handled also by combo check)
         if (hasInjectAnnotation(field)) {
             knowledgeBase.addDefinitionError(fmtField(field) + ": producer field may not be annotated @Inject");
