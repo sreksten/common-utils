@@ -217,91 +217,104 @@ public class CDI41InjectionValidator {
     private boolean validateAlternatives(Collection<Bean<?>> validBeans) {
         boolean allValid = true;
 
-        // Group beans by their types to find alternatives (includes producer beans)
-        Map<Type, Set<Bean<?>>> beansByType = new HashMap<>();
+        // Group by type AND effective qualifiers to detect ambiguity only within the same qualifier set.
+        Map<Type, Map<Set<Annotation>, Set<Bean<?>>>> byTypeAndQuals = new HashMap<>();
 
         for (Bean<?> bean : validBeans) {
+            Set<Annotation> qKey = qualifierKey(bean.getQualifiers());
             for (Type type : bean.getTypes()) {
-                beansByType.computeIfAbsent(type, k -> new LinkedHashSet<>()).add(bean);
+                if (isJavaLangObject(type)) {
+                    // Skip java.lang.Object to avoid spurious ambiguity: every bean has Object
+                    // as a type, but injection points of Object are exceedingly rare and would
+                    // be validated during normal resolution if present.
+                    continue;
+                }
+                byTypeAndQuals
+                        .computeIfAbsent(type, t -> new HashMap<>())
+                        .computeIfAbsent(qKey, k -> Collections.newSetFromMap(new IdentityHashMap<>()))
+                        .add(bean);
             }
         }
 
-        // Check each type for ambiguous alternatives
-        for (Map.Entry<Type, Set<Bean<?>>> entry : beansByType.entrySet()) {
-            Type type = entry.getKey();
-            List<Bean<?>> beansOfType = new ArrayList<>(entry.getValue());
+        // Check each (type, qualifier set) bucket for ambiguous alternatives
+        for (Map.Entry<Type, Map<Set<Annotation>, Set<Bean<?>>>> typeEntry : byTypeAndQuals.entrySet()) {
+            Type type = typeEntry.getKey();
+            for (Map.Entry<Set<Annotation>, Set<Bean<?>>> qualEntry : typeEntry.getValue().entrySet()) {
+                List<Bean<?>> alternatives = qualEntry.getValue().stream()
+                        .filter(Bean::isAlternative)
+                        .collect(Collectors.toList());
 
-            // Filter for alternative beans only
-            List<Bean<?>> alternatives = beansOfType.stream()
-                    .filter(Bean::isAlternative)
-                    .collect(Collectors.toList());
-
-            // If more than one alternative exists, check priorities
-            if (alternatives.size() > 1) {
-                // Extract priorities for each alternative
-                Map<Bean<?>, Integer> priorities = new HashMap<>();
-                List<Bean<?>> noPriorityAlternatives = new ArrayList<>();
-
-                for (Bean<?> alt : alternatives) {
-                    Priority priority = alt.getBeanClass().getAnnotation(Priority.class);
-                    if (priority != null) {
-                        priorities.put(alt, priority.value());
-                    } else {
-                        // Alternative without @Priority annotation
-                        noPriorityAlternatives.add(alt);
+                if (alternatives.size() > 1) {
+                    // Deduplicate logically equivalent beans (same bean class) within this qualifier bucket
+                    Map<String, Bean<?>> uniqueByClass = new LinkedHashMap<>();
+                    for (Bean<?> alt : alternatives) {
+                        uniqueByClass.put(alt.getBeanClass().getName(), alt);
                     }
-                }
+                    alternatives = new ArrayList<>(uniqueByClass.values());
 
-                // CDI 4.1: ERROR if multiple alternatives have no priority
-                if (noPriorityAlternatives.size() > 1) {
-                    String alternativeList = noPriorityAlternatives.stream()
-                            .map(b -> b.getBeanClass().getName())
-                            .collect(Collectors.joining(", "));
+                    Map<Bean<?>, Integer> priorities = new HashMap<>();
+                    List<Bean<?>> noPriorityAlternatives = new ArrayList<>();
 
-                    knowledgeBase.addError(
-                            "Ambiguous alternatives for type " + formatType(type) +
-                            ": [" + alternativeList + "]. " +
-                            "Multiple alternatives without @Priority - cannot determine precedence. " +
-                            "Add @Priority annotation to resolve ambiguity."
-                    );
-                    allValid = false;
-                }
-
-                // CDI 4.1: ERROR only if there is a tie at the HIGHEST priority
-                if (!priorities.isEmpty()) {
-                    // Group by priority value
-                    Map<Integer, List<Bean<?>>> byPriority = new HashMap<>();
-                    for (Map.Entry<Bean<?>, Integer> e : priorities.entrySet()) {
-                        byPriority.computeIfAbsent(e.getValue(), k -> new ArrayList<>()).add(e.getKey());
+                    for (Bean<?> alt : alternatives) {
+                        Priority priority = alt.getBeanClass().getAnnotation(Priority.class);
+                        if (priority != null) {
+                            priorities.put(alt, priority.value());
+                        } else {
+                            noPriorityAlternatives.add(alt);
+                        }
                     }
-                    // Highest priority value
-                    int max = byPriority.keySet().stream().max(Integer::compareTo).orElse(Integer.MIN_VALUE);
-                    List<Bean<?>> top = byPriority.get(max);
-                    if (top != null && top.size() > 1) {
-                        String samePriorityList = top.stream()
+
+                    if (noPriorityAlternatives.size() > 1) {
+                        String alternativeList = noPriorityAlternatives.stream()
                                 .map(b -> b.getBeanClass().getName())
                                 .collect(Collectors.joining(", "));
 
                         knowledgeBase.addError(
                                 "Ambiguous alternatives for type " + formatType(type) +
-                                ": [" + samePriorityList + "] all have the same (highest) priority @Priority(" + max + "). " +
-                                "Alternatives must have different priority values to resolve ambiguity."
+                                " with qualifiers " + formatQualifiers(qualEntry.getKey()) +
+                                ": [" + alternativeList + "]. " +
+                                "Multiple alternatives without @Priority - cannot determine precedence. " +
+                                "Add @Priority to resolve ambiguity."
                         );
                         allValid = false;
                     }
-                }
 
-                // CDI 4.1: ERROR if mix of priority and no-priority (ambiguous)
-                if (!priorities.isEmpty() && !noPriorityAlternatives.isEmpty()) {
-                    // This is technically allowed, but potentially confusing
-                    // No-priority alternatives have implicit priority of 0 (lowest)
-                    // So prioritized alternatives will win - this is VALID per CDI 4.1
-                    // No error needed here
+                    if (!priorities.isEmpty()) {
+                        Map<Integer, List<Bean<?>>> byPriority = new HashMap<>();
+                        for (Map.Entry<Bean<?>, Integer> e : priorities.entrySet()) {
+                            byPriority.computeIfAbsent(e.getValue(), k -> new ArrayList<>()).add(e.getKey());
+                        }
+                        int max = byPriority.keySet().stream().max(Integer::compareTo).orElse(Integer.MIN_VALUE);
+                        List<Bean<?>> top = byPriority.get(max);
+                        if (top != null && top.size() > 1) {
+                            String samePriorityList = top.stream()
+                                    .map(b -> b.getBeanClass().getName())
+                                    .collect(Collectors.joining(", "));
+
+                            knowledgeBase.addError(
+                                    "Ambiguous alternatives for type " + formatType(type) +
+                                    " with qualifiers " + formatQualifiers(qualEntry.getKey()) +
+                                    ": [" + samePriorityList + "] all have the same (highest) priority @Priority(" + max + "). " +
+                                    "Alternatives must have different priority values to resolve ambiguity."
+                            );
+                            allValid = false;
+                        }
+                    }
                 }
             }
         }
 
         return allValid;
+    }
+
+    private boolean isJavaLangObject(Type type) {
+        if (type instanceof Class) {
+            return Object.class.equals(type);
+        }
+        if (type != null && "java.lang.Object".equals(type.getTypeName())) {
+            return true;
+        }
+        return false;
     }
 
     // ============================================
@@ -883,6 +896,15 @@ public class CDI41InjectionValidator {
      */
     private String formatType(Type type) {
         return type.getTypeName();
+    }
+
+    private Set<Annotation> qualifierKey(Set<Annotation> qualifiers) {
+        return qualifiers.stream()
+                .filter(q -> !q.annotationType().equals(javax.enterprise.inject.Any.class)
+                        && !q.annotationType().equals(javax.enterprise.inject.Default.class)
+                        && !q.annotationType().equals(jakarta.enterprise.inject.Any.class)
+                        && !q.annotationType().equals(jakarta.enterprise.inject.Default.class))
+                .collect(Collectors.toSet());
     }
 
     /**
