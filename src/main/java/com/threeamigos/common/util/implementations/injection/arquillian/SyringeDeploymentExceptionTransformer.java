@@ -12,30 +12,20 @@ import org.jboss.arquillian.container.spi.client.container.DeploymentExceptionTr
 public class SyringeDeploymentExceptionTransformer implements DeploymentExceptionTransformer {
 
     @Override
-    public DeploymentException transform(Throwable exception) {
-        Throwable definitionCause = findDefinitionOrDeploymentException(exception);
-        if (definitionCause != null) {
-            return new DeploymentException("CDI definition error during deployment", definitionCause);
+    public Throwable transform(Throwable exception) {
+
+        if (exception instanceof jakarta.enterprise.inject.spi.DefinitionException ||
+                exception instanceof jakarta.enterprise.inject.spi.DeploymentException) {
+            return exception;
         }
-        return null; // let Arquillian handle other exceptions
+
+        if (exception instanceof javax.enterprise.inject.spi.DefinitionException) {
+            return new jakarta.enterprise.inject.spi.DefinitionException(exception.getMessage());
+        }
+        if (exception instanceof javax.enterprise.inject.spi.DeploymentException) {
+            return new jakarta.enterprise.inject.spi.DeploymentException(exception.getMessage());
+        }
+        return exception;
     }
 
-    private Throwable findDefinitionOrDeploymentException(Throwable throwable) {
-        while (throwable != null) {
-            if (isDefinitionOrDeploymentException(throwable)) {
-                return throwable;
-            }
-            throwable = throwable.getCause();
-        }
-        return null;
-    }
-
-    private boolean isDefinitionOrDeploymentException(Throwable t) {
-        // Accept both jakarta and legacy javax DefinitionException
-        String cn = t.getClass().getName();
-        return "jakarta.enterprise.inject.spi.DefinitionException".equals(cn) ||
-                "javax.enterprise.inject.spi.DefinitionException".equals(cn) ||
-                "jakarta.enterprise.inject.spi.DeploymentException".equals(cn) ||
-                "javax.enterprise.inject.spi.DeploymentException".equals(cn);
-    }
 }

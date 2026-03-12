@@ -1955,14 +1955,14 @@ public class CDI41BeanValidator {
                     ": @AroundConstruct must be non-static, return Object, and accept a single InvocationContext parameter");
             valid = false;
         }
-        if (postConstructMethod != null && !isValidLifecycleVoidNoArgs(postConstructMethod)) {
+        if (postConstructMethod != null && !isValidInterceptorLifecycleMethod(postConstructMethod)) {
             knowledgeBase.addDefinitionError(fmtMethod(postConstructMethod) +
-                    ": @PostConstruct interceptor method must be non-static, void, and take no parameters");
+                    ": @PostConstruct interceptor method must be non-static, void/Object, and take a single InvocationContext parameter");
             valid = false;
         }
-        if (preDestroyMethod != null && !isValidLifecycleVoidNoArgs(preDestroyMethod)) {
+        if (preDestroyMethod != null && !isValidInterceptorLifecycleMethod(preDestroyMethod)) {
             knowledgeBase.addDefinitionError(fmtMethod(preDestroyMethod) +
-                    ": @PreDestroy interceptor method must be non-static, void, and take no parameters");
+                    ": @PreDestroy interceptor method must be non-static, void/Object, and take a single InvocationContext parameter");
             valid = false;
         }
 
@@ -1997,10 +1997,20 @@ public class CDI41BeanValidator {
                 && jakarta.interceptor.InvocationContext.class.isAssignableFrom(m.getParameterTypes()[0]);
     }
 
-    private boolean isValidLifecycleVoidNoArgs(Method m) {
+    /**
+     * CDI 4.1 / Jakarta Interceptors 2.2: lifecycle interceptor methods declared
+     * on interceptor classes must be non-static, non-final, return void or Object,
+     * and accept exactly one InvocationContext parameter.
+     *
+     * Note: lifecycle methods declared on target beans follow different rules
+     * (void, no-args). This validator is only used for interceptor classes.
+     */
+    private boolean isValidInterceptorLifecycleMethod(Method m) {
+        boolean returnOk = m.getReturnType().equals(void.class) || m.getReturnType().equals(Object.class);
         return !Modifier.isStatic(m.getModifiers())
-                && m.getReturnType().equals(void.class)
-                && m.getParameterCount() == 0;
+                && returnOk
+                && m.getParameterCount() == 1
+                && jakarta.interceptor.InvocationContext.class.isAssignableFrom(m.getParameterTypes()[0]);
     }
 
     /**

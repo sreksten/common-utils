@@ -1384,7 +1384,12 @@ public class Syringe {
                     error("  - Definition error: " + error));
             knowledgeBase.getInjectionErrors().forEach(error ->
                     error("  - Injection error: " + error));
-            throw new DeploymentException("Deployment validation failed. See errors above.");
+
+            if (!knowledgeBase.getDefinitionErrors().isEmpty()) {
+                throw new DefinitionException("Deployment validation failed. See log for details.");
+            } else {
+                throw new DeploymentException("Deployment validation failed. See log for details.");
+            }
         }
 
         info("Deployment validation passed");
