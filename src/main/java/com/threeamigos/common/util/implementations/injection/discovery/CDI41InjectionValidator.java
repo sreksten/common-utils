@@ -267,28 +267,27 @@ public class CDI41InjectionValidator {
                     allValid = false;
                 }
 
-                // CDI 4.1: ERROR if alternatives have the same priority value
-                if (priorities.size() > 1) {
-                    // Group by priority value to find duplicates
+                // CDI 4.1: ERROR only if there is a tie at the HIGHEST priority
+                if (!priorities.isEmpty()) {
+                    // Group by priority value
                     Map<Integer, List<Bean<?>>> byPriority = new HashMap<>();
                     for (Map.Entry<Bean<?>, Integer> e : priorities.entrySet()) {
                         byPriority.computeIfAbsent(e.getValue(), k -> new ArrayList<>()).add(e.getKey());
                     }
+                    // Highest priority value
+                    int max = byPriority.keySet().stream().max(Integer::compareTo).orElse(Integer.MIN_VALUE);
+                    List<Bean<?>> top = byPriority.get(max);
+                    if (top != null && top.size() > 1) {
+                        String samePriorityList = top.stream()
+                                .map(b -> b.getBeanClass().getName())
+                                .collect(Collectors.joining(", "));
 
-                    // Check for multiple alternatives with the same priority
-                    for (Map.Entry<Integer, List<Bean<?>>> e : byPriority.entrySet()) {
-                        if (e.getValue().size() > 1) {
-                            String samePriorityList = e.getValue().stream()
-                                    .map(b -> b.getBeanClass().getName())
-                                    .collect(Collectors.joining(", "));
-
-                            knowledgeBase.addError(
-                                    "Ambiguous alternatives for type " + formatType(type) +
-                                    ": [" + samePriorityList + "] all have the same priority @Priority(" + e.getKey() + "). " +
-                                    "Alternatives must have different priority values to resolve ambiguity."
-                            );
-                            allValid = false;
-                        }
+                        knowledgeBase.addError(
+                                "Ambiguous alternatives for type " + formatType(type) +
+                                ": [" + samePriorityList + "] all have the same (highest) priority @Priority(" + max + "). " +
+                                "Alternatives must have different priority values to resolve ambiguity."
+                        );
+                        allValid = false;
                     }
                 }
 
