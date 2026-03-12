@@ -9,6 +9,9 @@ import jakarta.enterprise.inject.spi.Producer;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.Set;
+import java.util.Map;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 
 /**
  * Implementation of Bean for programmatically created producer beans.
@@ -29,6 +32,8 @@ public class SyntheticProducerBeanImpl<T> implements Bean<T> {
     private final BeanAttributes<T> attributes;
     private final Class<?> beanClass;
     private final Producer<T> producer;
+    private final Map<T, CreationalContext<T>> ctxByInstance =
+            Collections.synchronizedMap(new IdentityHashMap<>());
 
     /**
      * Creates a synthetic producer bean from attributes, class, and producer.
@@ -45,14 +50,28 @@ public class SyntheticProducerBeanImpl<T> implements Bean<T> {
 
     @Override
     public T create(CreationalContext<T> creationalContext) {
+        if (creationalContext == null) {
+            throw new IllegalArgumentException("CreationalContext must not be null");
+        }
         // Use Producer to create the instance
-        return producer.produce(creationalContext);
+        T instance = producer.produce(creationalContext);
+        if (instance != null) { // null instances are allowed; nothing to track
+            ctxByInstance.put(instance, creationalContext);
+        }
+        return instance;
     }
 
     @Override
     public void destroy(T instance, CreationalContext<T> creationalContext) {
         producer.dispose(instance);
-        creationalContext.release();
+        CreationalContext<T> ctx = creationalContext != null
+                ? creationalContext
+                : ctxByInstance.remove(instance);
+        ctxByInstance.remove(instance);
+        if (ctx == null) {
+            throw new IllegalStateException("No CreationalContext available to destroy instance of " + beanClass.getName());
+        }
+        ctx.release();
     }
 
     @Override

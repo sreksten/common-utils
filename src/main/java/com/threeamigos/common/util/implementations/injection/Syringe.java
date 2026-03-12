@@ -1431,19 +1431,6 @@ public class Syringe {
             }
         }
 
-        // Destroy @Dependent beans that were created outside normal contexts (edge cases)
-        for (Bean<?> bean : knowledgeBase.getBeans()) {
-            //fixme potrebbe essere javax.
-            if (bean.getScope() == null || bean.getScope().getName().equals(Dependent.class.getName())) {
-                try {
-                    // Dependent beans aren't stored in contexts; nothing to release beyond CreationalContext
-                    // but if a bean holds resources, call destroy() with null ctx (BeanImpl handles @PreDestroy)
-                    bean.destroy(null, null);
-                } catch (Exception e) {
-                    log("Error destroying dependent bean " + bean.getBeanClass().getName(), e);
-                }
-            }
-        }
     }
 
     // ============================================================
