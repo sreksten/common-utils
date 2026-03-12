@@ -2033,7 +2033,7 @@ public class CDI41BeanValidator {
      * CDI spec: must have signature Object method(InvocationContext) throws Exception
      */
     private Method findAroundInvokeMethod(Class<?> clazz) {
-        for (Method method : clazz.getDeclaredMethods()) {
+        for (Method method : getAllMethods(clazz)) {
             if (method.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
                 return method;
             }
@@ -2046,7 +2046,7 @@ public class CDI41BeanValidator {
      * CDI spec: must have signature void method(InvocationContext) throws Exception
      */
     private Method findAroundConstructMethod(Class<?> clazz) {
-        for (Method method : clazz.getDeclaredMethods()) {
+        for (Method method : getAllMethods(clazz)) {
             if (method.isAnnotationPresent(jakarta.interceptor.AroundConstruct.class)) {
                 return method;
             }
@@ -2058,7 +2058,7 @@ public class CDI41BeanValidator {
      * Finds the @PostConstruct method in the interceptor class (lifecycle callback).
      */
     private Method findPostConstructMethod(Class<?> clazz) {
-        for (Method method : clazz.getDeclaredMethods()) {
+        for (Method method : getAllMethods(clazz)) {
             if (method.isAnnotationPresent(PostConstruct.class)) {
                 return method;
             }
@@ -2070,12 +2070,25 @@ public class CDI41BeanValidator {
      * Finds the @PreDestroy method in the interceptor class (lifecycle callback).
      */
     private Method findPreDestroyMethod(Class<?> clazz) {
-        for (Method method : clazz.getDeclaredMethods()) {
+        for (Method method : getAllMethods(clazz)) {
             if (method.isAnnotationPresent(PreDestroy.class)) {
                 return method;
             }
         }
         return null;
+    }
+
+    /**
+     * Returns all declared methods in the class hierarchy, stopping at Object.
+     */
+    private List<Method> getAllMethods(Class<?> clazz) {
+        List<Method> methods = new ArrayList<>();
+        Class<?> current = clazz;
+        while (current != null && current != Object.class) {
+            Collections.addAll(methods, current.getDeclaredMethods());
+            current = current.getSuperclass();
+        }
+        return methods;
     }
 
     // -----------------------
