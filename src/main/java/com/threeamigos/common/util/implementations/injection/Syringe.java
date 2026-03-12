@@ -2,6 +2,9 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.builtinbeans.BeanManagerBean;
+import com.threeamigos.common.util.implementations.injection.builtinbeans.ConversationBean;
+import com.threeamigos.common.util.implementations.injection.builtinbeans.InjectionPointBean;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.discovery.*;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -23,6 +26,8 @@ import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
+import jakarta.enterprise.inject.AmbiguousResolutionException;
+import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
@@ -279,6 +284,9 @@ public class Syringe {
         // Step 1.2: Create BeanManager
         beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
 
+        // Register CDI built-in beans before any processing/validation
+        registerBuiltInBeans();
+
         // Step 2.1: Fire BeforeBeanDiscovery event
         // Extensions can:
         // - Add new qualifiers, scopes, stereotypes, interceptor bindings
@@ -304,6 +312,15 @@ public class Syringe {
             throw new IllegalStateException("Container not yet initialized. Call initialize() first.");
         }
         knowledgeBase.add(clazz);
+    }
+
+    /**
+     * Registers CDI built-in beans required by the spec.
+     */
+    private void registerBuiltInBeans() {
+        knowledgeBase.addBean(new BeanManagerBean(beanManager));
+        knowledgeBase.addBean(new InjectionPointBean());
+        knowledgeBase.addBean(new ConversationBean());
     }
 
     /**
@@ -1588,6 +1605,28 @@ public class Syringe {
             throw new IllegalStateException("Container not initialized. Call setup() first.");
         }
         return beanManager;
+    }
+
+    /**
+     * Programmatically get an injected instance of the given bean class.
+     * Uses default qualifiers unless explicit qualifiers are provided.
+     */
+    public <T> T inject(Class<T> beanClass, Annotation... qualifiers) {
+        if (!initialized) {
+            throw new IllegalStateException("Container not initialized. Call setup() first.");
+        }
+        BeanManager bm = getBeanManager();
+        Set<Bean<?>> beans = (qualifiers != null && qualifiers.length > 0)
+                ? bm.getBeans(beanClass, qualifiers)
+                : bm.getBeans(beanClass);
+        if (beans == null || beans.isEmpty()) {
+            throw new UnsatisfiedResolutionException("No bean found for type " + beanClass.getName());
+        }
+        Bean<?> bean = bm.resolve(beans); // may throw AmbiguousResolutionException
+        CreationalContext<?> ctx = bm.createCreationalContext(bean);
+        @SuppressWarnings("unchecked")
+        T instance = (T) bm.getReference(bean, beanClass, ctx);
+        return instance;
     }
 
     /**

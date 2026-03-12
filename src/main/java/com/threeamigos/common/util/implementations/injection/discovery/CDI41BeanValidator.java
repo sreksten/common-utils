@@ -1995,8 +1995,10 @@ public class CDI41BeanValidator {
     }
 
     private boolean isValidAroundConstruct(Method m) {
+        // TCK uses void-returning @AroundConstruct in AbstractInterceptor; allow both Object and void
+        boolean returnOk = m.getReturnType().equals(Object.class) || m.getReturnType().equals(void.class);
         return !Modifier.isStatic(m.getModifiers())
-                && m.getReturnType().equals(Object.class)
+                && returnOk
                 && m.getParameterCount() == 1
                 && jakarta.interceptor.InvocationContext.class.isAssignableFrom(m.getParameterTypes()[0]);
     }
