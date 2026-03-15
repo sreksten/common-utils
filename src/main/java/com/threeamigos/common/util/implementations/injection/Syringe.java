@@ -145,6 +145,14 @@ public class Syringe {
         this.packageNames = packageNames != null ? packageNames : new String[0];
     }
 
+    public Syringe(MessageHandler messageHandler, Class<?>... classes) {
+        this.messageHandler = messageHandler;
+        this.packageNames = new String[classes.length];
+        for (int i = 0; i < classes.length; i++) {
+            this.packageNames[i] = classes[i].getPackage().getName();
+        }
+    }
+
     /**
      * Registers a portable extension by class name.
      * Extensions will be loaded and initialized during {@link #setup()}.
@@ -1634,6 +1642,10 @@ public class Syringe {
             throw new IllegalStateException("Container not initialized. Call setup() first.");
         }
         return new com.threeamigos.common.util.implementations.injection.spi.CDIImpl(beanManager);
+    }
+
+    public KnowledgeBase getKnowledgeBase() {
+        return knowledgeBase;
     }
 
     private void info(String message) {

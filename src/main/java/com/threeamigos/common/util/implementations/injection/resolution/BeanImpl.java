@@ -21,7 +21,49 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * CDI 4.1 - 2 - A <i>bean</i> is a source of contextual objects that define application state and/or logic.
+ * These objects are called <i>contextual instances</i> of the bean. The container creates and destroys these instances
+ * and associates them with the appropriate context. Contextual instances of a bean may be injected into other objects
+ * (including other bean instances) that execute in the same context. A bean may bear metadata defining its lifecycle
+ * and interactions with other beans.
+ * <p>A bean comprises the following attributes:
+ * <ul>
+ * <li>A (nonempty) set of bean types</li>
+ * <li>A (nonempty) set of qualifiers</li>
+ * <li>A scope</li>
+ * <li>Optionally, a bean name</li>
+ * <li>A set of interceptor bindings</li>
+ * <li>A bean implementation</li>
+ * </ul>
+ * Furthermore, a bean may or may not be an alternative.
+ * @param <T> type of the bean
+ */
 public class BeanImpl<T> implements Bean<T> {
+
+    /**
+     * CDI 4.1 - 2.2 - A bean type defines a client-visible type of the bean. A bean may have multiple bean types.
+     * All beans have the bean type java.lang.Object. Almost any Java type may be a bean type of a bean:
+     * <ul>
+     * <li>A bean type may be an interface, a concrete class or an abstract class, may be declared sealed or
+     * non-sealed or final, and may have final methods.</li>
+     * <li>A bean type may be a parameterized type with actual type parameters and type variables.</li>
+     * <li>A bean type may be an array type. Two array types are considered identical only if the element
+     * type is identical</li>
+     * <li>A bean type may be a primitive type. Primitive types are considered to be identical to their
+     * corresponding wrapper types in java.lang.</li>
+     * <li>A bean type may be a raw type.</li>
+     * </ul>
+     * However, some Java types are not legal bean types:
+     * <ul>
+     * <li>A type variable is not a legal bean type.</li>
+     * <li>A parameterized type that contains a wildcard type parameter is not a legal bean type.</li>
+     * <li>An array type whose component type is not a legal bean type.</li>
+     * </ul>
+     * Note that certain additional restrictions are specified in Unproxyable bean types for beans with a
+     * normal scope as per 3.10.
+     */
+    private final Set<Type> types = new HashSet<>();
 
     // Bean
     private final Class<T> beanClass;
@@ -32,7 +74,6 @@ public class BeanImpl<T> implements Bean<T> {
     private final Set<Annotation> qualifiers = new HashSet<>();
     private Class<? extends Annotation> scope;
     private final Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
-    private final Set<Type> types = new HashSet<>();
     private final boolean alternative;
 
     // Validation state
