@@ -14,6 +14,7 @@ import com.threeamigos.common.util.implementations.injection.spi.spievents.Simpl
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
 import jakarta.el.ELResolver;
 import jakarta.el.ExpressionFactory;
@@ -1443,7 +1444,7 @@ public class BeanManagerImpl implements BeanManager {
         Set<Annotation> qualifiers = extractQualifiersFromAnnotated(type);
         Class<? extends Annotation> scope = extractScopeFromAnnotated(type);
         Set<Class<? extends Annotation>> stereotypes = extractStereotypesFromAnnotated(type);
-        Set<Type> types = extractTypesFromClass(type.getJavaClass());
+        Set<Type> types = TypeClosureHelper.extractTypesFromClass(type.getJavaClass());
         boolean alternative = type.isAnnotationPresent(jakarta.enterprise.inject.Alternative.class);
 
         return new BeanAttributesImpl<>(name, qualifiers, scope, stereotypes, types, alternative);
@@ -1899,21 +1900,6 @@ public class BeanManagerImpl implements BeanManager {
             }
         }
         return stereotypes;
-    }
-
-    /**
-     * Extracts bean types from a class.
-     */
-    private Set<Type> extractTypesFromClass(Class<?> clazz) {
-        Set<Type> types = new LinkedHashSet<>();
-        Class<?> c = clazz;
-        while (c != null && c != Object.class) {
-            types.add(c);
-            types.addAll(Arrays.asList(c.getGenericInterfaces()));
-            c = c.getSuperclass();
-        }
-        types.add(Object.class);
-        return types;
     }
 
     /**

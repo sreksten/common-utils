@@ -53,10 +53,12 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
 public class CDI41BeanValidator {
 
     private final KnowledgeBase knowledgeBase;
+    private final BeanTypesExtractor beanTypesExtractor;
     private Annotation[] overrideAnnotations;
 
     public CDI41BeanValidator(KnowledgeBase knowledgeBase) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
+        this.beanTypesExtractor = new BeanTypesExtractor();
     }
 
     /**
@@ -262,9 +264,12 @@ public class CDI41BeanValidator {
         bean.setQualifiers(extractBeanQualifiers(clazz));
         bean.setScope(extractBeanScope(clazz, beanScope));
 
-        Set<Type> beanTypes = extractBeanTypes(clazz);
-        removeIllegalBeanTypes(beanTypes, clazz, "bean class");
-        bean.setTypes(beanTypes);
+        BeanTypesExtractor.ExtractionResult managedBeanTypes = beanTypesExtractor.extractManagedBeanTypes(clazz);
+        for (String error : managedBeanTypes.getDefinitionErrors()) {
+            addValidationError(clazz, error);
+            valid = false;
+        }
+        bean.setTypes(managedBeanTypes.getTypes());
 
         bean.setStereotypes(extractBeanStereotypes(clazz));
 
@@ -421,61 +426,6 @@ public class CDI41BeanValidator {
 
         // Default scope for managed beans is @Dependent.
         return Dependent.class;
-    }
-
-    private Set<Type> extractBeanTypes(Class<?> clazz) {
-        // CDI 4.1 Section 2.2 - Bean types
-        // Check for @Typed annotation which restricts the bean types
-        // Using AnnotationsEnum for javax/jakarta compatibility
-        if (hasTypedAnnotation(clazz)) {
-            Annotation typedAnnotation = getTypedAnnotation(clazz);
-            if (typedAnnotation != null) {
-                // @Typed present: Use only the types specified in the annotation
-                Set<Type> types = new LinkedHashSet<>();
-
-                try {
-                    // Use reflection to extract value() from the annotation (works with both javax and jakarta)
-                    Method valueMethod = typedAnnotation.getClass().getMethod("value");
-                    Class<?>[] typedClasses = (Class<?>[]) valueMethod.invoke(typedAnnotation);
-
-                    if (typedClasses.length == 0) {
-                        // @Typed with empty value means only Object.class
-                        types.add(Object.class);
-                    } else {
-                        // Add all types specified in @Typed
-                        for (Class<?> typedClass : typedClasses) {
-                            // Validate that the bean class is assignable to the typed class
-                            if (!typedClass.isAssignableFrom(clazz)) {
-                                addValidationError(clazz,
-                                    "@Typed specifies type " + typedClass.getName() +
-                                    " which is not a type of bean class " + clazz.getName());
-                                continue;
-                            }
-                            types.add(typedClass);
-                        }
-                        // Object.class is always present per CDI 4.1 spec
-                        types.add(Object.class);
-                    }
-                    return types;
-                } catch (ReflectiveOperationException e) {
-                    // If reflection fails, fall through to default behavior
-                    knowledgeBase.addDefinitionError(clazz.getName() +
-                        ": Failed to extract @Typed annotation values: " + e.getMessage());
-                }
-            }
-        }
-
-        // No @Typed annotation: Conservative "bean types" computation
-        // Include class, all superclasses (up to Object), and all directly implemented interfaces across the hierarchy.
-        Set<Type> types = new LinkedHashSet<>();
-        Class<?> c = clazz;
-        while (c != null && c != Object.class) {
-            types.add(c);
-            types.addAll(Arrays.asList(c.getGenericInterfaces()));
-            c = c.getSuperclass();
-        }
-        types.add(Object.class);
-        return types;
     }
 
     private Set<Class<? extends Annotation>> extractBeanStereotypes(Class<?> clazz) {
@@ -1357,9 +1307,12 @@ public class CDI41BeanValidator {
             producerBean.setQualifiers(extractQualifiers(producerMethod));
             producerBean.setScope(extractScope(producerMethod, Dependent.class));
 
-            Set<Type> producerTypes = extractProducerTypes(producerMethod.getGenericReturnType());
-            removeIllegalBeanTypes(producerTypes, producerMethod, "producer method");
-            producerBean.setTypes(producerTypes);
+            BeanTypesExtractor.ExtractionResult producerTypes =
+                    beanTypesExtractor.extractProducerBeanTypes(producerMethod.getGenericReturnType());
+            for (String error : producerTypes.getDefinitionErrors()) {
+                knowledgeBase.addDefinitionError(fmtMethod(producerMethod) + ": " + error);
+            }
+            producerBean.setTypes(producerTypes.getTypes());
 
             // CDI 4.1 Section 3.10: Add InjectionPoint metadata for producer method parameters
             // Producer method parameters are injection points and should have InjectionPoint metadata
@@ -1380,9 +1333,12 @@ public class CDI41BeanValidator {
             producerBean.setQualifiers(extractQualifiers(producerField));
             producerBean.setScope(extractScope(producerField, Dependent.class));
 
-            Set<Type> producerTypes = extractProducerTypes(producerField.getGenericType());
-            removeIllegalBeanTypes(producerTypes, producerField, "producer field");
-            producerBean.setTypes(producerTypes);
+            BeanTypesExtractor.ExtractionResult producerTypes =
+                    beanTypesExtractor.extractProducerBeanTypes(producerField.getGenericType());
+            for (String error : producerTypes.getDefinitionErrors()) {
+                knowledgeBase.addDefinitionError(fmtField(producerField) + ": " + error);
+            }
+            producerBean.setTypes(producerTypes.getTypes());
         } else {
             throw new IllegalArgumentException("Either producerMethod or producerField must be non-null");
         }
@@ -1468,144 +1424,6 @@ public class CDI41BeanValidator {
             }
         }
         return defaultScope;
-    }
-
-    /**
-     * Extracts bean types for a producer (its return/field type and supertypes).
-     * <p>
-     * According to CDI 4.1 Section 3.3 - Bean types of a producer method/field:
-     * <ul>
-     *   <li>The producer type itself (with its parameterization, if any)</li>
-     *   <li>All supertypes and superinterfaces of the raw type</li>
-     *   <li>Object.class</li>
-     *   <li>Wildcards in parameterized types are preserved for typesafe resolution</li>
-     * </ul>
-     * <p>
-     * <b>CDI 4.1 Wildcard Handling:</b>
-     * When a producer method returns a parameterized type containing wildcards
-     * (e.g., {@code List<? extends Number>}), the wildcard is part of the bean type.
-     * During typesafe resolution:
-     * <ul>
-     *   <li>{@code List<? extends Number>} can satisfy injection point {@code List<Integer>}
-     *       if Integer extends Number</li>
-     *   <li>{@code List<?>} (unbounded) can satisfy any {@code List<T>} injection point</li>
-     *   <li>Resolution follows Java's wildcard subtyping rules</li>
-     * </ul>
-     *
-     * @param producerType the type returned by producer method or field
-     * @return set of bean types for this producer
-     */
-    private Set<Type> extractProducerTypes(Type producerType) {
-        // Build full bean types per CDI: raw type, all superclasses, all interfaces
-        Set<Type> types = new LinkedHashSet<>();
-
-        // Add the declared generic type itself first (keeps parameterization including wildcards)
-        // This is crucial: List<? extends Number> must be in the bean types with its wildcard
-        types.add(producerType);
-
-        // Add raw type hierarchy (superclasses and interfaces)
-        Class<?> c = RawTypeExtractor.getRawType(producerType);
-        while (c != null && c != Object.class) {
-            types.add(c);
-            // Add all interfaces implemented by this class (raw types)
-            types.addAll(Arrays.asList(c.getGenericInterfaces()));
-            c = c.getSuperclass();
-        }
-
-        // Always include Object.class as per CDI spec
-        types.add(Object.class);
-
-        return types;
-    }
-
-    /**
-     * Removes bean types that are not legal according to CDI 4.1 §2.2.1.
-     * Adds definition errors for each offending type.
-     *
-     * @param types   mutable set of bean types (will be pruned)
-     * @param source  originating element (class/producer member) for error messages
-     * @param context textual context for clearer diagnostics
-     * @return true if any illegal types were removed
-     */
-    private boolean removeIllegalBeanTypes(Set<Type> types, AnnotatedElement source, String context) {
-        Class<?> sourceClass = (source instanceof Class) ? (Class<?>) source
-                : (source instanceof Field) ? ((Field) source).getDeclaringClass()
-                : (source instanceof Method) ? ((Method) source).getDeclaringClass()
-                : null;
-
-        boolean removed = false;
-        Iterator<Type> it = types.iterator();
-        while (it.hasNext()) {
-            Type t = it.next();
-            if (!isLegalBeanType(t)) {
-                removed = true;
-                it.remove();
-            }
-        }
-        return removed;
-    }
-
-    private boolean isLegalBeanType(Type type) {
-        if (type instanceof TypeVariable) {
-            return false; // type variables are illegal bean types
-        }
-        if (type instanceof WildcardType) {
-            return false; // any wildcard in bean type makes it illegal
-        }
-        if (type instanceof GenericArrayType) {
-            GenericArrayType gat = (GenericArrayType) type;
-            return isLegalArrayComponent(gat.getGenericComponentType());
-        }
-        if (type instanceof Class) {
-            Class<?> cls = (Class<?>) type;
-            if (cls.isArray()) {
-                return isLegalArrayComponent(cls.getComponentType());
-            }
-            return true; // primitives, raw types, concrete/abstract classes, interfaces are all legal
-        }
-        if (type instanceof ParameterizedType) {
-            ParameterizedType pt = (ParameterizedType) type;
-            for (Type arg : pt.getActualTypeArguments()) {
-                if (arg instanceof WildcardType) {
-                    return false; // wildcard actual type parameter is illegal
-                }
-                if (arg instanceof GenericArrayType) {
-                    if (!isLegalArrayComponent(((GenericArrayType) arg).getGenericComponentType())) {
-                        return false;
-                    }
-                    continue;
-                }
-                if (arg instanceof Class && ((Class<?>) arg).isArray()) {
-                    if (!isLegalArrayComponent(((Class<?>) arg).getComponentType())) {
-                        return false;
-                    }
-                    continue;
-                }
-                if (arg instanceof ParameterizedType) {
-                    if (!isLegalBeanType(arg)) {
-                        return false;
-                    }
-                }
-                // TypeVariable as an actual type argument is allowed by spec
-                if (arg instanceof TypeVariable) {
-                    continue;
-                }
-                if (!(arg instanceof Class || arg instanceof ParameterizedType || arg instanceof TypeVariable)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        // Fallback: treat unknown Type implementations as illegal to be safe
-        return false;
-    }
-
-    private boolean isLegalArrayComponent(Type component) {
-        return isLegalBeanType(component);
-    }
-
-    private String describeType(Type t) {
-        return t.getTypeName();
     }
 
     /**
