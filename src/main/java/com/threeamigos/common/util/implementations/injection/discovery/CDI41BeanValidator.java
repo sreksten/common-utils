@@ -261,7 +261,11 @@ public class CDI41BeanValidator {
         bean.setName(extractBeanName(clazz));
         bean.setQualifiers(extractBeanQualifiers(clazz));
         bean.setScope(extractBeanScope(clazz, beanScope));
-        bean.setTypes(extractBeanTypes(clazz));
+
+        Set<Type> beanTypes = extractBeanTypes(clazz);
+        removeIllegalBeanTypes(beanTypes, clazz, "bean class");
+        bean.setTypes(beanTypes);
+
         bean.setStereotypes(extractBeanStereotypes(clazz));
 
         // Populate injection metadata for bean creation
@@ -1352,7 +1356,10 @@ public class CDI41BeanValidator {
             producerBean.setName(extractProducerName(producerMethod));
             producerBean.setQualifiers(extractQualifiers(producerMethod));
             producerBean.setScope(extractScope(producerMethod, Dependent.class));
-            producerBean.setTypes(extractProducerTypes(producerMethod.getGenericReturnType()));
+
+            Set<Type> producerTypes = extractProducerTypes(producerMethod.getGenericReturnType());
+            removeIllegalBeanTypes(producerTypes, producerMethod, "producer method");
+            producerBean.setTypes(producerTypes);
 
             // CDI 4.1 Section 3.10: Add InjectionPoint metadata for producer method parameters
             // Producer method parameters are injection points and should have InjectionPoint metadata
@@ -1372,7 +1379,10 @@ public class CDI41BeanValidator {
             producerBean.setName(extractProducerName(producerField));
             producerBean.setQualifiers(extractQualifiers(producerField));
             producerBean.setScope(extractScope(producerField, Dependent.class));
-            producerBean.setTypes(extractProducerTypes(producerField.getGenericType()));
+
+            Set<Type> producerTypes = extractProducerTypes(producerField.getGenericType());
+            removeIllegalBeanTypes(producerTypes, producerField, "producer field");
+            producerBean.setTypes(producerTypes);
         } else {
             throw new IllegalArgumentException("Either producerMethod or producerField must be non-null");
         }
@@ -1506,6 +1516,96 @@ public class CDI41BeanValidator {
         types.add(Object.class);
 
         return types;
+    }
+
+    /**
+     * Removes bean types that are not legal according to CDI 4.1 §2.2.1.
+     * Adds definition errors for each offending type.
+     *
+     * @param types   mutable set of bean types (will be pruned)
+     * @param source  originating element (class/producer member) for error messages
+     * @param context textual context for clearer diagnostics
+     * @return true if any illegal types were removed
+     */
+    private boolean removeIllegalBeanTypes(Set<Type> types, AnnotatedElement source, String context) {
+        Class<?> sourceClass = (source instanceof Class) ? (Class<?>) source
+                : (source instanceof Field) ? ((Field) source).getDeclaringClass()
+                : (source instanceof Method) ? ((Method) source).getDeclaringClass()
+                : null;
+
+        boolean removed = false;
+        Iterator<Type> it = types.iterator();
+        while (it.hasNext()) {
+            Type t = it.next();
+            if (!isLegalBeanType(t)) {
+                removed = true;
+                it.remove();
+            }
+        }
+        return removed;
+    }
+
+    private boolean isLegalBeanType(Type type) {
+        if (type instanceof TypeVariable) {
+            return false; // type variables are illegal bean types
+        }
+        if (type instanceof WildcardType) {
+            return false; // any wildcard in bean type makes it illegal
+        }
+        if (type instanceof GenericArrayType) {
+            GenericArrayType gat = (GenericArrayType) type;
+            return isLegalArrayComponent(gat.getGenericComponentType());
+        }
+        if (type instanceof Class) {
+            Class<?> cls = (Class<?>) type;
+            if (cls.isArray()) {
+                return isLegalArrayComponent(cls.getComponentType());
+            }
+            return true; // primitives, raw types, concrete/abstract classes, interfaces are all legal
+        }
+        if (type instanceof ParameterizedType) {
+            ParameterizedType pt = (ParameterizedType) type;
+            for (Type arg : pt.getActualTypeArguments()) {
+                if (arg instanceof WildcardType) {
+                    return false; // wildcard actual type parameter is illegal
+                }
+                if (arg instanceof GenericArrayType) {
+                    if (!isLegalArrayComponent(((GenericArrayType) arg).getGenericComponentType())) {
+                        return false;
+                    }
+                    continue;
+                }
+                if (arg instanceof Class && ((Class<?>) arg).isArray()) {
+                    if (!isLegalArrayComponent(((Class<?>) arg).getComponentType())) {
+                        return false;
+                    }
+                    continue;
+                }
+                if (arg instanceof ParameterizedType) {
+                    if (!isLegalBeanType(arg)) {
+                        return false;
+                    }
+                }
+                // TypeVariable as an actual type argument is allowed by spec
+                if (arg instanceof TypeVariable) {
+                    continue;
+                }
+                if (!(arg instanceof Class || arg instanceof ParameterizedType || arg instanceof TypeVariable)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        // Fallback: treat unknown Type implementations as illegal to be safe
+        return false;
+    }
+
+    private boolean isLegalArrayComponent(Type component) {
+        return isLegalBeanType(component);
+    }
+
+    private String describeType(Type t) {
+        return t.getTypeName();
     }
 
     /**

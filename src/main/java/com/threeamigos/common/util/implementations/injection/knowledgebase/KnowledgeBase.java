@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 public class KnowledgeBase {
 
     private final MessageHandler messageHandler;
+    private final Set<Class<?>> excludedClasses = new HashSet<>();
 
     // Use Set to prevent duplicate class registrations
     private final Set<Class<?>> classes = ConcurrentHashMap.newKeySet();
@@ -89,14 +90,26 @@ public class KnowledgeBase {
         this.messageHandler = messageHandler;
     }
 
+    public void exclude(Class<?>... excludedClasses) {
+        this.excludedClasses.addAll(Arrays.asList(excludedClasses));
+    }
+
+    public Collection<Class<?>> getExcludedClasses() {
+        return excludedClasses;
+    }
+
     public void add(Class<?> clazz) {
-        classes.add(clazz);
+        if (!excludedClasses.contains(clazz)) {
+            classes.add(clazz);
+        }
     }
 
     public void add(Class<?> clazz, BeanArchiveMode mode) {
-        classes.add(clazz);
-        if (mode != null) {
-            classArchiveModes.put(clazz, mode);
+        if (!excludedClasses.contains(clazz)) {
+            classes.add(clazz);
+            if (mode != null) {
+                classArchiveModes.put(clazz, mode);
+            }
         }
     }
 

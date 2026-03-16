@@ -60,6 +60,13 @@ public class BeanImpl<T> implements Bean<T> {
      * <li>A parameterized type that contains a wildcard type parameter is not a legal bean type.</li>
      * <li>An array type whose component type is not a legal bean type.</li>
      * </ul>
+     * CDI 4.1 - 3.1.2 - Bean types of a managed bean:
+     * <ul>
+     * <li>The unrestricted set of bean types for a managed bean contains the bean class, every superclass
+     * and all interfaces it implements directly or indirectly.</li>
+     * <li>The resulting set of bean types for a managed bean consists only of legal bean types, all other types
+     * are removed from the set of bean types.</li>
+     * </ul>
      * Note that certain additional restrictions are specified in Unproxyable bean types for beans with a
      * normal scope as per 3.10.
      */

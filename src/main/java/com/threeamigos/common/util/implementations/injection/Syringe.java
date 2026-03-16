@@ -93,6 +93,21 @@ public class Syringe {
     private final MessageHandler messageHandler;
 
     /**
+     * Package names to scan for beans.
+     */
+    private final String[] packageNames;
+
+    /**
+     * Knowledge base containing all discovered beans, interceptors, decorators, observers.
+     */
+    private final KnowledgeBase knowledgeBase;
+
+    /**
+     * The ContextManager, responsible for handling Scopes
+     */
+    private final ContextManager contextManager;
+
+    /**
      * Set of extension class names to be loaded.
      * Extensions must implement jakarta.enterprise.inject.spi.Extension.
      */
@@ -109,21 +124,6 @@ public class Syringe {
     private BeanManagerImpl beanManager;
 
     /**
-     * Knowledge base containing all discovered beans, interceptors, decorators, observers.
-     */
-    private KnowledgeBase knowledgeBase;
-
-    /**
-     * The ContextManager, responsible for handling Scopes
-     */
-    private ContextManager contextManager;
-
-    /**
-     * Package names to scan for beans.
-     */
-    private final String[] packageNames;
-
-    /**
      * Whether the container has been initialized.
      */
     private boolean initialized = false;
@@ -138,11 +138,15 @@ public class Syringe {
     public Syringe() {
         this.messageHandler = new ConsoleMessageHandler();
         this.packageNames = new String[0];
+        knowledgeBase = new KnowledgeBase(messageHandler);
+        contextManager = new ContextManager(messageHandler);
     }
 
     public Syringe(String... packageNames) {
         this.messageHandler = new ConsoleMessageHandler();
         this.packageNames = packageNames != null ? packageNames : new String[0];
+        knowledgeBase = new KnowledgeBase(messageHandler);
+        contextManager = new ContextManager(messageHandler);
     }
 
     public Syringe(MessageHandler messageHandler, Class<?>... classes) {
@@ -151,6 +155,18 @@ public class Syringe {
         for (int i = 0; i < classes.length; i++) {
             this.packageNames[i] = classes[i].getPackage().getName();
         }
+        knowledgeBase = new KnowledgeBase(messageHandler);
+        contextManager = new ContextManager(messageHandler);
+    }
+
+    /**
+     * Manually exclude one or more classes from scanning.
+     * This is useful for excluding classes that are known to be problematic (e.g., when running tests) or unnecessary.
+     *
+     * @param classes the classes to exclude
+     */
+    public void exclude(Class<?> ... classes) {
+        knowledgeBase.exclude(classes);
     }
 
     /**
@@ -283,9 +299,6 @@ public class Syringe {
         // ============================================================
         info("Phase 1: Container Initialization");
 
-        knowledgeBase = new KnowledgeBase(messageHandler);
-        contextManager = new ContextManager(messageHandler);
-
         // Step 1.1: Load portable extensions via ServiceLoader + explicitly registered
         loadExtensions();
 
@@ -300,6 +313,48 @@ public class Syringe {
         // - Add new qualifiers, scopes, stereotypes, interceptor bindings
         // - Register additional beans programmatically
         fireBeforeBeanDiscovery();
+    }
+
+    /**
+     * Performs bean discovery by scanning the classpath.
+     *
+     * <p>Steps:
+     * <ol>
+     *   <li>Use ParallelClasspathScanner to find all classes in specified packages</li>
+     *   <li>Use BeanArchiveDetector to determine EXPLICIT/IMPLICIT mode per archive</li>
+     *   <li>Collect AnnotatedType<?> for each discovered class</li>
+     * </ol>
+     */
+    private void discoverBeans() {
+        // Step 2.2: Perform bean discovery (classpath scanning)
+        // - Scan for classes in specified packages
+        // - Detect bean archives (explicit/implicit via beans.xml)
+        // - Discover annotated types
+        info("Discovering beans in packages: " + Arrays.toString(packageNames));
+
+        ParallelClasspathScanner scanner;
+        try (ParallelTaskExecutor parallelTaskExecutor = ParallelTaskExecutor.createExecutor()) {
+            ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase);
+            scanner = new ParallelClasspathScanner(
+                    Thread.currentThread().getContextClassLoader(),
+                    classProcessor,
+                    knowledgeBase,
+                    packageNames
+            );
+            parallelTaskExecutor.awaitCompletion();
+        } catch (Exception e) {
+            throw new DeploymentException("Bean discovery failed", e);
+        }
+
+        info("Discovered " + knowledgeBase.getClasses().size() + " classes");
+
+        // Collect beans.xml configurations from all scanned archives
+        for (BeansXml beansXml : scanner.getBeansXmlConfigurations()) {
+            knowledgeBase.addBeansXml(beansXml);
+        }
+
+        // Process registered AnnotatedTypes (added programmatically via BeforeBeanDiscovery)
+        processRegisteredAnnotatedTypes();
     }
 
     /**
@@ -438,6 +493,8 @@ public class Syringe {
             initialized = true;
             info("Container initialization complete");
 
+        } catch (DefinitionException e) {
+            throw e;
         } catch (Exception e) {
             throw new DeploymentException("Container initialization failed", e);
         }
@@ -543,48 +600,6 @@ public class Syringe {
         info("Firing BeforeBeanDiscovery event");
         BeforeBeanDiscovery event = new BeforeBeanDiscoveryImpl(messageHandler, knowledgeBase, beanManager);
         fireEventToExtensions(event);
-    }
-
-    /**
-     * Performs bean discovery by scanning the classpath.
-     *
-     * <p>Steps:
-     * <ol>
-     *   <li>Use ParallelClasspathScanner to find all classes in specified packages</li>
-     *   <li>Use BeanArchiveDetector to determine EXPLICIT/IMPLICIT mode per archive</li>
-     *   <li>Collect AnnotatedType<?> for each discovered class</li>
-     * </ol>
-     */
-    private void discoverBeans() {
-        // Step 2.2: Perform bean discovery (classpath scanning)
-        // - Scan for classes in specified packages
-        // - Detect bean archives (explicit/implicit via beans.xml)
-        // - Discover annotated types
-        info("Discovering beans in packages: " + Arrays.toString(packageNames));
-
-        ParallelClasspathScanner scanner;
-        try (ParallelTaskExecutor parallelTaskExecutor = ParallelTaskExecutor.createExecutor()) {
-            ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase);
-            scanner = new ParallelClasspathScanner(
-                    Thread.currentThread().getContextClassLoader(),
-                    classProcessor,
-                    knowledgeBase,
-                    packageNames
-            );
-            parallelTaskExecutor.awaitCompletion();
-        } catch (Exception e) {
-            throw new DeploymentException("Bean discovery failed", e);
-        }
-
-        info("Discovered " + knowledgeBase.getClasses().size() + " classes");
-
-        // Collect beans.xml configurations from all scanned archives
-        for (BeansXml beansXml : scanner.getBeansXmlConfigurations()) {
-            knowledgeBase.addBeansXml(beansXml);
-        }
-
-        // Process registered AnnotatedTypes (added programmatically via BeforeBeanDiscovery)
-        processRegisteredAnnotatedTypes();
     }
 
     /**
@@ -1378,6 +1393,14 @@ public class Syringe {
      */
     private void validateDeployment() {
         info("Validating deployment");
+
+        Collection<Class<?>> excludedClasses = knowledgeBase.getExcludedClasses();
+        if (!excludedClasses.isEmpty()) {
+            info("Manually excluded classes:");
+            for (Class<?> excludedClass : excludedClasses) {
+                info("  - " + excludedClass.getName());
+            }
+        }
 
         // 1. Check for unsatisfied/ambiguous dependencies
         CDI41InjectionValidator injectionValidator = new CDI41InjectionValidator(knowledgeBase);
