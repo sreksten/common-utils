@@ -791,6 +791,8 @@ public class Syringe {
                 AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(clazz);
                 validator.validateAndRegisterRaw(clazz, mode, override);
                 validated++;
+            } catch (DefinitionException e) {
+                throw e;
             } catch (Exception e) {
                 log("Error validating bean class " + clazz.getName(), e);
             }

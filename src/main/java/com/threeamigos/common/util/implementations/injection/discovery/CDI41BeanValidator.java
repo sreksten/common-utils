@@ -220,6 +220,11 @@ public class CDI41BeanValidator {
         boolean isDecorator = hasDecoratorAnnotation(clazz);
 
         if (isInterceptor) {
+            if (beanScope != null && !Dependent.class.equals(beanScope)) {
+                throw new NonPortableBehaviourException(clazz.getName() +
+                        ": interceptor declares scope @" + beanScope.getSimpleName() +
+                        ". Interceptors with any scope other than @Dependent are non-portable.");
+            }
             knowledgeBase.addInterceptor(clazz);
             // Validate and register interceptor metadata
             validateAndRegisterInterceptor(clazz);

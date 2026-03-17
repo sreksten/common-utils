@@ -1,7 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par24scopes;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par24nonportableinterceptor.NonPortableScopedInterceptor;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.SessionScoped;
@@ -124,6 +126,14 @@ public class ScopesTest {
         // Those are produced by DefaultScopeProducerFactory
         assertProducerBeanScope(syringe, MethodProducedDefaultScopeObject.class, Dependent.class);
         assertProducerBeanScope(syringe, FieldProducedDefaultScopeObject.class, Dependent.class);
+    }
+
+    @Test
+    @DisplayName("2.4 - Interceptor with scope other than @Dependent fails with NonPortableBehaviourException")
+    public void interceptorWithNonDependentScopeFailsWithNonPortableBehaviourException() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), NonPortableScopedInterceptor.class);
+
+        assertThrows(NonPortableBehaviourException.class, syringe::setup);
     }
 
     private Class<? extends Annotation> getBeanScope(Syringe syringe, Class<?> beanClass) {
