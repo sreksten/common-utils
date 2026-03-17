@@ -902,8 +902,8 @@ public class CDI41BeanValidator {
             return discoveredScope;
         }
 
-        // Default scope for managed beans is @Dependent.
-        return Dependent.class;
+        // No explicit scope: resolve default scope from stereotypes (if any), otherwise @Dependent.
+        return extractBeanScope(clazz);
     }
 
     private boolean isScopeAnnotationType(Class<? extends Annotation> at) {
