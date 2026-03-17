@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par26names;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par26nonportableinterceptor.NamedNonPortableInterceptor;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par26names.bullet1.NamedManagedBean;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par26names.bullet2.MethodProducedType;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par26names.bullet2.MethodProducerFactory;
@@ -8,12 +9,14 @@ import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par26names.bullet3.FieldProducerFactory;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par26names.bullet4.StereotypedNamedBean;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par26names.bullet5.UnnamedBean;
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import jakarta.enterprise.inject.spi.Bean;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,6 +71,14 @@ public class BeanNamesTest {
 
         Bean<?> bean = findManagedBean(syringe, UnnamedBean.class);
         assertTrue(bean.getName() == null || bean.getName().isEmpty());
+    }
+
+    @Test
+    @DisplayName("2.6 - Interceptor with a bean name is non-portable")
+    void interceptorWithBeanNameIsNonPortable() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), NamedNonPortableInterceptor.class);
+
+        assertThrows(NonPortableBehaviourException.class, syringe::setup);
     }
 
     private Bean<?> findManagedBean(Syringe syringe, Class<?> beanClass) {

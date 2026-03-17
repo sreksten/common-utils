@@ -223,6 +223,12 @@ public class CDI41BeanValidator {
         boolean isDecorator = hasDecoratorAnnotation(clazz);
 
         if (isInterceptor) {
+            String interceptorName = extractBeanName(clazz);
+            if (interceptorName != null && !interceptorName.isEmpty()) {
+                throw new NonPortableBehaviourException(clazz.getName() +
+                        ": interceptor declares bean name '" + interceptorName +
+                        "'. Named interceptors are non-portable.");
+            }
             if (beanScope != null && !Dependent.class.equals(beanScope)) {
                 throw new NonPortableBehaviourException(clazz.getName() +
                         ": interceptor declares scope @" + beanScope.getSimpleName() +
