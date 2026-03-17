@@ -321,23 +321,68 @@ public class CDI41BeanValidator {
     }
 
     private String extractBeanName(Class<?> clazz) {
-        // CDI: @Named without value defaults to decapitalized simple name.
-        for (Annotation a : annotationsOf(clazz)) {
-            if (a.annotationType().equals(Named.class)) {
-                try {
-                    Method value = a.annotationType().getMethod("value");
-                    Object v = value.invoke(a);
-                    String s = (v == null) ? "" : v.toString();
-                    if (!s.trim().isEmpty()) {
-                        return s.trim();
-                    }
-                } catch (ReflectiveOperationException ignored) {
-                    // fall through to defaulting
-                }
-                return decapitalize(clazz.getSimpleName());
+        // CDI: direct @Named without value defaults to decapitalized simple name.
+        for (Annotation annotation : annotationsOf(clazz)) {
+            if (annotation.annotationType().equals(Named.class)) {
+                return defaultedBeanName(readNamedValue(annotation), clazz);
             }
         }
+
+        // CDI 4.1 §2.6.2: empty @Named declared by a stereotype also assigns a default bean name.
+        Set<Class<? extends Annotation>> visited = new HashSet<>();
+        for (Annotation annotation : annotationsOf(clazz)) {
+            Class<? extends Annotation> at = annotation.annotationType();
+            if (hasMetaAnnotation(at, Stereotype.class)) {
+                String stereotypeName = extractNameFromStereotype(at, clazz, visited);
+                if (stereotypeName != null) {
+                    return stereotypeName;
+                }
+            }
+        }
+
         return "";
+    }
+
+    private String defaultedBeanName(String rawName, Class<?> beanClass) {
+        if (rawName != null && !rawName.trim().isEmpty()) {
+            return rawName.trim();
+        }
+        return decapitalize(beanClass.getSimpleName());
+    }
+
+    private String readNamedValue(Annotation namedAnnotation) {
+        try {
+            Method value = namedAnnotation.annotationType().getMethod("value");
+            Object raw = value.invoke(namedAnnotation);
+            return raw == null ? "" : raw.toString();
+        } catch (ReflectiveOperationException ignored) {
+            return "";
+        }
+    }
+
+    private String extractNameFromStereotype(Class<? extends Annotation> stereotypeAnnotation,
+                                             Class<?> beanClass,
+                                             Set<Class<? extends Annotation>> visited) {
+        if (!visited.add(stereotypeAnnotation)) {
+            return null;
+        }
+
+        Named named = stereotypeAnnotation.getAnnotation(Named.class);
+        if (named != null) {
+            return defaultedBeanName(named.value(), beanClass);
+        }
+
+        for (Annotation meta : stereotypeAnnotation.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (hasMetaAnnotation(metaType, Stereotype.class)) {
+                String nested = extractNameFromStereotype(metaType, beanClass, visited);
+                if (nested != null) {
+                    return nested;
+                }
+            }
+        }
+
+        return null;
     }
 
     private Set<Annotation> extractBeanQualifiers(Class<?> clazz) {
