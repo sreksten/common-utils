@@ -776,17 +776,26 @@ public class CDI41InjectionValidator {
      */
     private boolean areQualifiersCompatible(Set<Annotation> required, Set<Annotation> provided) {
         // If no specific qualifiers required, match @Default
-        if (required.isEmpty() || hasOnlyDefault(required)) {
+        if (required.isEmpty()) {
             return hasDefault(provided);
         }
 
-        // Check if @Any is present in required (matches all beans)
-        if (hasAny(required)) {
+        // Explicitly requesting only @Any means "any qualifier set is acceptable"
+        if (hasOnlyAny(required)) {
             return true;
+        }
+
+        // @Default (with optional @Any) matches beans with @Default
+        if (hasOnlyDefault(required)) {
+            return hasDefault(provided);
         }
 
         // All required qualifiers must be present in provided
         for (Annotation reqQualifier : required) {
+            // @Any is implicit and should not constrain matching when other qualifiers are present
+            if (reqQualifier.annotationType().equals(Any.class)) {
+                continue;
+            }
             if (isQualifier(reqQualifier) && !hasMatchingQualifier(reqQualifier, provided)) {
                 return false;
             }
@@ -860,6 +869,23 @@ public class CDI41InjectionValidator {
             .filter(this::isQualifier)
             .allMatch(q -> q.annotationType().equals(Default.class) ||
                           q.annotationType().equals(Any.class));
+    }
+
+    /**
+     * Checks if the set contains only @Any.
+     */
+    private boolean hasOnlyAny(Set<Annotation> qualifiers) {
+        boolean hasAtLeastOneQualifier = false;
+        for (Annotation qualifier : qualifiers) {
+            if (!isQualifier(qualifier)) {
+                continue;
+            }
+            hasAtLeastOneQualifier = true;
+            if (!qualifier.annotationType().equals(Any.class)) {
+                return false;
+            }
+        }
+        return hasAtLeastOneQualifier;
     }
 
     /**

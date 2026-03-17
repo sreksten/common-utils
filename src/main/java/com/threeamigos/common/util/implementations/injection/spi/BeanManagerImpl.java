@@ -13,6 +13,7 @@ import com.threeamigos.common.util.implementations.injection.events.ObserverMeth
 import com.threeamigos.common.util.implementations.injection.spi.spievents.SimpleAnnotatedType;
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
 import jakarta.el.ELResolver;
@@ -25,6 +26,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -936,6 +938,19 @@ public class BeanManagerImpl implements BeanManager {
 
         Type requiredType = injectionPoint.getType();
         Set<Annotation> qualifiers = injectionPoint.getQualifiers();
+
+        // Special case: inject Instance<T> handles for lazy/programmatic lookup.
+        if (requiredType instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) requiredType;
+            Type rawType = parameterizedType.getRawType();
+            if (rawType instanceof Class && Instance.class.isAssignableFrom((Class<?>) rawType)) {
+                Type selectedType = parameterizedType.getActualTypeArguments()[0];
+                Class<?> selectedClass = RawTypeExtractor.getRawType(selectedType);
+                @SuppressWarnings("unchecked")
+                Class<Object> selectedObjectClass = (Class<Object>) selectedClass;
+                return createInstance().select(selectedObjectClass, qualifiers.toArray(new Annotation[0]));
+            }
+        }
 
         Set<Bean<?>> beans = getBeans(requiredType, qualifiers.toArray(new Annotation[0]));
         Bean<?> bean = resolve(beans);

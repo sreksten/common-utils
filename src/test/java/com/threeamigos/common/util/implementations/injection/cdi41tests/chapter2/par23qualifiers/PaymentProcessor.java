@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par23qualifiers;
 
-@Asynchronous
-public class AsynchronousOrder {
+public interface PaymentProcessor {
+
+    String processPayment();
 }

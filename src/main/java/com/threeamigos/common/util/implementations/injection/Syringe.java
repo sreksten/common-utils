@@ -114,6 +114,18 @@ public class Syringe {
     private final Set<String> extensionClassNames = new HashSet<>();
 
     /**
+     * Optional forced bean archive mode used during validation/discovery processing.
+     * When set, this mode overrides detected archive mode for all classes that are
+     * already discovered and present in the KnowledgeBase.
+     *
+     * <p>Important limitation: this does not alter scanner-time archive detection.
+     * If an archive is skipped by the scanner because it is detected as
+     * bean-discovery-mode="none", those classes are never added and therefore cannot
+     * be affected by this override.
+     */
+    private BeanArchiveMode forcedBeanArchiveMode;
+
+    /**
      * Loaded extension instances.
      */
     private final List<Extension> extensions = new ArrayList<>();
@@ -181,6 +193,34 @@ public class Syringe {
         }
         extensionClassNames.add(extensionClassName);
         info("Queued extension: " + extensionClassName);
+    }
+
+    /**
+     * Forces a bean archive mode for all discovered classes.
+     *
+     * <p>This is primarily useful for tests that need deterministic discovery behavior
+     * regardless of detected beans.xml metadata.
+     *
+     * <p>Scope of this override:
+     * <ul>
+     *   <li>It changes the mode used when validating/registering discovered classes.</li>
+     *   <li>It does not change scanner-time decisions in {@code ParallelClasspathScanner}.</li>
+     *   <li>Archives skipped as {@code BeanArchiveMode.NONE} remain skipped.</li>
+     * </ul>
+     *
+     * @param beanArchiveMode the mode to force (for example {@link BeanArchiveMode#EXPLICIT} or
+     *                        {@link BeanArchiveMode#IMPLICIT}); cannot be {@code null}
+     */
+    public void forceBeanArchiveMode(BeanArchiveMode beanArchiveMode) {
+        if (initialized) {
+            throw new IllegalStateException("Cannot force bean archive mode after container initialization");
+        }
+        if (beanArchiveMode == null) {
+            throw new IllegalArgumentException("beanArchiveMode cannot be null");
+        }
+
+        this.forcedBeanArchiveMode = beanArchiveMode;
+        info("Forced bean archive mode: " + beanArchiveMode);
     }
 
     /**
@@ -330,6 +370,8 @@ public class Syringe {
         // - Scan for classes in specified packages
         // - Detect bean archives (explicit/implicit via beans.xml)
         // - Discover annotated types
+        // NOTE: If scanner detects BeanArchiveMode.NONE for an archive, that archive is skipped
+        // before class registration. forceBeanArchiveMode(...) cannot override this scanner step.
         info("Discovering beans in packages: " + Arrays.toString(packageNames));
 
         ParallelClasspathScanner scanner;
@@ -374,7 +416,7 @@ public class Syringe {
         if (knowledgeBase == null) {
             throw new IllegalStateException("Container not yet initialized. Call initialize() first.");
         }
-        knowledgeBase.add(clazz);
+        knowledgeBase.add(clazz, effectiveBeanArchiveMode(BeanArchiveMode.IMPLICIT));
     }
 
     /**
@@ -405,6 +447,8 @@ public class Syringe {
         }
 
         try {
+            applyForcedArchiveModeOverride();
+
             // ============================================================
             // PHASE 2 (CONT): PROCESS DISCOVERED TYPES
             // ============================================================
@@ -626,7 +670,7 @@ public class Syringe {
             info("Processing registered AnnotatedType: " + clazz.getName() + " (ID: " + id + ")");
 
             // Add the class to KnowledgeBase so it will be processed as a bean candidate
-            knowledgeBase.add(clazz);
+            knowledgeBase.add(clazz, effectiveBeanArchiveMode(BeanArchiveMode.IMPLICIT));
         }
 
         info("Total classes after registered types: " + knowledgeBase.getClasses().size());
@@ -719,7 +763,9 @@ public class Syringe {
 
         for (Class<?> clazz : knowledgeBase.getClasses()) {
             try {
-                BeanArchiveMode mode = knowledgeBase.getBeanArchiveMode(clazz);
+                // Effective mode honors forced override when configured; otherwise uses
+                // the mode detected during scanning and recorded in KnowledgeBase.
+                BeanArchiveMode mode = effectiveBeanArchiveMode(knowledgeBase.getBeanArchiveMode(clazz));
                 AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(clazz);
                 validator.validateAndRegisterRaw(clazz, mode, override);
                 validated++;
@@ -1669,6 +1715,29 @@ public class Syringe {
 
     public KnowledgeBase getKnowledgeBase() {
         return knowledgeBase;
+    }
+
+    private BeanArchiveMode effectiveBeanArchiveMode(BeanArchiveMode discoveredMode) {
+        if (forcedBeanArchiveMode != null) {
+            return forcedBeanArchiveMode;
+        }
+        return discoveredMode != null ? discoveredMode : BeanArchiveMode.IMPLICIT;
+    }
+
+    private void applyForcedArchiveModeOverride() {
+        if (forcedBeanArchiveMode == null) {
+            return;
+        }
+
+        // Rewrites class-level archive mode entries for already discovered classes.
+        // This does not discover additional classes; it only changes how existing
+        // entries will be validated/registered.
+        int updated = 0;
+        for (Class<?> clazz : knowledgeBase.getClasses()) {
+            knowledgeBase.add(clazz, forcedBeanArchiveMode);
+            updated++;
+        }
+        info("Applied forced bean archive mode " + forcedBeanArchiveMode + " to " + updated + " class(es)");
     }
 
     private void info(String message) {
