@@ -1045,25 +1045,18 @@ public class CDI41BeanValidator {
             return false;
         }
 
-        // Bean-defining annotations per CDI spec
-        if (hasApplicationScopedAnnotation(clazz) ||
-                hasSessionScopedAnnotation(clazz) ||
-                hasRequestScopedAnnotation(clazz) ||
-                hasConversationScopedAnnotation(clazz) ||
-                hasDependentAnnotation(clazz) ||
-                hasSingletonAnnotation(clazz) ||
-                hasInterceptorAnnotation(clazz) ||
-                hasDecoratorAnnotation(clazz) ||
-                hasAlternativeAnnotation(clazz) ||
-                hasStereotypeAnnotation(clazz)) {
+        // Bean-defining annotations per CDI 4.1 §2.5.1:
+        // - @ApplicationScoped and @RequestScoped
+        // - all other normal scopes
+        // - @Interceptor
+        // - stereotypes
+        // - @Dependent
+        // Note: pseudo-scopes (except @Dependent) are NOT bean-defining annotations.
+        if (hasBeanDefiningAnnotation(clazz)
+                // Kept for backward compatibility with existing discovery behavior in this implementation.
+                || hasDecoratorAnnotation(clazz)
+                || hasAlternativeAnnotation(clazz)) {
             return true;
-        }
-
-        // A scope meta-annotated type also counts
-        for (Annotation a : annotationsOf(clazz)) {
-            if (isScopeAnnotationType(a.annotationType())) {
-                return true;
-            }
         }
 
         // CDI 4.1 Bean Archive Modes:
@@ -1077,6 +1070,37 @@ public class CDI41BeanValidator {
 
         // In implicit/trimmed mode, bean-defining annotation is required
         return false;
+    }
+
+    private boolean hasBeanDefiningAnnotation(Class<?> clazz) {
+        for (Annotation annotation : annotationsOf(clazz)) {
+            if (isBeanDefiningAnnotationType(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isBeanDefiningAnnotationType(Class<? extends Annotation> annotationType) {
+        // Explicitly listed built-ins
+        if (annotationType.equals(Dependent.class)
+                || annotationType.equals(ApplicationScoped.class)
+                || annotationType.equals(RequestScoped.class)) {
+            return true;
+        }
+
+        // "all other normal scope types"
+        if (hasMetaAnnotation(annotationType, NormalScope.class)) {
+            return true;
+        }
+
+        // @Interceptor
+        if (INTERCEPTOR.matches(annotationType)) {
+            return true;
+        }
+
+        // "all stereotype annotations"
+        return hasMetaAnnotation(annotationType, Stereotype.class);
     }
 
     /**

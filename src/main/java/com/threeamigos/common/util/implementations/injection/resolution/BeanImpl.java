@@ -83,13 +83,21 @@ public class BeanImpl<T> implements Bean<T> {
      */
     private final Set<Annotation> qualifiers = new HashSet<>();
 
+    /**
+     * Scope of the bean
+     */
+    private Class<? extends Annotation> scope;
+
+    /**
+     * Name of the bean (optional)
+     */
+    private String name;
+
     // Bean
     private final Class<T> beanClass;
     private final Set<InjectionPoint> injectionPoints = new HashSet<>();
 
     // BeanAttributes
-    private String name;
-    private Class<? extends Annotation> scope;
     private final Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
     private final boolean alternative;
 
