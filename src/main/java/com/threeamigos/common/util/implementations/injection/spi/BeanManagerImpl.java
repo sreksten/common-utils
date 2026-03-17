@@ -12,7 +12,6 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.SimpleAnnotatedType;
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
@@ -32,6 +31,7 @@ import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.extractQualifiers;
+import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.normalizeBeanQualifiers;
 import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.qualifiersMatch;
 
 /**
@@ -1441,7 +1441,7 @@ public class BeanManagerImpl implements BeanManager {
 
         // Extract metadata from AnnotatedType
         String name = extractName(type);
-        Set<Annotation> qualifiers = extractQualifiersFromAnnotated(type);
+        Set<Annotation> qualifiers = normalizeBeanQualifiers(type.getAnnotations());
         Class<? extends Annotation> scope = extractScopeFromAnnotated(type);
         Set<Class<? extends Annotation>> stereotypes = extractStereotypesFromAnnotated(type);
         Set<Type> types = TypeClosureHelper.extractTypesFromClass(type.getJavaClass());
@@ -1468,7 +1468,7 @@ public class BeanManagerImpl implements BeanManager {
 
         // Extract metadata from AnnotatedMember (producer field or method)
         String name = extractName(member);
-        Set<Annotation> qualifiers = extractQualifiersFromAnnotated(member);
+        Set<Annotation> qualifiers = normalizeBeanQualifiers(member.getAnnotations());
         Class<? extends Annotation> scope = extractScopeFromAnnotated(member);
         Set<Class<? extends Annotation>> stereotypes = extractStereotypesFromAnnotated(member);
         Set<Type> types = extractTypesFromMember(member);
@@ -1684,7 +1684,6 @@ public class BeanManagerImpl implements BeanManager {
     /**
      * Creates an ObserverMethod wrapper from ObserverMethodInfo.
      */
-    @SuppressWarnings("unchecked")
     private <T> ObserverMethod<T> createObserverMethod(ObserverMethodInfo info) {
         // Create a wrapper that implements ObserverMethod
         return new ObserverMethod<T>() {
@@ -1782,6 +1781,10 @@ public class BeanManagerImpl implements BeanManager {
         public void addDependentInstance(Object instance) {
             dependentInstances.add(instance);
         }
+
+        public List<Object> getDependentInstances() {
+            return Collections.unmodifiableList(dependentInstances);
+        }
     }
 
     /**
@@ -1851,29 +1854,6 @@ public class BeanManagerImpl implements BeanManager {
             }
         }
         return "";
-    }
-
-    /**
-     * Extracts qualifiers from an Annotated element.
-     * Adds @Default if no qualifiers are present, and always adds @Any.
-     */
-    private Set<Annotation> extractQualifiersFromAnnotated(jakarta.enterprise.inject.spi.Annotated annotated) {
-        Set<Annotation> qualifiers = new HashSet<>();
-        for (Annotation ann : annotated.getAnnotations()) {
-            if (hasQualifierAnnotation(ann.annotationType())) {
-                qualifiers.add(ann);
-            }
-        }
-
-        // If no qualifiers, add @Default
-        if (qualifiers.isEmpty() || (qualifiers.size() == 1 && qualifiers.iterator().next().annotationType().equals(jakarta.inject.Named.class))) {
-            qualifiers.add(new DefaultLiteral());
-        }
-
-        // Always add @Any
-        qualifiers.add(new AnyLiteral());
-
-        return qualifiers;
     }
 
     /**

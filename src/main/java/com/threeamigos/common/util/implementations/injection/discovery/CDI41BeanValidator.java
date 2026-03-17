@@ -5,8 +5,7 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Decor
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
-import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
@@ -342,51 +341,16 @@ public class CDI41BeanValidator {
     }
 
     private Set<Annotation> extractBeanQualifiers(Class<?> clazz) {
-        // CDI 4.1 approach:
-        // - Collect qualifier annotations from the class
-        // - Inherit qualifiers from stereotypes
-        // - If no qualifiers exist (other than @Named), add @Default
-        // - @Named is a special qualifier that doesn't replace @Default
-        // - Always add @Any (CDI built-in)
-        Set<Annotation> result = new HashSet<>();
-        boolean hasNonNamedQualifier = false;
-
-        // First, collect qualifiers directly on the class
-        for (Annotation a : annotationsOf(clazz)) {
-            if (isQualifierAnnotationType(a.annotationType())) {
-                result.add(a);
-                // Check if this is a qualifier other than @Named
-                if (!a.annotationType().equals(Named.class)) {
-                    hasNonNamedQualifier = true;
-                }
-            }
-        }
+        Set<Annotation> result = QualifiersHelper.extractQualifierAnnotations(annotationsOf(clazz));
 
         // Then, inherit qualifiers from stereotypes
         for (Annotation a : annotationsOf(clazz)) {
             if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
-                Set<Annotation> stereotypeQualifiers = extractQualifiersFromStereotype(a.annotationType());
-                result.addAll(stereotypeQualifiers);
-                if (!stereotypeQualifiers.isEmpty()) {
-                    // Check if stereotype defines non-@Named qualifiers
-                    for (Annotation sq : stereotypeQualifiers) {
-                        if (!sq.annotationType().equals(Named.class)) {
-                            hasNonNamedQualifier = true;
-                        }
-                    }
-                }
+                result.addAll(extractQualifiersFromStereotype(a.annotationType()));
             }
         }
 
-        // Add @Default if no qualifiers (other than @Named) exist
-        if (!hasNonNamedQualifier) {
-            result.add(new DefaultLiteral());
-        }
-
-        // Always add @Any
-        result.add(new AnyLiteral());
-
-        return result;
+        return QualifiersHelper.normalizeBeanQualifiers(result);
     }
 
     private Class<? extends Annotation> extractBeanScope(Class<?> clazz) {
@@ -487,14 +451,7 @@ public class CDI41BeanValidator {
      * @return set of qualifier annotations
      */
     private Set<Annotation> extractQualifiersFromStereotype(Class<? extends Annotation> stereotypeClass) {
-        Set<Annotation> qualifiers = new HashSet<>();
-
-        // Collect qualifiers directly on the stereotype
-        for (Annotation a : stereotypeClass.getAnnotations()) {
-            if (isQualifierAnnotationType(a.annotationType())) {
-                qualifiers.add(a);
-            }
-        }
+        Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(stereotypeClass.getAnnotations());
 
         // Recursively collect from nested stereotypes
         for (Annotation a : stereotypeClass.getAnnotations()) {
@@ -1398,19 +1355,7 @@ public class CDI41BeanValidator {
      * Extracts qualifiers from an annotated element.
      */
     private Set<Annotation> extractQualifiers(AnnotatedElement element) {
-        Set<Annotation> qualifiers = new HashSet<>();
-        for (Annotation ann : element.getAnnotations()) {
-            if (hasMetaAnnotation(ann.annotationType(), Qualifier.class)) {
-                qualifiers.add(ann);
-            }
-        }
-        // Add @Default if no qualifiers present
-        if (qualifiers.isEmpty()) {
-            qualifiers.add(new DefaultLiteral());
-        }
-        // Always add @Any
-        qualifiers.add(new AnyLiteral());
-        return qualifiers;
+        return QualifiersHelper.extractBeanQualifiers(element.getAnnotations());
     }
 
     /**

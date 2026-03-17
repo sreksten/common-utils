@@ -72,13 +72,23 @@ public class BeanImpl<T> implements Bean<T> {
      */
     private final Set<Type> types = new HashSet<>();
 
+    /**
+     * CDI 4.1 - 2.3.1 - Qualifiers of a bean:
+     * <ul>
+     * <li>Every bean has the built-in @Any qualifier, even if it does not explicitly declare it.</li>
+     * <li>Every bean has the @Named qualifier if it is a named bean.</li>
+     * <li>If a bean does not explicitly declare a qualifier other than @Named or @Any, the bean has exactly one
+     * additional qualifier, of type @Default. This is called the default qualifier.</li>
+     * </ul>
+     */
+    private final Set<Annotation> qualifiers = new HashSet<>();
+
     // Bean
     private final Class<T> beanClass;
     private final Set<InjectionPoint> injectionPoints = new HashSet<>();
 
     // BeanAttributes
     private String name;
-    private final Set<Annotation> qualifiers = new HashSet<>();
     private Class<? extends Annotation> scope;
     private final Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
     private final boolean alternative;

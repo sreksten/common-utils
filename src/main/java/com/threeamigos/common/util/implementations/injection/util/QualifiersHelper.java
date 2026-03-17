@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.injection.util;
 import jakarta.inject.Named;
 
 import java.lang.annotation.Annotation;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -19,16 +20,10 @@ public final class QualifiersHelper {
 
     /**
      * Extracts qualifiers from an annotation array, defaulting to @Default when empty.
+     * This is intended for required-qualifier extraction during resolution.
      */
     public static Set<Annotation> extractQualifiers(Annotation[] annotations) {
-        Set<Annotation> qualifiers = new HashSet<>();
-        if (annotations != null) {
-            for (Annotation ann : annotations) {
-                if (hasQualifierAnnotation(ann.annotationType())) {
-                    qualifiers.add(ann);
-                }
-            }
-        }
+        Set<Annotation> qualifiers = extractQualifierAnnotations(annotations);
         if (qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());
         }
@@ -37,15 +32,61 @@ public final class QualifiersHelper {
 
     /**
      * Normalizes a collection of annotations to a qualifier set (adds @Default if none).
+     * This is intended for required/available qualifier matching utilities.
      */
     public static Set<Annotation> normalizeQualifiers(Collection<Annotation> annotations) {
+        Set<Annotation> qualifiers = annotations == null ? new HashSet<>() :
+                extractQualifierAnnotations(annotations.toArray(new Annotation[0]));
+        if (qualifiers.isEmpty()) {
+            qualifiers.add(new DefaultLiteral());
+        }
+        return qualifiers;
+    }
+
+    /**
+     * Extracts qualifier annotations from an annotation array without adding implicit qualifiers.
+     */
+    public static Set<Annotation> extractQualifierAnnotations(Annotation[] annotations) {
+        Set<Annotation> qualifiers = new HashSet<>();
+        if (annotations != null) {
+            for (Annotation ann : annotations) {
+                if (hasQualifierAnnotation(ann.annotationType())) {
+                    qualifiers.add(ann);
+                }
+            }
+        }
+        return qualifiers;
+    }
+
+    /**
+     * Extracts bean qualifiers from an annotation array and applies CDI built-ins:
+     * adds {@code @Default} when no qualifier other than {@code @Named}/{@code @Any} exists,
+     * and always adds {@code @Any}.
+     */
+    public static Set<Annotation> extractBeanQualifiers(Annotation[] annotations) {
+        return normalizeBeanQualifiers(Arrays.asList(annotations == null ? new Annotation[0] : annotations));
+    }
+
+    /**
+     * Normalizes bean qualifiers according to CDI bean qualifier rules:
+     * adds {@code @Default} when no qualifier other than {@code @Named}/{@code @Any} exists,
+     * and always adds {@code @Any}.
+     */
+    public static Set<Annotation> normalizeBeanQualifiers(Collection<Annotation> annotations) {
         Set<Annotation> qualifiers = annotations == null ? new HashSet<>() :
                 annotations.stream()
                         .filter(ann -> hasQualifierAnnotation(ann.annotationType()))
                         .collect(Collectors.toSet());
-        if (qualifiers.isEmpty()) {
+
+        boolean hasNonNamedNonAnyQualifier = qualifiers.stream()
+                .map(Annotation::annotationType)
+                .anyMatch(type -> !type.equals(Named.class) &&
+                        !type.equals(jakarta.enterprise.inject.Any.class));
+
+        if (!hasNonNamedNonAnyQualifier) {
             qualifiers.add(new DefaultLiteral());
         }
+        qualifiers.add(new AnyLiteral());
         return qualifiers;
     }
 
