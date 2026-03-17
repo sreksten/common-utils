@@ -45,7 +45,7 @@ import static com.threeamigos.common.util.implementations.injection.util.Qualifi
  *
  * @author Stefano Reksten
  */
-public class BeanResolver implements ProducerBean.DependencyResolver {
+public class BeanResolver implements DependencyResolver {
 
     private final KnowledgeBase knowledgeBase;
     private final ContextManager contextManager;

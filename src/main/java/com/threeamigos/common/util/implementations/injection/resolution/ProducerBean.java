@@ -343,20 +343,4 @@ public class ProducerBean<T> implements Bean<T> {
     public void setDependencyResolver(DependencyResolver dependencyResolver) {
         this.dependencyResolver = dependencyResolver;
     }
-
-    /**
-     * Interface for resolving dependencies during producer invocation.
-     * This will be implemented by the container to provide dependency lookup.
-     */
-    public interface DependencyResolver {
-        /**
-         * Resolves a dependency by type and qualifiers.
-         */
-        Object resolve(Type type, Annotation[] qualifiers);
-
-        /**
-         * Gets or creates an instance of the declaring bean.
-         */
-        Object resolveDeclaringBeanInstance(Class<?> declaringClass);
-    }
 }

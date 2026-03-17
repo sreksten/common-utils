@@ -4,6 +4,7 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
 
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedParameterWrapper;
 import jakarta.enterprise.inject.spi.Annotated;
@@ -112,16 +113,8 @@ public class InjectionPointImpl<T> implements InjectionPoint {
      * @param annotations all annotations present on the injection point
      */
     private void collectQualifiers(Annotation[] annotations) {
-        for (Annotation ann : annotations) {
-            // Skip @Delegate - it's not a qualifier, it's a decorator marker
-            if (ann.annotationType().getName().equals("jakarta.decorator.Delegate") ||
-                ann.annotationType().getName().equals("javax.decorator.Delegate")) {
-                continue;
-            }
-
-            if (hasQualifierAnnotation(ann.annotationType())) {
-                qualifiers.add(ann);
-            }
+        for (Annotation qualifier : QualifiersHelper.extractQualifierAnnotations(annotations)) {
+            qualifiers.add(qualifier);
         }
 
         // CDI defaulting rules: if no qualifier present, add @Default; always include @Any

@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
-import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
@@ -80,7 +79,7 @@ public class QualifiersTest {
     @DisplayName("2.3.4. Specifying qualifiers of an injected field")
     void specifyingQualifiersOfAnInjectedField() {
         // Given
-        Syringe syringe = new Syringe(new ConsoleMessageHandler(), ShoppingCart.class);
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ShoppingCart.class);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
         // When
@@ -108,7 +107,7 @@ public class QualifiersTest {
     @DisplayName("2.3.4 - Specifying qualifiers of an injected @Any Instance")
     void specifyingQualifiersOfAnInjectedAnyInstance() {
         // Given
-        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ShoppingCartWithAnyInstance.class);
+        Syringe syringe = new Syringe(new ConsoleMessageHandler(), ShoppingCartWithAnyInstance.class);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
         // When
@@ -118,6 +117,35 @@ public class QualifiersTest {
                         AnnotationLiteral.of(Synchronous.class)).get().processPayment();
         // Then
         assertEquals("Processed synchronously and reliably", paymentResult);
+    }
+
+    @Test
+    @DisplayName("2.3.5 - Qualifiers with a ShoppingCart using PaymentProcessorFactory")
+    void qualifiersWithShoppingCartUsingPaymentProcessorFactory() {
+        // Given
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ShoppingCartUsingPaymentProcessorFactory.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.setup();
+        // When
+        ShoppingCartUsingPaymentProcessorFactory shoppingCart =
+                syringe.inject(ShoppingCartUsingPaymentProcessorFactory.class);
+        String paymentResult = shoppingCart.processPayment();
+        // Then
+        assertEquals("Processed synchronously and reliably", paymentResult);
+    }
+
+    @Test
+    @DisplayName("2.3.6 - Repeating Qualifiers")
+    void repeatingQualifiers() {
+        // Given
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), CoordinateConsumer.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.setup();
+        // When
+        CoordinateConsumer consumer = syringe.inject(CoordinateConsumer.class);
+        Coordinate coordinate = consumer.getCoordinate();
+        // Then
+        assertEquals(2, coordinate.getCoordinates().length);
     }
 
     private boolean hasQualifier(Set<Annotation> qualifiers, Class<? extends Annotation> qualifierType) {

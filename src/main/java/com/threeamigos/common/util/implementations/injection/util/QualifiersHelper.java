@@ -3,11 +3,11 @@ package com.threeamigos.common.util.implementations.injection.util;
 import jakarta.inject.Named;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasQualifierAnnotation;
 
@@ -50,9 +50,7 @@ public final class QualifiersHelper {
         Set<Annotation> qualifiers = new HashSet<>();
         if (annotations != null) {
             for (Annotation ann : annotations) {
-                if (hasQualifierAnnotation(ann.annotationType())) {
-                    qualifiers.add(ann);
-                }
+                collectQualifierAnnotation(ann, qualifiers);
             }
         }
         return qualifiers;
@@ -74,9 +72,7 @@ public final class QualifiersHelper {
      */
     public static Set<Annotation> normalizeBeanQualifiers(Collection<Annotation> annotations) {
         Set<Annotation> qualifiers = annotations == null ? new HashSet<>() :
-                annotations.stream()
-                        .filter(ann -> hasQualifierAnnotation(ann.annotationType()))
-                        .collect(Collectors.toSet());
+                extractQualifierAnnotations(annotations.toArray(new Annotation[0]));
 
         boolean hasNonNamedNonAnyQualifier = qualifiers.stream()
                 .map(Annotation::annotationType)
@@ -88,6 +84,59 @@ public final class QualifiersHelper {
         }
         qualifiers.add(new AnyLiteral());
         return qualifiers;
+    }
+
+    /**
+     * Collects qualifier annotations, expanding repeatable qualifier container annotations.
+     */
+    private static void collectQualifierAnnotation(Annotation annotation, Set<Annotation> sink) {
+        if (annotation == null) {
+            return;
+        }
+
+        if (hasQualifierAnnotation(annotation.annotationType())) {
+            sink.add(annotation);
+            return;
+        }
+
+        for (Annotation nestedQualifier : extractQualifierAnnotationsFromContainer(annotation)) {
+            sink.add(nestedQualifier);
+        }
+    }
+
+    /**
+     * Extracts nested qualifier annotations from a repeatable container annotation.
+     *
+     * <p>For example, for {@code @Locations({@Location("north"), @Location("south")})}
+     * this returns the nested {@code @Location} annotations.
+     */
+    private static Annotation[] extractQualifierAnnotationsFromContainer(Annotation containerAnnotation) {
+        try {
+            Method valueMethod = containerAnnotation.annotationType().getMethod("value");
+            Class<?> returnType = valueMethod.getReturnType();
+            if (!returnType.isArray()) {
+                return new Annotation[0];
+            }
+
+            Class<?> componentType = returnType.getComponentType();
+            if (componentType == null || !Annotation.class.isAssignableFrom(componentType)) {
+                return new Annotation[0];
+            }
+
+            @SuppressWarnings("unchecked")
+            Class<? extends Annotation> nestedAnnotationType = (Class<? extends Annotation>) componentType;
+            if (!hasQualifierAnnotation(nestedAnnotationType)) {
+                return new Annotation[0];
+            }
+
+            Object value = valueMethod.invoke(containerAnnotation);
+            if (value instanceof Annotation[]) {
+                return (Annotation[]) value;
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // Not a repeatable qualifier container annotation; ignore.
+        }
+        return new Annotation[0];
     }
 
     /**

@@ -471,6 +471,7 @@ public class Syringe {
             // - Validate injection points
             // - Check scope, qualifiers, stereotypes
             validateAndRegisterBeans();
+            initializeBeanDependencyResolvers();
 
             // Step 3.2: Fire ProcessInjectionPoint<T, X> events
             // Extensions can modify injection point metadata
@@ -511,6 +512,10 @@ public class Syringe {
             // - Register interceptors and decorators
             fireAfterBeanDiscovery();
 
+            // Extensions may add beans programmatically during AfterBeanDiscovery.
+            // Re-apply dependency resolver wiring to cover newly registered BeanImpl/ProducerBean instances.
+            initializeBeanDependencyResolvers();
+
             // ============================================================
             // PHASE 5: VALIDATION
             // ============================================================
@@ -541,6 +546,23 @@ public class Syringe {
             throw e;
         } catch (Exception e) {
             throw new DeploymentException("Container initialization failed", e);
+        }
+    }
+
+    /**
+     * Wires runtime dependency resolution into beans that perform reflective injection/production.
+     *
+     * <p>Both managed beans ({@link BeanImpl}) and producer beans ({@link ProducerBean})
+     * delegate dependency lookup to {@link BeanResolver} during instance creation.
+     */
+    private void initializeBeanDependencyResolvers() {
+        BeanResolver beanResolver = new BeanResolver(knowledgeBase, contextManager);
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (bean instanceof BeanImpl<?>) {
+                ((BeanImpl<?>) bean).setDependencyResolver(beanResolver);
+            } else if (bean instanceof ProducerBean<?>) {
+                ((ProducerBean<?>) bean).setDependencyResolver(beanResolver);
+            }
         }
     }
 

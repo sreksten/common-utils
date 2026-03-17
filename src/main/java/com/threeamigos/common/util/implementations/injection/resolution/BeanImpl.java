@@ -116,7 +116,7 @@ public class BeanImpl<T> implements Bean<T> {
     private final List<Method> postActivateMethods = new ArrayList<>();
 
     // Dependency resolver (set during container initialization)
-    private ProducerBean.DependencyResolver dependencyResolver;
+    private DependencyResolver dependencyResolver;
 
     // ====================================================================================
     // PHASE 2: Interceptor Support - Business Method Interception (@AroundInvoke)
@@ -980,7 +980,7 @@ public class BeanImpl<T> implements Bean<T> {
         }
     }
 
-    public void setDependencyResolver(ProducerBean.DependencyResolver dependencyResolver) {
+    public void setDependencyResolver(DependencyResolver dependencyResolver) {
         this.dependencyResolver = dependencyResolver;
     }
 
