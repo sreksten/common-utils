@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par24nonportableinterceptor.NonPortableScopedInterceptor;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par24nonportablescope.NonPortableScopeAnchorBean;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
@@ -132,6 +133,14 @@ public class ScopesTest {
     @DisplayName("2.4 - Interceptor with scope other than @Dependent fails with NonPortableBehaviourException")
     public void interceptorWithNonDependentScopeFailsWithNonPortableBehaviourException() {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), NonPortableScopedInterceptor.class);
+
+        assertThrows(NonPortableBehaviourException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("2.4.2 - Scope type with attributes fails with NonPortableBehaviourException")
+    public void scopeTypeWithAttributesFailsWithNonPortableBehaviourException() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), NonPortableScopeAnchorBean.class);
 
         assertThrows(NonPortableBehaviourException.class, syringe::setup);
     }

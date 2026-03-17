@@ -84,6 +84,9 @@ public class CDI41BeanValidator {
                     ? annotatedTypeOverride.getAnnotations().toArray(new Annotation[0])
                     : null;
 
+        // CDI 4.1 §2.4.2: scope types with attributes are non-portable.
+        validateNonPortableScopeTypes(clazz);
+
         // 1) Bean class eligibility (managed bean type)
         if (!isCandidateBeanClass(clazz, beanArchiveMode)) {
             // Not necessarily an error; just not a bean (CDI scans lots of classes).
@@ -318,6 +321,28 @@ public class CDI41BeanValidator {
         return bean;
         } finally {
             overrideAnnotations = null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateNonPortableScopeTypes(Class<?> clazz) {
+        // Validate scope type declaration itself.
+        if (clazz.isAnnotation()) {
+            Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
+            if (isScopeAnnotationType(annotationType) && annotationType.getDeclaredMethods().length > 0) {
+                throw new NonPortableBehaviourException(annotationType.getName() +
+                        ": scope type declares attributes. Scope types with attributes are non-portable.");
+            }
+        }
+
+        // Validate any scope used by this class.
+        for (Annotation annotation : annotationsOf(clazz)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (isScopeAnnotationType(annotationType) && annotationType.getDeclaredMethods().length > 0) {
+                throw new NonPortableBehaviourException(clazz.getName() +
+                        ": declares non-portable scope type @" + annotationType.getSimpleName() +
+                        " which has attributes.");
+            }
         }
     }
 
