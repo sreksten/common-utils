@@ -107,7 +107,7 @@ public class QualifiersTest {
     @DisplayName("2.3.4 - Specifying qualifiers of an injected @Any Instance")
     void specifyingQualifiersOfAnInjectedAnyInstance() {
         // Given
-        Syringe syringe = new Syringe(new ConsoleMessageHandler(), ShoppingCartWithAnyInstance.class);
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ShoppingCartWithAnyInstance.class);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
         // When

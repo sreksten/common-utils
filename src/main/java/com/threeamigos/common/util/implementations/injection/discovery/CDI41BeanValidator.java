@@ -89,12 +89,20 @@ public class CDI41BeanValidator {
         validateNonPortableScopeTypes(clazz);
         // CDI 4.1 §2.8: a stereotype may declare at most one scope.
         validateStereotypeScopeDeclaration(clazz);
+        // CDI 4.1 §2.8.1.3: non-empty @Named on stereotype is a definition error.
+        validateStereotypeNamedDeclaration(clazz);
+        // CDI 4.1 §2.8: stereotype qualifier/@Typed misuse is non-portable.
+        validateStereotypeNonPortableDeclarations(clazz);
 
         // 1) Bean class eligibility (managed bean type)
         if (!isCandidateBeanClass(clazz, beanArchiveMode)) {
             // Not necessarily an error; just not a bean (CDI scans lots of classes).
             return null;
         }
+
+        // CDI 4.1 §2.8.1.5: if stereotypes declare different priorities,
+        // the bean must explicitly declare @Priority.
+        validateStereotypePriorityDeclaration(clazz);
 
         if (hasVetoedAnnotation(clazz)) {
             return null;
@@ -268,6 +276,7 @@ public class CDI41BeanValidator {
         // Mark alternative based on annotation; enablement affects resolution elsewhere.
         BeanImpl<T> bean = new BeanImpl<>(clazz, alternative);
         bean.setAlternativeEnabled(alternativeEnabled);
+        bean.setPriority(extractEffectivePriority(clazz));
 
         // Mark bean as having validation errors if validation failed
         if (!valid) {
@@ -383,6 +392,102 @@ public class CDI41BeanValidator {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private void validateStereotypeNamedDeclaration(Class<?> clazz) {
+        if (!clazz.isAnnotation()) {
+            return;
+        }
+
+        Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
+        if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+            return;
+        }
+
+        validateStereotypeNamedDeclaration(annotationType, new HashSet<>());
+    }
+
+    private void validateStereotypeNamedDeclaration(Class<? extends Annotation> stereotypeType,
+                                                    Set<Class<? extends Annotation>> visited) {
+        if (!visited.add(stereotypeType)) {
+            return;
+        }
+
+        Named named = stereotypeType.getAnnotation(Named.class);
+        if (named != null) {
+            String value = named.value();
+            if (value != null && !value.trim().isEmpty()) {
+                throw new DefinitionException(stereotypeType.getName() +
+                        ": stereotype declares non-empty @Named(\"" + value + "\")");
+            }
+        }
+
+        for (Annotation meta : stereotypeType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (hasMetaAnnotation(metaType, Stereotype.class)) {
+                validateStereotypeNamedDeclaration(metaType, visited);
+            }
+        }
+    }
+
+    /**
+     * CDI 4.1 §2.8.1.5:
+     * If a bean has multiple stereotypes (directly/indirectly/transitively) that declare
+     * different priority values, the bean must explicitly declare @Priority.
+     */
+    private void validateStereotypePriorityDeclaration(Class<?> clazz) {
+        if (extractDeclaredPriorityFromClass(clazz) != null) {
+            // Explicit bean @Priority always wins over stereotype priorities.
+            return;
+        }
+
+        Set<Integer> stereotypePriorities = collectStereotypePriorityValues(clazz);
+        if (stereotypePriorities.size() > 1) {
+            String priorityValues = stereotypePriorities.stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(", "));
+            throw new DefinitionException(clazz.getName() +
+                    ": stereotypes declare different @Priority values (" +
+                    priorityValues +
+                    "). Bean must explicitly declare @Priority.");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateStereotypeNonPortableDeclarations(Class<?> clazz) {
+        if (!clazz.isAnnotation()) {
+            return;
+        }
+
+        Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
+        if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+            return;
+        }
+
+        if (hasTypedAnnotation(annotationType)) {
+            throw new NonPortableBehaviourException(annotationType.getName() +
+                    ": stereotype is annotated with @Typed");
+        }
+
+        List<String> illegalQualifiers = new ArrayList<>();
+        for (Annotation meta : annotationType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (hasQualifierAnnotation(metaType) && !isNamedQualifierType(metaType)) {
+                illegalQualifiers.add("@" + metaType.getSimpleName());
+            }
+        }
+
+        if (!illegalQualifiers.isEmpty()) {
+            throw new NonPortableBehaviourException(annotationType.getName() +
+                    ": stereotype declares qualifier(s) other than @Named: " +
+                    String.join(", ", illegalQualifiers));
+        }
+    }
+
+    private boolean isNamedQualifierType(Class<? extends Annotation> annotationType) {
+        return Named.class.equals(annotationType) ||
+                "javax.inject.Named".equals(annotationType.getName());
+    }
+
     private void collectStereotypeScopes(Class<? extends Annotation> stereotypeType,
                                          Set<Class<? extends Annotation>> scopes,
                                          Set<Class<? extends Annotation>> visited) {
@@ -398,6 +503,87 @@ public class CDI41BeanValidator {
                 collectStereotypeScopes(metaType, scopes, visited);
             }
         }
+    }
+
+    private Set<Integer> collectStereotypePriorityValues(Class<?> clazz) {
+        Set<Integer> priorities = new LinkedHashSet<>();
+        Set<Class<? extends Annotation>> visited = new HashSet<>();
+
+        for (Annotation annotation : annotationsOf(clazz)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (hasMetaAnnotation(annotationType, Stereotype.class)) {
+                collectStereotypePriorityValues(annotationType, priorities, visited);
+            }
+        }
+
+        return priorities;
+    }
+
+    private void collectStereotypePriorityValues(Class<? extends Annotation> stereotypeType,
+                                                 Set<Integer> priorities,
+                                                 Set<Class<? extends Annotation>> visited) {
+        if (!visited.add(stereotypeType)) {
+            return;
+        }
+
+        Integer declaredPriority = extractDeclaredPriority(stereotypeType.getAnnotations());
+        if (declaredPriority != null) {
+            priorities.add(declaredPriority);
+        }
+
+        for (Annotation meta : stereotypeType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (hasMetaAnnotation(metaType, Stereotype.class)) {
+                collectStereotypePriorityValues(metaType, priorities, visited);
+            }
+        }
+    }
+
+    private Integer extractEffectivePriority(Class<?> clazz) {
+        Integer explicitPriority = extractDeclaredPriorityFromClass(clazz);
+        if (explicitPriority != null) {
+            return explicitPriority;
+        }
+
+        Set<Integer> stereotypePriorities = collectStereotypePriorityValues(clazz);
+        if (stereotypePriorities.size() == 1) {
+            return stereotypePriorities.iterator().next();
+        }
+
+        return null;
+    }
+
+    private Integer extractDeclaredPriorityFromClass(Class<?> clazz) {
+        return extractDeclaredPriority(annotationsOf(clazz));
+    }
+
+    private Integer extractDeclaredPriority(Annotation[] annotations) {
+        if (annotations == null) {
+            return null;
+        }
+
+        for (Annotation annotation : annotations) {
+            String annotationTypeName = annotation.annotationType().getName();
+            if (Priority.class.getName().equals(annotationTypeName) ||
+                    "javax.annotation.Priority".equals(annotationTypeName)) {
+                return readPriorityValue(annotation);
+            }
+        }
+
+        return null;
+    }
+
+    private Integer readPriorityValue(Annotation priorityAnnotation) {
+        try {
+            Method valueMethod = priorityAnnotation.annotationType().getMethod("value");
+            Object value = valueMethod.invoke(priorityAnnotation);
+            if (value instanceof Integer) {
+                return (Integer) value;
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // Ignore malformed annotation implementations and treat as absent.
+        }
+        return null;
     }
 
     private Annotation[] annotationsOf(Class<?> clazz) {
@@ -580,7 +766,11 @@ public class CDI41BeanValidator {
      * @return set of qualifier annotations
      */
     private Set<Annotation> extractQualifiersFromStereotype(Class<? extends Annotation> stereotypeClass) {
-        Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(stereotypeClass.getAnnotations());
+        Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(stereotypeClass.getAnnotations())
+                .stream()
+                // CDI 4.1 §2.8.1.3: @Named declared by stereotype does not become a bean qualifier.
+                .filter(annotation -> !Named.class.equals(annotation.annotationType()))
+                .collect(Collectors.toSet());
 
         // Recursively collect from nested stereotypes
         for (Annotation a : stereotypeClass.getAnnotations()) {
@@ -1035,7 +1225,7 @@ public class CDI41BeanValidator {
             return false;
         }
 
-        if (clazz.getAnnotation(Priority.class) != null) {
+        if (extractEffectivePriority(clazz) != null) {
             return true;
         }
 
@@ -1530,9 +1720,12 @@ public class CDI41BeanValidator {
         }
 
         // Capture @Priority for enabled alternatives (used during resolution ordering)
-        Priority priority = element.getAnnotation(Priority.class);
-        if (priority != null) {
-            producerBean.setPriority(priority.value());
+        Integer priorityValue = extractDeclaredPriority(element.getAnnotations());
+        if (priorityValue == null) {
+            priorityValue = extractEffectivePriority(declaringClass);
+        }
+        if (priorityValue != null) {
+            producerBean.setPriority(priorityValue);
         }
 
         // Register in KnowledgeBase

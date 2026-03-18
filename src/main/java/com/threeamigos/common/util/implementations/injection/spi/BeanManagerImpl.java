@@ -1728,6 +1728,13 @@ public class BeanManagerImpl implements BeanManager {
             }
         }
 
+        if (obj instanceof BeanImpl) {
+            Integer beanPriority = ((BeanImpl<?>) obj).getPriority();
+            if (beanPriority != null) {
+                return beanPriority;
+            }
+        }
+
         if (hasPriorityAnnotation(clazz)) {
             jakarta.annotation.Priority priority = clazz.getAnnotation(jakarta.annotation.Priority.class);
             if (priority != null) {

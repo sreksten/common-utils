@@ -101,6 +101,10 @@ public class BeanImpl<T> implements Bean<T> {
      * Alternative enabled flag - NONSTANDARD feature. It permits enabling an Alternative programmatically.
      */
     private boolean alternativeEnabled;
+    /**
+     * Effective alternative priority, resolved from bean @Priority or stereotype @Priority.
+     */
+    private Integer priority;
 
     /**
      * CDI 4.1 - 2.8 - Stereotypes of a bean<br/>
@@ -249,6 +253,7 @@ public class BeanImpl<T> implements Bean<T> {
         this.scope = null;
         this.alternative = alternative;
         this.alternativeEnabled = !alternative;
+        this.priority = null;
     }
 
     @Override
@@ -361,6 +366,14 @@ public class BeanImpl<T> implements Bean<T> {
 
     public void setAlternativeEnabled(boolean alternativeEnabled) {
         this.alternativeEnabled = alternativeEnabled;
+    }
+
+    public Integer getPriority() {
+        return priority;
+    }
+
+    public void setPriority(Integer priority) {
+        this.priority = priority;
     }
 
     @Override

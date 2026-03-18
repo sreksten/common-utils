@@ -667,6 +667,13 @@ public class CDI41InjectionValidator {
             }
         }
 
+        if (bean instanceof BeanImpl) {
+            Integer beanPriority = ((BeanImpl<?>) bean).getPriority();
+            if (beanPriority != null) {
+                return beanPriority;
+            }
+        }
+
         Priority priority = bean.getBeanClass().getAnnotation(Priority.class);
         if (priority != null) {
             return priority.value();

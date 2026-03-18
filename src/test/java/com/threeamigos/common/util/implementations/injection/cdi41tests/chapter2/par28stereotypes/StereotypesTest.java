@@ -8,6 +8,17 @@ import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet4.ActionBoundBean;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet4.SecureInterceptor;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet4.TransactionalInterceptor;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet5.NamedActionBean;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet6.InvalidNamedActionBean;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet7.InvalidQualifiedStereotypeBean;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet8.InvalidTypedStereotypeBean;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet9.MockStrategy;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet9.StrategyClient;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet10.conflict.ConflictingPriorityBean;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet10.enabling.EnabledServiceClient;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet10.explicit.ExplicitPriorityClient;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet10.ordering.OrderedServiceClient;
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
@@ -20,11 +31,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("Paragraph 2.8 - Stereotypes")
 public class StereotypesTest {
@@ -82,9 +96,108 @@ public class StereotypesTest {
         );
 
         assertIterableEquals(
-                List.of(SecureInterceptor.class, TransactionalInterceptor.class),
-                interceptors.stream().map(InterceptorInfo::getInterceptorClass).toList()
+                Arrays.asList(SecureInterceptor.class, TransactionalInterceptor.class),
+                interceptors.stream()
+                        .map(InterceptorInfo::getInterceptorClass)
+                        .collect(Collectors.toList())
         );
+    }
+
+    @Test
+    @DisplayName("2.8.1.3 - Empty @Named on stereotype gives bean a defaulted name")
+    void emptyNamedOnStereotypeGivesBeanDefaultedName() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), NamedActionBean.class);
+        syringe.setup();
+
+        Bean<?> bean = findBean(syringe, NamedActionBean.class);
+        assertEquals("namedActionBean", bean.getName());
+    }
+
+    @Test
+    @DisplayName("2.8.1.3 - @Named declared by stereotype is not a bean qualifier")
+    void namedDeclaredByStereotypeIsNotABeanQualifier() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), NamedActionBean.class);
+        syringe.setup();
+
+        Bean<?> bean = findBean(syringe, NamedActionBean.class);
+        boolean hasNamedQualifier = bean.getQualifiers().stream()
+                .anyMatch(annotation -> annotation.annotationType().equals(jakarta.inject.Named.class));
+        assertEquals(false, hasNamedQualifier);
+    }
+
+    @Test
+    @DisplayName("2.8.1.3 - Non-empty @Named on stereotype is a definition error")
+    void nonEmptyNamedOnStereotypeIsDefinitionError() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidNamedActionBean.class);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("2.8 - Stereotype declaring qualifier other than @Named is non-portable")
+    void stereotypeDeclaringQualifierOtherThanNamedIsNonPortable() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidQualifiedStereotypeBean.class);
+
+        assertThrows(NonPortableBehaviourException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("2.8 - Stereotype annotated with @Typed is non-portable")
+    void stereotypeAnnotatedWithTypedIsNonPortable() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidTypedStereotypeBean.class);
+
+        assertThrows(NonPortableBehaviourException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("2.8.1.4 - @Alternative declared by stereotype marks bean as alternative")
+    void alternativeDeclaredByStereotypeMarksBeanAsAlternative() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), StrategyClient.class);
+        syringe.setup();
+
+        Bean<?> mockBean = findBean(syringe, MockStrategy.class);
+        assertTrue(mockBean.isAlternative());
+
+        StrategyClient client = syringe.inject(StrategyClient.class);
+        assertEquals("default", client.strategyKind());
+    }
+
+    @Test
+    @DisplayName("2.8.1.5 - @Priority on stereotype enables an alternative bean")
+    void priorityOnStereotypeEnablesAlternativeBean() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), EnabledServiceClient.class);
+        syringe.setup();
+
+        EnabledServiceClient client = syringe.inject(EnabledServiceClient.class);
+        assertEquals("stereotypePriorityAlternative", client.selectedServiceType());
+    }
+
+    @Test
+    @DisplayName("2.8.1.5 - @Priority on stereotype participates in alternative ordering")
+    void priorityOnStereotypeParticipatesInAlternativeOrdering() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), OrderedServiceClient.class);
+        syringe.setup();
+
+        OrderedServiceClient client = syringe.inject(OrderedServiceClient.class);
+        assertEquals("highPriorityStereotypeAlternative", client.selectedServiceType());
+    }
+
+    @Test
+    @DisplayName("2.8.1.5 - Different stereotype priorities require explicit bean @Priority")
+    void differentStereotypePrioritiesRequireExplicitBeanPriority() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ConflictingPriorityBean.class);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("2.8.1.5 - Explicit bean @Priority overrides stereotype priorities")
+    void explicitBeanPriorityOverridesStereotypePriorities() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ExplicitPriorityClient.class);
+        syringe.setup();
+
+        ExplicitPriorityClient client = syringe.inject(ExplicitPriorityClient.class);
+        assertEquals("competingClassPriorityBean", client.selectedServiceType());
     }
 
     private Bean<?> findBean(Syringe syringe, Class<?> beanClass) {
