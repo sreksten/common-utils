@@ -126,8 +126,13 @@ public class BeanImpl<T> implements Bean<T> {
      */
     private final Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
 
-    // Bean
+    /**
+     * CDI 4.1 - 3.1 - Managed beans<br/>
+     * A managed bean is a bean implemented by a Java class. This class is called the bean class of
+     * the managed bean.
+     */
     private final Class<T> beanClass;
+
     private final Set<InjectionPoint> injectionPoints = new HashSet<>();
 
     // Validation state

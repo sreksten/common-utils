@@ -296,7 +296,10 @@ public class CDI41BeanValidator {
         // Populate BeanAttributes (now that BeanImpl supports it)
         bean.setName(extractBeanName(clazz));
         bean.setQualifiers(extractBeanQualifiers(clazz));
-        bean.setScope(extractBeanScope(clazz, beanScope));
+        Class<? extends Annotation> effectiveBeanScope = extractBeanScope(clazz, beanScope);
+        validateManagedBeanPublicFieldScopeConstraint(clazz, effectiveBeanScope);
+        validateManagedBeanGenericTypeScopeConstraint(clazz, effectiveBeanScope);
+        bean.setScope(effectiveBeanScope);
 
         BeanTypesExtractor.ExtractionResult managedBeanTypes = beanTypesExtractor.extractManagedBeanTypes(clazz);
         for (String error : managedBeanTypes.getDefinitionErrors()) {
@@ -1351,6 +1354,72 @@ public class CDI41BeanValidator {
 
         // No explicit scope: resolve default scope from stereotypes (if any), otherwise @Dependent.
         return extractBeanScope(clazz);
+    }
+
+    /**
+     * CDI 4.1 §3.1: A managed bean with a non-static public field must declare a pseudo-scope.
+     * A normal scope on such a bean is a definition error.
+     */
+    private void validateManagedBeanPublicFieldScopeConstraint(Class<?> clazz,
+                                                               Class<? extends Annotation> scopeAnnotation) {
+        if (scopeAnnotation == null || !isNormalScope(scopeAnnotation)) {
+            return;
+        }
+
+        List<String> invalidFields = Arrays.stream(clazz.getFields())
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .filter(field -> !field.isSynthetic())
+                .map(field -> field.getDeclaringClass().getName() + "#" + field.getName())
+                .collect(Collectors.toList());
+
+        if (!invalidFields.isEmpty()) {
+            throw new DefinitionException(clazz.getName() +
+                    ": declares normal scope @" + scopeAnnotation.getSimpleName() +
+                    " and non-static public field(s) " + String.join(", ", invalidFields) +
+                    ". Such beans must declare a pseudo-scope (e.g. @Dependent or @Singleton).");
+        }
+    }
+
+    /**
+     * CDI 4.1 §3.1: a managed bean with a parameterized bean class must have @Dependent scope.
+     */
+    private void validateManagedBeanGenericTypeScopeConstraint(Class<?> clazz,
+                                                               Class<? extends Annotation> scopeAnnotation) {
+        if (clazz.getTypeParameters().length == 0) {
+            return;
+        }
+
+        if (scopeAnnotation == null ||
+                Dependent.class.equals(scopeAnnotation) ||
+                "javax.enterprise.context.Dependent".equals(scopeAnnotation.getName())) {
+            return;
+        }
+
+        throw new DefinitionException(clazz.getName() +
+                ": managed bean class is generic and declares scope @" +
+                scopeAnnotation.getSimpleName() +
+                ". Generic managed beans must have @Dependent scope.");
+    }
+
+    private boolean isNormalScope(Class<? extends Annotation> scopeAnnotation) {
+        if (scopeAnnotation == null) {
+            return false;
+        }
+
+        String scopeName = scopeAnnotation.getName();
+        if ("jakarta.enterprise.context.ApplicationScoped".equals(scopeName) ||
+                "jakarta.enterprise.context.RequestScoped".equals(scopeName) ||
+                "jakarta.enterprise.context.SessionScoped".equals(scopeName) ||
+                "jakarta.enterprise.context.ConversationScoped".equals(scopeName) ||
+                "javax.enterprise.context.ApplicationScoped".equals(scopeName) ||
+                "javax.enterprise.context.RequestScoped".equals(scopeName) ||
+                "javax.enterprise.context.SessionScoped".equals(scopeName) ||
+                "javax.enterprise.context.ConversationScoped".equals(scopeName)) {
+            return true;
+        }
+
+        return scopeAnnotation.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
+                scopeAnnotation.isAnnotationPresent(javax.enterprise.context.NormalScope.class);
     }
 
     private boolean isScopeAnnotationType(Class<? extends Annotation> at) {
