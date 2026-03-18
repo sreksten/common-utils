@@ -42,6 +42,7 @@ public class ProducerBean<T> implements Bean<T> {
     private final Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
     private final Set<Type> types = new HashSet<>();
     private final boolean alternative;
+    private boolean alternativeEnabled;
     private Integer priority; // @Priority value when the alternative is enabled
     private jakarta.enterprise.inject.spi.InjectionTarget<T> customInjectionTarget;
 
@@ -65,6 +66,7 @@ public class ProducerBean<T> implements Bean<T> {
         this.producerMethod = producerMethod;
         this.producerField = null;
         this.alternative = alternative;
+        this.alternativeEnabled = !alternative;
         this.scope = Dependent.class; // Default scope
     }
 
@@ -76,6 +78,7 @@ public class ProducerBean<T> implements Bean<T> {
         this.producerMethod = null;
         this.producerField = producerField;
         this.alternative = alternative;
+        this.alternativeEnabled = !alternative;
         this.scope = Dependent.class; // Default scope
     }
 
@@ -165,6 +168,14 @@ public class ProducerBean<T> implements Bean<T> {
     @Override
     public boolean isAlternative() {
         return alternative;
+    }
+
+    public boolean isAlternativeEnabled() {
+        return !alternative || alternativeEnabled;
+    }
+
+    public void setAlternativeEnabled(boolean alternativeEnabled) {
+        this.alternativeEnabled = alternativeEnabled;
     }
 
     public void setPriority(Integer priority) {

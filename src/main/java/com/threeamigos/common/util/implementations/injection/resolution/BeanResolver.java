@@ -10,6 +10,7 @@ import com.threeamigos.common.util.implementations.injection.util.RawTypeExtract
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
@@ -138,6 +139,13 @@ public class BeanResolver implements DependencyResolver {
         }
 
         if (candidates.size() > 1) {
+            Optional<Bean<?>> resolvedCandidate = resolveByAlternativePrecedence(candidates);
+            if (resolvedCandidate.isPresent()) {
+                candidates = Collections.singletonList(resolvedCandidate.get());
+            }
+        }
+
+        if (candidates.size() > 1) {
             String message = buildResolutionMessage(
                 "Ambiguous dependency",
                 requiredType,
@@ -179,6 +187,10 @@ public class BeanResolver implements DependencyResolver {
 
         // Search through all valid beans
         for (Bean<?> bean : knowledgeBase.getValidBeans()) {
+            if (!isBeanEnabledForResolution(bean)) {
+                continue;
+            }
+
             // Skip beans with validation errors
             if (bean instanceof BeanImpl && ((BeanImpl<?>) bean).hasValidationErrors()) {
                 continue;
@@ -215,6 +227,81 @@ public class BeanResolver implements DependencyResolver {
         }
 
         return matches;
+    }
+
+    /**
+     * Resolves matching beans using CDI alternative precedence:
+     * enabled alternatives are preferred over non-alternatives and the highest
+     * priority alternative wins. Equal top priority remains ambiguous.
+     */
+    private Optional<Bean<?>> resolveByAlternativePrecedence(Collection<Bean<?>> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return Optional.empty();
+        }
+        if (candidates.size() == 1) {
+            return Optional.of(candidates.iterator().next());
+        }
+
+        List<Bean<?>> alternatives = candidates.stream()
+                .filter(Bean::isAlternative)
+                .collect(Collectors.toList());
+
+        if (alternatives.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Bean<?> winner = null;
+        int winnerPriority = Integer.MIN_VALUE;
+        boolean tie = false;
+
+        for (Bean<?> alternative : alternatives) {
+            int priority = getAlternativePriority(alternative);
+            if (winner == null || priority > winnerPriority) {
+                winner = alternative;
+                winnerPriority = priority;
+                tie = false;
+            } else if (priority == winnerPriority) {
+                tie = true;
+            }
+        }
+
+        if (tie || winner == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(winner);
+    }
+
+    private int getAlternativePriority(Bean<?> bean) {
+        if (bean instanceof ProducerBean) {
+            Integer producerPriority = ((ProducerBean<?>) bean).getPriority();
+            if (producerPriority != null) {
+                return producerPriority;
+            }
+        }
+
+        Priority priority = bean.getBeanClass().getAnnotation(Priority.class);
+        if (priority != null) {
+            return priority.value();
+        }
+
+        return jakarta.interceptor.Interceptor.Priority.APPLICATION;
+    }
+
+    private boolean isBeanEnabledForResolution(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        if (!bean.isAlternative()) {
+            return true;
+        }
+        if (bean instanceof BeanImpl) {
+            return ((BeanImpl<?>) bean).isAlternativeEnabled();
+        }
+        if (bean instanceof ProducerBean) {
+            return ((ProducerBean<?>) bean).isAlternativeEnabled();
+        }
+        return true;
     }
 
     /**

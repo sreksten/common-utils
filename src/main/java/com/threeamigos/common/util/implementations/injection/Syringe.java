@@ -196,6 +196,23 @@ public class Syringe {
     }
 
     /**
+     * Programmatically enables an {@code @Alternative} bean class.
+     *
+     * <p>This is useful in tests and controlled bootstrap scenarios where alternatives
+     * must be selected without beans.xml.
+     *
+     * @param alternativeClass alternative bean class to enable
+     */
+    public void enableAlternative(Class<?> alternativeClass) {
+        if (initialized) {
+            throw new IllegalStateException("Cannot enable alternatives after container initialization");
+        }
+
+        knowledgeBase.enableAlternative(alternativeClass);
+        info("Programmatically enabled alternative: " + alternativeClass.getName());
+    }
+
+    /**
      * Forces a bean archive mode for all discovered classes.
      *
      * <p>This is primarily useful for tests that need deterministic discovery behavior

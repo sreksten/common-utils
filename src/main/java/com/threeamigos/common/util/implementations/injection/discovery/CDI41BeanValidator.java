@@ -20,6 +20,7 @@ import jakarta.inject.Named;
 import jakarta.inject.Qualifier;
 import jakarta.inject.Scope;
 import jakarta.enterprise.context.*;
+import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Stereotype;
 
 import java.lang.annotation.Annotation;
@@ -86,6 +87,8 @@ public class CDI41BeanValidator {
 
         // CDI 4.1 §2.4.2: scope types with attributes are non-portable.
         validateNonPortableScopeTypes(clazz);
+        // CDI 4.1 §2.8: a stereotype may declare at most one scope.
+        validateStereotypeScopeDeclaration(clazz);
 
         // 1) Bean class eligibility (managed bean type)
         if (!isCandidateBeanClass(clazz, beanArchiveMode)) {
@@ -223,6 +226,10 @@ public class CDI41BeanValidator {
         boolean isDecorator = hasDecoratorAnnotation(clazz);
 
         if (isInterceptor) {
+            if (isAlternativeDeclared(clazz)) {
+                throw new NonPortableBehaviourException(clazz.getName() +
+                        ": interceptor is declared as @Alternative. Alternative interceptors are non-portable.");
+            }
             String interceptorName = extractBeanName(clazz);
             if (interceptorName != null && !interceptorName.isEmpty()) {
                 throw new NonPortableBehaviourException(clazz.getName() +
@@ -254,12 +261,13 @@ public class CDI41BeanValidator {
         }
 
         // 7) Check if this is an alternative bean
-        boolean alternative = hasAlternativeAnnotation(clazz);
-        boolean alternativeEnabled = isAlternativeEnabled(clazz, alternative);
+        boolean alternative = isAlternativeDeclared(clazz);
+        boolean alternativeEnabled = isAlternativeEnabled(clazz, clazz, alternative);
 
         // Build and register Bean (even if invalid, to track all beans)
         // Mark alternative based on annotation; enablement affects resolution elsewhere.
         BeanImpl<T> bean = new BeanImpl<>(clazz, alternative);
+        bean.setAlternativeEnabled(alternativeEnabled);
 
         // Mark bean as having validation errors if validation failed
         if (!valid) {
@@ -348,6 +356,46 @@ public class CDI41BeanValidator {
                 throw new NonPortableBehaviourException(clazz.getName() +
                         ": declares non-portable scope type @" + annotationType.getSimpleName() +
                         " which has attributes.");
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateStereotypeScopeDeclaration(Class<?> clazz) {
+        if (!clazz.isAnnotation()) {
+            return;
+        }
+
+        Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
+        if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+            return;
+        }
+
+        Set<Class<? extends Annotation>> declaredScopes = new LinkedHashSet<>();
+        collectStereotypeScopes(annotationType, declaredScopes, new HashSet<>());
+
+        if (declaredScopes.size() > 1) {
+            String scopeNames = declaredScopes.stream()
+                    .map(scope -> "@" + scope.getSimpleName())
+                    .collect(Collectors.joining(", "));
+            throw new DefinitionException(annotationType.getName() +
+                    ": stereotype declares multiple scopes: " + scopeNames);
+        }
+    }
+
+    private void collectStereotypeScopes(Class<? extends Annotation> stereotypeType,
+                                         Set<Class<? extends Annotation>> scopes,
+                                         Set<Class<? extends Annotation>> visited) {
+        if (!visited.add(stereotypeType)) {
+            return;
+        }
+
+        for (Annotation meta : stereotypeType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (isScopeAnnotationType(metaType)) {
+                scopes.add(metaType);
+            } else if (hasMetaAnnotation(metaType, Stereotype.class)) {
+                collectStereotypeScopes(metaType, scopes, visited);
             }
         }
     }
@@ -906,47 +954,105 @@ public class CDI41BeanValidator {
     }
 
     /**
-     * CDI 4.1 alternative enabling helper usable for bean classes and producer members.
-     *
-     * <p>CDI 4.1 Section 5.1.2: Alternatives can be enabled via:
-     * <ul>
-     *   <li>@Priority annotation on the class (preferred in CDI 4.1)</li>
-     *   <li>beans.xml &lt;alternatives&gt; section (traditional method)</li>
-     * </ul>
-     *
-     * <p>For stereotype-based alternatives, the stereotype itself (not the class)
-     * must be listed in beans.xml or annotated with @Priority.
+     * Returns true when a class is declared as an alternative directly or via stereotype.
      */
-    private boolean isAlternativeEnabled(AnnotatedElement element, boolean annotatedAlternative) {
-        if (!annotatedAlternative) {
+    private boolean isAlternativeDeclared(Class<?> clazz) {
+        if (hasAlternativeAnnotation(clazz)) {
+            return true;
+        }
+
+        Set<Class<? extends Annotation>> visited = new HashSet<>();
+        for (Annotation annotation : annotationsOf(clazz)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (hasMetaAnnotation(annotationType, Stereotype.class) &&
+                stereotypeDeclaresAlternative(annotationType, visited)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean stereotypeDeclaresAlternative(Class<? extends Annotation> stereotypeType,
+                                                  Set<Class<? extends Annotation>> visited) {
+        if (!visited.add(stereotypeType)) {
             return false;
         }
 
-        // Method 1: Check for @Priority annotation
-        Priority priority = element.getAnnotation(Priority.class);
-        if (priority != null) {
-            return true; // enabled by @Priority
+        if (hasMetaAnnotation(stereotypeType, Alternative.class)) {
+            return true;
         }
 
-        // Method 2: Check beans.xml alternatives section
-        if (element instanceof Class) {
-            Class<?> clazz = (Class<?>) element;
-
-            // Check if class is directly listed as alternative in beans.xml
-            if (knowledgeBase.isAlternativeEnabledInBeansXml(clazz.getName())) {
+        for (Annotation meta : stereotypeType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (hasMetaAnnotation(metaType, Stereotype.class) &&
+                stereotypeDeclaresAlternative(metaType, visited)) {
                 return true;
             }
+        }
 
-            // Check if class has a stereotype that's enabled as alternative in beans.xml
-            for (Annotation annotation : annotationsOf(clazz)) {
-                Class<? extends Annotation> annotationType = annotation.annotationType();
+        return false;
+    }
 
-                // Check if this is a stereotype annotation
-                if (AnnotationsEnum.STEREOTYPE.isPresent(annotationType)) {
-                    // Check if the stereotype is listed in beans.xml alternatives
-                    if (knowledgeBase.isAlternativeEnabledInBeansXml(annotationType.getName())) {
-                        return true;
-                    }
+    /**
+     * CDI 4.1 alternative enabling helper usable for bean classes and producer members.
+     *
+     * <p>Alternatives can be enabled by:
+     * <ul>
+     *   <li>{@code @Priority}</li>
+     *   <li>beans.xml {@code <alternatives>}</li>
+     *   <li>programmatic enablement via {@link Syringe#enableAlternative(Class)}</li>
+     * </ul>
+     */
+    private boolean isAlternativeEnabled(AnnotatedElement element,
+                                         Class<?> declaringClass,
+                                         boolean alternativeDeclared) {
+        if (!alternativeDeclared) {
+            return false;
+        }
+
+        // Producer member-level @Priority enables member alternatives.
+        Priority priority = element.getAnnotation(Priority.class);
+        if (priority != null) {
+            return true;
+        }
+
+        // Class-level checks (bean class itself or producer declaring class).
+        if (declaringClass != null && isAlternativeEnabledForClass(declaringClass)) {
+            return true;
+        }
+
+        // Fallback for class elements when declaringClass is null.
+        if (element instanceof Class) {
+            return isAlternativeEnabledForClass((Class<?>) element);
+        }
+
+        return false;
+    }
+
+    private boolean isAlternativeEnabledForClass(Class<?> clazz) {
+        if (clazz == null) {
+            return false;
+        }
+
+        if (clazz.getAnnotation(Priority.class) != null) {
+            return true;
+        }
+
+        if (knowledgeBase.isAlternativeEnabledProgrammatically(clazz.getName())) {
+            return true;
+        }
+
+        if (knowledgeBase.isAlternativeEnabledInBeansXml(clazz.getName())) {
+            return true;
+        }
+
+        for (Annotation annotation : annotationsOf(clazz)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (hasMetaAnnotation(annotationType, Stereotype.class)) {
+                if (knowledgeBase.isAlternativeEnabledProgrammatically(annotationType.getName()) ||
+                    knowledgeBase.isAlternativeEnabledInBeansXml(annotationType.getName())) {
+                    return true;
                 }
             }
         }
@@ -1356,13 +1462,14 @@ public class CDI41BeanValidator {
         AnnotatedElement element = (producerMethod != null) ? producerMethod : producerField;
 
         // Determine alternative status at element level
-        boolean annotatedAlternative = hasAlternativeAnnotation(declaringClass) || hasAlternativeAnnotation(element);
-        boolean alternativeEnabled = isAlternativeEnabled(element, annotatedAlternative);
+        boolean annotatedAlternative = isAlternativeDeclared(declaringClass) || hasAlternativeAnnotation(element);
+        boolean alternativeEnabled = isAlternativeEnabled(element, declaringClass, annotatedAlternative);
 
         // Create ProducerBean
         ProducerBean<?> producerBean;
         if (producerMethod != null) {
             producerBean = new ProducerBean<>(declaringClass, producerMethod, annotatedAlternative);
+            producerBean.setAlternativeEnabled(alternativeEnabled);
 
             // Set bean attributes from producer method annotations
             producerBean.setName(extractProducerName(producerMethod));
@@ -1389,6 +1496,7 @@ public class CDI41BeanValidator {
             }
         } else if (producerField != null) {
             producerBean = new ProducerBean<>(declaringClass, producerField, annotatedAlternative);
+            producerBean.setAlternativeEnabled(alternativeEnabled);
 
             // Set bean attributes from producer field annotations
             producerBean.setName(extractProducerName(producerField));

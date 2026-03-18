@@ -203,7 +203,10 @@ public class InterceptorResolver {
             }
 
             // Traverse superclass first (preserves natural overriding semantics)
-            stack.push(current.getSuperclass());
+            Class<?> superclass = current.getSuperclass();
+            if (superclass != null) {
+                stack.push(superclass);
+            }
             // Then traverse interfaces (may include generic parents)
             for (Class<?> iface : current.getInterfaces()) {
                 stack.push(iface);

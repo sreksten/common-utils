@@ -11,11 +11,10 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Inter
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
-import jakarta.enterprise.inject.spi.Bean;
-import jakarta.enterprise.inject.spi.InjectionPoint;
-import jakarta.enterprise.inject.spi.InjectionTarget;
-import jakarta.enterprise.inject.spi.InterceptionType;
+import jakarta.enterprise.inject.spi.*;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
@@ -62,7 +61,7 @@ public class BeanImpl<T> implements Bean<T> {
      * </ul>
      * CDI 4.1 - 3.1.2 - Bean types of a managed bean:
      * <ul>
-     * <li>The unrestricted set of bean types for a managed bean contains the bean class, every superclass
+     * <li>The unrestricted set of bean types for a managed bean contains the bean class, every superclass,
      * and all interfaces it implements directly or indirectly.</li>
      * <li>The resulting set of bean types for a managed bean consists only of legal bean types, all other types
      * are removed from the set of bean types.</li>
@@ -84,22 +83,48 @@ public class BeanImpl<T> implements Bean<T> {
     private final Set<Annotation> qualifiers = new HashSet<>();
 
     /**
-     * Scope of the bean
+     * CDI 4.1 - 2.4 - Scope of the bean
      */
     private Class<? extends Annotation> scope;
 
     /**
-     * Name of the bean (optional)
+     * CDI 4.1 - 2.6 - Name of the bean (optional)
      */
     private String name;
+
+    /**
+     * CDI 4.1 - 2.7 - Alternative flag.<br/>
+     * To be enabled, the Alternative must declare a @Priority or be present in the META-INF/beans.xml file.
+     */
+    private final boolean alternative;
+    /**
+     * Alternative enabled flag - NONSTANDARD feature. It permits enabling an Alternative programmatically.
+     */
+    private boolean alternativeEnabled;
+
+    /**
+     * CDI 4.1 - 2.8 - Stereotypes of a bean<br/>
+     * In many systems, the use of architectural patterns produces a set of recurring bean roles. A stereotype
+     * allows a framework developer to identify such a role and declare some common metadata for
+     * beans with that role in a central place.<br/>
+     * A stereotype encapsulates any combination of:
+     * <ul>
+     * <li>a default scope</li>
+     * <li>a set of interceptor bindings</li>
+     * </ul>
+     * A stereotype may also specify that:
+     * <ul>
+     * <li>all beans with the stereotype have defaulted bean names, or</li>
+     * <li>all beans with the stereotype are alternatives, or</li>
+     * <li>all beans with the stereotype have predefined @Priority.</li>
+     * </ul>
+     * A bean may declare zero, one, or multiple stereotypes.
+     */
+    private final Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
 
     // Bean
     private final Class<T> beanClass;
     private final Set<InjectionPoint> injectionPoints = new HashSet<>();
-
-    // BeanAttributes
-    private final Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
-    private final boolean alternative;
 
     // Validation state
     private boolean hasValidationErrors = false;
@@ -119,7 +144,7 @@ public class BeanImpl<T> implements Bean<T> {
     // Passivation lifecycle methods for @SessionScoped beans
     // NOTE: @PrePassivate/@PostActivate are EJB annotations (jakarta.ejb), NOT CDI 4.1 standard.
     // CDI 4.1 relies on Java's Serializable (writeObject/readObject). This is optional support
-    // for applications using both CDI and EJB. If jakarta.ejb is not on classpath, these remain empty.
+    // for applications using both CDI and EJB. If jakarta.ejb is not on the classpath, these remain empty.
     private final List<Method> prePassivateMethods = new ArrayList<>();
     private final List<Method> postActivateMethods = new ArrayList<>();
 
@@ -132,13 +157,13 @@ public class BeanImpl<T> implements Bean<T> {
 
     /**
      * InterceptorResolver - resolves which interceptors apply to this bean's methods.
-     * Set during container initialization by InjectorImpl.
+     * Set during container initialization.
      */
     private InterceptorResolver interceptorResolver;
 
     /**
      * KnowledgeBase - provides access to interceptor metadata.
-     * Set during container initialization by InjectorImpl.
+     * Set during container initialization.
      */
     private KnowledgeBase knowledgeBase;
 
@@ -147,7 +172,6 @@ public class BeanImpl<T> implements Bean<T> {
      * Built once during bean initialization and cached for performance.
      * Key: Method object from beanClass
      * Value: Pre-built InterceptorChain for that method
-     *
      * Only contains entries for methods that have interceptors.
      * Methods without interceptors are not in this map (for memory efficiency).
      */
@@ -178,10 +202,8 @@ public class BeanImpl<T> implements Bean<T> {
      * Cache of interceptor instances.
      * Key: Interceptor class
      * Value: Interceptor instance
-     *
      * Interceptor instances are created once per bean and reused for all method calls.
      * This is per CDI spec: interceptors are stateful and bound to the bean instance.
-     *
      * Thread-safety: ConcurrentHashMap ensures thread-safe lazy initialization of interceptor instances.
      */
     private final Map<Class<?>, Object> interceptorInstanceCache = new ConcurrentHashMap<>();
@@ -212,20 +234,21 @@ public class BeanImpl<T> implements Bean<T> {
      * BeanManager - needed for creating decorator instances.
      * Set during container initialization by InjectorImpl2.
      */
-    private jakarta.enterprise.inject.spi.BeanManager beanManager;
+    private BeanManager beanManager;
 
     /**
      * Optional InjectionTarget provided/modified by ProcessInjectionTarget extension events.
      * When present, lifecycle operations delegate to this InjectionTarget instead of the
      * internal implementation.
      */
-    private jakarta.enterprise.inject.spi.InjectionTarget<T> customInjectionTarget;
+    private InjectionTarget<T> customInjectionTarget;
 
     public BeanImpl(Class<T> beanClass, boolean alternative) {
         this.beanClass = beanClass;
         this.name = "";
         this.scope = null;
         this.alternative = alternative;
+        this.alternativeEnabled = !alternative;
     }
 
     @Override
@@ -332,6 +355,14 @@ public class BeanImpl<T> implements Bean<T> {
         return alternative;
     }
 
+    public boolean isAlternativeEnabled() {
+        return !alternative || alternativeEnabled;
+    }
+
+    public void setAlternativeEnabled(boolean alternativeEnabled) {
+        this.alternativeEnabled = alternativeEnabled;
+    }
+
     @Override
     public T create(CreationalContext<T> creationalContext) {
         try {
@@ -366,8 +397,8 @@ public class BeanImpl<T> implements Bean<T> {
             // bean.create() and returned immediately. So we need to wrap them here.
             //
             // How to tell if this is a @Dependent bean?
-            // - Check if scope is null (CDI spec: @Dependent beans have no scope annotation)
-            // - Or check if scope is jakarta.enterprise.context.Dependent.class
+            // - Check if the scope is null (CDI spec: @Dependent beans have no scope annotation)
+            // - Or check if the scope is jakarta.enterprise.context.Dependent.class
             if (hasInterceptors() && isDependent()) {
                 instance = createInterceptorAwareProxy(instance);
             }
@@ -389,11 +420,11 @@ public class BeanImpl<T> implements Bean<T> {
     /**
      * Checks if this bean is @Dependent scoped.
      * <p>
-     * @Dependent is the default scope in CDI and is represented by either:
+     * Dependent is the default scope in CDI and is represented by either:
      * - null scope (no scope annotation)
      * - jakarta.enterprise.context.Dependent.class
      * <p>
-     * @Dependent beans are special because they:
+     * Dependent beans are special because they:
      * - Don't go through scope contexts (no context.get() call)
      * - Are created directly via bean.create()
      * - Have the same lifecycle as their injection point
@@ -407,8 +438,8 @@ public class BeanImpl<T> implements Bean<T> {
             return true;
         }
 
-        // Check if scope is explicitly @Dependent
-        return scope.equals(jakarta.enterprise.context.Dependent.class);
+        // Check if the scope is explicitly @Dependent
+        return scope.equals(Dependent.class);
     }
 
     @Override
@@ -482,7 +513,9 @@ public class BeanImpl<T> implements Bean<T> {
             // Invoke constructor interceptor chain
             // The chain will execute all @AroundConstruct interceptors, then invoke the actual constructor
             Object result = constructorInterceptorChain.invoke(null, constructor, args);
-            return (T) result;
+            @SuppressWarnings("unchecked")
+            T resultT = (T) result;
+            return resultT;
         } else {
             // No constructor interceptors, invoke directly
             return constructor.newInstance(args);
@@ -600,7 +633,7 @@ public class BeanImpl<T> implements Bean<T> {
                             !Modifier.isPrivate(superMethod.getModifiers());
 
                     if (isSuperPackagePrivate) {
-                        // Package-private method is only overridden if in same package
+                        // Package-private method is only overridden if in the same package
                         String superPackage = superMethod.getDeclaringClass().getPackage() != null ?
                                 superMethod.getDeclaringClass().getPackage().getName() : "";
                         String subPackage = subMethod.getDeclaringClass().getPackage() != null ?
@@ -611,7 +644,7 @@ public class BeanImpl<T> implements Bean<T> {
                     return true; // Method is overridden
                 }
             } catch (NoSuchMethodException e) {
-                // Method not found in this class, continue to superclass
+                // Method was not found in this class, continue to superclass
             }
             current = current.getSuperclass();
         }
@@ -642,7 +675,7 @@ public class BeanImpl<T> implements Bean<T> {
     private void invokePostConstruct(T instance) throws Exception {
         // PHASE 4: Check for @PostConstruct interceptors
         if (postConstructInterceptorChain != null) {
-            // Invoke interceptor chain which will then invoke all target @PostConstruct methods
+            // Invoke the interceptor chain which will then invoke all target @PostConstruct methods
             // We pass the list of methods to be invoked in order
             postConstructInterceptorChain.invokeLifecycleChain(instance, postConstructMethods);
         } else if (!postConstructMethods.isEmpty()) {
@@ -678,7 +711,7 @@ public class BeanImpl<T> implements Bean<T> {
     private void invokePreDestroy(T instance) throws Exception {
         // PHASE 4: Check for @PreDestroy interceptors
         if (preDestroyInterceptorChain != null) {
-            // Invoke interceptor chain which will then invoke all target @PreDestroy methods
+            // Invoke the interceptor chain which will then invoke all target @PreDestroy methods.
             // Methods must be in reverse order for @PreDestroy: subclass → superclass
             List<Method> reversedMethods = new ArrayList<>(preDestroyMethods);
             Collections.reverse(reversedMethods);
@@ -903,7 +936,7 @@ public class BeanImpl<T> implements Bean<T> {
      * Gets all @PostConstruct methods in the bean hierarchy.
      * Methods are ordered from superclass to subclass (execution order).
      *
-     * @return list of @PostConstruct methods (may be empty)
+     * @return list of @PostConstruct methods (can be empty)
      */
     public List<Method> getPostConstructMethods() {
         return Collections.unmodifiableList(postConstructMethods);
@@ -925,7 +958,7 @@ public class BeanImpl<T> implements Bean<T> {
      * Gets all @PreDestroy methods in the bean hierarchy.
      * Methods are ordered from subclass to superclass (execution order).
      *
-     * @return list of @PreDestroy methods (may be empty)
+     * @return list of @PreDestroy methods (can be empty)
      */
     public List<Method> getPreDestroyMethods() {
         return Collections.unmodifiableList(preDestroyMethods);
@@ -948,7 +981,7 @@ public class BeanImpl<T> implements Bean<T> {
      * Gets all @PrePassivate methods in the bean hierarchy.
      * Methods are ordered from superclass to subclass (execution order).
      *
-     * @return list of @PrePassivate methods (may be empty)
+     * @return list of @PrePassivate methods (can be empty)
      */
     public List<Method> getPrePassivateMethods() {
         return Collections.unmodifiableList(prePassivateMethods);
@@ -970,7 +1003,7 @@ public class BeanImpl<T> implements Bean<T> {
      * Gets all @PostActivate methods in the bean hierarchy.
      * Methods are ordered from superclass to subclass (execution order).
      *
-     * @return list of @PostActivate methods (may be empty)
+     * @return list of @PostActivate methods (can be empty)
      */
     public List<Method> getPostActivateMethods() {
         return Collections.unmodifiableList(postActivateMethods);
@@ -1080,10 +1113,10 @@ public class BeanImpl<T> implements Bean<T> {
      * <pre>
      * {@literal @}ApplicationScoped
      * public class OrderService {
-     *     {@literal @}Transactional  // Method-level binding
-     *     public void createOrder(Order order) { ... }  // Will have interceptors
+     *     {@literal @}Transactional // Method-level binding
+     *     public void createOrder(Order order) { ... } // Will have interceptors
      *
-     *     public Order getOrder(String id) { ... }      // No interceptors
+     *     public Order getOrder(String id) { ... } // No interceptors
      * }
      *
      * // Result:
@@ -1207,7 +1240,7 @@ public class BeanImpl<T> implements Bean<T> {
      * This method:
      * <ol>
      * <li>Creates interceptor instances for each InterceptorInfo (with caching)</li>
-     * <li>Retrieves the appropriate interceptor method based on interception type</li>
+     * <li>Retrieves the appropriate interceptor method based on the interception type</li>
      * <li>Builds a chain using the InterceptorChain.Builder</li>
      * <li>Returns the immutable, thread-safe chain</li>
      * </ol>
@@ -1237,11 +1270,11 @@ public class BeanImpl<T> implements Bean<T> {
             // Get or create the interceptor instance (cached)
             Object interceptorInstance = getOrCreateInterceptorInstance(interceptorInfo);
 
-            // Get the appropriate interceptor method based on interception type
+            // Get the appropriate interceptor method based on the interception type
             Method interceptorMethod = getInterceptorMethod(interceptorInfo, interceptionType);
 
             if (interceptorMethod != null) {
-                // Add this interceptor to the chain
+                // Add this interceptor to the chain.
                 // The chain will invoke: interceptorMethod.invoke(interceptorInstance, invocationContext)
                 builder.addInterceptor(interceptorInstance, interceptorMethod);
             }
@@ -1327,7 +1360,7 @@ public class BeanImpl<T> implements Bean<T> {
      * {@literal @}Interceptor
      * {@literal @}Logged
      * public class InvocationCounterInterceptor {
-     *     private int invocationCount = 0;  // State maintained across calls
+     *     private int invocationCount = 0; // State maintained across calls
      *
      *     {@literal @}AroundInvoke
      *     public Object count(InvocationContext ctx) {
@@ -1340,8 +1373,8 @@ public class BeanImpl<T> implements Bean<T> {
      *
      * <h3>Creation Process:</h3>
      * <ol>
-     * <li>Check if instance exists in cache (thread-safe lookup)</li>
-     * <li>If not, create new instance via reflection</li>
+     * <li>Check if an instance exists in cache (thread-safe lookup)</li>
+     * <li>If not, create a new instance via reflection</li>
      * <li>Perform dependency injection on the interceptor (if it has @Inject fields/methods)</li>
      * <li>Call @PostConstruct on the interceptor (if present)</li>
      * <li>Cache and return the instance</li>
@@ -1370,7 +1403,7 @@ public class BeanImpl<T> implements Bean<T> {
                 // Step 2: Resolve constructor parameters via dependency injection
                 Object[] constructorArgs = resolveConstructorParameters(constructor);
 
-                // Step 3: Create instance with injected constructor parameters
+                // Step 3: Create an instance with injected constructor parameters
                 Object instance = constructor.newInstance(constructorArgs);
 
                 // Step 4: Perform field injection (@Inject fields)
@@ -1409,7 +1442,7 @@ public class BeanImpl<T> implements Bean<T> {
      * This map is used by the InterceptorAwareProxyGenerator to create proxies that
      * execute interceptors before business methods.
      *
-     * @return the method interceptor chains map (may be empty, never null)
+     * @return the method interceptor chains map (can be empty, never null)
      */
     public Map<Method, InterceptorChain> getMethodInterceptorChains() {
         return methodInterceptorChains != null ? methodInterceptorChains : Collections.emptyMap();
@@ -1426,7 +1459,7 @@ public class BeanImpl<T> implements Bean<T> {
      * // In RequestScopeContext.get():
      * T instance = bean.create(context);
      *
-     * // If bean has interceptors, wrap with interceptor-aware proxy
+     * // If a bean has interceptors, wrap with interceptor-aware proxy
      * if (bean instanceof BeanImpl && ((BeanImpl) bean).hasInterceptors()) {
      *     instance = ((BeanImpl) bean).createInterceptorAwareProxy(instance);
      * }
@@ -1434,7 +1467,7 @@ public class BeanImpl<T> implements Bean<T> {
      *
      * @param targetInstance the actual bean instance to wrap
      * @return a proxy that executes interceptors before delegating to targetInstance
-     * @throws IllegalStateException if interceptor support not configured
+     * @throws IllegalStateException if interceptor support is not configured
      */
     public T createInterceptorAwareProxy(T targetInstance) {
         if (interceptorAwareProxyGenerator == null) {
@@ -1641,7 +1674,7 @@ public class BeanImpl<T> implements Bean<T> {
      * @param targetInstance the bean instance to decorate (may already be an interceptor proxy)
      * @param creationalContext the CreationalContext for managing decorator lifecycle
      * @return the outermost decorator instance, or target if no decorators apply
-     * @throws IllegalStateException if decorator support not configured
+     * @throws IllegalStateException if decorator support isn't configured
      */
     @SuppressWarnings("unchecked")
     public T createDecoratorChain(T targetInstance, CreationalContext<T> creationalContext) {
@@ -1674,7 +1707,7 @@ public class BeanImpl<T> implements Bean<T> {
             );
         }
 
-        // Create decorator chain using DecoratorAwareProxyGenerator
+        // Create a decorator chain using DecoratorAwareProxyGenerator
         DecoratorChain chain = decoratorAwareProxyGenerator.createDecoratorChain(
                 targetInstance,
                 decorators,

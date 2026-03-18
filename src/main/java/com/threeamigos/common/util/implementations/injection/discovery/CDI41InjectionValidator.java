@@ -89,7 +89,9 @@ public class CDI41InjectionValidator {
         boolean allValid = true;
 
         // Only validate injection points of valid beans
-        Collection<Bean<?>> validBeans = knowledgeBase.getValidBeans();
+        Collection<Bean<?>> validBeans = knowledgeBase.getValidBeans().stream()
+                .filter(this::isBeanEnabledForResolution)
+                .collect(Collectors.toList());
 
         // Enhancement 3: Validate alternative beans (only one alternative per type)
         allValid &= validateAlternatives(validBeans);
@@ -426,7 +428,7 @@ public class CDI41InjectionValidator {
             // Get the single resolved bean (ambiguity already checked in validateInjectionPoint)
             Bean<?> resolvedBean;
             if (candidates.size() > 1) {
-                Optional<Bean<?>> preferred = chooseByPriority(candidates);
+                Optional<Bean<?>> preferred = resolveByAlternativePrecedence(candidates);
                 if (!preferred.isPresent()) {
                     // Ambiguous - already reported by validateInjectionPoint
                     continue;
@@ -580,10 +582,9 @@ public class CDI41InjectionValidator {
             return false;
         }
 
-        // Check for ambiguous dependency (respect alternative priorities if present)
+        // Check for ambiguous dependency (apply CDI alternative precedence rules)
         if (candidates.size() > 1) {
-            // If one or more alternatives present with differing priorities, pick highest
-            Optional<Bean<?>> preferred = chooseByPriority(candidates);
+            Optional<Bean<?>> preferred = resolveByAlternativePrecedence(candidates);
             if (preferred.isPresent()) {
                 candidates = Collections.singleton(preferred.get());
             } else {
@@ -616,46 +617,62 @@ public class CDI41InjectionValidator {
     }
 
     /**
-     * If candidates include alternatives with @Priority, prefer the highest priority.
-     * Returns empty when no clear single winner.
+     * Resolves candidates using CDI alternative precedence:
+     * if enabled alternatives are present they are preferred over non-alternatives,
+     * and the highest-priority alternative wins; equal top priority remains ambiguous.
      */
-    private Optional<Bean<?>> chooseByPriority(Set<Bean<?>> candidates) {
-        // Filter to alternatives with a known priority (ProducerBean stores it explicitly; BeanImpl reads @Priority on class)
-        List<BeanWithPriority> prioritized = new ArrayList<>();
-        for (Bean<?> bean : candidates) {
-            Integer priority = null;
-            if (bean instanceof ProducerBean) {
-                priority = ((ProducerBean<?>) bean).getPriority();
-            }
-            if (priority == null) {
-                Priority p = bean.getBeanClass().getAnnotation(Priority.class);
-                if (p != null) {
-                    priority = p.value();
-                }
-            }
-            if (bean.isAlternative() && priority != null) {
-                prioritized.add(new BeanWithPriority(bean, priority));
-            }
+    private Optional<Bean<?>> resolveByAlternativePrecedence(Collection<Bean<?>> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return Optional.empty();
+        }
+        if (candidates.size() == 1) {
+            return Optional.of(candidates.iterator().next());
         }
 
-        if (prioritized.isEmpty()) {
+        List<Bean<?>> alternatives = candidates.stream()
+                .filter(Bean::isAlternative)
+                .collect(Collectors.toList());
+
+        if (alternatives.isEmpty()) {
             return Optional.empty();
         }
 
-        // Pick highest priority; if multiple share it, still ambiguous
-        prioritized.sort((a, b) -> Integer.compare(b.priority, a.priority));
-        BeanWithPriority top = prioritized.get(0);
-        boolean uniqueTop = prioritized.stream().filter(bp -> bp.priority == top.priority).count() == 1;
-        return uniqueTop ? Optional.of(top.bean) : Optional.empty();
+        Bean<?> winner = null;
+        int winnerPriority = Integer.MIN_VALUE;
+        boolean tie = false;
+
+        for (Bean<?> alternative : alternatives) {
+            int priority = getAlternativePriority(alternative);
+            if (winner == null || priority > winnerPriority) {
+                winner = alternative;
+                winnerPriority = priority;
+                tie = false;
+            } else if (priority == winnerPriority) {
+                tie = true;
+            }
+        }
+
+        if (tie || winner == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(winner);
     }
 
-    private static class BeanWithPriority {
-        final Bean<?> bean;
-        final int priority;
-        BeanWithPriority(Bean<?> bean, int priority) {
-            this.bean = bean;
-            this.priority = priority;
+    private int getAlternativePriority(Bean<?> bean) {
+        if (bean instanceof ProducerBean) {
+            Integer producerPriority = ((ProducerBean<?>) bean).getPriority();
+            if (producerPriority != null) {
+                return producerPriority;
+            }
         }
+
+        Priority priority = bean.getBeanClass().getAnnotation(Priority.class);
+        if (priority != null) {
+            return priority.value();
+        }
+
+        return jakarta.interceptor.Interceptor.Priority.APPLICATION;
     }
 
     /**
@@ -719,6 +736,9 @@ public class CDI41InjectionValidator {
         Collection<Bean<?>> validBeans = knowledgeBase.getValidBeans();
 
         for (Bean<?> bean : validBeans) {
+            if (!isBeanEnabledForResolution(bean)) {
+                continue;
+            }
             // Check if bean's types are compatible with required type
             // Uses TypeChecker for proper generic matching (e.g., List<String> matches ArrayList<String>)
             if (isTypeCompatible(requiredType, bean.getTypes()) &&
@@ -734,6 +754,22 @@ public class CDI41InjectionValidator {
         // the validBeans collection above. No special handling needed here.
 
         return matches;
+    }
+
+    private boolean isBeanEnabledForResolution(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        if (!bean.isAlternative()) {
+            return true;
+        }
+        if (bean instanceof BeanImpl) {
+            return ((BeanImpl<?>) bean).isAlternativeEnabled();
+        }
+        if (bean instanceof ProducerBean) {
+            return ((ProducerBean<?>) bean).isAlternativeEnabled();
+        }
+        return true;
     }
 
     /**

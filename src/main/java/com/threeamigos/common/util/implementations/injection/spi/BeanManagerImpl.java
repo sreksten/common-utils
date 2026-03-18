@@ -223,6 +223,10 @@ public class BeanManagerImpl implements BeanManager {
         Set<Bean<?>> matchingBeans = new HashSet<>();
 
         for (Bean<?> bean : knowledgeBase.getValidBeans()) {
+            if (!isBeanEnabledForResolution(bean)) {
+                continue;
+            }
+
             // Check type compatibility
             boolean typeMatches = false;
             for (Type type : bean.getTypes()) {
@@ -278,6 +282,9 @@ public class BeanManagerImpl implements BeanManager {
         Set<Bean<?>> namedBeans = new HashSet<>();
 
         for (Bean<?> bean : knowledgeBase.getValidBeans()) {
+            if (!isBeanEnabledForResolution(bean)) {
+                continue;
+            }
             if (name.equals(bean.getName())) {
                 namedBeans.add(bean);
             }
@@ -328,8 +335,19 @@ public class BeanManagerImpl implements BeanManager {
             return null;
         }
 
-        if (beans.size() == 1) {
-            return beans.iterator().next();
+        List<Bean<? extends X>> enabledBeans = new ArrayList<>();
+        for (Bean<? extends X> bean : beans) {
+            if (isBeanEnabledForResolution(bean)) {
+                enabledBeans.add(bean);
+            }
+        }
+
+        if (enabledBeans.isEmpty()) {
+            return null;
+        }
+
+        if (enabledBeans.size() == 1) {
+            return enabledBeans.get(0);
         }
 
         // Apply CDI 4.1 resolution rules:
@@ -340,7 +358,7 @@ public class BeanManagerImpl implements BeanManager {
         List<Bean<? extends X>> alternatives = new ArrayList<>();
         List<Bean<? extends X>> nonAlternatives = new ArrayList<>();
 
-        for (Bean<? extends X> bean : beans) {
+        for (Bean<? extends X> bean : enabledBeans) {
             if (bean.isAlternative()) {
                 alternatives.add(bean);
             } else {
@@ -377,6 +395,23 @@ public class BeanManagerImpl implements BeanManager {
 
         // Multiple non-alternatives = ambiguous
         return null;
+    }
+
+    private boolean isBeanEnabledForResolution(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        if (!bean.isAlternative()) {
+            return true;
+        }
+        if (bean instanceof BeanImpl) {
+            return ((BeanImpl<?>) bean).isAlternativeEnabled();
+        }
+        if (bean instanceof ProducerBean) {
+            return ((ProducerBean<?>) bean).isAlternativeEnabled();
+        }
+        // For unknown Bean implementations keep backward-compatible behavior.
+        return true;
     }
 
     /**
@@ -1685,6 +1720,13 @@ public class BeanManagerImpl implements BeanManager {
      */
     private int getPriority(Object obj) {
         Class<?> clazz = obj instanceof Bean ? ((Bean<?>) obj).getBeanClass() : obj.getClass();
+
+        if (obj instanceof ProducerBean) {
+            Integer producerPriority = ((ProducerBean<?>) obj).getPriority();
+            if (producerPriority != null) {
+                return producerPriority;
+            }
+        }
 
         if (hasPriorityAnnotation(clazz)) {
             jakarta.annotation.Priority priority = clazz.getAnnotation(jakarta.annotation.Priority.class);

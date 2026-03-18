@@ -10,6 +10,8 @@ import com.threeamigos.common.util.implementations.injection.util.AnnotationComp
 import com.threeamigos.common.util.implementations.injection.util.AnnotationHelper;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
+import jakarta.enterprise.inject.Alternative;
+import jakarta.enterprise.inject.Stereotype;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InterceptionType;
@@ -85,6 +87,9 @@ public class KnowledgeBase {
 
     // Vetoed types (types vetoed by extensions during ProcessAnnotatedType)
     private final Set<Class<?>> vetoedTypes = ConcurrentHashMap.newKeySet();
+
+    // Programmatically enabled alternatives (fully qualified class names)
+    private final Set<String> programmaticallyEnabledAlternatives = ConcurrentHashMap.newKeySet();
 
     public KnowledgeBase(MessageHandler messageHandler) {
         this.messageHandler = messageHandler;
@@ -640,16 +645,61 @@ public class KnowledgeBase {
      * @param alternativeClass the alternative bean class to enable
      */
     public void enableAlternative(Class<?> alternativeClass) {
-        // Find the bean for this class and mark it as enabled
-        for (jakarta.enterprise.inject.spi.Bean<?> bean : beans) {
-            if (bean.getBeanClass().equals(alternativeClass) && bean.isAlternative()) {
-                // Alternative is already in beans collection, no action needed
-                // Priority-based resolution will handle selection
-                return;
+        if (alternativeClass == null) {
+            throw new IllegalArgumentException("alternativeClass cannot be null");
+        }
+
+        if (!isAlternativeDeclaration(alternativeClass)) {
+            throw new IllegalArgumentException(
+                    alternativeClass.getName() + " is not an @Alternative bean class (directly or via stereotype)");
+        }
+
+        programmaticallyEnabledAlternatives.add(alternativeClass.getName());
+        messageHandler.handleInfoMessage("[KnowledgeBase] Programmatically enabled alternative: " + alternativeClass.getName());
+    }
+
+    public boolean isAlternativeEnabledProgrammatically(String className) {
+        if (className == null || className.isEmpty()) {
+            return false;
+        }
+        return programmaticallyEnabledAlternatives.contains(className);
+    }
+
+    private boolean isAlternativeDeclaration(Class<?> beanClass) {
+        if (beanClass.isAnnotationPresent(Alternative.class)) {
+            return true;
+        }
+
+        Set<Class<? extends Annotation>> visited = new HashSet<>();
+        for (Annotation annotation : beanClass.getAnnotations()) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (annotationType.isAnnotationPresent(Stereotype.class) &&
+                stereotypeDeclaresAlternative(annotationType, visited)) {
+                return true;
             }
         }
-        throw new IllegalArgumentException(
-                "No alternative bean found for class: " + alternativeClass.getName());
+        return false;
+    }
+
+    private boolean stereotypeDeclaresAlternative(Class<? extends Annotation> stereotypeType,
+                                                  Set<Class<? extends Annotation>> visited) {
+        if (!visited.add(stereotypeType)) {
+            return false;
+        }
+
+        if (stereotypeType.isAnnotationPresent(Alternative.class)) {
+            return true;
+        }
+
+        for (Annotation meta : stereotypeType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (metaType.isAnnotationPresent(Stereotype.class) &&
+                stereotypeDeclaresAlternative(metaType, visited)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
