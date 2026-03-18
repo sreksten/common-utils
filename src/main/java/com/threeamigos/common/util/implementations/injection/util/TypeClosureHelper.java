@@ -32,8 +32,18 @@ public final class TypeClosureHelper {
         Objects.requireNonNull(baseType, "baseType cannot be null");
 
         Set<Type> types = new LinkedHashSet<>();
+        Class<?> rawType = RawTypeExtractor.getRawType(baseType);
+
+        // CDI 4.1 §3.2.1: for primitive and Java array producer return types,
+        // unrestricted bean types are exactly the return type and Object.
+        if (rawType.isPrimitive() || rawType.isArray()) {
+            types.add(baseType);
+            types.add(Object.class);
+            return types;
+        }
+
         types.add(baseType);
-        addClassHierarchy(types, RawTypeExtractor.getRawType(baseType));
+        addClassHierarchy(types, rawType);
         types.add(Object.class);
         return types;
     }
