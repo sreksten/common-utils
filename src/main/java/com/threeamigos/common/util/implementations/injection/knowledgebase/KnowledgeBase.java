@@ -58,6 +58,7 @@ public class KnowledgeBase {
     private final List<String> definitionErrors = new ArrayList<>();
     private final List<String> deploymentErrors = new ArrayList<>();
     private final List<String> injectionErrors = new ArrayList<>();
+    private final List<String> illegalProductErrors = new ArrayList<>();
 
     // Programmatically registered stereotypes (via BeforeBeanDiscovery.addStereotype)
     // Maps stereotype class -> set of meta-annotations that define the stereotype
@@ -220,6 +221,14 @@ public class KnowledgeBase {
 
     public List<String> getInjectionErrors() {
         return injectionErrors;
+    }
+
+    public void addIllegalProductError(String error) {
+        illegalProductErrors.add(error);
+    }
+
+    public List<String> getIllegalProductErrors() {
+        return illegalProductErrors;
     }
 
     /**

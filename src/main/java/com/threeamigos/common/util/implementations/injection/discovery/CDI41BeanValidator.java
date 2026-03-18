@@ -119,8 +119,12 @@ public class CDI41BeanValidator {
         }
 
         if (Modifier.isAbstract(clazz.getModifiers())) {
-            // Abstract classes are not managed beans (they can define producers, but not be instantiated as beans).
-            // We treat this as "not a bean" rather than a hard error to avoid polluting KB during scanning.
+            // Abstract classes are not managed beans, but abstract producer methods are still a definition error.
+            for (Method method : clazz.getDeclaredMethods()) {
+                if (hasProducesAnnotation(method) && Modifier.isAbstract(method.getModifiers())) {
+                    knowledgeBase.addDefinitionError(fmtMethod(method) + ": producer method must not be abstract");
+                }
+            }
             return null;
         }
 
@@ -664,7 +668,7 @@ public class CDI41BeanValidator {
     }
 
     private String extractBeanName(Class<?> clazz) {
-        // CDI: direct @Named without value defaults to decapitalized simple name.
+        // CDI: direct @Named without value defaults to simple name with first character lower-cased.
         for (Annotation annotation : annotationsOf(clazz)) {
             if (annotation.annotationType().equals(Named.class)) {
                 return defaultedBeanName(readNamedValue(annotation), clazz);
@@ -793,10 +797,6 @@ public class CDI41BeanValidator {
 
     private String decapitalize(String s) {
         if (s == null || s.isEmpty()) return s;
-        if (s.length() > 1 && Character.isUpperCase(s.charAt(0)) && Character.isUpperCase(s.charAt(1))) {
-            // "URLService" stays "URLService" (matches common CDI behavior expectations)
-            return s;
-        }
         return Character.toLowerCase(s.charAt(0)) + s.substring(1);
     }
 
@@ -1058,6 +1058,13 @@ public class CDI41BeanValidator {
         // Validate return type (no type variables/wildcards)
         try {
             checkProducerTypeValidity(method.getGenericReturnType());
+        } catch (DefinitionException e) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": " + e.getMessage());
+            valid = false;
+        }
+
+        try {
+            validateProducerMethodTypeVariableScopeConstraint(method);
         } catch (DefinitionException e) {
             knowledgeBase.addDefinitionError(fmtMethod(method) + ": " + e.getMessage());
             valid = false;
@@ -1464,24 +1471,123 @@ public class CDI41BeanValidator {
      * Rules:
      * <ul>
      *   <li>The type itself cannot be a wildcard or type variable</li>
-     *   <li>Parameterized types CAN contain wildcards (e.g., List&lt;?&gt; is valid)</li>
-     *   <li>Wildcards in parameterized types are allowed for producers (but not for injection points)</li>
+     *   <li>Array producer types cannot have a type-variable component type</li>
+     *   <li>Producer types cannot contain wildcard type parameters</li>
      * </ul>
      *
      * @param type the producer return/field type to validate
      * @throws DefinitionException if the type is invalid
      */
     private void checkProducerTypeValidity(Type type) {
+        checkProducerTypeValidity(type, true);
+    }
+
+    private void checkProducerTypeValidity(Type type, boolean topLevel) {
         if (type instanceof WildcardType) {
-            throw new DefinitionException("type may not be a wildcard (" + type.getTypeName() + ")");
+            throw new DefinitionException("type may not contain a wildcard (" + type.getTypeName() + ")");
         }
         if (type instanceof TypeVariable) {
-            throw new DefinitionException("type may not be a type variable (" + type.getTypeName() + ")");
+            if (topLevel) {
+                throw new DefinitionException("type may not be a type variable (" + type.getTypeName() + ")");
+            }
+            return;
+        }
+        if (type instanceof GenericArrayType) {
+            Type componentType = ((GenericArrayType) type).getGenericComponentType();
+            if (componentType instanceof TypeVariable) {
+                throw new DefinitionException("array component type may not be a type variable (" +
+                        componentType.getTypeName() + ")");
+            }
+            checkProducerTypeValidity(componentType, false);
+            return;
+        }
+        if (type instanceof Class) {
+            Class<?> clazz = (Class<?>) type;
+            if (clazz.isArray()) {
+                checkProducerTypeValidity(clazz.getComponentType(), false);
+            }
+            return;
+        }
+        if (type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+
+            Type rawType = parameterizedType.getRawType();
+            if (rawType instanceof Class) {
+                Class<?> rawClass = (Class<?>) rawType;
+                if (rawClass.getTypeParameters().length != parameterizedType.getActualTypeArguments().length) {
+                    throw new DefinitionException("parameterized type must specify all type parameters (" +
+                            type.getTypeName() + ")");
+                }
+            }
+
+            // CDI 4.1: each type parameter of a parameterized producer return type must be specified
+            // either as an actual type argument or as a type variable. Raw generic arguments are invalid.
+            for (Type typeArgument : parameterizedType.getActualTypeArguments()) {
+                if (typeArgument instanceof Class &&
+                        ((Class<?>) typeArgument).getTypeParameters().length > 0) {
+                    throw new DefinitionException("parameterized producer type contains raw generic argument (" +
+                            typeArgument.getTypeName() + ")");
+                }
+
+                // Nested parameterized arguments are validated recursively.
+                checkProducerTypeValidity(typeArgument, false);
+            }
+        }
+    }
+
+    /**
+     * CDI 4.1 §3.2: a producer method whose return type is a parameterized type that contains
+     * a type variable must declare @Dependent scope.
+     */
+    private void validateProducerMethodTypeVariableScopeConstraint(Method method) {
+        Type returnType = method.getGenericReturnType();
+        if (!(returnType instanceof ParameterizedType)) {
+            return;
         }
 
-        // Note: Parameterized types containing wildcards (e.g., List<? extends Number>) are ALLOWED
-        // for producers (unlike injection points). The wildcards are handled during type extraction
-        // and resolution according to CDI 4.1 typesafe resolution rules.
+        if (!containsTypeVariable(((ParameterizedType) returnType).getActualTypeArguments())) {
+            return;
+        }
+
+        Class<? extends Annotation> scope = extractScope(method, Dependent.class);
+        if (scope == null ||
+                Dependent.class.equals(scope) ||
+                "javax.enterprise.context.Dependent".equals(scope.getName())) {
+            return;
+        }
+
+        throw new DefinitionException("producer method with parameterized return type containing a type variable " +
+                "must declare @Dependent scope, but declares @" + scope.getSimpleName());
+    }
+
+    private boolean containsTypeVariable(Type[] types) {
+        for (Type type : types) {
+            if (containsTypeVariable(type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsTypeVariable(Type type) {
+        if (type instanceof TypeVariable) {
+            return true;
+        }
+        if (type instanceof ParameterizedType) {
+            return containsTypeVariable(((ParameterizedType) type).getActualTypeArguments());
+        }
+        if (type instanceof GenericArrayType) {
+            return containsTypeVariable(((GenericArrayType) type).getGenericComponentType());
+        }
+        if (type instanceof Class && ((Class<?>) type).isArray()) {
+            return containsTypeVariable(((Class<?>) type).getComponentType());
+        }
+        if (type instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) type;
+            return containsTypeVariable(wildcardType.getLowerBounds()) ||
+                    containsTypeVariable(wildcardType.getUpperBounds());
+        }
+        return false;
     }
 
     /**
@@ -1911,7 +2017,9 @@ public class CDI41BeanValidator {
         for (Annotation ann : element.getAnnotations()) {
             Class<? extends Annotation> annotationType = ann.annotationType();
             if (hasMetaAnnotation(annotationType, Scope.class) ||
-                hasMetaAnnotation(annotationType, jakarta.inject.Scope.class)) {
+                hasMetaAnnotation(annotationType, jakarta.inject.Scope.class) ||
+                hasMetaAnnotation(annotationType, NormalScope.class) ||
+                hasMetaAnnotation(annotationType, javax.enterprise.context.NormalScope.class)) {
                 directScopes.add(annotationType);
             }
         }

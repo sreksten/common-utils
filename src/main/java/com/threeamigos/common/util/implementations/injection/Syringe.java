@@ -27,6 +27,7 @@ import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
+import jakarta.enterprise.inject.IllegalProductException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.spi.*;
 
@@ -1496,15 +1497,20 @@ public class Syringe {
         // 2. Check definition errors
         if (knowledgeBase.hasErrors()) {
             error("Deployment validation failed:");
-            knowledgeBase.getErrors().forEach(error ->
-                    error("  - Generic Error: " + error));
             knowledgeBase.getDefinitionErrors().forEach(error ->
                     error("  - Definition error: " + error));
             knowledgeBase.getInjectionErrors().forEach(error ->
                     error("  - Injection error: " + error));
+            knowledgeBase.getIllegalProductErrors().forEach(error ->
+                    error("  - Illegal product error: " + error));
+            knowledgeBase.getErrors().forEach(error ->
+                    error("  - Generic Error: " + error));
+
 
             if (!knowledgeBase.getDefinitionErrors().isEmpty()) {
                 throw new DefinitionException("Deployment validation failed. See log for details.");
+            } else if (!knowledgeBase.getIllegalProductErrors().isEmpty()) {
+                throw new IllegalProductException("Deployment validation failed. See log for details.");
             } else {
                 throw new DeploymentException("Deployment validation failed. See log for details.");
             }

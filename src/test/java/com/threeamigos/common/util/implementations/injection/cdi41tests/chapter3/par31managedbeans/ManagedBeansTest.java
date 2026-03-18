@@ -3,11 +3,14 @@ package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par31managedbeans.bullet1.InvalidNormalScopedPublicFieldBean;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par31managedbeans.bullet2.InvalidGenericNormalScopedBean;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par31managedbeans.bullet3.URLNamedManagedBean;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @DisplayName("3.1 - Managed beans")
@@ -37,6 +40,27 @@ public class ManagedBeansTest {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidGenericNormalScopedBean.class);
 
         assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    /**
+     * The default name for a managed bean is the unqualified class name of the bean class,
+     * after converting the first character to lower case.
+     */
+    @Test
+    @DisplayName("3.1 - Managed bean default name is class name with first character lower-cased")
+    void managedBeanDefaultNameIsClassNameWithFirstCharacterLowerCased() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), URLNamedManagedBean.class);
+        syringe.setup();
+
+        Bean<?> bean = findManagedBean(syringe, URLNamedManagedBean.class);
+        assertEquals("uRLNamedManagedBean", bean.getName());
+    }
+
+    private Bean<?> findManagedBean(Syringe syringe, Class<?> beanClass) {
+        return syringe.getKnowledgeBase().getBeans().stream()
+                .filter(bean -> bean.getBeanClass().equals(beanClass))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Managed bean not found: " + beanClass.getName()));
     }
 
 }

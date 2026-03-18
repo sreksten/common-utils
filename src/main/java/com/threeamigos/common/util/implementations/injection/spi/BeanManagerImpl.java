@@ -1911,7 +1911,7 @@ public class BeanManagerImpl implements BeanManager {
             if (value != null && !value.trim().isEmpty()) {
                 return value.trim();
             }
-            // Default name: decapitalized simple class name
+            // Default name: simple class name with first character lower-cased
             if (annotated instanceof jakarta.enterprise.inject.spi.AnnotatedType) {
                 Class<?> clazz = ((jakarta.enterprise.inject.spi.AnnotatedType<?>) annotated).getJavaClass();
                 return decapitalize(clazz.getSimpleName());
@@ -1973,9 +1973,6 @@ public class BeanManagerImpl implements BeanManager {
      */
     private String decapitalize(String s) {
         if (s == null || s.isEmpty()) return s;
-        if (s.length() > 1 && Character.isUpperCase(s.charAt(0)) && Character.isUpperCase(s.charAt(1))) {
-            return s;
-        }
         return Character.toLowerCase(s.charAt(0)) + s.substring(1);
     }
 

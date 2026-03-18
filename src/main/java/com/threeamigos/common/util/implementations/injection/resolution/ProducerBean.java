@@ -4,6 +4,7 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
 
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.IllegalProductException;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import java.lang.annotation.Annotation;
@@ -203,12 +204,16 @@ public class ProducerBean<T> implements Bean<T> {
 
             // 2. Invoke producer method or access producer field
             if (producerMethod != null) {
-                return invokeProducerMethod(declaringInstance, creationalContext);
+                T produced = invokeProducerMethod(declaringInstance, creationalContext);
+                validateProducerMethodNullProduct(produced);
+                return produced;
             } else if (producerField != null) {
                 return accessProducerField(declaringInstance);
             } else {
                 throw new IllegalStateException("ProducerBean has neither method nor field");
             }
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to create instance from producer", e);
         }
@@ -263,6 +268,24 @@ public class ProducerBean<T> implements Bean<T> {
     private T accessProducerField(Object declaringInstance) throws Exception {
         producerField.setAccessible(true);
         return (T) producerField.get(declaringInstance);
+    }
+
+    private void validateProducerMethodNullProduct(T produced) {
+        if (produced != null || producerMethod == null || isDependentScope(scope)) {
+            return;
+        }
+
+        String scopeName = (scope == null) ? "<unknown>" : scope.getSimpleName();
+        throw new IllegalProductException(
+                "Producer method " + producerMethod.getName() +
+                " of class " + declaringClass.getName() +
+                " returned null but declares non-@Dependent scope @" + scopeName);
+    }
+
+    private boolean isDependentScope(Class<? extends Annotation> scopeType) {
+        return scopeType != null && (
+                Dependent.class.equals(scopeType) ||
+                "javax.enterprise.context.Dependent".equals(scopeType.getName()));
     }
 
     /**
