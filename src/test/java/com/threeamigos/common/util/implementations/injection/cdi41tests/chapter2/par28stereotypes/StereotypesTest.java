@@ -18,10 +18,21 @@ import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet10.enabling.EnabledServiceClient;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet10.explicit.ExplicitPriorityClient;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet10.ordering.OrderedServiceClient;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet11.invalidtarget.InvalidTargetStereotypeBean;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet11.transitive.DeepAuditableActionBean;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet12.locations.LocationLoginAction;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet12.locations.LocationMethodProduct;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet12.locations.LocationFieldProduct;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet12.multiple.DaoStereotype;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet12.multiple.MultiAction;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet12.multiple.MultiStereotypeLoginAction;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter2.par28stereotypes.bullet12.override.OverrideMockLoginAction;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
+import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.spi.InterceptionType;
@@ -200,11 +211,73 @@ public class StereotypesTest {
         assertEquals("competingClassPriorityBean", client.selectedServiceType());
     }
 
+    @Test
+    @DisplayName("2.8.1.6 - Stereotype declarations are transitive")
+    void stereotypeDeclarationsAreTransitive() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), DeepAuditableActionBean.class);
+        syringe.setup();
+
+        Bean<?> bean = findBean(syringe, DeepAuditableActionBean.class);
+        assertEquals(RequestScoped.class, bean.getScope());
+    }
+
+    @Test
+    @DisplayName("2.8.1.6 - @Target(TYPE) stereotype cannot be applied to broader-target stereotype")
+    void targetTypeStereotypeCannotBeAppliedToBroaderTargetStereotype() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidTargetStereotypeBean.class);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("2.8.2 - Stereotypes can be applied to bean class, producer method and producer field")
+    void stereotypesCanBeAppliedToBeanClassProducerMethodAndProducerField() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), LocationLoginAction.class);
+        syringe.setup();
+
+        Bean<?> loginActionBean = findBean(syringe, LocationLoginAction.class);
+        assertEquals(RequestScoped.class, loginActionBean.getScope());
+
+        ProducerBean<?> methodProducedBean = findProducerBeanByProducedType(syringe, LocationMethodProduct.class);
+        ProducerBean<?> fieldProducedBean = findProducerBeanByProducedType(syringe, LocationFieldProduct.class);
+        assertEquals(RequestScoped.class, methodProducedBean.getScope());
+        assertEquals(RequestScoped.class, fieldProducedBean.getScope());
+    }
+
+    @Test
+    @DisplayName("2.8.2 - Bean scope overrides stereotype default scope")
+    void beanScopeOverridesStereotypeDefaultScope() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), OverrideMockLoginAction.class);
+        syringe.setup();
+
+        Bean<?> bean = findBean(syringe, OverrideMockLoginAction.class);
+        assertEquals(ApplicationScoped.class, bean.getScope());
+    }
+
+    @Test
+    @DisplayName("2.8.2 - Multiple stereotypes may be applied to the same bean")
+    void multipleStereotypesMayBeAppliedToSameBean() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), MultiStereotypeLoginAction.class);
+        syringe.setup();
+
+        Bean<?> bean = findBean(syringe, MultiStereotypeLoginAction.class);
+        assertTrue(bean.getStereotypes().contains(MultiAction.class));
+        assertTrue(bean.getStereotypes().contains(DaoStereotype.class));
+        assertEquals(RequestScoped.class, bean.getScope());
+    }
+
     private Bean<?> findBean(Syringe syringe, Class<?> beanClass) {
         return syringe.getKnowledgeBase().getBeans().stream()
                 .filter(bean -> bean.getBeanClass().equals(beanClass))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Bean not found: " + beanClass.getName()));
+    }
+
+    private ProducerBean<?> findProducerBeanByProducedType(Syringe syringe, Class<?> producedType) {
+        return syringe.getKnowledgeBase().getProducerBeans().stream()
+                .filter(producerBean -> producerBean.getTypes().contains(producedType))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Producer bean not found for type: " + producedType.getName()));
     }
 
 }

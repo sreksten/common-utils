@@ -24,6 +24,8 @@ import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Stereotype;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Target;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -93,6 +95,8 @@ public class CDI41BeanValidator {
         validateStereotypeNamedDeclaration(clazz);
         // CDI 4.1 §2.8: stereotype qualifier/@Typed misuse is non-portable.
         validateStereotypeNonPortableDeclarations(clazz);
+        // CDI 4.1 §2.8.1.6: target compatibility for stereotypes-with-stereotypes.
+        validateStereotypeTargetCompatibility(clazz);
 
         // 1) Bean class eligibility (managed bean type)
         if (!isCandidateBeanClass(clazz, beanArchiveMode)) {
@@ -452,6 +456,38 @@ public class CDI41BeanValidator {
         }
     }
 
+    /**
+     * CDI 4.1 §2.8.1.6:
+     * Stereotypes declared @Target(TYPE) may not be applied to stereotypes that can target
+     * METHOD and/or FIELD.
+     */
+    @SuppressWarnings("unchecked")
+    private void validateStereotypeTargetCompatibility(Class<?> clazz) {
+        if (!clazz.isAnnotation()) {
+            return;
+        }
+
+        Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
+        if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+            return;
+        }
+
+        Set<ElementType> declaredTargets = declaredTargetElements(annotationType);
+        boolean canTargetMethodOrField = declaredTargets.contains(ElementType.METHOD) ||
+                declaredTargets.contains(ElementType.FIELD);
+        if (!canTargetMethodOrField) {
+            return;
+        }
+
+        Set<String> invalidStereotypes = new LinkedHashSet<>();
+        collectTypeOnlyStereotypes(annotationType, invalidStereotypes, new HashSet<>());
+        if (!invalidStereotypes.isEmpty()) {
+            throw new DefinitionException(annotationType.getName() +
+                    ": declares stereotype(s) " + String.join(", ", invalidStereotypes) +
+                    " with @Target(TYPE), which is not allowed for stereotypes targeting METHOD/FIELD.");
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void validateStereotypeNonPortableDeclarations(Class<?> clazz) {
         if (!clazz.isAnnotation()) {
@@ -503,6 +539,40 @@ public class CDI41BeanValidator {
                 collectStereotypeScopes(metaType, scopes, visited);
             }
         }
+    }
+
+    private void collectTypeOnlyStereotypes(Class<? extends Annotation> stereotypeType,
+                                            Set<String> invalidStereotypes,
+                                            Set<Class<? extends Annotation>> visited) {
+        if (!visited.add(stereotypeType)) {
+            return;
+        }
+
+        for (Annotation meta : stereotypeType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (!hasMetaAnnotation(metaType, Stereotype.class)) {
+                continue;
+            }
+
+            if (isTypeOnlyTarget(metaType)) {
+                invalidStereotypes.add("@" + metaType.getSimpleName());
+            }
+
+            collectTypeOnlyStereotypes(metaType, invalidStereotypes, visited);
+        }
+    }
+
+    private Set<ElementType> declaredTargetElements(Class<? extends Annotation> annotationType) {
+        Target target = annotationType.getAnnotation(Target.class);
+        if (target == null || target.value() == null) {
+            return Collections.emptySet();
+        }
+        return new LinkedHashSet<>(Arrays.asList(target.value()));
+    }
+
+    private boolean isTypeOnlyTarget(Class<? extends Annotation> annotationType) {
+        Set<ElementType> targetElements = declaredTargetElements(annotationType);
+        return targetElements.size() == 1 && targetElements.contains(ElementType.TYPE);
     }
 
     private Set<Integer> collectStereotypePriorityValues(Class<?> clazz) {
@@ -1768,13 +1838,66 @@ public class CDI41BeanValidator {
      * Extracts scope from an annotated element, or returns default scope.
      */
     private Class<? extends Annotation> extractScope(AnnotatedElement element, Class<? extends Annotation> defaultScope) {
+        List<Class<? extends Annotation>> directScopes = new ArrayList<>();
         for (Annotation ann : element.getAnnotations()) {
-            if (hasMetaAnnotation(ann.annotationType(), Scope.class) ||
-                hasMetaAnnotation(ann.annotationType(), jakarta.inject.Scope.class)) {
-                return ann.annotationType();
+            Class<? extends Annotation> annotationType = ann.annotationType();
+            if (hasMetaAnnotation(annotationType, Scope.class) ||
+                hasMetaAnnotation(annotationType, jakarta.inject.Scope.class)) {
+                directScopes.add(annotationType);
             }
         }
+
+        if (directScopes.size() > 1) {
+            String scopeNames = directScopes.stream()
+                    .map(scope -> "@" + scope.getSimpleName())
+                    .collect(Collectors.joining(", "));
+            knowledgeBase.addDefinitionError(describeAnnotatedElement(element) +
+                    ": declares multiple scope annotations: " + scopeNames);
+        }
+
+        if (!directScopes.isEmpty()) {
+            return directScopes.get(0);
+        }
+
+        Class<? extends Annotation> inheritedScope = null;
+        for (Annotation ann : element.getAnnotations()) {
+            Class<? extends Annotation> annotationType = ann.annotationType();
+            if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+                continue;
+            }
+
+            Class<? extends Annotation> stereotypeScope = extractScopeFromStereotype(annotationType);
+            if (stereotypeScope == null) {
+                continue;
+            }
+
+            if (inheritedScope == null) {
+                inheritedScope = stereotypeScope;
+            } else if (!inheritedScope.equals(stereotypeScope)) {
+                knowledgeBase.addDefinitionError(describeAnnotatedElement(element) +
+                        ": conflicting scopes inherited from stereotypes (" +
+                        inheritedScope.getName() + " vs " + stereotypeScope.getName() + ")");
+            }
+        }
+
+        if (inheritedScope != null) {
+            return inheritedScope;
+        }
+
         return defaultScope;
+    }
+
+    private String describeAnnotatedElement(AnnotatedElement element) {
+        if (element instanceof Field) {
+            return fmtField((Field) element);
+        }
+        if (element instanceof Method) {
+            return fmtMethod((Method) element);
+        }
+        if (element instanceof Class) {
+            return ((Class<?>) element).getName();
+        }
+        return element.toString();
     }
 
     /**
