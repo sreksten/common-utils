@@ -122,6 +122,7 @@ public class CDI41BeanValidator {
         }
 
         if (Modifier.isAbstract(clazz.getModifiers())) {
+            knowledgeBase.addDefinitionError(clazz.getName() + ": bean class must not be abstract");
             // Abstract classes are not managed beans, but abstract producer/disposer methods are still definition errors.
             for (Method method : clazz.getDeclaredMethods()) {
                 if (hasProducesAnnotation(method) && Modifier.isAbstract(method.getModifiers())) {
@@ -254,7 +255,9 @@ public class CDI41BeanValidator {
         }
 
         // 5) Constructor rules (only if it is a bean OR it has injection points / producers)
-        boolean relevantClass = hasInjectionPoints || hasAnyProducer(clazz);
+        boolean hasInjectConstructor = Arrays.stream(clazz.getDeclaredConstructors())
+                .anyMatch(AnnotationsEnum::hasInjectAnnotation);
+        boolean relevantClass = hasInjectionPoints || hasAnyProducer(clazz) || hasInjectConstructor;
         if (relevantClass) {
             @SuppressWarnings("unchecked")
             Constructor<T> ctor = (Constructor<T>) findBeanConstructor(clazz);
@@ -904,7 +907,7 @@ public class CDI41BeanValidator {
                 return null;
             }
 
-            if (!hasValidInjectionParameters(c.getParameters(), fmtConstructor(c))) {
+            if (!validateBeanConstructorParameters(c)) {
                 return null;
             }
             return c;
@@ -927,6 +930,36 @@ public class CDI41BeanValidator {
         }
 
         return c;
+    }
+
+    private boolean validateBeanConstructorParameters(Constructor<?> constructor) {
+        boolean valid = true;
+        for (Parameter p : constructor.getParameters()) {
+            if (hasDisposesAnnotation(p)) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": bean constructor parameter may not be annotated @Disposes");
+                valid = false;
+                continue;
+            }
+            if (hasObservesAnnotation(p)) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": bean constructor parameter may not be annotated @Observes");
+                valid = false;
+                continue;
+            }
+            if (hasObservesAsyncAnnotation(p)) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": bean constructor parameter may not be annotated @ObservesAsync");
+                valid = false;
+                continue;
+            }
+        }
+
+        if (!hasValidInjectionParameters(constructor.getParameters(), fmtConstructor(constructor))) {
+            valid = false;
+        }
+
+        return valid;
     }
 
     // -----------------------
