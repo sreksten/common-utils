@@ -208,7 +208,9 @@ public class ProducerBean<T> implements Bean<T> {
                 validateProducerMethodNullProduct(produced);
                 return produced;
             } else if (producerField != null) {
-                return accessProducerField(declaringInstance);
+                T produced = accessProducerField(declaringInstance);
+                validateProducerFieldNullProduct(produced);
+                return produced;
             } else {
                 throw new IllegalStateException("ProducerBean has neither method nor field");
             }
@@ -280,6 +282,18 @@ public class ProducerBean<T> implements Bean<T> {
                 "Producer method " + producerMethod.getName() +
                 " of class " + declaringClass.getName() +
                 " returned null but declares non-@Dependent scope @" + scopeName);
+    }
+
+    private void validateProducerFieldNullProduct(T produced) {
+        if (produced != null || producerField == null || isDependentScope(scope)) {
+            return;
+        }
+
+        String scopeName = (scope == null) ? "<unknown>" : scope.getSimpleName();
+        throw new IllegalProductException(
+                "Producer field " + producerField.getName() +
+                " of class " + declaringClass.getName() +
+                " contains null but declares non-@Dependent scope @" + scopeName);
     }
 
     private boolean isDependentScope(Class<? extends Annotation> scopeType) {

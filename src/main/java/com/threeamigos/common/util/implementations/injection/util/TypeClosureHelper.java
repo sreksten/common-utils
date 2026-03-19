@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.util;
 
 import java.lang.reflect.Type;
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -52,8 +51,16 @@ public final class TypeClosureHelper {
         Class<?> current = clazz;
         while (current != null && current != Object.class) {
             types.add(current);
-            types.addAll(Arrays.asList(current.getGenericInterfaces()));
+            addInterfaceHierarchy(types, current.getGenericInterfaces());
             current = current.getSuperclass();
+        }
+    }
+
+    private static void addInterfaceHierarchy(Set<Type> types, Type[] interfaces) {
+        for (Type interfaceType : interfaces) {
+            types.add(interfaceType);
+            Class<?> rawInterface = RawTypeExtractor.getRawType(interfaceType);
+            addInterfaceHierarchy(types, rawInterface.getGenericInterfaces());
         }
     }
 }

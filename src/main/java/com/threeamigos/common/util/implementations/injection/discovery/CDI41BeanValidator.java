@@ -166,21 +166,27 @@ public class CDI41BeanValidator {
             }
 
             if (produces) {
-                valid &= validateProducerField(field);
-
-                // Ambiguity check for overloaded producers
-                String signatureKey = producerSignatureKey(field.getGenericType(), extractQualifiers(field));
-                if (producerSignatureOwners.containsKey(signatureKey)) {
+                if (isInterceptor) {
                     knowledgeBase.addDefinitionError(fmtField(field) +
-                        ": producer conflicts with " + producerSignatureOwners.get(signatureKey) +
-                        " (same bean type/qualifiers). Overloaded producers for the same bean are not allowed.");
+                            ": interceptor may not declare producer fields");
                     valid = false;
                 } else {
-                    producerSignatureOwners.put(signatureKey, fmtField(field));
-                }
+                    valid &= validateProducerField(field);
 
-                // Create and register ProducerBean for this producer field
-                createAndRegisterProducerBean(clazz, null, field);
+                    // Ambiguity check for overloaded producers
+                    String signatureKey = producerSignatureKey(field.getGenericType(), extractQualifiers(field));
+                    if (producerSignatureOwners.containsKey(signatureKey)) {
+                        knowledgeBase.addDefinitionError(fmtField(field) +
+                            ": producer conflicts with " + producerSignatureOwners.get(signatureKey) +
+                            " (same bean type/qualifiers). Overloaded producers for the same bean are not allowed.");
+                        valid = false;
+                    } else {
+                        producerSignatureOwners.put(signatureKey, fmtField(field));
+                    }
+
+                    // Create and register ProducerBean for this producer field
+                    createAndRegisterProducerBean(clazz, null, field);
+                }
             }
 
             // Disallow illegal combos proactively
@@ -1034,6 +1040,13 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
+        try {
+            validateProducerFieldTypeVariableScopeConstraint(field);
+        } catch (DefinitionException e) {
+            knowledgeBase.addDefinitionError(fmtField(field) + ": " + e.getMessage());
+            valid = false;
+        }
+
         return valid;
     }
 
@@ -1572,6 +1585,31 @@ public class CDI41BeanValidator {
         }
 
         throw new DefinitionException("producer method with parameterized return type containing a type variable " +
+                "must declare @Dependent scope, but declares @" + scope.getSimpleName());
+    }
+
+    /**
+     * CDI 4.1 §3.3: a producer field whose type is a parameterized type that contains
+     * a type variable must declare @Dependent scope.
+     */
+    private void validateProducerFieldTypeVariableScopeConstraint(Field field) {
+        Type fieldType = field.getGenericType();
+        if (!(fieldType instanceof ParameterizedType)) {
+            return;
+        }
+
+        if (!containsTypeVariable(((ParameterizedType) fieldType).getActualTypeArguments())) {
+            return;
+        }
+
+        Class<? extends Annotation> scope = extractScope(field, Dependent.class);
+        if (scope == null ||
+                Dependent.class.equals(scope) ||
+                "javax.enterprise.context.Dependent".equals(scope.getName())) {
+            return;
+        }
+
+        throw new DefinitionException("producer field with parameterized type containing a type variable " +
                 "must declare @Dependent scope, but declares @" + scope.getSimpleName());
     }
 
