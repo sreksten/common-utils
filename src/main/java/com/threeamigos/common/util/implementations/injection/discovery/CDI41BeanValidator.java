@@ -1005,17 +1005,17 @@ public class CDI41BeanValidator {
 
         // Initializer method constraints (conservative CDI 4.1)
         if (Modifier.isAbstract(method.getModifiers())) {
-            knowledgeBase.addInjectionError(fmtMethod(method) + ": cannot inject into an abstract initializer method");
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": cannot inject into an abstract initializer method");
             valid = false;
         }
 
         if (Modifier.isStatic(method.getModifiers())) {
-            knowledgeBase.addInjectionError(fmtMethod(method) + ": static initializer methods are not valid CDI injection points");
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": static initializer methods are not valid CDI injection points");
             valid = false;
         }
 
         if (method.getTypeParameters().length > 0) {
-            knowledgeBase.addInjectionError(fmtMethod(method) + ": generic methods are not valid CDI initializer methods");
+            knowledgeBase.addDefinitionError(fmtMethod(method) + ": generic methods are not valid CDI initializer methods");
             valid = false;
         }
 
@@ -1027,6 +1027,19 @@ public class CDI41BeanValidator {
         if (hasAnyParameterWithDisposesAnnotation(method)) {
             knowledgeBase.addDefinitionError(fmtMethod(method) + ": initializer method may not declare a @Disposes parameter");
             valid = false;
+        }
+        for (Parameter p : method.getParameters()) {
+            if (hasObservesAnnotation(p)) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": initializer method parameter may not be annotated @Observes");
+                valid = false;
+                continue;
+            }
+            if (hasObservesAsyncAnnotation(p)) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": initializer method parameter may not be annotated @ObservesAsync");
+                valid = false;
+            }
         }
 
         if (!hasValidInjectionParameters(method.getParameters(), fmtMethod(method))) {
