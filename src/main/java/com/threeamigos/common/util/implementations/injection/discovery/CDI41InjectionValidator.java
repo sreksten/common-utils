@@ -20,6 +20,9 @@ import jakarta.inject.Qualifier;
 import java.lang.annotation.Annotation;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -612,8 +615,169 @@ public class CDI41InjectionValidator {
             return false;
         }
 
+        if (!validateProxyableBeanTypesIfRequired(injectionPoint, owningBean, resolvedBean)) {
+            return false;
+        }
+
         // Injection point is valid
         return true;
+    }
+
+    /**
+     * CDI 4.1 §3.10 - unproxyable bean types:
+     * if an injection point resolves to a bean that requires a client proxy (normal scope)
+     * or has bound interceptors, every bean type of that bean must be proxyable.
+     */
+    private boolean validateProxyableBeanTypesIfRequired(InjectionPoint injectionPoint,
+                                                         Bean<?> owningBean,
+                                                         Bean<?> resolvedBean) {
+        if (!requiresProxyableBeanTypes(resolvedBean)) {
+            return true;
+        }
+
+        List<String> unproxyableTypes = findUnproxyableBeanTypes(resolvedBean.getTypes());
+        if (unproxyableTypes.isEmpty()) {
+            return true;
+        }
+
+        knowledgeBase.addError(
+                formatInjectionPoint(injectionPoint, owningBean) +
+                ": resolved bean " + resolvedBean.getBeanClass().getName() +
+                " requires proxying but declares unproxyable bean type(s): " +
+                String.join(", ", unproxyableTypes)
+        );
+        return false;
+    }
+
+    private boolean requiresProxyableBeanTypes(Bean<?> bean) {
+        if (isNormalScope(bean.getScope())) {
+            return true;
+        }
+
+        return hasBoundInterceptor(bean);
+    }
+
+    private boolean hasBoundInterceptor(Bean<?> bean) {
+        if (!(bean instanceof BeanImpl)) {
+            return false;
+        }
+
+        Class<?> beanClass = bean.getBeanClass();
+        Set<Annotation> classBindings = extractInterceptorBindingAnnotations(beanClass.getAnnotations());
+        if (!classBindings.isEmpty() && !knowledgeBase.getInterceptorsByBindings(classBindings).isEmpty()) {
+            return true;
+        }
+
+        for (Method method : beanClass.getDeclaredMethods()) {
+            int modifiers = method.getModifiers();
+            if (Modifier.isStatic(modifiers) || Modifier.isPrivate(modifiers)) {
+                continue;
+            }
+
+            Set<Annotation> effectiveBindings = new HashSet<>(classBindings);
+            effectiveBindings.addAll(extractInterceptorBindingAnnotations(method.getAnnotations()));
+            if (!effectiveBindings.isEmpty() &&
+                    !knowledgeBase.getInterceptorsByBindings(effectiveBindings).isEmpty()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private Set<Annotation> extractInterceptorBindingAnnotations(Annotation[] annotations) {
+        Set<Annotation> bindings = new HashSet<>();
+        for (Annotation annotation : annotations) {
+            if (annotation.annotationType().isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class)) {
+                bindings.add(annotation);
+            }
+        }
+        return bindings;
+    }
+
+    private List<String> findUnproxyableBeanTypes(Set<Type> beanTypes) {
+        List<String> unproxyable = new ArrayList<>();
+
+        for (Type beanType : beanTypes) {
+            String reason = unproxyableReason(beanType);
+            if (reason != null) {
+                unproxyable.add(beanType.getTypeName() + " (" + reason + ")");
+            }
+        }
+
+        return unproxyable;
+    }
+
+    private String unproxyableReason(Type beanType) {
+        Class<?> rawType = RawTypeExtractor.getRawType(beanType);
+        if (rawType == null) {
+            return null;
+        }
+
+        if (rawType.equals(Object.class)) {
+            return null;
+        }
+
+        if (rawType.isPrimitive()) {
+            return "primitive type";
+        }
+
+        if (rawType.isArray()) {
+            return "array type";
+        }
+
+        if (isSealed(rawType)) {
+            return "sealed class or interface";
+        }
+
+        if (rawType.isInterface()) {
+            return null;
+        }
+
+        if (Modifier.isFinal(rawType.getModifiers())) {
+            return "final class";
+        }
+
+        if (!hasNonPrivateNoArgConstructor(rawType)) {
+            return "missing non-private no-arg constructor";
+        }
+
+        Method finalBusinessMethod = findNonStaticFinalNonPrivateMethod(rawType);
+        if (finalBusinessMethod != null) {
+            return "has non-static final method with non-private visibility: " + finalBusinessMethod.getName();
+        }
+
+        return null;
+    }
+
+    private boolean hasNonPrivateNoArgConstructor(Class<?> type) {
+        for (Constructor<?> constructor : type.getDeclaredConstructors()) {
+            if (constructor.getParameterCount() == 0 && !Modifier.isPrivate(constructor.getModifiers())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Method findNonStaticFinalNonPrivateMethod(Class<?> type) {
+        for (Method method : type.getDeclaredMethods()) {
+            int modifiers = method.getModifiers();
+            if (Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers) || Modifier.isPrivate(modifiers)) {
+                continue;
+            }
+            return method;
+        }
+        return null;
+    }
+
+    private boolean isSealed(Class<?> type) {
+        try {
+            Method isSealedMethod = Class.class.getMethod("isSealed");
+            Object value = isSealedMethod.invoke(type);
+            return value instanceof Boolean && (Boolean) value;
+        } catch (ReflectiveOperationException ignored) {
+            return false;
+        }
     }
 
     /**
