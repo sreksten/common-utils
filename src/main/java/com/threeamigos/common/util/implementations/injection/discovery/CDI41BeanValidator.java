@@ -147,6 +147,9 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
+        boolean isInterceptor = hasInterceptorAnnotation(clazz);
+        boolean isDecorator = hasDecoratorAnnotation(clazz);
+
         // 4) Validate producers and injection points on fields/methods
         boolean hasInjectionPoints = false;
 
@@ -198,24 +201,30 @@ public class CDI41BeanValidator {
             }
 
             if (produces) {
-                valid &= validateProducerMethod(method);
-
-                // Ambiguity check for overloaded producers
-                String signatureKey = producerSignatureKey(method.getGenericReturnType(), extractQualifiers(method));
-                if (producerSignatureOwners.containsKey(signatureKey)) {
+                if (isInterceptor) {
                     knowledgeBase.addDefinitionError(fmtMethod(method) +
-                        ": producer conflicts with " + producerSignatureOwners.get(signatureKey) +
-                        " (same bean type/qualifiers). Overloaded producers for the same bean are not allowed.");
+                            ": interceptor may not declare producer methods");
                     valid = false;
                 } else {
-                    producerSignatureOwners.put(signatureKey, fmtMethod(method));
-                }
+                    valid &= validateProducerMethod(method);
 
-                // Create and register ProducerBean for this producer method
-                createAndRegisterProducerBean(clazz, method, null);
+                    // Ambiguity check for overloaded producers
+                    String signatureKey = producerSignatureKey(method.getGenericReturnType(), extractQualifiers(method));
+                    if (producerSignatureOwners.containsKey(signatureKey)) {
+                        knowledgeBase.addDefinitionError(fmtMethod(method) +
+                            ": producer conflicts with " + producerSignatureOwners.get(signatureKey) +
+                            " (same bean type/qualifiers). Overloaded producers for the same bean are not allowed.");
+                        valid = false;
+                    } else {
+                        producerSignatureOwners.put(signatureKey, fmtMethod(method));
+                    }
+
+                    // Create and register ProducerBean for this producer method
+                    createAndRegisterProducerBean(clazz, method, null);
+                }
             }
 
-            if (disposes) {
+            if (disposes && !produces) {
                 valid &= validateDisposerMethod(method);
             }
 
@@ -238,9 +247,6 @@ public class CDI41BeanValidator {
         }
 
         // 6) Check for @Interceptor and @Decorator (not managed beans)
-        boolean isInterceptor = hasInterceptorAnnotation(clazz);
-        boolean isDecorator = hasDecoratorAnnotation(clazz);
-
         if (isInterceptor) {
             if (isAlternativeDeclared(clazz)) {
                 throw new NonPortableBehaviourException(clazz.getName() +
@@ -1070,34 +1076,43 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
-        // Parameters: at most one @Disposes, and only valid within producer methods.
-        int disposesCount = 0;
+        // Producer method parameters must not be annotated with @Disposes, @Observes, or @ObservesAsync.
         for (Parameter p : method.getParameters()) {
             if (hasDisposesAnnotation(p)) {
-                disposesCount++;
-            } else {
-                // normal injection parameter of a producer method
-                try {
-                    checkInjectionTypeValidity(p.getParameterizedType());
-                } catch (IllegalArgumentException e) {
-                    knowledgeBase.addInjectionError(fmtParameter(p) + ": " + e.getMessage());
-                    valid = false;
-                } catch (DefinitionException e) {
-                    knowledgeBase.addDefinitionError(fmtParameter(p) + ": " + e.getMessage());
-                    valid = false;
-                }
-                try {
-                    validateQualifiers(p.getAnnotations(), fmtMethod(method));
-                } catch (DefinitionException e) {
-                    knowledgeBase.addDefinitionError(fmtParameter(p) + ": " + e.getMessage());
-                    valid = false;
-                }
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": producer method parameter may not be annotated @Disposes");
+                valid = false;
+                continue;
             }
-        }
+            if (hasObservesAnnotation(p)) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": producer method parameter may not be annotated @Observes");
+                valid = false;
+                continue;
+            }
+            if (hasObservesAsyncAnnotation(p)) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": producer method parameter may not be annotated @ObservesAsync");
+                valid = false;
+                continue;
+            }
 
-        if (disposesCount > 1) {
-            knowledgeBase.addDefinitionError(fmtMethod(method) + ": producer method may declare at most one @Disposes parameter");
-            valid = false;
+            // normal injection parameter of a producer method
+            try {
+                checkInjectionTypeValidity(p.getParameterizedType());
+            } catch (IllegalArgumentException e) {
+                knowledgeBase.addInjectionError(fmtParameter(p) + ": " + e.getMessage());
+                valid = false;
+            } catch (DefinitionException e) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) + ": " + e.getMessage());
+                valid = false;
+            }
+            try {
+                validateQualifiers(p.getAnnotations(), fmtMethod(method));
+            } catch (DefinitionException e) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) + ": " + e.getMessage());
+                valid = false;
+            }
         }
 
         return valid;
@@ -1910,6 +1925,7 @@ public class CDI41BeanValidator {
             producerBean.setName(extractProducerName(producerMethod));
             producerBean.setQualifiers(extractQualifiers(producerMethod));
             producerBean.setScope(extractScope(producerMethod, Dependent.class));
+            producerBean.setStereotypes(extractStereotypes(producerMethod));
 
             BeanTypesExtractor.ExtractionResult producerTypes =
                     beanTypesExtractor.extractProducerBeanTypes(producerMethod.getGenericReturnType());
@@ -1937,6 +1953,7 @@ public class CDI41BeanValidator {
             producerBean.setName(extractProducerName(producerField));
             producerBean.setQualifiers(extractQualifiers(producerField));
             producerBean.setScope(extractScope(producerField, Dependent.class));
+            producerBean.setStereotypes(extractStereotypes(producerField));
 
             BeanTypesExtractor.ExtractionResult producerTypes =
                     beanTypesExtractor.extractProducerBeanTypes(producerField.getGenericType());
@@ -2007,6 +2024,20 @@ public class CDI41BeanValidator {
      */
     private Set<Annotation> extractQualifiers(AnnotatedElement element) {
         return QualifiersHelper.extractBeanQualifiers(element.getAnnotations());
+    }
+
+    /**
+     * Extracts stereotypes declared on a producer member.
+     */
+    private Set<Class<? extends Annotation>> extractStereotypes(AnnotatedElement element) {
+        Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
+        for (Annotation annotation : element.getAnnotations()) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (hasMetaAnnotation(annotationType, Stereotype.class)) {
+                stereotypes.add(annotationType);
+            }
+        }
+        return stereotypes;
     }
 
     /**

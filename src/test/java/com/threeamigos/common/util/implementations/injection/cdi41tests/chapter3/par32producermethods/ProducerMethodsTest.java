@@ -16,8 +16,17 @@ import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet8.InterfaceReturnProducerFactory;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet8.LegalTypePruningProducerFactory;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet8.PrimitiveReturnProducerFactory;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet9.ConfiguredProducerFactory;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet9.ProducerMarker;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet9.ProducerMethodStereotype;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet10.InvalidDisposesParameterProducerMethodFactory;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet10.InvalidInjectProducerMethodFactory;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet10.InvalidObservesAsyncParameterProducerMethodFactory;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet10.InvalidObservesParameterProducerMethodFactory;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet11.InvalidInterceptorProducerMethod;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.IllegalProductException;
 import jakarta.enterprise.inject.spi.DefinitionException;
@@ -251,6 +260,61 @@ public class ProducerMethodsTest {
         assertTrue(beanTypes.contains(Object.class));
         assertFalse(beanTypes.stream().anyMatch(this::hasTypeVariableArrayArgument),
                 "Illegal bean types should be removed from resulting producer bean types");
+    }
+
+    @Test
+    @DisplayName("3.2.2 - Producer method may declare scope, bean name, stereotypes and qualifiers")
+    void producerMethodMayDeclareScopeNameStereotypesAndQualifiers() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ConfiguredProducerFactory.class);
+        syringe.setup();
+
+        ProducerBean<?> producerBean = findProducerBeanByDeclaringClass(syringe, ConfiguredProducerFactory.class);
+
+        assertEquals(ApplicationScoped.class, producerBean.getScope());
+        assertEquals("configuredProduct", producerBean.getName());
+        assertTrue(producerBean.getStereotypes().contains(ProducerMethodStereotype.class));
+        assertTrue(producerBean.getQualifiers().stream()
+                .anyMatch(qualifier -> qualifier.annotationType().equals(ProducerMarker.class)));
+    }
+
+    @Test
+    @DisplayName("3.2.2 - Producer method annotated @Inject is a definition error")
+    void producerMethodAnnotatedInjectIsDefinitionError() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidInjectProducerMethodFactory.class);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("3.2.2 - Producer method with @Disposes parameter is a definition error")
+    void producerMethodWithDisposesParameterIsDefinitionError() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidDisposesParameterProducerMethodFactory.class);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("3.2.2 - Producer method with @Observes parameter is a definition error")
+    void producerMethodWithObservesParameterIsDefinitionError() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidObservesParameterProducerMethodFactory.class);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("3.2.2 - Producer method with @ObservesAsync parameter is a definition error")
+    void producerMethodWithObservesAsyncParameterIsDefinitionError() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidObservesAsyncParameterProducerMethodFactory.class);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("3.2.2 - Interceptor declaring producer method is a definition error")
+    void interceptorDeclaringProducerMethodIsDefinitionError() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidInterceptorProducerMethod.class);
+
+        assertThrows(DefinitionException.class, syringe::setup);
     }
 
     private ProducerBean<?> findProducerBeanByDeclaringClass(Syringe syringe, Class<?> declaringClass) {
