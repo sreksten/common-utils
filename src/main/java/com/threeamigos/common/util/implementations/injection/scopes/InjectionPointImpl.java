@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 
-import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
@@ -107,7 +106,6 @@ public class InjectionPointImpl<T> implements InjectionPoint {
      * Collects all qualifier annotations from the injection point.
      * Per CDI spec:
      * - If no qualifiers are present, @Default is added
-     * - @Any is always added (built-in qualifier that matches all beans)
      * - @Delegate is NOT a qualifier, so it's excluded from the qualifiers set
      *
      * @param annotations all annotations present on the injection point
@@ -117,11 +115,10 @@ public class InjectionPointImpl<T> implements InjectionPoint {
             qualifiers.add(qualifier);
         }
 
-        // CDI defaulting rules: if no qualifier present, add @Default; always include @Any
+        // CDI defaulting rules for injection points: if no qualifier is declared, add @Default.
         if (qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());
         }
-        qualifiers.add(new AnyLiteral());
     }
 
     /**
