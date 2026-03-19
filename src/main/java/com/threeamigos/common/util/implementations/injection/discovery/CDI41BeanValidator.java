@@ -970,13 +970,13 @@ public class CDI41BeanValidator {
         boolean valid = true;
 
         if (Modifier.isFinal(field.getModifiers())) {
-            knowledgeBase.addInjectionError(fmtField(field) + ": final fields are not valid injection points");
+            knowledgeBase.addDefinitionError(fmtField(field) + ": final fields are not valid injection points");
             valid = false;
         }
 
         // CDI is stricter than JSR-330 about certain injection points; keep conservative:
         if (Modifier.isStatic(field.getModifiers())) {
-            knowledgeBase.addInjectionError(fmtField(field) + ": static field injection is not a valid CDI injection point");
+            knowledgeBase.addDefinitionError(fmtField(field) + ": static field injection is not a valid CDI injection point");
             valid = false;
         }
 

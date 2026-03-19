@@ -9,7 +9,9 @@ import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -144,24 +146,28 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         @Override
         public void inject(T instance, CreationalContext<T> ctx) {
             try {
-                Class<?> clazz = instance.getClass();
+                List<Class<?>> hierarchy = buildHierarchy(instance.getClass());
 
                 // Inject fields
-                for (Field field : clazz.getDeclaredFields()) {
-                    if (hasInjectAnnotation(field)) {
-                        field.setAccessible(true);
-                        Object value = beanManager.getInjectableReference(
-                            createInjectionPoint(field), ctx);
-                        field.set(instance, value);
+                for (Class<?> clazz : hierarchy) {
+                    for (Field field : clazz.getDeclaredFields()) {
+                        if (hasInjectAnnotation(field)) {
+                            field.setAccessible(true);
+                            Object value = beanManager.getInjectableReference(
+                                createInjectionPoint(field), ctx);
+                            field.set(instance, value);
+                        }
                     }
                 }
 
                 // Inject methods
-                for (Method method : clazz.getDeclaredMethods()) {
-                    if (hasInjectAnnotation(method)) {
-                        method.setAccessible(true);
-                        Object[] args = resolveMethodParameters(method, ctx);
-                        method.invoke(instance, args);
+                for (Class<?> clazz : hierarchy) {
+                    for (Method method : clazz.getDeclaredMethods()) {
+                        if (hasInjectAnnotation(method)) {
+                            method.setAccessible(true);
+                            Object[] args = resolveMethodParameters(method, ctx);
+                            method.invoke(instance, args);
+                        }
                     }
                 }
 
@@ -245,6 +251,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         private Set<InjectionPoint> discoverInjectionPoints() {
             Set<InjectionPoint> points = new HashSet<>();
             Class<T> javaClass = annotatedType.getJavaClass();
+            List<Class<?>> hierarchy = buildHierarchy(javaClass);
 
             // Constructor parameters
             for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
@@ -256,22 +263,36 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             }
 
             // Fields
-            for (Field field : javaClass.getDeclaredFields()) {
-                if (hasInjectAnnotation(field)) {
-                    points.add(new InjectionPointImpl(field, null));
+            for (Class<?> clazz : hierarchy) {
+                for (Field field : clazz.getDeclaredFields()) {
+                    if (hasInjectAnnotation(field)) {
+                        points.add(new InjectionPointImpl(field, null));
+                    }
                 }
             }
 
             // Method parameters
-            for (Method method : javaClass.getDeclaredMethods()) {
-                if (hasInjectAnnotation(method)) {
-                    for (java.lang.reflect.Parameter param : method.getParameters()) {
-                        points.add(new InjectionPointImpl(param, null));
+            for (Class<?> clazz : hierarchy) {
+                for (Method method : clazz.getDeclaredMethods()) {
+                    if (hasInjectAnnotation(method)) {
+                        for (java.lang.reflect.Parameter param : method.getParameters()) {
+                            points.add(new InjectionPointImpl(param, null));
+                        }
                     }
                 }
             }
 
             return points;
+        }
+
+        private List<Class<?>> buildHierarchy(Class<?> leafClass) {
+            List<Class<?>> hierarchy = new ArrayList<>();
+            Class<?> current = leafClass;
+            while (current != null && current != Object.class) {
+                hierarchy.add(0, current);
+                current = current.getSuperclass();
+            }
+            return hierarchy;
         }
 
         @SuppressWarnings("unchecked")
