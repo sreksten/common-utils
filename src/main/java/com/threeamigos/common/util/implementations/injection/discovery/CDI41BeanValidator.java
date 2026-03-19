@@ -8,6 +8,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.InjectionPoi
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
+import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -56,11 +57,13 @@ public class CDI41BeanValidator {
 
     private final KnowledgeBase knowledgeBase;
     private final BeanTypesExtractor beanTypesExtractor;
+    private final TypeChecker typeChecker;
     private Annotation[] overrideAnnotations;
 
     public CDI41BeanValidator(KnowledgeBase knowledgeBase) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.beanTypesExtractor = new BeanTypesExtractor();
+        this.typeChecker = new TypeChecker();
     }
 
     /**
@@ -119,10 +122,13 @@ public class CDI41BeanValidator {
         }
 
         if (Modifier.isAbstract(clazz.getModifiers())) {
-            // Abstract classes are not managed beans, but abstract producer methods are still a definition error.
+            // Abstract classes are not managed beans, but abstract producer/disposer methods are still definition errors.
             for (Method method : clazz.getDeclaredMethods()) {
                 if (hasProducesAnnotation(method) && Modifier.isAbstract(method.getModifiers())) {
                     knowledgeBase.addDefinitionError(fmtMethod(method) + ": producer method must not be abstract");
+                }
+                if (hasDisposesParameter(method) && Modifier.isAbstract(method.getModifiers())) {
+                    knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method must not be abstract");
                 }
             }
             return null;
@@ -230,8 +236,15 @@ public class CDI41BeanValidator {
                 }
             }
 
-            if (disposes && !produces) {
-                valid &= validateDisposerMethod(method);
+            if (disposes) {
+                if (isInterceptor) {
+                    knowledgeBase.addDefinitionError(fmtMethod(method) +
+                            ": interceptor may not declare disposer methods");
+                    valid = false;
+                } else if (!produces) {
+                    valid &= validateDisposerMethod(method);
+                    valid &= validateDisposerMethodHasMatchingProducer(clazz, method);
+                }
             }
 
             if (inject && produces) {
@@ -1138,7 +1151,7 @@ public class CDI41BeanValidator {
      * <ul>
      *   <li>Must have exactly one parameter annotated with @Disposes</li>
      *   <li>Must not be annotated with @Produces or @Inject</li>
-     *   <li>Must not be abstract or static</li>
+     *   <li>Must not be abstract</li>
      *   <li>Must not declare type parameters (not a generic method)</li>
      *   <li>The @Disposes parameter type must match a producer method's return type</li>
      *   <li>Other parameters are treated as injection points</li>
@@ -1157,31 +1170,25 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
-        // Rule 2: Must not be static
-        if (Modifier.isStatic(method.getModifiers())) {
-            knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method must not be static");
-            valid = false;
-        }
-
-        // Rule 3: Must not be generic
+        // Rule 2: Must not be generic
         if (method.getTypeParameters().length > 0) {
             knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method must not be generic");
             valid = false;
         }
 
-        // Rule 4: Must not be annotated with @Produces
+        // Rule 3: Must not be annotated with @Produces
         if (hasProducesAnnotation(method)) {
             knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method may not be annotated @Produces");
             valid = false;
         }
 
-        // Rule 5: Must not be annotated with @Inject
+        // Rule 4: Must not be annotated with @Inject
         if (hasInjectAnnotation(method)) {
             knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method may not be annotated @Inject");
             valid = false;
         }
 
-        // Rule 6: Must have exactly one @Disposes parameter
+        // Rule 5: Must have exactly one @Disposes parameter
         int disposesCount = 0;
         Parameter disposesParam = null;
         for (Parameter p : method.getParameters()) {
@@ -1199,7 +1206,7 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
-        // Rule 7: Validate @Disposes parameter type
+        // Rule 6: Validate @Disposes parameter type
         if (disposesParam != null) {
             try {
                 checkInjectionTypeValidity(disposesParam.getParameterizedType());
@@ -1208,6 +1215,20 @@ public class CDI41BeanValidator {
                 valid = false;
             } catch (DefinitionException e) {
                 knowledgeBase.addDefinitionError(fmtParameter(disposesParam) + ": " + e.getMessage());
+                valid = false;
+            }
+        }
+
+        // Rule 7: Disposer method parameters must not be annotated with @Observes or @ObservesAsync.
+        for (Parameter p : method.getParameters()) {
+            if (hasObservesAnnotation(p)) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": disposer method parameter may not be annotated @Observes");
+                valid = false;
+            }
+            if (hasObservesAsyncAnnotation(p)) {
+                knowledgeBase.addDefinitionError(fmtParameter(p) +
+                        ": disposer method parameter may not be annotated @ObservesAsync");
                 valid = false;
             }
         }
@@ -2004,11 +2025,12 @@ public class CDI41BeanValidator {
         }
 
         // Find and set the disposer method if present
-        if (producerMethod != null) {
-            Method disposer = findDisposerForProducer(declaringClass, producerMethod);
-            if (disposer != null) {
-                producerBean.setDisposerMethod(disposer);
-            }
+        Type producedType = (producerMethod != null)
+                ? producerMethod.getGenericReturnType()
+                : producerField.getGenericType();
+        Method disposer = findDisposerForProducer(declaringClass, producedType, producerBean.getQualifiers());
+        if (disposer != null) {
+            producerBean.setDisposerMethod(disposer);
         }
 
         // Mark producer bean as vetoed if the declaring class was vetoed by an extension
@@ -2147,29 +2169,103 @@ public class CDI41BeanValidator {
     }
 
     /**
-     * Finds the disposer method for a given producer method.
+     * Finds the disposer method for a producer member by matching disposed parameter type and qualifiers.
      */
-    private Method findDisposerForProducer(Class<?> clazz, Method producerMethod) {
-        Class<?> producedType = producerMethod.getReturnType();
-        boolean primitiveBoxingMismatchReported = false;
+    private Method findDisposerForProducer(Class<?> clazz,
+                                           Type producerType,
+                                           Set<Annotation> producerQualifiers) {
+        List<Method> matches = new ArrayList<>();
 
         for (Method method : clazz.getDeclaredMethods()) {
-            if (hasDisposesParameter(method)) {
-                // Check if disposer parameter type matches producer return type
-                for (Parameter param : method.getParameters()) {
-                    if (hasDisposesAnnotation(param)) {
-                        Class<?> disposerType = param.getType();
-                        if (disposerType.equals(producedType)) {
-                            return method;
-                        } else if (isPrimitiveBoxingPair(disposerType, producedType) && !primitiveBoxingMismatchReported) {
-                            knowledgeBase.addDefinitionError(fmtMethod(method) +
-                                ": @Disposes parameter type " + disposerType.getName() +
-                                " does not exactly match producer return type " + producedType.getName() +
-                                " (primitive/boxed mismatch). Use the exact same type.");
-                            primitiveBoxingMismatchReported = true;
-                        }
-                    }
-                }
+            Parameter disposesParameter = getDisposesParameter(method);
+            if (disposesParameter == null) {
+                continue;
+            }
+
+            if (matchesDisposesParameter(disposesParameter, producerType, producerQualifiers)) {
+                matches.add(method);
+            }
+        }
+
+        if (matches.size() <= 1) {
+            return matches.isEmpty() ? null : matches.get(0);
+        }
+
+        knowledgeBase.addDefinitionError(clazz.getName() +
+                ": multiple disposer methods match producer type " + producerType.getTypeName() +
+                " and qualifiers " + formatQualifiers(producerQualifiers));
+        return matches.get(0);
+    }
+
+    private boolean validateDisposerMethodHasMatchingProducer(Class<?> clazz, Method disposerMethod) {
+        Parameter disposesParameter = getDisposesParameter(disposerMethod);
+        if (disposesParameter == null) {
+            return false;
+        }
+
+        Type disposesType = disposesParameter.getParameterizedType();
+        Set<Annotation> requiredQualifiers = QualifiersHelper.extractQualifiers(disposesParameter.getAnnotations());
+
+        for (Method producerMethod : clazz.getDeclaredMethods()) {
+            if (!hasProducesAnnotation(producerMethod)) {
+                continue;
+            }
+            if (matchesDisposesParameter(disposesParameter,
+                    producerMethod.getGenericReturnType(),
+                    extractQualifiers(producerMethod))) {
+                return true;
+            }
+        }
+
+        for (Field producerField : clazz.getDeclaredFields()) {
+            if (!hasProducesAnnotation(producerField)) {
+                continue;
+            }
+            if (matchesDisposesParameter(disposesParameter,
+                    producerField.getGenericType(),
+                    extractQualifiers(producerField))) {
+                return true;
+            }
+        }
+
+        knowledgeBase.addDefinitionError(fmtMethod(disposerMethod) +
+                ": @Disposes parameter type/qualifiers do not match any producer method return type or producer field type " +
+                "(type=" + disposesType.getTypeName() + ", qualifiers=" + formatQualifiers(requiredQualifiers) + ")");
+        return false;
+    }
+
+    private boolean matchesDisposesParameter(Parameter disposesParameter,
+                                             Type producerType,
+                                             Set<Annotation> producerQualifiers) {
+        Set<Annotation> requiredQualifiers = QualifiersHelper.extractQualifiers(disposesParameter.getAnnotations());
+        if (!QualifiersHelper.qualifiersMatch(requiredQualifiers, producerQualifiers)) {
+            return false;
+        }
+
+        Type disposesType = disposesParameter.getParameterizedType();
+        try {
+            return typeChecker.isAssignable(disposesType, producerType);
+        } catch (DefinitionException e) {
+            return false;
+        } catch (IllegalStateException e) {
+            knowledgeBase.addDefinitionError(fmtParameter(disposesParameter) +
+                    ": failed to compare @Disposes type against producer type " + producerType.getTypeName() +
+                    " (" + e.getMessage() + ")");
+            return false;
+        }
+    }
+
+    private String formatQualifiers(Set<Annotation> qualifiers) {
+        return qualifiers.stream()
+                .map(q -> "@" + q.annotationType().getSimpleName())
+                .sorted()
+                .collect(Collectors.joining(", "));
+    }
+
+    private Parameter getDisposesParameter(Method method) {
+        for (Parameter param : method.getParameters()) {
+            if (hasDisposesAnnotation(param)) {
+                return param;
             }
         }
         return null;
@@ -2185,11 +2281,6 @@ public class CDI41BeanValidator {
             }
         }
         return false;
-    }
-
-    private boolean isPrimitiveBoxingPair(Class<?> a, Class<?> b) {
-        return (a.isPrimitive() && getBoxedType(a).equals(b)) ||
-               (b.isPrimitive() && getBoxedType(b).equals(a));
     }
 
     private Class<?> getBoxedType(Class<?> primitive) {
