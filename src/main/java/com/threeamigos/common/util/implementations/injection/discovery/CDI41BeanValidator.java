@@ -997,6 +997,10 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
+        if (!validateNamedInjectionPointUsage(field)) {
+            valid = false;
+        }
+
         return valid;
     }
 
@@ -1072,6 +1076,10 @@ public class CDI41BeanValidator {
                 validateQualifiers(p.getAnnotations(), owner + " parameter " + safeParamName(p));
             } catch (DefinitionException e) {
                 knowledgeBase.addDefinitionError(fmtParameter(p) + ": " + e.getMessage());
+                valid = false;
+            }
+
+            if (!validateNamedInjectionPointUsage(p)) {
                 valid = false;
             }
         }
@@ -1183,6 +1191,10 @@ public class CDI41BeanValidator {
                 validateQualifiers(p.getAnnotations(), fmtMethod(method));
             } catch (DefinitionException e) {
                 knowledgeBase.addDefinitionError(fmtParameter(p) + ": " + e.getMessage());
+                valid = false;
+            }
+
+            if (!validateNamedInjectionPointUsage(p)) {
                 valid = false;
             }
         }
@@ -1297,6 +1309,10 @@ public class CDI41BeanValidator {
                     validateQualifiers(p.getAnnotations(), fmtMethod(method));
                 } catch (DefinitionException e) {
                     knowledgeBase.addDefinitionError(fmtParameter(p) + ": " + e.getMessage());
+                    valid = false;
+                }
+
+                if (!validateNamedInjectionPointUsage(p)) {
                     valid = false;
                 }
             }
@@ -1554,6 +1570,56 @@ public class CDI41BeanValidator {
         if (!duplicates.isEmpty()) {
             throw new DefinitionException(location + ": duplicate qualifier annotations: " + String.join(", ", duplicates));
         }
+    }
+
+    /**
+     * CDI 4.1 §3.9:
+     * - If an injected field declares @Named with no value, the field name is assumed.
+     * - Any other injection point declaring @Named with no value is a definition error.
+     */
+    private boolean validateNamedInjectionPointUsage(AnnotatedElement injectionPoint) {
+        Annotation named = findNamedQualifier(injectionPoint.getAnnotations());
+        if (named == null) {
+            return true;
+        }
+
+        String namedValue = readNamedValue(named).trim();
+        if (!namedValue.isEmpty()) {
+            return true;
+        }
+
+        if (injectionPoint instanceof Field) {
+            return true;
+        }
+
+        knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                ": @Named injection point must declare a non-empty value on non-field injection points");
+        return false;
+    }
+
+    private Annotation findNamedQualifier(Annotation[] annotations) {
+        for (Annotation annotation : annotations) {
+            if (isNamedQualifierType(annotation.annotationType())) {
+                return annotation;
+            }
+        }
+        return null;
+    }
+
+    private String describeInjectionPoint(AnnotatedElement injectionPoint) {
+        if (injectionPoint instanceof Parameter) {
+            return fmtParameter((Parameter) injectionPoint);
+        }
+        if (injectionPoint instanceof Field) {
+            return fmtField((Field) injectionPoint);
+        }
+        if (injectionPoint instanceof Method) {
+            return fmtMethod((Method) injectionPoint);
+        }
+        if (injectionPoint instanceof Constructor) {
+            return fmtConstructor((Constructor<?>) injectionPoint);
+        }
+        return injectionPoint.toString();
     }
 
     private boolean isQualifierAnnotationType(Class<? extends Annotation> at) {

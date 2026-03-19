@@ -70,6 +70,12 @@ public class BeanResolver implements DependencyResolver {
 
     @Override
     public Object resolve(Type requiredType, Annotation[] qualifiers) {
+        Annotation[] effectiveQualifiers = qualifiers;
+        InjectionPoint injectionPointContext = currentInjectionPoint.get();
+        if (injectionPointContext != null && injectionPointContext.getQualifiers() != null) {
+            effectiveQualifiers = injectionPointContext.getQualifiers().toArray(new Annotation[0]);
+        }
+
         // Special handling for InjectionPoint built-in bean
         if (requiredType instanceof Class &&
             jakarta.enterprise.inject.spi.InjectionPoint.class.equals(requiredType)) {
@@ -111,7 +117,7 @@ public class BeanResolver implements DependencyResolver {
             // Check if it's Event<T>
             if (Event.class.isAssignableFrom(rawType)) {
                 Type eventType = pt.getActualTypeArguments()[0];
-                Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
+                Set<Annotation> requiredQualifiers = extractQualifiers(effectiveQualifiers);
 
                 return createEventWrapper(eventType, requiredQualifiers);
             }
@@ -120,20 +126,20 @@ public class BeanResolver implements DependencyResolver {
             if (Provider.class.isAssignableFrom(rawType)) {
                 Type actualType = pt.getActualTypeArguments()[0];
                 Class<?> actualClass = RawTypeExtractor.getRawType(actualType);
-                Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
+                Set<Annotation> requiredQualifiers = extractQualifiers(effectiveQualifiers);
 
                 return createProviderWrapper(actualClass, new ArrayList<>(requiredQualifiers));
             }
         }
 
         // Find matching beans for regular dependencies
-        Collection<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
+        Collection<Bean<?>> candidates = findMatchingBeans(requiredType, effectiveQualifiers);
 
         if (candidates.isEmpty()) {
             String message = buildResolutionMessage(
                 "Unsatisfied dependency",
                 requiredType,
-                qualifiers
+                effectiveQualifiers
             );
             throw new UnsatisfiedResolutionException(message);
         }
@@ -149,7 +155,7 @@ public class BeanResolver implements DependencyResolver {
             String message = buildResolutionMessage(
                 "Ambiguous dependency",
                 requiredType,
-                qualifiers
+                effectiveQualifiers
             ) + ". Matching beans: " + candidates.stream()
                 .map(this::formatBeanSummary)
                 .collect(Collectors.joining(", "));

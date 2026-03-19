@@ -12,11 +12,15 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Member;
+import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -112,13 +116,83 @@ public class InjectionPointImpl<T> implements InjectionPoint {
      */
     private void collectQualifiers(Annotation[] annotations) {
         for (Annotation qualifier : QualifiersHelper.extractQualifierAnnotations(annotations)) {
-            qualifiers.add(qualifier);
+            qualifiers.add(normalizeNamedQualifier(qualifier));
         }
 
         // CDI defaulting rules for injection points: if no qualifier is declared, add @Default.
         if (qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());
         }
+    }
+
+    private Annotation normalizeNamedQualifier(Annotation qualifier) {
+        if (!isNamedQualifierType(qualifier.annotationType())) {
+            return qualifier;
+        }
+
+        String namedValue = readNamedValue(qualifier).trim();
+        if (!namedValue.isEmpty()) {
+            return qualifier;
+        }
+
+        // CDI 4.1 §3.9: empty @Named on injected fields defaults to the field name.
+        if (member instanceof Field) {
+            return createNamedLiteral(qualifier.annotationType(), ((Field) member).getName());
+        }
+
+        return qualifier;
+    }
+
+    private boolean isNamedQualifierType(Class<? extends Annotation> annotationType) {
+        return annotationType.getName().equals("jakarta.inject.Named") ||
+                annotationType.getName().equals("javax.inject.Named");
+    }
+
+    private String readNamedValue(Annotation namedQualifier) {
+        try {
+            Method valueMethod = namedQualifier.annotationType().getMethod("value");
+            Object value = valueMethod.invoke(namedQualifier);
+            return value == null ? "" : value.toString();
+        } catch (ReflectiveOperationException ignored) {
+            return "";
+        }
+    }
+
+    private Annotation createNamedLiteral(Class<? extends Annotation> namedType, String value) {
+        InvocationHandler handler = (proxy, method, args) -> {
+            String name = method.getName();
+            if ("value".equals(name) && method.getParameterCount() == 0) {
+                return value;
+            }
+            if ("annotationType".equals(name) && method.getParameterCount() == 0) {
+                return namedType;
+            }
+            if ("equals".equals(name) && method.getParameterCount() == 1) {
+                Object other = args[0];
+                if (other == null || !namedType.isInstance(other)) {
+                    return false;
+                }
+                try {
+                    Method otherValue = namedType.getMethod("value");
+                    Object otherNamedValue = otherValue.invoke(other);
+                    return Objects.equals(value, otherNamedValue);
+                } catch (ReflectiveOperationException e) {
+                    return false;
+                }
+            }
+            if ("hashCode".equals(name) && method.getParameterCount() == 0) {
+                return (127 * "value".hashCode()) ^ value.hashCode();
+            }
+            if ("toString".equals(name) && method.getParameterCount() == 0) {
+                return "@" + namedType.getName() + "(value=" + value + ")";
+            }
+            throw new UnsupportedOperationException("Unsupported @Named literal method: " + name);
+        };
+
+        return (Annotation) Proxy.newProxyInstance(
+                namedType.getClassLoader(),
+                new Class<?>[]{namedType},
+                handler);
     }
 
     /**
