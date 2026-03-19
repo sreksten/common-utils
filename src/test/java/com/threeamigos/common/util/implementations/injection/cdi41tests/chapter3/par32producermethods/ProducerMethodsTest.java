@@ -24,11 +24,20 @@ import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet10.InvalidObservesAsyncParameterProducerMethodFactory;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet10.InvalidObservesParameterProducerMethodFactory;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet11.InvalidInterceptorProducerMethod;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet12.MultiParameterDependencyA;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet12.MultiParameterDependencyB;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet12.MultiParameterDependencyC;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet12.MultiParameterDependencyD;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet12.MultiParameterProducerFactory;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet12.MultiParameterProduct;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet13.PaymentProcessor;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par32producermethods.bullet13.ProducerMethodDefaultNameFactory;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.IllegalProductException;
+import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,6 +47,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -317,11 +328,73 @@ public class ProducerMethodsTest {
         assertThrows(DefinitionException.class, syringe::setup);
     }
 
+    @Test
+    @DisplayName("3.2.2 - Producer method may have any number of parameters and all are injection points")
+    void producerMethodParametersAreInjectionPoints() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), MultiParameterProducerFactory.class);
+        syringe.setup();
+
+        ProducerBean<?> producerBean = findProducerBeanByDeclaringClass(syringe, MultiParameterProducerFactory.class);
+
+        assertEquals(4, producerBean.getInjectionPoints().size());
+        Set<Type> injectionPointTypes = new HashSet<>();
+        for (InjectionPoint injectionPoint : producerBean.getInjectionPoints()) {
+            injectionPointTypes.add(injectionPoint.getType());
+        }
+        assertTrue(injectionPointTypes.contains(MultiParameterDependencyA.class));
+        assertTrue(injectionPointTypes.contains(MultiParameterDependencyB.class));
+        assertTrue(injectionPointTypes.contains(MultiParameterDependencyC.class));
+        assertTrue(injectionPointTypes.contains(MultiParameterDependencyD.class));
+
+        CreationalContext<?> creationalContext = syringe.getBeanManager().createCreationalContext(producerBean);
+        Object produced = producerBean.create((CreationalContext) creationalContext);
+        assertTrue(produced instanceof MultiParameterProduct);
+        assertEquals("ABCD", ((MultiParameterProduct) produced).getSignature());
+    }
+
+    @Test
+    @DisplayName("3.2.3 - Default bean name for getter-style producer method is JavaBeans property name")
+    void defaultBeanNameForGetterStyleProducerMethodUsesJavaBeansPropertyName() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ProducerMethodDefaultNameFactory.class);
+        syringe.setup();
+
+        ProducerBean<?> producerBean = findProducerBeanByDeclaringClassAndMethodName(
+                syringe, ProducerMethodDefaultNameFactory.class, "getProducts");
+
+        assertTrue(producerBean.getTypes().contains(List.class));
+        assertEquals("products", producerBean.getName());
+    }
+
+    @Test
+    @DisplayName("3.2.3 - Default bean name for non-getter producer method is method name")
+    void defaultBeanNameForNonGetterProducerMethodUsesMethodName() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ProducerMethodDefaultNameFactory.class);
+        syringe.setup();
+
+        ProducerBean<?> producerBean = findProducerBeanByDeclaringClassAndMethodName(
+                syringe, ProducerMethodDefaultNameFactory.class, "paymentProcessor");
+
+        assertTrue(producerBean.getTypes().contains(PaymentProcessor.class));
+        assertEquals("paymentProcessor", producerBean.getName());
+    }
+
     private ProducerBean<?> findProducerBeanByDeclaringClass(Syringe syringe, Class<?> declaringClass) {
         return syringe.getKnowledgeBase().getProducerBeans().stream()
                 .filter(producerBean -> producerBean.getDeclaringClass().equals(declaringClass))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Producer bean not found for class: " + declaringClass.getName()));
+    }
+
+    private ProducerBean<?> findProducerBeanByDeclaringClassAndMethodName(Syringe syringe,
+                                                                           Class<?> declaringClass,
+                                                                           String methodName) {
+        return syringe.getKnowledgeBase().getProducerBeans().stream()
+                .filter(producerBean -> producerBean.getDeclaringClass().equals(declaringClass))
+                .filter(producerBean -> producerBean.getProducerMethod() != null)
+                .filter(producerBean -> producerBean.getProducerMethod().getName().equals(methodName))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "Producer bean not found for " + declaringClass.getName() + "#" + methodName));
     }
 
     private Type producerReturnType(Class<?> declaringClass, String methodName) {
