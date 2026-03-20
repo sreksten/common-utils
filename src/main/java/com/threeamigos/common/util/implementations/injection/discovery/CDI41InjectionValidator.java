@@ -6,7 +6,8 @@ import com.threeamigos.common.util.implementations.injection.events.ObserverMeth
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
+import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Any;
@@ -924,7 +925,7 @@ public class CDI41InjectionValidator {
         // and registered as beans in KnowledgeBase, so they're included in
         // the validBeans collection above. No special handling needed here.
 
-        return matches;
+        return applySpecializationFiltering(matches);
     }
 
     private boolean isBeanEnabledForResolution(Bean<?> bean) {
@@ -1187,7 +1188,7 @@ public class CDI41InjectionValidator {
             Class<?> beanClass = beanImpl.getBeanClass();
 
             // Scan all methods for @Observes and @ObservesAsync
-            for (java.lang.reflect.Method method : beanClass.getDeclaredMethods()) {
+            for (java.lang.reflect.Method method : collectObserverCandidateMethods(beanClass)) {
                 boolean valid = validateObserverMethod(method, bean);
                 allValid &= valid;
             }
@@ -1246,7 +1247,11 @@ public class CDI41InjectionValidator {
 
         // Extract observer metadata
         boolean async = observesAsyncCount > 0;
-        Type eventType = observedParameter.getParameterizedType();
+        Type eventType = GenericTypeResolver.resolve(
+                observedParameter.getParameterizedType(),
+                declaringBean.getBeanClass(),
+                method.getDeclaringClass()
+        );
         Set<Annotation> qualifiers = extractQualifiers(observedParameter);
 
         // Extract reception and transaction phase
@@ -1300,10 +1305,83 @@ public class CDI41InjectionValidator {
                 qualifiers.add(annotation);
             }
         }
-        // If no explicit qualifiers, add @Default
+        // Observer methods with no explicit qualifiers observe events with @Any.
         if (qualifiers.isEmpty()) {
-            qualifiers.add(new DefaultLiteral());
+            qualifiers.add(new AnyLiteral());
         }
         return qualifiers;
+    }
+
+    /**
+     * Collects methods from superclass to subclass and keeps overriding methods from subclasses.
+     */
+    private List<Method> collectObserverCandidateMethods(Class<?> beanClass) {
+        List<Class<?>> hierarchy = new ArrayList<>();
+        Class<?> current = beanClass;
+        while (current != null && !Object.class.equals(current)) {
+            hierarchy.add(0, current);
+            current = current.getSuperclass();
+        }
+
+        Map<String, Method> bySignature = new LinkedHashMap<>();
+        for (Class<?> type : hierarchy) {
+            for (Method method : type.getDeclaredMethods()) {
+                bySignature.put(methodSignature(method), method);
+            }
+        }
+        return new ArrayList<>(bySignature.values());
+    }
+
+    private String methodSignature(Method method) {
+        StringBuilder builder = new StringBuilder(method.getName()).append("(");
+        Class<?>[] parameterTypes = method.getParameterTypes();
+        for (int i = 0; i < parameterTypes.length; i++) {
+            if (i > 0) {
+                builder.append(",");
+            }
+            builder.append(parameterTypes[i].getName());
+        }
+        builder.append(")");
+        return builder.toString();
+    }
+
+    /**
+     * Basic specialization filtering: if a bean specializes its direct superclass, remove the
+     * specialized superclass from candidates.
+     */
+    private Set<Bean<?>> applySpecializationFiltering(Set<Bean<?>> candidates) {
+        if (candidates == null || candidates.size() < 2) {
+            return candidates;
+        }
+
+        Set<Class<?>> specializedSuperclasses = new HashSet<>();
+        for (Bean<?> candidate : candidates) {
+            Class<?> beanClass = candidate.getBeanClass();
+            if (beanClass != null && hasSpecializesAnnotation(beanClass)) {
+                Class<?> superclass = beanClass.getSuperclass();
+                if (superclass != null && !Object.class.equals(superclass)) {
+                    specializedSuperclasses.add(superclass);
+                }
+            }
+        }
+
+        if (specializedSuperclasses.isEmpty()) {
+            return candidates;
+        }
+
+        return candidates.stream()
+                .filter(candidate -> !specializedSuperclasses.contains(candidate.getBeanClass()))
+                .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private boolean hasSpecializesAnnotation(Class<?> beanClass) {
+        for (Annotation annotation : beanClass.getAnnotations()) {
+            String name = annotation.annotationType().getName();
+            if ("jakarta.enterprise.inject.Specializes".equals(name) ||
+                    "javax.enterprise.inject.Specializes".equals(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

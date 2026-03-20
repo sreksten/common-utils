@@ -246,7 +246,7 @@ public class BeanManagerImpl implements BeanManager {
             }
         }
 
-        return matchingBeans;
+        return applySpecializationFiltering(matchingBeans);
     }
 
     /**
@@ -290,7 +290,7 @@ public class BeanManagerImpl implements BeanManager {
             }
         }
 
-        return namedBeans;
+        return applySpecializationFiltering(namedBeans);
     }
 
     /**
@@ -335,8 +335,13 @@ public class BeanManagerImpl implements BeanManager {
             return null;
         }
 
+        Set<Bean<? extends X>> filteredBeans = applySpecializationFiltering(beans);
+        if (filteredBeans.isEmpty()) {
+            return null;
+        }
+
         List<Bean<? extends X>> enabledBeans = new ArrayList<>();
-        for (Bean<? extends X> bean : beans) {
+        for (Bean<? extends X> bean : filteredBeans) {
             if (isBeanEnabledForResolution(bean)) {
                 enabledBeans.add(bean);
             }
@@ -395,6 +400,50 @@ public class BeanManagerImpl implements BeanManager {
 
         // Multiple non-alternatives = ambiguous
         return null;
+    }
+
+    /**
+     * Basic specialization filtering: if a candidate bean specializes its direct superclass,
+     * the specialized superclass bean is removed from candidate sets.
+     */
+    private <X> Set<Bean<? extends X>> applySpecializationFiltering(Set<Bean<? extends X>> candidates) {
+        if (candidates == null || candidates.size() < 2) {
+            return candidates;
+        }
+
+        Set<Class<?>> specializedSuperclasses = new HashSet<>();
+        for (Bean<? extends X> candidate : candidates) {
+            Class<?> beanClass = candidate.getBeanClass();
+            if (beanClass != null && hasSpecializesAnnotation(beanClass)) {
+                Class<?> superclass = beanClass.getSuperclass();
+                if (superclass != null && !Object.class.equals(superclass)) {
+                    specializedSuperclasses.add(superclass);
+                }
+            }
+        }
+
+        if (specializedSuperclasses.isEmpty()) {
+            return candidates;
+        }
+
+        Set<Bean<? extends X>> filtered = new HashSet<>();
+        for (Bean<? extends X> candidate : candidates) {
+            if (!specializedSuperclasses.contains(candidate.getBeanClass())) {
+                filtered.add(candidate);
+            }
+        }
+        return filtered;
+    }
+
+    private boolean hasSpecializesAnnotation(Class<?> beanClass) {
+        for (Annotation annotation : beanClass.getAnnotations()) {
+            String annotationName = annotation.annotationType().getName();
+            if ("jakarta.enterprise.inject.Specializes".equals(annotationName) ||
+                    "javax.enterprise.inject.Specializes".equals(annotationName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isBeanEnabledForResolution(Bean<?> bean) {

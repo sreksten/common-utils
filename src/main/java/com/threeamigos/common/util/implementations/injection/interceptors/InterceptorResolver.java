@@ -173,43 +173,24 @@ public class InterceptorResolver {
     }
 
     /**
-     * Collects interceptor bindings from a class and its type hierarchy (superclasses and interfaces).
+     * Collects interceptor bindings using class-level Java inheritance semantics.
      *
-     * <p>CDI 4.1 specifies that interceptor bindings are inherited. This method walks the full
-     * hierarchy to ensure bindings declared on generic superclasses or implemented interfaces
-     * are considered during resolution.</p>
+     * <p>Class#getAnnotations() already applies {@code @Inherited} rules and override behavior:
+     * only inherited bindings are visible, and a nearer superclass declaration of the same binding
+     * type hides farther ancestors. Interface annotations are not inherited.
      */
     private Set<Annotation> extractInterceptorBindingsFromHierarchy(Class<?> type) {
         Set<Annotation> bindings = new HashSet<>();
-        Set<Class<?>> visited = new HashSet<>();
-        Deque<Class<?>> stack = new ArrayDeque<>();
-        if (type != null) {
-            stack.push(type);
+        if (type == null) {
+            return bindings;
         }
 
-        while (!stack.isEmpty()) {
-            Class<?> current = stack.pop();
-            if (current == null || !visited.add(current)) {
-                continue;
+        for (Annotation annotation : type.getAnnotations()) {
+            if (isInterceptorBinding(annotation.annotationType())) {
+                bindings.add(annotation);
             }
-
-            for (Annotation annotation : current.getAnnotations()) {
-                if (isInterceptorBinding(annotation.annotationType())) {
-                    bindings.add(annotation);
-                }
-                if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
-                    bindings.addAll(extractInterceptorBindingsFromStereotype(annotation.annotationType()));
-                }
-            }
-
-            // Traverse superclass first (preserves natural overriding semantics)
-            Class<?> superclass = current.getSuperclass();
-            if (superclass != null) {
-                stack.push(superclass);
-            }
-            // Then traverse interfaces (may include generic parents)
-            for (Class<?> iface : current.getInterfaces()) {
-                stack.push(iface);
+            if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
+                bindings.addAll(extractInterceptorBindingsFromStereotype(annotation.annotationType()));
             }
         }
 

@@ -10,6 +10,7 @@ import com.threeamigos.common.util.implementations.injection.interceptors.Interc
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
+import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -389,6 +390,15 @@ public class BeanImpl<T> implements Bean<T> {
                 T instance = customInjectionTarget.produce(creationalContext);
                 customInjectionTarget.inject(instance, creationalContext);
                 customInjectionTarget.postConstruct(instance);
+
+                if (hasInterceptors() && isDependent()) {
+                    instance = createInterceptorAwareProxy(instance);
+                }
+
+                if (hasDecorators()) {
+                    instance = createDecoratorChain(instance, creationalContext);
+                }
+
                 return instance;
             }
 
@@ -514,12 +524,18 @@ public class BeanImpl<T> implements Bean<T> {
         Object[] args = new Object[parameters.length];
 
         for (int i = 0; i < parameters.length; i++) {
+            Type resolvedType = GenericTypeResolver.resolve(
+                    parameters[i].getParameterizedType(),
+                    beanClass,
+                    constructor.getDeclaringClass()
+            );
+
             // Create InjectionPoint metadata for this constructor parameter
             InjectionPoint injectionPoint = new InjectionPointImpl<>(parameters[i], this);
 
             // Resolve the parameter with InjectionPoint context set
             args[i] = resolveInjectionPointWithContext(
-                parameters[i].getParameterizedType(),
+                resolvedType,
                 parameters[i].getAnnotations(),
                 injectionPoint,
                 creationalContext
@@ -564,10 +580,15 @@ public class BeanImpl<T> implements Bean<T> {
 
                 // Create InjectionPoint metadata for this field
                 InjectionPoint injectionPoint = new InjectionPointImpl<>(field, this);
+                Type resolvedFieldType = GenericTypeResolver.resolve(
+                        field.getGenericType(),
+                        beanClass,
+                        field.getDeclaringClass()
+                );
 
                 // Resolve the field with InjectionPoint context set
                 Object value = resolveInjectionPointWithContext(
-                    field.getGenericType(),
+                    resolvedFieldType,
                     field.getAnnotations(),
                     injectionPoint,
                     creationalContext
@@ -609,12 +630,18 @@ public class BeanImpl<T> implements Bean<T> {
                 Object[] args = new Object[parameters.length];
 
                 for (int i = 0; i < parameters.length; i++) {
+                    Type resolvedParameterType = GenericTypeResolver.resolve(
+                            parameters[i].getParameterizedType(),
+                            beanClass,
+                            method.getDeclaringClass()
+                    );
+
                     // Create InjectionPoint metadata for this method parameter
                     InjectionPoint injectionPoint = new InjectionPointImpl<>(parameters[i], this);
 
                     // Resolve the parameter with InjectionPoint context set
                     args[i] = resolveInjectionPointWithContext(
-                        parameters[i].getParameterizedType(),
+                        resolvedParameterType,
                         parameters[i].getAnnotations(),
                         injectionPoint,
                         creationalContext
@@ -1161,9 +1188,14 @@ public class BeanImpl<T> implements Bean<T> {
         // ========================================================================
         Map<Method, InterceptorChain> chains = new HashMap<>();
 
-        // Iterate through all declared methods in the bean class
-        // We only process declared methods (not inherited) to avoid duplicates
-        for (Method method : beanClass.getDeclaredMethods()) {
+        // Iterate through all public methods in the bean class hierarchy.
+        // Using getMethods() includes inherited public methods and naturally keeps
+        // subclass overrides over superclass declarations.
+        for (Method method : beanClass.getMethods()) {
+            if (Object.class.equals(method.getDeclaringClass())) {
+                continue;
+            }
+
             // Skip non-public methods - CDI only intercepts public business methods
             if (!Modifier.isPublic(method.getModifiers())) {
                 continue;

@@ -26,6 +26,7 @@ import jakarta.enterprise.inject.Stereotype;
 
 import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
+import java.lang.annotation.Inherited;
 import java.lang.annotation.Target;
 import java.lang.reflect.*;
 import java.util.*;
@@ -695,6 +696,51 @@ public class CDI41BeanValidator {
         return overrideAnnotations != null ? overrideAnnotations : clazz.getAnnotations();
     }
 
+    private Annotation[] declaredAnnotationsOf(Class<?> clazz) {
+        Annotation[] declaredAnnotations = clazz.getDeclaredAnnotations();
+        if (overrideAnnotations == null) {
+            return declaredAnnotations;
+        }
+
+        // keep direct declarations and only add override annotations that are not inherited
+        // from superclasses. This preserves extension-added annotations while avoiding
+        // inherited annotations being treated as directly declared metadata.
+        List<Annotation> merged = new ArrayList<>(Arrays.asList(declaredAnnotations));
+        Set<Class<? extends Annotation>> seenTypes = merged.stream()
+                .map(Annotation::annotationType)
+                .collect(Collectors.toSet());
+
+        for (Annotation annotation : overrideAnnotations) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (seenTypes.contains(annotationType)) {
+                continue;
+            }
+            if (isInheritedFromSuperclass(clazz, annotationType)) {
+                continue;
+            }
+            merged.add(annotation);
+            seenTypes.add(annotationType);
+        }
+
+        return merged.toArray(new Annotation[0]);
+    }
+
+    private boolean isInheritedFromSuperclass(Class<?> clazz, Class<? extends Annotation> annotationType) {
+        if (!annotationType.isAnnotationPresent(Inherited.class)) {
+            return false;
+        }
+
+        Class<?> current = clazz.getSuperclass();
+        while (current != null && current != Object.class) {
+            if (current.isAnnotationPresent(annotationType)) {
+                return true;
+            }
+            current = current.getSuperclass();
+        }
+
+        return false;
+    }
+
     private String extractBeanName(Class<?> clazz) {
         // CDI: direct @Named without value defaults to simple name with first character lower-cased.
         for (Annotation annotation : annotationsOf(clazz)) {
@@ -774,16 +820,22 @@ public class CDI41BeanValidator {
     }
 
     private Class<? extends Annotation> extractBeanScope(Class<?> clazz) {
-        // CDI 4.1: Check for scope directly on the class first
-        // If a scope exists, it's already validated as at-most-one in validateScopeAnnotations.
-        for (Annotation a : annotationsOf(clazz)) {
-            Class<? extends Annotation> at = a.annotationType();
-            if (isScopeAnnotationType(at)) {
-                return at;
+        // 1) Direct scope declared on the bean class.
+        for (Annotation annotation : declaredAnnotationsOf(clazz)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (isScopeAnnotationType(annotationType)) {
+                return annotationType;
             }
         }
 
-        // If no direct scope, inherit from stereotypes (must be consistent)
+        // 2) CDI scope inheritance special rule:
+        // nearest superclass declaring ANY scope blocks farther ancestors.
+        Class<? extends Annotation> inheritedClassScope = resolveInheritedScopeByCdiRules(clazz);
+        if (inheritedClassScope != null) {
+            return inheritedClassScope;
+        }
+
+        // 3) No class scope -> resolve from stereotypes (must be consistent).
         Class<? extends Annotation> inheritedScope = null;
         for (Annotation a : annotationsOf(clazz)) {
             if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
@@ -810,6 +862,31 @@ public class CDI41BeanValidator {
 
         // Default scope for managed beans is @Dependent.
         return Dependent.class;
+    }
+
+    private Class<? extends Annotation> resolveInheritedScopeByCdiRules(Class<?> clazz) {
+        Class<?> current = clazz.getSuperclass();
+
+        while (current != null && current != Object.class) {
+            Class<? extends Annotation> declaredScope = firstDeclaredScope(current);
+            if (declaredScope != null) {
+                // A scope declaration on an intermediate class blocks farther ancestors.
+                return declaredScope.isAnnotationPresent(Inherited.class) ? declaredScope : null;
+            }
+            current = current.getSuperclass();
+        }
+
+        return null;
+    }
+
+    private Class<? extends Annotation> firstDeclaredScope(Class<?> clazz) {
+        for (Annotation annotation : clazz.getDeclaredAnnotations()) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (isScopeAnnotationType(annotationType)) {
+                return annotationType;
+            }
+        }
+        return null;
     }
 
     private Set<Class<? extends Annotation>> extractBeanStereotypes(Class<?> clazz) {
@@ -1452,7 +1529,7 @@ public class CDI41BeanValidator {
      * @throws DefinitionException if more than one scope annotation is present.
      */
     private Class<? extends Annotation> validateScopeAnnotations(Class<?> clazz) {
-        List<Class<? extends Annotation>> scopes = Arrays.stream(annotationsOf(clazz))
+        List<Class<? extends Annotation>> scopes = Arrays.stream(declaredAnnotationsOf(clazz))
                 .map(Annotation::annotationType)
                 .filter(this::isScopeAnnotationType)
                 .collect(Collectors.toList());
@@ -2510,11 +2587,9 @@ public class CDI41BeanValidator {
             current = current.getSuperclass();
         }
 
-        // Track which method signatures we've seen (to detect overrides)
-        Set<String> seenSignatures = new HashSet<>();
-
         // Process in superclass → subclass order
-        for (Class<?> currentClass : hierarchy) {
+        for (int i = 0; i < hierarchy.size(); i++) {
+            Class<?> currentClass = hierarchy.get(i);
             Method foundMethod = null;
 
             for (Method method : currentClass.getDeclaredMethods()) {
@@ -2557,15 +2632,8 @@ public class CDI41BeanValidator {
             }
 
             if (foundMethod != null) {
-                // Create method signature for override detection
-                String signature = getMethodSignature(foundMethod);
-
-                // If this signature was already seen, it means a subclass overrides it
-                // In that case, skip this method (only the overriding method should be called)
-                if (!seenSignatures.contains(signature)) {
-                    seenSignatures.add(signature);
-
-                    // Add to bean's lifecycle method list
+                // A lifecycle method is inherited only if no subclass overrides it.
+                if (!isOverriddenBySubclass(foundMethod, hierarchy, i + 1)) {
                     if (isPostConstruct) {
                         bean.addPostConstructMethod(foundMethod);
                     } else {
@@ -2574,6 +2642,58 @@ public class CDI41BeanValidator {
                 }
             }
         }
+    }
+
+    private boolean isOverriddenBySubclass(Method method, List<Class<?>> hierarchy, int startIndex) {
+        if (Modifier.isPrivate(method.getModifiers())) {
+            return false;
+        }
+
+        for (int i = startIndex; i < hierarchy.size(); i++) {
+            Class<?> subclass = hierarchy.get(i);
+            Method candidate = findDeclaredMethod(subclass, method.getName(), method.getParameterTypes());
+            if (candidate == null) {
+                continue;
+            }
+
+            if (Modifier.isStatic(candidate.getModifiers())) {
+                continue;
+            }
+
+            if (isOverridableFromSubclass(method, subclass)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private Method findDeclaredMethod(Class<?> clazz, String methodName, Class<?>[] parameterTypes) {
+        try {
+            return clazz.getDeclaredMethod(methodName, parameterTypes);
+        } catch (NoSuchMethodException ignored) {
+            return null;
+        }
+    }
+
+    private boolean isOverridableFromSubclass(Method method, Class<?> subclass) {
+        int modifiers = method.getModifiers();
+
+        if (Modifier.isPublic(modifiers) || Modifier.isProtected(modifiers)) {
+            return true;
+        }
+
+        if (Modifier.isPrivate(modifiers)) {
+            return false;
+        }
+
+        // package-private: only overridable in the same package
+        return packageName(method.getDeclaringClass()).equals(packageName(subclass));
+    }
+
+    private String packageName(Class<?> clazz) {
+        Package pkg = clazz.getPackage();
+        return pkg == null ? "" : pkg.getName();
     }
 
     /**

@@ -232,7 +232,7 @@ public class BeanResolver implements DependencyResolver {
             }
         }
 
-        return matches;
+        return applySpecializationFiltering(matches);
     }
 
     /**
@@ -276,6 +276,46 @@ public class BeanResolver implements DependencyResolver {
         }
 
         return Optional.of(winner);
+    }
+
+    /**
+     * Basic specialization filtering: if a bean specializes its direct superclass, remove the
+     * specialized superclass from candidates.
+     */
+    private Collection<Bean<?>> applySpecializationFiltering(Collection<Bean<?>> candidates) {
+        if (candidates == null || candidates.size() < 2) {
+            return candidates;
+        }
+
+        Set<Class<?>> specializedSuperclasses = new HashSet<>();
+        for (Bean<?> candidate : candidates) {
+            Class<?> beanClass = candidate.getBeanClass();
+            if (beanClass != null && hasSpecializesAnnotation(beanClass)) {
+                Class<?> superclass = beanClass.getSuperclass();
+                if (superclass != null && !Object.class.equals(superclass)) {
+                    specializedSuperclasses.add(superclass);
+                }
+            }
+        }
+
+        if (specializedSuperclasses.isEmpty()) {
+            return candidates;
+        }
+
+        return candidates.stream()
+                .filter(candidate -> !specializedSuperclasses.contains(candidate.getBeanClass()))
+                .collect(Collectors.toList());
+    }
+
+    private boolean hasSpecializesAnnotation(Class<?> beanClass) {
+        for (Annotation annotation : beanClass.getAnnotations()) {
+            String name = annotation.annotationType().getName();
+            if ("jakarta.enterprise.inject.Specializes".equals(name) ||
+                    "javax.enterprise.inject.Specializes".equals(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private int getAlternativePriority(Bean<?> bean) {

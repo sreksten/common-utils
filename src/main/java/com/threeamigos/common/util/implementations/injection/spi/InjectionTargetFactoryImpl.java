@@ -2,14 +2,20 @@ package com.threeamigos.common.util.implementations.injection.spi;
 
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
+import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -153,8 +159,13 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                     for (Field field : clazz.getDeclaredFields()) {
                         if (hasInjectAnnotation(field)) {
                             field.setAccessible(true);
+                            Type resolvedFieldType = GenericTypeResolver.resolve(
+                                    field.getGenericType(),
+                                    instance.getClass(),
+                                    field.getDeclaringClass()
+                            );
                             Object value = beanManager.getInjectableReference(
-                                createInjectionPoint(field), ctx);
+                                createInjectionPoint(field, resolvedFieldType), ctx);
                             field.set(instance, value);
                         }
                     }
@@ -164,6 +175,9 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 for (Class<?> clazz : hierarchy) {
                     for (Method method : clazz.getDeclaredMethods()) {
                         if (hasInjectAnnotation(method)) {
+                            if (isOverridden(method, instance.getClass())) {
+                                continue;
+                            }
                             method.setAccessible(true);
                             Object[] args = resolveMethodParameters(method, ctx);
                             method.invoke(instance, args);
@@ -185,15 +199,9 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         @Override
         public void postConstruct(T instance) {
             try {
-                Class<?> clazz = instance.getClass();
-
-                // Find and invoke @PostConstruct method
-                for (Method method : clazz.getDeclaredMethods()) {
-                    if (hasPostConstructAnnotation(method)) {
-                        method.setAccessible(true);
-                        method.invoke(instance);
-                        return;
-                    }
+                for (Method method : collectLifecycleMethods(instance.getClass(), true)) {
+                    method.setAccessible(true);
+                    method.invoke(instance);
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Failed to invoke @PostConstruct on " +
@@ -209,15 +217,11 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         @Override
         public void preDestroy(T instance) {
             try {
-                Class<?> clazz = instance.getClass();
-
-                // Find and invoke @PreDestroy method
-                for (Method method : clazz.getDeclaredMethods()) {
-                    if (hasPreDestroyAnnotation(method)) {
-                        method.setAccessible(true);
-                        method.invoke(instance);
-                        return;
-                    }
+                List<Method> methods = collectLifecycleMethods(instance.getClass(), false);
+                Collections.reverse(methods);
+                for (Method method : methods) {
+                    method.setAccessible(true);
+                    method.invoke(instance);
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Failed to invoke @PreDestroy on " +
@@ -313,7 +317,12 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             Object[] args = new Object[params.length];
 
             for (int i = 0; i < params.length; i++) {
-                InjectionPoint ip = new InjectionPointImpl(params[i], null);
+                Type resolvedType = GenericTypeResolver.resolve(
+                        params[i].getParameterizedType(),
+                        annotatedType.getJavaClass(),
+                        constructor.getDeclaringClass()
+                );
+                InjectionPoint ip = createInjectionPoint(params[i], resolvedType);
                 args[i] = beanManager.getInjectableReference(ip, ctx);
             }
 
@@ -325,15 +334,130 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             Object[] args = new Object[params.length];
 
             for (int i = 0; i < params.length; i++) {
-                InjectionPoint ip = new InjectionPointImpl(params[i], null);
+                Type resolvedType = GenericTypeResolver.resolve(
+                        params[i].getParameterizedType(),
+                        annotatedType.getJavaClass(),
+                        method.getDeclaringClass()
+                );
+                InjectionPoint ip = createInjectionPoint(params[i], resolvedType);
                 args[i] = beanManager.getInjectableReference(ip, ctx);
             }
 
             return args;
         }
 
-        private InjectionPoint createInjectionPoint(Field field) {
-            return new InjectionPointImpl(field, null);
+        private InjectionPoint createInjectionPoint(Field field, Type resolvedType) {
+            return new ResolvedInjectionPoint(new InjectionPointImpl(field, null), resolvedType);
+        }
+
+        private InjectionPoint createInjectionPoint(Parameter parameter, Type resolvedType) {
+            return new ResolvedInjectionPoint(new InjectionPointImpl(parameter, null), resolvedType);
+        }
+
+        private List<Method> collectLifecycleMethods(Class<?> beanClass, boolean postConstruct) {
+            List<Class<?>> hierarchy = buildHierarchy(beanClass);
+            List<Method> lifecycleMethods = new ArrayList<>();
+
+            for (int i = 0; i < hierarchy.size(); i++) {
+                Class<?> clazz = hierarchy.get(i);
+                for (Method method : clazz.getDeclaredMethods()) {
+                    boolean matchesLifecycle = postConstruct
+                            ? hasPostConstructAnnotation(method)
+                            : hasPreDestroyAnnotation(method);
+                    if (!matchesLifecycle) {
+                        continue;
+                    }
+
+                    if (!isOverriddenBySubclass(method, hierarchy, i + 1)) {
+                        lifecycleMethods.add(method);
+                    }
+                }
+            }
+
+            return lifecycleMethods;
+        }
+
+        private boolean isOverriddenBySubclass(Method method, List<Class<?>> hierarchy, int startIndex) {
+            if (java.lang.reflect.Modifier.isPrivate(method.getModifiers())) {
+                return false;
+            }
+
+            for (int i = startIndex; i < hierarchy.size(); i++) {
+                Class<?> subclass = hierarchy.get(i);
+                Method candidate = findDeclaredMethod(subclass, method.getName(), method.getParameterTypes());
+                if (candidate == null) {
+                    continue;
+                }
+
+                if (java.lang.reflect.Modifier.isStatic(candidate.getModifiers())) {
+                    continue;
+                }
+
+                if (isOverridableFromSubclass(method, subclass)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private Method findDeclaredMethod(Class<?> clazz, String methodName, Class<?>[] parameterTypes) {
+            try {
+                return clazz.getDeclaredMethod(methodName, parameterTypes);
+            } catch (NoSuchMethodException ignored) {
+                return null;
+            }
+        }
+
+        private boolean isOverridableFromSubclass(Method method, Class<?> subclass) {
+            int modifiers = method.getModifiers();
+            if (java.lang.reflect.Modifier.isPublic(modifiers) || java.lang.reflect.Modifier.isProtected(modifiers)) {
+                return true;
+            }
+            if (java.lang.reflect.Modifier.isPrivate(modifiers)) {
+                return false;
+            }
+            return packageName(method.getDeclaringClass()).equals(packageName(subclass));
+        }
+
+        private String packageName(Class<?> type) {
+            Package pkg = type.getPackage();
+            return pkg == null ? "" : pkg.getName();
+        }
+
+        private boolean isOverridden(Method superMethod, Class<?> leafClass) {
+            if (java.lang.reflect.Modifier.isPrivate(superMethod.getModifiers())) {
+                return false;
+            }
+            if (superMethod.getDeclaringClass().equals(leafClass)) {
+                return false;
+            }
+
+            Class<?> current = leafClass;
+            while (current != null && current != superMethod.getDeclaringClass()) {
+                Method subMethod = findDeclaredMethod(current, superMethod.getName(), superMethod.getParameterTypes());
+                if (subMethod != null && !subMethod.equals(superMethod)) {
+                    if (java.lang.reflect.Modifier.isStatic(subMethod.getModifiers())) {
+                        current = current.getSuperclass();
+                        continue;
+                    }
+
+                    int superModifiers = superMethod.getModifiers();
+                    boolean superPackagePrivate = !java.lang.reflect.Modifier.isPublic(superModifiers) &&
+                            !java.lang.reflect.Modifier.isProtected(superModifiers) &&
+                            !java.lang.reflect.Modifier.isPrivate(superModifiers);
+
+                    if (superPackagePrivate) {
+                        return packageName(superMethod.getDeclaringClass())
+                                .equals(packageName(subMethod.getDeclaringClass()));
+                    }
+
+                    return true;
+                }
+                current = current.getSuperclass();
+            }
+
+            return false;
         }
 
         private boolean hasInjectAnnotation(java.lang.reflect.AnnotatedElement element) {
@@ -346,6 +470,51 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
 
         private boolean hasPreDestroyAnnotation(Method method) {
             return method.isAnnotationPresent(jakarta.annotation.PreDestroy.class);
+        }
+
+        private static final class ResolvedInjectionPoint implements InjectionPoint {
+            private final InjectionPoint delegate;
+            private final Type resolvedType;
+
+            private ResolvedInjectionPoint(InjectionPoint delegate, Type resolvedType) {
+                this.delegate = delegate;
+                this.resolvedType = resolvedType;
+            }
+
+            @Override
+            public Type getType() {
+                return resolvedType != null ? resolvedType : delegate.getType();
+            }
+
+            @Override
+            public Set<Annotation> getQualifiers() {
+                return delegate.getQualifiers();
+            }
+
+            @Override
+            public Bean<?> getBean() {
+                return delegate.getBean();
+            }
+
+            @Override
+            public Member getMember() {
+                return delegate.getMember();
+            }
+
+            @Override
+            public Annotated getAnnotated() {
+                return delegate.getAnnotated();
+            }
+
+            @Override
+            public boolean isDelegate() {
+                return delegate.isDelegate();
+            }
+
+            @Override
+            public boolean isTransient() {
+                return delegate.isTransient();
+            }
         }
     }
 }
