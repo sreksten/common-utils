@@ -1736,13 +1736,43 @@ public class Syringe {
                 ? bm.getBeans(beanClass, qualifiers)
                 : bm.getBeans(beanClass);
         if (beans == null || beans.isEmpty()) {
-            throw new UnsatisfiedResolutionException("No bean found for type " + beanClass.getName());
+            String message = "No bean found for type " + beanClass.getName();
+            knowledgeBase.addInjectionError("Programmatic lookup unsatisfied dependency: " + message);
+            throw new UnsatisfiedResolutionException(message);
         }
-        Bean<?> bean = bm.resolve(beans); // may throw AmbiguousResolutionException
+        Bean<?> bean;
+        try {
+            bean = bm.resolve(beans);
+        } catch (AmbiguousResolutionException e) {
+            knowledgeBase.addInjectionError("Programmatic lookup ambiguous dependency for type " +
+                    beanClass.getName() + " with qualifiers " + formatQualifiers(qualifiers) + ": " + e.getMessage());
+            throw e;
+        }
+        if (bean == null) {
+            String candidates = beans.stream()
+                    .map(candidate -> candidate.getBeanClass().getName())
+                    .sorted()
+                    .collect(java.util.stream.Collectors.joining(", "));
+            String message = "Ambiguous dependency for type " + beanClass.getName() +
+                    " with qualifiers " + formatQualifiers(qualifiers) +
+                    ". Matching beans: [" + candidates + "]";
+            knowledgeBase.addInjectionError("Programmatic lookup " + message);
+            throw new AmbiguousResolutionException(message);
+        }
         CreationalContext<?> ctx = bm.createCreationalContext(bean);
         @SuppressWarnings("unchecked")
         T instance = (T) bm.getReference(bean, beanClass, ctx);
         return instance;
+    }
+
+    private String formatQualifiers(Annotation... qualifiers) {
+        if (qualifiers == null || qualifiers.length == 0) {
+            return "[@Default]";
+        }
+        return Arrays.stream(qualifiers)
+                .filter(Objects::nonNull)
+                .map(annotation -> "@" + annotation.annotationType().getSimpleName())
+                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
     }
 
     /**

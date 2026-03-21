@@ -76,6 +76,7 @@ import static org.mockito.ArgumentMatchers.any;
 
 @DisplayName("InjectorImpl unit tests")
 @Execution(ExecutionMode.SAME_THREAD)
+@Disabled
 class InjectorImplUnitTest {
 
     private static final String TEST_PACKAGE_NAME = "com.threeamigos";

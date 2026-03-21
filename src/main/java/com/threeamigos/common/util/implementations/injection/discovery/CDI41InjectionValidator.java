@@ -64,7 +64,13 @@ public class CDI41InjectionValidator {
      * Tracks beans currently being resolved to detect circular dependencies.
      * Thread-local to support concurrent validation if needed in the future.
      */
-    private final ThreadLocal<Set<Bean<?>>> resolutionStack = ThreadLocal.withInitial(HashSet::new);
+    private final ThreadLocal<Deque<Bean<?>>> resolutionStack = ThreadLocal.withInitial(ArrayDeque::new);
+
+    /**
+     * Deduplicates circular dependency errors in the current validation thread.
+     */
+    private final ThreadLocal<Set<String>> reportedCircularDependencies =
+            ThreadLocal.withInitial(HashSet::new);
 
     public CDI41InjectionValidator(KnowledgeBase knowledgeBase) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
@@ -106,17 +112,17 @@ public class CDI41InjectionValidator {
         // Enhancement 5: Scan and validate observer methods
         allValid &= scanAndValidateObserverMethods(validBeans);
 
-        // Validate each bean's injection points
+        Set<Bean<?>> globallyVisited = Collections.newSetFromMap(new IdentityHashMap<>());
+
+        // Validate each bean's dependency graph (including circular dependency detection)
         for (Bean<?> bean : validBeans) {
-            for (InjectionPoint injectionPoint : bean.getInjectionPoints()) {
-                // Enhancement 2: Detect circular dependencies during validation
-                boolean valid = validateInjectionPointWithCircularCheck(injectionPoint, bean);
-                allValid &= valid;
-            }
+            boolean valid = validateBeanWithCircularCheck(bean, globallyVisited);
+            allValid &= valid;
         }
 
         // Clean up thread-local storage
         resolutionStack.remove();
+        reportedCircularDependencies.remove();
 
         return allValid;
     }
@@ -125,59 +131,147 @@ public class CDI41InjectionValidator {
     // Enhancement 2: Circular Dependency Detection
     // ============================================
 
-    /**
-     * Validates an injection point with circular dependency detection.
-     *
-     * <p>This method wraps {@link #validateInjectionPoint} with circular dependency tracking.
-     * It maintains a stack of beans currently being resolved and detects when a bean tries
-     * to inject a dependency that is already in the resolution chain.
-     *
-     * <p><b>Example of circular dependency:</b>
-     * <pre>
-     * {@literal @}ApplicationScoped
-     * class ServiceA {
-     *     {@literal @}Inject ServiceB serviceB;  // ServiceA depends on ServiceB
-     * }
-     *
-     * {@literal @}ApplicationScoped
-     * class ServiceB {
-     *     {@literal @}Inject ServiceA serviceA;  // ServiceB depends on ServiceA → CIRCULAR!
-     * }
-     * </pre>
-     *
-     * @param injectionPoint the injection point to validate
-     * @param owningBean the bean that declares this injection point
-     * @return true if the injection point can be satisfied without circular dependencies
-     */
-    private boolean validateInjectionPointWithCircularCheck(InjectionPoint injectionPoint, Bean<?> owningBean) {
-        // Get the current resolution stack for this thread
-        Set<Bean<?>> stack = resolutionStack.get();
+    private boolean validateBeanWithCircularCheck(Bean<?> rootBean, Set<Bean<?>> globallyVisited) {
+        Deque<Bean<?>> stack = resolutionStack.get();
+        stack.clear();
+        try {
+            return validateBeanDependencies(rootBean, stack, globallyVisited);
+        } finally {
+            stack.clear();
+        }
+    }
 
-        // Check if we're already resolving this bean (circular dependency)
-        if (stack.contains(owningBean)) {
-            // Build the circular dependency chain for error message
-            String chain = stack.stream()
-                    .map(b -> b.getBeanClass().getSimpleName())
-                    .collect(Collectors.joining(" → "));
-            chain += " → " + owningBean.getBeanClass().getSimpleName();
-
-            knowledgeBase.addError(
-                    "Circular dependency detected: " + chain +
-                    " at injection point " + formatInjectionPoint(injectionPoint, owningBean)
-            );
+    private boolean validateBeanDependencies(Bean<?> owningBean, Deque<Bean<?>> stack,
+                                             Set<Bean<?>> globallyVisited) {
+        if (containsByIdentity(stack, owningBean)) {
+            reportCircularDependency(formatCircularDependencyChain(stack, owningBean), null, null);
             return false;
         }
 
-        // Push this bean onto the resolution stack
-        stack.add(owningBean);
-
-        try {
-            // Validate the injection point normally
-            return validateInjectionPoint(injectionPoint, owningBean);
-        } finally {
-            // Pop this bean from the resolution stack
-            stack.remove(owningBean);
+        if (globallyVisited.contains(owningBean)) {
+            return true;
         }
+
+        stack.addLast(owningBean);
+        globallyVisited.add(owningBean);
+        boolean allValid = true;
+        try {
+            for (InjectionPoint injectionPoint : owningBean.getInjectionPoints()) {
+                boolean valid = validateInjectionPoint(injectionPoint, owningBean);
+                allValid &= valid;
+                if (!valid) {
+                    continue;
+                }
+
+                Optional<Bean<?>> resolvedDependency = resolveInjectionPointTargetBean(injectionPoint);
+                if (!resolvedDependency.isPresent()) {
+                    continue;
+                }
+
+                Bean<?> dependency = resolvedDependency.get();
+                if (containsByIdentity(stack, dependency)) {
+                    String chain = formatCircularDependencyChain(stack, dependency);
+                    reportCircularDependency(chain, injectionPoint, owningBean);
+                    allValid = false;
+                    continue;
+                }
+
+                allValid &= validateBeanDependencies(dependency, stack, globallyVisited);
+            }
+        } finally {
+            stack.removeLast();
+        }
+
+        return allValid;
+    }
+
+    private Optional<Bean<?>> resolveInjectionPointTargetBean(InjectionPoint injectionPoint) {
+        Type requiredType = injectionPoint.getType();
+        if (isInstanceOrProvider(requiredType)) {
+            return Optional.empty();
+        }
+
+        Set<Bean<?>> candidates = findMatchingBeans(requiredType, injectionPoint.getQualifiers());
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
+
+        if (candidates.size() > 1) {
+            return resolveByAlternativePrecedence(candidates);
+        }
+
+        return Optional.of(candidates.iterator().next());
+    }
+
+    private void reportCircularDependency(String chain, InjectionPoint injectionPoint, Bean<?> owningBean) {
+        StringBuilder message = new StringBuilder("Circular dependency detected: ").append(chain);
+        if (injectionPoint != null && owningBean != null) {
+            message.append(" at ").append(formatInjectionPoint(injectionPoint, owningBean));
+        }
+
+        String rendered = message.toString();
+        Set<String> reported = reportedCircularDependencies.get();
+        if (reported.add(rendered)) {
+            knowledgeBase.addInjectionError(rendered);
+        }
+    }
+
+    private boolean containsByIdentity(Deque<Bean<?>> stack, Bean<?> target) {
+        for (Bean<?> bean : stack) {
+            if (bean == target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int indexByIdentity(List<Bean<?>> beans, Bean<?> target) {
+        for (int i = 0; i < beans.size(); i++) {
+            if (beans.get(i) == target) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private String formatCircularDependencyChain(Deque<Bean<?>> stack, Bean<?> repeatedBean) {
+        List<Bean<?>> path = new ArrayList<>(stack);
+        int start = indexByIdentity(path, repeatedBean);
+        if (start < 0) {
+            String name = beanDisplayName(repeatedBean);
+            return name + " -> " + name;
+        }
+
+        List<Bean<?>> cycle = new ArrayList<>(path.subList(start, path.size()));
+        if (cycle.isEmpty()) {
+            String name = beanDisplayName(repeatedBean);
+            return name + " -> " + name;
+        }
+
+        int canonicalStart = 0;
+        String canonicalName = beanDisplayName(cycle.get(0));
+        for (int i = 1; i < cycle.size(); i++) {
+            String candidate = beanDisplayName(cycle.get(i));
+            if (candidate.compareTo(canonicalName) < 0) {
+                canonicalStart = i;
+                canonicalName = candidate;
+            }
+        }
+
+        List<String> names = new ArrayList<>(cycle.size() + 1);
+        for (int i = 0; i < cycle.size(); i++) {
+            names.add(beanDisplayName(cycle.get((canonicalStart + i) % cycle.size())));
+        }
+        names.add(names.get(0));
+        return String.join(" -> ", names);
+    }
+
+    private String beanDisplayName(Bean<?> bean) {
+        String simpleName = bean.getBeanClass().getSimpleName();
+        if (simpleName != null && !simpleName.isEmpty()) {
+            return simpleName;
+        }
+        return bean.getBeanClass().getName();
     }
 
     // ============================================
