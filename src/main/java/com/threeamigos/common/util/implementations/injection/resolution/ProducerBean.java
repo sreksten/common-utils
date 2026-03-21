@@ -2,6 +2,8 @@ package com.threeamigos.common.util.implementations.injection.resolution;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 
+import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.IllegalProductException;
@@ -260,7 +262,11 @@ public class ProducerBean<T> implements Bean<T> {
             );
         }
 
-        return (T) producerMethod.invoke(declaringInstance, args);
+        try {
+            return (T) producerMethod.invoke(declaringInstance, args);
+        } finally {
+            destroyDependentInvocationParameters(parameters, args, false);
+        }
     }
 
     /**
@@ -332,7 +338,46 @@ public class ProducerBean<T> implements Bean<T> {
             }
         }
 
-        disposerMethod.invoke(declaringInstance, args);
+        try {
+            disposerMethod.invoke(declaringInstance, args);
+        } finally {
+            destroyDependentInvocationParameters(parameters, args, true);
+        }
+    }
+
+    private void destroyDependentInvocationParameters(Parameter[] parameters, Object[] args, boolean skipDisposesParameter)
+            throws Exception {
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter parameter = parameters[i];
+            Object arg = args[i];
+            if (arg == null) {
+                continue;
+            }
+            if (skipDisposesParameter && hasDisposesAnnotation(parameter)) {
+                continue;
+            }
+            if (!isDependentParameter(parameter)) {
+                continue;
+            }
+            LifecycleMethodHelper.invokeLifecycleMethod(arg, PreDestroy.class);
+        }
+    }
+
+    private boolean isDependentParameter(Parameter parameter) {
+        Class<?> parameterType = parameter.getType();
+        if (parameterType == null) {
+            return false;
+        }
+        if (parameterType.isAnnotationPresent(Dependent.class)) {
+            return true;
+        }
+        for (Annotation annotation : parameterType.getAnnotations()) {
+            String annotationName = annotation.annotationType().getName();
+            if ("javax.enterprise.context.Dependent".equals(annotationName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Getters and setters

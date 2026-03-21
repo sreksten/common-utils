@@ -18,6 +18,7 @@ import com.threeamigos.common.util.implementations.injection.util.TypeClosureHel
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
 import jakarta.el.ELResolver;
 import jakarta.el.ExpressionFactory;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -1045,6 +1046,17 @@ public class BeanManagerImpl implements BeanManager {
                 "No bean found for injection point: " + injectionPoint);
         }
 
+        if (bean.getScope() == Dependent.class && ctx instanceof CreationalContextImpl) {
+            @SuppressWarnings("unchecked")
+            Bean<Object> dependentBean = (Bean<Object>) bean;
+            CreationalContext<Object> childContext = createCreationalContext(dependentBean);
+            Object instance = dependentBean.create(childContext);
+            @SuppressWarnings("unchecked")
+            CreationalContextImpl<Object> parentContext = (CreationalContextImpl<Object>) ctx;
+            parentContext.addDependentInstance(dependentBean, instance, childContext);
+            return instance;
+        }
+
         return getReference(bean, requiredType, ctx);
     }
 
@@ -1964,7 +1976,7 @@ public class BeanManagerImpl implements BeanManager {
      * Tracks dependent instances for cleanup.
      */
     private static class CreationalContextImpl<T> implements CreationalContext<T> {
-        private final List<Object> dependentInstances = new ArrayList<>();
+        private final List<DependentEntry> dependentInstances = new ArrayList<>();
 
         @Override
         public void push(T incompleteInstance) {
@@ -1973,16 +1985,48 @@ public class BeanManagerImpl implements BeanManager {
 
         @Override
         public void release() {
-            // Cleanup dependent instances
+            // Destroy dependent instances in reverse creation order.
+            for (int i = dependentInstances.size() - 1; i >= 0; i--) {
+                DependentEntry entry = dependentInstances.get(i);
+                try {
+                    entry.bean.destroy(entry.instance, entry.creationalContext);
+                } catch (Exception ignored) {
+                    // Continue destroying remaining dependents.
+                }
+            }
             dependentInstances.clear();
         }
 
         public void addDependentInstance(Object instance) {
-            dependentInstances.add(instance);
+            if (instance != null) {
+                dependentInstances.add(new DependentEntry(null, instance, null));
+            }
+        }
+
+        public void addDependentInstance(Bean<Object> bean, Object instance, CreationalContext<Object> creationalContext) {
+            if (bean != null && instance != null) {
+                dependentInstances.add(new DependentEntry(bean, instance, creationalContext));
+            }
         }
 
         public List<Object> getDependentInstances() {
-            return Collections.unmodifiableList(dependentInstances);
+            List<Object> instances = new ArrayList<>(dependentInstances.size());
+            for (DependentEntry entry : dependentInstances) {
+                instances.add(entry.instance);
+            }
+            return Collections.unmodifiableList(instances);
+        }
+
+        private static class DependentEntry {
+            private final Bean<Object> bean;
+            private final Object instance;
+            private final CreationalContext<Object> creationalContext;
+
+            private DependentEntry(Bean<Object> bean, Object instance, CreationalContext<Object> creationalContext) {
+                this.bean = bean;
+                this.instance = instance;
+                this.creationalContext = creationalContext;
+            }
         }
     }
 

@@ -9,9 +9,12 @@ import com.threeamigos.common.util.implementations.injection.scopes.SessionScope
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
+import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionSynchronizationCallbacks;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
@@ -24,6 +27,7 @@ import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
 import java.util.*;
@@ -580,17 +584,6 @@ public class EventImpl<T> implements Event<T> {
             Method method = observerInfo.getObserverMethod();
             Bean<?> declaringBean = observerInfo.getDeclaringBean();
 
-            // Get the bean instance that declares this observer method
-            // For Reception.ALWAYS (default): This will create the bean if it doesn't exist
-            // For Reception.IF_EXISTS: This is only called after checking bean existence
-            Object beanInstance = null;
-            if (declaringBean != null) {
-                beanInstance = beanResolver.resolveDeclaringBeanInstance(declaringBean.getBeanClass());
-            } else {
-                // If no bean metadata, try to resolve by method's declaring class
-                beanInstance = beanResolver.resolveDeclaringBeanInstance(method.getDeclaringClass());
-            }
-
             // Resolve method parameters
             Parameter[] parameters = method.getParameters();
             Object[] args = new Object[parameters.length];
@@ -610,9 +603,27 @@ public class EventImpl<T> implements Event<T> {
                 }
             }
 
-            // Invoke the observer method
-            method.setAccessible(true);
-            method.invoke(beanInstance, args);
+            // For static observer methods, invocation must not require declaring bean instance creation.
+            Object beanInstance = null;
+            if (!Modifier.isStatic(method.getModifiers())) {
+                // Get the bean instance that declares this observer method
+                // For Reception.ALWAYS (default): This will create the bean if it doesn't exist
+                // For Reception.IF_EXISTS: This is only called after checking bean existence
+                if (declaringBean != null) {
+                    beanInstance = beanResolver.resolveDeclaringBeanInstance(declaringBean.getBeanClass());
+                } else {
+                    // If no bean metadata, try to resolve by method's declaring class
+                    beanInstance = beanResolver.resolveDeclaringBeanInstance(method.getDeclaringClass());
+                }
+            }
+
+            try {
+                // Invoke the observer method
+                method.setAccessible(true);
+                method.invoke(beanInstance, args);
+            } finally {
+                destroyDependentInvocationParameters(parameters, args);
+            }
 
         } catch (Exception e) {
             String observerName = observerInfo.isSynthetic() ?
@@ -624,6 +635,40 @@ public class EventImpl<T> implements Event<T> {
                 e
             );
         }
+    }
+
+    private void destroyDependentInvocationParameters(Parameter[] parameters, Object[] args) throws Exception {
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter parameter = parameters[i];
+            Object arg = args[i];
+            if (arg == null) {
+                continue;
+            }
+            if (AnnotationsEnum.hasObservesAnnotation(parameter) ||
+                AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
+                continue;
+            }
+            if (!isDependentParameter(parameter)) {
+                continue;
+            }
+            LifecycleMethodHelper.invokeLifecycleMethod(arg, PreDestroy.class);
+        }
+    }
+
+    private boolean isDependentParameter(Parameter parameter) {
+        Class<?> parameterType = parameter.getType();
+        if (parameterType == null) {
+            return false;
+        }
+        if (parameterType.isAnnotationPresent(Dependent.class)) {
+            return true;
+        }
+        for (Annotation annotation : parameterType.getAnnotations()) {
+            if ("javax.enterprise.context.Dependent".equals(annotation.annotationType().getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void invokeObserverList(List<ObserverMethodInfo> observers, Object event) {
