@@ -24,6 +24,7 @@ import jakarta.inject.Provider;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.*;
@@ -320,9 +321,20 @@ public class BeanResolver implements DependencyResolver {
 
     private int getAlternativePriority(Bean<?> bean) {
         if (bean instanceof ProducerBean) {
-            Integer producerPriority = ((ProducerBean<?>) bean).getPriority();
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Integer memberPriority = extractPriorityFromProducerMember(producerBean);
+            if (memberPriority != null) {
+                return memberPriority;
+            }
+
+            Integer producerPriority = producerBean.getPriority();
             if (producerPriority != null) {
                 return producerPriority;
+            }
+
+            Integer declaringPriority = extractPriorityFromClass(producerBean.getDeclaringClass());
+            if (declaringPriority != null) {
+                return declaringPriority;
             }
         }
 
@@ -333,12 +345,53 @@ public class BeanResolver implements DependencyResolver {
             }
         }
 
-        Priority priority = bean.getBeanClass().getAnnotation(Priority.class);
-        if (priority != null) {
-            return priority.value();
+        Integer classPriority = extractPriorityFromClass(bean.getBeanClass());
+        if (classPriority != null) {
+            return classPriority;
         }
 
         return jakarta.interceptor.Interceptor.Priority.APPLICATION;
+    }
+
+    private Integer extractPriorityFromProducerMember(ProducerBean<?> producerBean) {
+        if (producerBean.getProducerMethod() != null) {
+            return extractPriorityFromAnnotations(producerBean.getProducerMethod().getAnnotations());
+        }
+        if (producerBean.getProducerField() != null) {
+            return extractPriorityFromAnnotations(producerBean.getProducerField().getAnnotations());
+        }
+        return null;
+    }
+
+    private Integer extractPriorityFromClass(Class<?> beanClass) {
+        if (beanClass == null) {
+            return null;
+        }
+        return extractPriorityFromAnnotations(beanClass.getAnnotations());
+    }
+
+    private Integer extractPriorityFromAnnotations(Annotation[] annotations) {
+        if (annotations == null) {
+            return null;
+        }
+
+        for (Annotation annotation : annotations) {
+            String annotationTypeName = annotation.annotationType().getName();
+            if (Priority.class.getName().equals(annotationTypeName) ||
+                    "javax.annotation.Priority".equals(annotationTypeName)) {
+                try {
+                    Method valueMethod = annotation.annotationType().getMethod("value");
+                    Object value = valueMethod.invoke(annotation);
+                    if (value instanceof Integer) {
+                        return (Integer) value;
+                    }
+                } catch (ReflectiveOperationException ignored) {
+                    return null;
+                }
+            }
+        }
+
+        return null;
     }
 
     private boolean isBeanEnabledForResolution(Bean<?> bean) {

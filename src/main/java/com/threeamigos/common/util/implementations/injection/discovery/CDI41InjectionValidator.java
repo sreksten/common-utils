@@ -6,6 +6,7 @@ import com.threeamigos.common.util.implementations.injection.events.ObserverMeth
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
+import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
@@ -920,9 +921,20 @@ public class CDI41InjectionValidator {
 
     private int getAlternativePriority(Bean<?> bean) {
         if (bean instanceof ProducerBean) {
-            Integer producerPriority = ((ProducerBean<?>) bean).getPriority();
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Integer memberPriority = extractPriorityFromProducerMember(producerBean);
+            if (memberPriority != null) {
+                return memberPriority;
+            }
+
+            Integer producerPriority = producerBean.getPriority();
             if (producerPriority != null) {
                 return producerPriority;
+            }
+
+            Integer declaringPriority = extractPriorityFromClass(producerBean.getDeclaringClass());
+            if (declaringPriority != null) {
+                return declaringPriority;
             }
         }
 
@@ -933,12 +945,51 @@ public class CDI41InjectionValidator {
             }
         }
 
-        Priority priority = bean.getBeanClass().getAnnotation(Priority.class);
-        if (priority != null) {
-            return priority.value();
+        Integer classPriority = extractPriorityFromClass(bean.getBeanClass());
+        if (classPriority != null) {
+            return classPriority;
         }
 
         return jakarta.interceptor.Interceptor.Priority.APPLICATION;
+    }
+
+    private Integer extractPriorityFromProducerMember(ProducerBean<?> producerBean) {
+        if (producerBean.getProducerMethod() != null) {
+            return extractPriorityFromAnnotations(producerBean.getProducerMethod().getAnnotations());
+        }
+        if (producerBean.getProducerField() != null) {
+            return extractPriorityFromAnnotations(producerBean.getProducerField().getAnnotations());
+        }
+        return null;
+    }
+
+    private Integer extractPriorityFromClass(Class<?> beanClass) {
+        if (beanClass == null) {
+            return null;
+        }
+        return extractPriorityFromAnnotations(beanClass.getAnnotations());
+    }
+
+    private Integer extractPriorityFromAnnotations(Annotation[] annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        for (Annotation annotation : annotations) {
+            String annotationTypeName = annotation.annotationType().getName();
+            if (Priority.class.getName().equals(annotationTypeName) ||
+                    "javax.annotation.Priority".equals(annotationTypeName)) {
+                try {
+                    Method valueMethod = annotation.annotationType().getMethod("value");
+                    Object value = valueMethod.invoke(annotation);
+                    if (value instanceof Integer) {
+                        return (Integer) value;
+                    }
+                } catch (ReflectiveOperationException ignored) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -1135,8 +1186,8 @@ public class CDI41InjectionValidator {
             return false;
         }
 
-        // For now, simple equality check - could be enhanced to check annotation members
-        return a.equals(b);
+        // CDI qualifier equality must honor @Nonbinding members.
+        return AnnotationComparator.equals(a, b);
     }
 
     /**

@@ -26,6 +26,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.*;
@@ -1770,10 +1771,42 @@ public class BeanManagerImpl implements BeanManager {
     private int getPriority(Object obj) {
         Class<?> clazz = obj instanceof Bean ? ((Bean<?>) obj).getBeanClass() : obj.getClass();
 
+        if (obj instanceof SyntheticProducerBeanImpl) {
+            Bean<?> originalProducerBean = findOriginalProducerBean((Bean<?>) obj);
+            if (originalProducerBean instanceof ProducerBean) {
+                ProducerBean<?> producerBean = (ProducerBean<?>) originalProducerBean;
+                Integer memberPriority = extractPriorityFromProducerMember(producerBean);
+                if (memberPriority != null) {
+                    return memberPriority;
+                }
+
+                Integer producerPriority = producerBean.getPriority();
+                if (producerPriority != null) {
+                    return producerPriority;
+                }
+
+                Integer declaringPriority = extractPriorityFromClass(producerBean.getDeclaringClass());
+                if (declaringPriority != null) {
+                    return declaringPriority;
+                }
+            }
+        }
+
         if (obj instanceof ProducerBean) {
-            Integer producerPriority = ((ProducerBean<?>) obj).getPriority();
+            ProducerBean<?> producerBean = (ProducerBean<?>) obj;
+            Integer memberPriority = extractPriorityFromProducerMember(producerBean);
+            if (memberPriority != null) {
+                return memberPriority;
+            }
+
+            Integer producerPriority = producerBean.getPriority();
             if (producerPriority != null) {
                 return producerPriority;
+            }
+
+            Integer declaringPriority = extractPriorityFromClass(producerBean.getDeclaringClass());
+            if (declaringPriority != null) {
+                return declaringPriority;
             }
         }
 
@@ -1784,14 +1817,67 @@ public class BeanManagerImpl implements BeanManager {
             }
         }
 
-        if (hasPriorityAnnotation(clazz)) {
-            jakarta.annotation.Priority priority = clazz.getAnnotation(jakarta.annotation.Priority.class);
-            if (priority != null) {
-                return priority.value();
-            }
+        Integer classPriority = extractPriorityFromClass(clazz);
+        if (classPriority != null) {
+            return classPriority;
         }
 
         return jakarta.interceptor.Interceptor.Priority.APPLICATION;
+    }
+
+    private Bean<?> findOriginalProducerBean(Bean<?> syntheticBean) {
+        for (ProducerBean<?> producerBean : knowledgeBase.getProducerBeans()) {
+            if (!Objects.equals(producerBean.getBeanClass(), syntheticBean.getBeanClass())) {
+                continue;
+            }
+            if (!Objects.equals(producerBean.getTypes(), syntheticBean.getTypes())) {
+                continue;
+            }
+            if (!Objects.equals(producerBean.getQualifiers(), syntheticBean.getQualifiers())) {
+                continue;
+            }
+            return producerBean;
+        }
+        return null;
+    }
+
+    private Integer extractPriorityFromProducerMember(ProducerBean<?> producerBean) {
+        if (producerBean.getProducerMethod() != null) {
+            return extractPriorityFromAnnotations(producerBean.getProducerMethod().getAnnotations());
+        }
+        if (producerBean.getProducerField() != null) {
+            return extractPriorityFromAnnotations(producerBean.getProducerField().getAnnotations());
+        }
+        return null;
+    }
+
+    private Integer extractPriorityFromClass(Class<?> clazz) {
+        if (clazz == null) {
+            return null;
+        }
+        return extractPriorityFromAnnotations(clazz.getAnnotations());
+    }
+
+    private Integer extractPriorityFromAnnotations(Annotation[] annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        for (Annotation annotation : annotations) {
+            String annotationTypeName = annotation.annotationType().getName();
+            if (jakarta.annotation.Priority.class.getName().equals(annotationTypeName) ||
+                    "javax.annotation.Priority".equals(annotationTypeName)) {
+                try {
+                    Method valueMethod = annotation.annotationType().getMethod("value");
+                    Object value = valueMethod.invoke(annotation);
+                    if (value instanceof Integer) {
+                        return (Integer) value;
+                    }
+                } catch (ReflectiveOperationException ignored) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     /**

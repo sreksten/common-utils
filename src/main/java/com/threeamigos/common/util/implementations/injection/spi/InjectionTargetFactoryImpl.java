@@ -166,6 +166,9 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                             );
                             Object value = beanManager.getInjectableReference(
                                 createInjectionPoint(field, resolvedFieldType), ctx);
+                            if (value == null && field.getType().isPrimitive()) {
+                                value = defaultPrimitiveValue(field.getType());
+                            }
                             field.set(instance, value);
                         }
                     }
@@ -324,6 +327,9 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 );
                 InjectionPoint ip = createInjectionPoint(params[i], resolvedType);
                 args[i] = beanManager.getInjectableReference(ip, ctx);
+                if (args[i] == null && params[i].getType().isPrimitive()) {
+                    args[i] = defaultPrimitiveValue(params[i].getType());
+                }
             }
 
             return args;
@@ -341,6 +347,9 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 );
                 InjectionPoint ip = createInjectionPoint(params[i], resolvedType);
                 args[i] = beanManager.getInjectableReference(ip, ctx);
+                if (args[i] == null && params[i].getType().isPrimitive()) {
+                    args[i] = defaultPrimitiveValue(params[i].getType());
+                }
             }
 
             return args;
@@ -352,6 +361,18 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
 
         private InjectionPoint createInjectionPoint(Parameter parameter, Type resolvedType) {
             return new ResolvedInjectionPoint(new InjectionPointImpl(parameter, null), resolvedType);
+        }
+
+        private Object defaultPrimitiveValue(Class<?> primitiveType) {
+            if (primitiveType == boolean.class) return false;
+            if (primitiveType == byte.class) return (byte) 0;
+            if (primitiveType == short.class) return (short) 0;
+            if (primitiveType == int.class) return 0;
+            if (primitiveType == long.class) return 0L;
+            if (primitiveType == float.class) return 0f;
+            if (primitiveType == double.class) return 0d;
+            if (primitiveType == char.class) return '\u0000';
+            return null;
         }
 
         private List<Method> collectLifecycleMethods(Class<?> beanClass, boolean postConstruct) {

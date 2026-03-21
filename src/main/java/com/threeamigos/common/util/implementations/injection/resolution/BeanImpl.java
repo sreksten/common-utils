@@ -540,6 +540,9 @@ public class BeanImpl<T> implements Bean<T> {
                 injectionPoint,
                 creationalContext
             );
+            if (args[i] == null && parameters[i].getType().isPrimitive()) {
+                args[i] = defaultPrimitiveValue(parameters[i].getType());
+            }
         }
 
         // PHASE 3: Check for @AroundConstruct interceptors
@@ -593,6 +596,9 @@ public class BeanImpl<T> implements Bean<T> {
                     injectionPoint,
                     creationalContext
                 );
+                if (value == null && field.getType().isPrimitive()) {
+                    value = defaultPrimitiveValue(field.getType());
+                }
 
                 field.set(instance, value);
             }
@@ -646,6 +652,9 @@ public class BeanImpl<T> implements Bean<T> {
                         injectionPoint,
                         creationalContext
                     );
+                    if (args[i] == null && parameters[i].getType().isPrimitive()) {
+                        args[i] = defaultPrimitiveValue(parameters[i].getType());
+                    }
                 }
 
                 method.invoke(instance, args);
@@ -695,6 +704,18 @@ public class BeanImpl<T> implements Bean<T> {
         }
 
         return false;
+    }
+
+    private Object defaultPrimitiveValue(Class<?> primitiveType) {
+        if (primitiveType == boolean.class) return false;
+        if (primitiveType == byte.class) return (byte) 0;
+        if (primitiveType == short.class) return (short) 0;
+        if (primitiveType == int.class) return 0;
+        if (primitiveType == long.class) return 0L;
+        if (primitiveType == float.class) return 0f;
+        if (primitiveType == double.class) return 0d;
+        if (primitiveType == char.class) return '\u0000';
+        return null;
     }
 
     /**

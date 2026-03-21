@@ -93,6 +93,8 @@ public class CDI41BeanValidator {
 
         // CDI 4.1 §2.4.2: scope types with attributes are non-portable.
         validateNonPortableScopeTypes(clazz);
+        // CDI 4.1 §5.2.6: qualifier members that are array/annotation-valued should be @Nonbinding.
+        validateNonPortableQualifierMembers(clazz);
         // CDI 4.1 §2.8: a stereotype may declare at most one scope.
         validateStereotypeScopeDeclaration(clazz);
         // CDI 4.1 §2.8.1.3: non-empty @Named on stereotype is a definition error.
@@ -405,6 +407,31 @@ public class CDI41BeanValidator {
                 throw new NonPortableBehaviourException(clazz.getName() +
                         ": declares non-portable scope type @" + annotationType.getSimpleName() +
                         " which has attributes.");
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateNonPortableQualifierMembers(Class<?> clazz) {
+        if (!clazz.isAnnotation()) {
+            return;
+        }
+
+        Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
+        if (!hasQualifierAnnotation(annotationType)) {
+            return;
+        }
+
+        for (Method member : annotationType.getDeclaredMethods()) {
+            if (hasNonbindingAnnotation(member)) {
+                continue;
+            }
+
+            Class<?> returnType = member.getReturnType();
+            if (returnType.isArray() || returnType.isAnnotation()) {
+                throw new NonPortableBehaviourException(annotationType.getName() +
+                        ": qualifier member '" + member.getName() + "' has non-portable type " +
+                        returnType.getTypeName() + " and must be annotated @Nonbinding");
             }
         }
     }
@@ -1871,9 +1898,6 @@ public class CDI41BeanValidator {
     }
 
     private void checkInjectionTypeValidity(Type type) {
-        if (type instanceof WildcardType) {
-            throw new DefinitionException("injection point may not contain a wildcard (" + type.getTypeName() + ")");
-        }
         if (type instanceof TypeVariable) {
             throw new DefinitionException("injection point may not be a type variable (" + type.getTypeName() + ")");
         }
@@ -1885,9 +1909,6 @@ public class CDI41BeanValidator {
         }
         if (raw.isEnum()) {
             throw new IllegalArgumentException("cannot inject an enum");
-        }
-        if (raw.isPrimitive()) {
-            throw new IllegalArgumentException("cannot inject a primitive");
         }
         if (raw.isSynthetic()) {
             throw new IllegalArgumentException("cannot inject a synthetic class");
@@ -1905,9 +1926,6 @@ public class CDI41BeanValidator {
         if (type instanceof ParameterizedType) {
             ParameterizedType pt = (ParameterizedType) type;
             for (Type arg : pt.getActualTypeArguments()) {
-                if (arg instanceof WildcardType) {
-                    throw new DefinitionException("injection point may not contain wildcard type arguments (" + arg.getTypeName() + ")");
-                }
                 if (arg instanceof TypeVariable) {
                     throw new DefinitionException("injection point may not contain type variable arguments (" + arg.getTypeName() + ")");
                 }

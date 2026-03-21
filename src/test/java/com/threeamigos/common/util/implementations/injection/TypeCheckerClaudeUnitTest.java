@@ -53,33 +53,24 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Should reject WildcardType - unbounded wildcard")
-        void testRejectUnboundedWildcard() {
+        @DisplayName("Should accept WildcardType - unbounded wildcard")
+        void testAcceptUnboundedWildcard() {
             Type unboundedWildcard = new TypeLiteral<List<?>>() {}.getType();
-
-            DefinitionException exception = assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(unboundedWildcard));
-            assertTrue(exception.getMessage().contains("wildcard"));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(unboundedWildcard));
         }
 
         @Test
-        @DisplayName("Should reject WildcardType - extends wildcard")
-        void testRejectExtendsWildcard() {
+        @DisplayName("Should accept WildcardType - extends wildcard")
+        void testAcceptExtendsWildcard() {
             Type extendsWildcard = new TypeLiteral<List<? extends Number>>() {}.getType();
-
-            DefinitionException exception = assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(extendsWildcard));
-            assertTrue(exception.getMessage().contains("wildcard"));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(extendsWildcard));
         }
 
         @Test
-        @DisplayName("Should reject WildcardType - super wildcard")
-        void testRejectSuperWildcard() {
+        @DisplayName("Should accept WildcardType - super wildcard")
+        void testAcceptSuperWildcard() {
             Type superWildcard = new TypeLiteral<List<? super Integer>>() {}.getType();
-
-            DefinitionException exception = assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(superWildcard));
-            assertTrue(exception.getMessage().contains("wildcard"));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(superWildcard));
         }
 
         @Test
@@ -93,21 +84,17 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Should reject nested wildcard in ParameterizedType - second level")
-        void testRejectNestedWildcardSecondLevel() {
+        @DisplayName("Should accept nested wildcard in ParameterizedType - second level")
+        void testAcceptNestedWildcardSecondLevel() {
             Type nestedWildcard = new TypeLiteral<List<Set<?>>>() {}.getType();
-
-            assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(nestedWildcard));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(nestedWildcard));
         }
 
         @Test
-        @DisplayName("Should reject nested wildcard in ParameterizedType - deep nesting")
-        void testRejectNestedWildcardDeep() {
+        @DisplayName("Should accept nested wildcard in ParameterizedType - deep nesting")
+        void testAcceptNestedWildcardDeep() {
             Type deepNestedWildcard = new TypeLiteral<Map<String, List<Map<Integer, Set<?>>>>>() {}.getType();
-
-            assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(deepNestedWildcard));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(deepNestedWildcard));
         }
 
         @Test
@@ -138,13 +125,11 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Should reject GenericArrayType with wildcard component")
-        void testRejectGenericArrayWithWildcard() throws NoSuchFieldException {
+        @DisplayName("Should accept GenericArrayType with wildcard component")
+        void testAcceptGenericArrayWithWildcard() throws NoSuchFieldException {
             class Container { List<?>[] array; }
             Type arrayType = Container.class.getDeclaredField("array").getGenericType();
-
-            assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(arrayType));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(arrayType));
         }
 
         @Test
@@ -429,12 +414,11 @@ class TypeCheckerClaudeUnitTest {
     class IsAssignableEdgeCasesTests {
 
         @Test
-        @DisplayName("Should handle target type validation with wildcard - reject in isAssignable")
-        void testIsAssignableRejectsWildcard() {
+        @DisplayName("Should handle target type validation with wildcard in isAssignable")
+        void testIsAssignableAllowsWildcard() {
             Type wildcardType = new TypeLiteral<List<?>>() {}.getType();
-
-            assertThrows(DefinitionException.class,
-                () -> sut.isAssignable(wildcardType, ArrayList.class));
+            Type impl = new TypeLiteral<ArrayList<String>>() {}.getType();
+            assertTrue(sut.isAssignable(wildcardType, impl));
         }
 
         @Test
@@ -709,12 +693,10 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Should reject injection of List<?> - wildcard not allowed")
-        void testListWildcardRejected() {
+        @DisplayName("Should accept injection of List<?> - wildcard allowed by CDI 4.1")
+        void testListWildcardAllowed() {
             Type injectionPoint = new TypeLiteral<List<?>>() {}.getType();
-
-            assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(injectionPoint));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(injectionPoint));
         }
 
         @Test
@@ -769,13 +751,11 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Should reject array of wildcards in injection point")
-        void testArrayOfWildcardsRejected() throws NoSuchFieldException {
+        @DisplayName("Should accept array of wildcards in injection point")
+        void testArrayOfWildcardsAllowed() throws NoSuchFieldException {
             class Container { List<?>[] arrays; }
             Type injectionPoint = Container.class.getDeclaredField("arrays").getGenericType();
-
-            assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(injectionPoint));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(injectionPoint));
         }
 
         @Test
@@ -844,12 +824,10 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Should reject deeply nested wildcard")
+        @DisplayName("Should accept deeply nested wildcard")
         void testDeeplyNestedWildcard() {
             Type deepWildcard = new TypeLiteral<Map<String, Map<Integer, Map<Long, List<Set<? extends Number>>>>>>() {}.getType();
-
-            assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(deepWildcard));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(deepWildcard));
         }
 
         @Test
@@ -1008,12 +986,10 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Should reject wildcard at 4th level of nesting")
-        void testRejectWildcardAtDeepLevel() {
+        @DisplayName("Should accept wildcard at 4th level of nesting")
+        void testAllowWildcardAtDeepLevel() {
             Type deepWildcard = new TypeLiteral<Map<String, List<Set<List<?>>>>>() {}.getType();
-
-            assertThrows(DefinitionException.class,
-                () -> sut.validateInjectionPoint(deepWildcard));
+            assertDoesNotThrow(() -> sut.validateInjectionPoint(deepWildcard));
         }
     }
 

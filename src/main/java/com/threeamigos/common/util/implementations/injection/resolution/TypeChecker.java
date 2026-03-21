@@ -14,12 +14,12 @@ import java.util.Objects;
  *
  * <p>This class determines whether a bean implementation type can be injected into a target injection
  * point, considering class hierarchies, interface implementations, generic types, and arrays. The checker
- * validates that injection points do not contain wildcards or type variables (as required by JSR 330/346)
+ * validates that injection points do not contain type variables (CDI 4.1 allows wildcard type parameters)
  * and performs type compatibility checks using generic type invariance.
  *
  * <p><b>Key Features:</b>
  * <ul>
- *   <li>Validates injection points (no wildcards or type variables allowed)</li>
+ *   <li>Validates injection points (no type variables allowed; wildcard type parameters are allowed)</li>
  *   <li>Checks raw type assignability using {@link Class#isAssignableFrom(Class)}</li>
  *   <li>Enforces generic type invariance (e.g., {@code List<String>} ≠ {@code List<Object>})</li>
  *   <li>Handles raw types, parameterized types, generic arrays, and type variables</li>
@@ -51,9 +51,9 @@ import java.util.Objects;
  * Type implStr = new TypeLiteral&lt;List&lt;String&gt;&gt;(){}.getType();
  * boolean assignable2 = checker.isAssignable(targetObj, implStr); // false
  *
- * // Wildcards in injection points are rejected
+ * // Wildcards in injection points are allowed by CDI 4.1
  * Type wildcardTarget = new TypeLiteral&lt;List&lt;?&gt;&gt;(){}.getType();
- * checker.isAssignable(wildcardTarget, impl); // throws DefinitionException
+ * checker.isAssignable(wildcardTarget, impl); // legal
  * </pre>
  *
  * <p><b>Thread Safety:</b> This class is thread-safe. The internal cache uses a thread-safe
@@ -82,22 +82,29 @@ public class TypeChecker {
 
     /**
      * Validates that a type is a legal bean type for an injection point.
-     * Per JSR 330/346, injection points cannot contain wildcards or type variables.
+     * CDI 4.1 allows wildcard type parameters in injection point types, but not type variables.
      *
      * <p>Note: Intersection types (e.g., T extends Serializable & Comparable&lt;T&gt;) are
      * represented via TypeVariable bounds in Java's reflection API. These are allowed in
      * injection points when fully resolved (i.e., when the actual type is known).
      *
      * @param type the type to validate
-     * @throws DefinitionException if the type contains wildcards or type variables
+     * @throws DefinitionException if the type contains type variables
      */
     public void validateInjectionPoint(Type type) {
-        if (type instanceof WildcardType) {
-            throw new DefinitionException("Injection point cannot contain a wildcard: " + type.getTypeName());
-        }
-
         if (type instanceof TypeVariable) {
             throw new DefinitionException("Injection point cannot be a type variable: " + type.getTypeName());
+        }
+
+        if (type instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) type;
+            for (Type upperBound : wildcardType.getUpperBounds()) {
+                validateInjectionPoint(upperBound);
+            }
+            for (Type lowerBound : wildcardType.getLowerBounds()) {
+                validateInjectionPoint(lowerBound);
+            }
+            return;
         }
 
         if (type instanceof ParameterizedType) {
@@ -117,7 +124,7 @@ public class TypeChecker {
      * Java's type system rules including generic type invariance.
      *
      * <p>This method validates that the target type is a legal injection point
-     * (no wildcards or type variables per JSR 330/346), then checks assignability
+     * (no type variables per CDI 4.1), then checks assignability
      * considering:
      * <ul>
      *   <li>Raw type assignability (e.g., ArrayList → List)</li>
@@ -142,10 +149,10 @@ public class TypeChecker {
      * boolean result2 = checker.isAssignable(targetObj, implStr); // returns false (invariance)
      * </pre>
      *
-     * @param targetType the type required by an injection point (must not contain wildcards)
+     * @param targetType the type required by an injection point (must not contain type variables)
      * @param implementationType the type of candidate bean to inject
      * @return true if implementationType can be assigned to targetType
-     * @throws DefinitionException if targetType contains wildcards or type variables
+     * @throws DefinitionException if targetType contains type variables
      * @throws IllegalStateException if type hierarchy navigation fails unexpectedly
      */
     /**
@@ -181,7 +188,7 @@ public class TypeChecker {
      * @param targetType the target injection point type
      * @param implementationType the candidate bean type
      * @return true if implementationType is assignable to targetType
-     * @throws DefinitionException if targetType contains wildcards or type variables
+     * @throws DefinitionException if targetType contains type variables
      * @throws IllegalStateException if type navigation fails unexpectedly
      */
     boolean isAssignableInternal(Type targetType, Type implementationType) {
@@ -220,8 +227,10 @@ public class TypeChecker {
 
         Class<?> targetRaw = RawTypeExtractor.getRawType(targetType);
         Class<?> implementationRaw = RawTypeExtractor.getRawType(implementationType);
+        Class<?> normalizedTargetRaw = normalizePrimitive(targetRaw);
+        Class<?> normalizedImplementationRaw = normalizePrimitive(implementationRaw);
 
-        if (!targetRaw.isAssignableFrom(implementationRaw)) {
+        if (!normalizedTargetRaw.isAssignableFrom(normalizedImplementationRaw)) {
             return false;
         }
 
@@ -265,6 +274,22 @@ public class TypeChecker {
 
     private boolean isOnlyObjectBound(Type[] bounds) {
         return bounds.length == 1 && Object.class.equals(bounds[0]);
+    }
+
+    private Class<?> normalizePrimitive(Class<?> type) {
+        if (!type.isPrimitive()) {
+            return type;
+        }
+        if (type == int.class) return Integer.class;
+        if (type == long.class) return Long.class;
+        if (type == double.class) return Double.class;
+        if (type == float.class) return Float.class;
+        if (type == boolean.class) return Boolean.class;
+        if (type == char.class) return Character.class;
+        if (type == byte.class) return Byte.class;
+        if (type == short.class) return Short.class;
+        if (type == void.class) return Void.class;
+        return type;
     }
 
     /**
@@ -457,8 +482,10 @@ public class TypeChecker {
             return true;
         }
 
-        // t1 (target/injection point) cannot be Wildcard or TypeVariable due to validateInjectionPoint.
-        // But t2 (candidate/implementation from producer) CAN be a wildcard.
+        // Wildcards can appear both at injection points (t1) and candidate bean types (t2).
+        if (t1 instanceof WildcardType) {
+            return isInjectionWildcardCompatible((WildcardType) t1, t2);
+        }
 
         // Handle wildcards in producer bean types (t2)
         if (t2 instanceof WildcardType) {
@@ -590,6 +617,43 @@ public class TypeChecker {
         }
 
         // Fallback: treat as incompatible
+        return false;
+    }
+
+    /**
+     * Checks if a concrete candidate type argument can satisfy a wildcard type argument
+     * declared at an injection point.
+     */
+    private boolean isInjectionWildcardCompatible(WildcardType injectionWildcard, Type candidateType) {
+        Type[] upperBounds = injectionWildcard.getUpperBounds();
+        Type[] lowerBounds = injectionWildcard.getLowerBounds();
+
+        if ((upperBounds.length == 1 && Object.class.equals(upperBounds[0])) && lowerBounds.length == 0) {
+            return true;
+        }
+
+        Class<?> candidateRaw = RawTypeExtractor.getRawType(candidateType);
+
+        if (upperBounds.length > 0 && lowerBounds.length == 0) {
+            for (Type upperBound : upperBounds) {
+                Class<?> upperRaw = RawTypeExtractor.getRawType(upperBound);
+                if (!upperRaw.isAssignableFrom(candidateRaw)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (lowerBounds.length > 0) {
+            for (Type lowerBound : lowerBounds) {
+                Class<?> lowerRaw = RawTypeExtractor.getRawType(lowerBound);
+                if (candidateRaw.isAssignableFrom(lowerRaw)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         return false;
     }
 
