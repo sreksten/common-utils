@@ -23,6 +23,7 @@ import java.lang.annotation.Annotation;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
@@ -106,6 +107,8 @@ public class CDI41InjectionValidator {
 
         // Enhancement 3: Validate alternative beans (only one alternative per type)
         allValid &= validateAlternatives(validBeans);
+        // CDI 4.1 §5.3.1: validate ambiguous bean names at initialization.
+        allValid &= validateNameResolution(validBeans);
 
         // Enhancement 4: Validate passivation capability for beans in passivating scopes
         allValid &= validatePassivation(validBeans);
@@ -126,6 +129,164 @@ public class CDI41InjectionValidator {
         reportedCircularDependencies.remove();
 
         return allValid;
+    }
+
+    private boolean validateNameResolution(Collection<Bean<?>> validBeans) {
+        boolean allValid = true;
+
+        Map<String, Set<Bean<?>>> beansByName = new HashMap<>();
+        for (Bean<?> bean : validBeans) {
+            String name = bean.getName();
+            if (name == null || name.isEmpty()) {
+                continue;
+            }
+            beansByName.computeIfAbsent(name, k -> Collections.newSetFromMap(new IdentityHashMap<>()))
+                    .add(bean);
+        }
+
+        for (Map.Entry<String, Set<Bean<?>>> entry : beansByName.entrySet()) {
+            String beanName = entry.getKey();
+            Set<Bean<?>> candidates = entry.getValue();
+            if (candidates.size() <= 1) {
+                continue;
+            }
+
+            Bean<?> resolved = resolveAmbiguousName(candidates);
+            if (resolved == null) {
+                String beans = candidates.stream()
+                        .map(b -> b.getBeanClass().getName())
+                        .distinct()
+                        .sorted()
+                        .collect(Collectors.joining(", "));
+                knowledgeBase.addDefinitionError(
+                        "Ambiguous bean name '" + beanName + "': [" + beans + "]"
+                );
+                allValid = false;
+            }
+        }
+
+        // CDI 4.1 §5.3.1: deployment problem when one name is x and another is x.y (y valid bean name).
+        Set<String> names = new HashSet<>(beansByName.keySet());
+        for (String name : names) {
+            int dotIndex = name.indexOf('.');
+            if (dotIndex <= 0 || dotIndex >= name.length() - 1) {
+                continue;
+            }
+
+            String x = name.substring(0, dotIndex);
+            String y = name.substring(dotIndex + 1);
+            if (names.contains(x) && isValidSimpleBeanName(y)) {
+                knowledgeBase.addDefinitionError(
+                        "Bean name conflict detected: '" + x + "' and '" + name + "'"
+                );
+                allValid = false;
+            }
+        }
+
+        return allValid;
+    }
+
+    private Bean<?> resolveAmbiguousName(Set<Bean<?>> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        if (candidates.size() == 1) {
+            return candidates.iterator().next();
+        }
+
+        List<Bean<?>> alternatives = candidates.stream()
+                .filter(Bean::isAlternative)
+                .collect(Collectors.toList());
+
+        // Eliminate non-alternatives first (CDI 4.1 §5.3.1).
+        List<Bean<?>> remaining = alternatives.isEmpty()
+                ? new ArrayList<>(candidates)
+                : alternatives;
+
+        if (remaining.size() == 1) {
+            return remaining.get(0);
+        }
+
+        // If all remaining beans are alternatives with priority, keep only highest priority.
+        boolean allHavePriority = remaining.stream().allMatch(this::hasPriorityValue);
+        if (allHavePriority) {
+            int highest = remaining.stream()
+                    .mapToInt(this::extractPriorityValue)
+                    .max()
+                    .orElse(Integer.MIN_VALUE);
+            List<Bean<?>> highestPriorityBeans = remaining.stream()
+                    .filter(bean -> extractPriorityValue(bean) == highest)
+                    .collect(Collectors.toList());
+            if (highestPriorityBeans.size() == 1) {
+                return highestPriorityBeans.get(0);
+            }
+            return null;
+        }
+
+        return null;
+    }
+
+    private boolean hasPriorityValue(Bean<?> bean) {
+        return extractPriorityValue(bean) != Integer.MIN_VALUE;
+    }
+
+    private int extractPriorityValue(Bean<?> bean) {
+        if (bean == null) {
+            return Integer.MIN_VALUE;
+        }
+
+        if (bean instanceof ProducerBean) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Method producerMethod = producerBean.getProducerMethod();
+            if (producerMethod != null) {
+                Priority priority = producerMethod.getAnnotation(Priority.class);
+                if (priority != null) {
+                    return priority.value();
+                }
+            }
+            Field producerField = producerBean.getProducerField();
+            if (producerField != null) {
+                Priority priority = producerField.getAnnotation(Priority.class);
+                if (priority != null) {
+                    return priority.value();
+                }
+            }
+
+            Integer explicitProducerPriority = producerBean.getPriority();
+            if (explicitProducerPriority != null) {
+                return explicitProducerPriority;
+            }
+
+            Priority declaringPriority = producerBean.getDeclaringClass().getAnnotation(Priority.class);
+            if (declaringPriority != null) {
+                return declaringPriority.value();
+            }
+        }
+
+        if (bean instanceof BeanImpl) {
+            Integer priority = ((BeanImpl<?>) bean).getPriority();
+            if (priority != null) {
+                return priority;
+            }
+        }
+
+        Priority classPriority = bean.getBeanClass().getAnnotation(Priority.class);
+        return classPriority == null ? Integer.MIN_VALUE : classPriority.value();
+    }
+
+    private boolean isValidSimpleBeanName(String name) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        if (!Character.isJavaIdentifierStart(name.charAt(0))) {
+            return false;
+        }
+        for (int i = 1; i < name.length(); i++) {
+            if (!Character.isJavaIdentifierPart(name.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // ============================================
