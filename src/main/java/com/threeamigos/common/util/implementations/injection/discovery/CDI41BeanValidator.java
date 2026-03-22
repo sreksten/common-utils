@@ -152,6 +152,8 @@ public class CDI41BeanValidator {
             return null;
         }
 
+        validateManagedBeanSpecializationConstraint(clazz, beanArchiveMode);
+
         // 3) Scope sanity (at most one scope) + capture it for bean construction
         Class<? extends Annotation> beanScope = null;
         try {
@@ -300,6 +302,11 @@ public class CDI41BeanValidator {
         }
 
         if (isDecorator) {
+            if (beanScope != null && !Dependent.class.equals(beanScope)) {
+                throw new NonPortableBehaviourException(clazz.getName() +
+                        ": decorator declares scope @" + beanScope.getSimpleName() +
+                        ". Decorators with any scope other than @Dependent are non-portable.");
+            }
             // Validate decorator-specific rules before registering
             // Per CDI spec: A decorator must have exactly one @Delegate injection point
             validateDecoratorDelegateInjectionPoints(clazz);
@@ -1291,6 +1298,10 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
+        if (!validateSpecializingProducerMethodConstraint(method)) {
+            valid = false;
+        }
+
         // Validate return type (no type variables/wildcards)
         try {
             checkProducerTypeValidity(method.getGenericReturnType());
@@ -1354,6 +1365,47 @@ public class CDI41BeanValidator {
         }
 
         return valid;
+    }
+
+    /**
+     * CDI 4.1 §15.2: a producer method annotated @Specializes must be non-static and directly override
+     * another producer method.
+     */
+    private boolean validateSpecializingProducerMethodConstraint(Method method) {
+        if (!hasSpecializesAnnotation(method)) {
+            return true;
+        }
+
+        if (Modifier.isStatic(method.getModifiers())) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) +
+                    ": producer method annotated @Specializes must be non-static");
+            return false;
+        }
+
+        Class<?> declaringClass = method.getDeclaringClass();
+        Class<?> directSuperclass = declaringClass.getSuperclass();
+        if (directSuperclass == null || Object.class.equals(directSuperclass)) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) +
+                    ": producer method annotated @Specializes must directly override another producer method");
+            return false;
+        }
+
+        Method overridden;
+        try {
+            overridden = directSuperclass.getDeclaredMethod(method.getName(), method.getParameterTypes());
+        } catch (NoSuchMethodException e) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) +
+                    ": producer method annotated @Specializes must directly override another producer method");
+            return false;
+        }
+
+        if (!hasProducesAnnotation(overridden)) {
+            knowledgeBase.addDefinitionError(fmtMethod(method) +
+                    ": producer method annotated @Specializes must directly override another producer method");
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -1946,6 +1998,39 @@ public class CDI41BeanValidator {
 
         return scopeAnnotation.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
                 scopeAnnotation.isAnnotationPresent(javax.enterprise.context.NormalScope.class);
+    }
+
+    /**
+     * CDI 4.1 §15.1: a managed bean annotated @Specializes must directly extend another managed bean.
+     * If this is not true, the container must treat it as a definition error.
+     */
+    private void validateManagedBeanSpecializationConstraint(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
+        if (!hasSpecializesAnnotation(clazz)) {
+            return;
+        }
+
+        Class<?> directSuperclass = clazz.getSuperclass();
+        if (directSuperclass == null || Object.class.equals(directSuperclass)) {
+            knowledgeBase.addDefinitionError(clazz.getName() +
+                    ": declares @Specializes but does not directly extend another managed bean");
+            return;
+        }
+
+        BeanArchiveMode superMode = knowledgeBase.getBeanArchiveMode(directSuperclass);
+        if (superMode == null) {
+            superMode = beanArchiveMode;
+        }
+
+        boolean managedBeanSuperclass = isCandidateBeanClass(directSuperclass, superMode)
+                && !Modifier.isAbstract(directSuperclass.getModifiers())
+                && !hasInterceptorAnnotation(directSuperclass)
+                && !hasDecoratorAnnotation(directSuperclass);
+
+        if (!managedBeanSuperclass) {
+            knowledgeBase.addDefinitionError(clazz.getName() +
+                    ": declares @Specializes but direct superclass " + directSuperclass.getName() +
+                    " is not a managed bean");
+        }
     }
 
     private boolean isScopeAnnotationType(Class<? extends Annotation> at) {
