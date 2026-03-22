@@ -1557,8 +1557,9 @@ public class CDI41InjectionValidator {
         }
 
         boolean allValid = true;
+        Set<Bean<?>> specializationFiltered = applySpecializationFiltering(new HashSet<Bean<?>>(validBeans));
 
-        for (Bean<?> bean : validBeans) {
+        for (Bean<?> bean : specializationFiltered) {
             if (!(bean instanceof BeanImpl)) {
                 continue; // Producer beans don't have observer methods
             }
@@ -1770,10 +1771,7 @@ public class CDI41InjectionValidator {
         for (Bean<?> candidate : candidates) {
             Class<?> beanClass = candidate.getBeanClass();
             if (beanClass != null && hasSpecializesAnnotation(beanClass)) {
-                Class<?> superclass = beanClass.getSuperclass();
-                if (superclass != null && !Object.class.equals(superclass)) {
-                    specializedSuperclasses.add(superclass);
-                }
+                specializedSuperclasses.addAll(collectSpecializedSuperclasses(beanClass));
             }
         }
 
@@ -1784,6 +1782,22 @@ public class CDI41InjectionValidator {
         return candidates.stream()
                 .filter(candidate -> !specializedSuperclasses.contains(candidate.getBeanClass()))
                 .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
+        Set<Class<?>> out = new HashSet<Class<?>>();
+        if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
+            return out;
+        }
+        Class<?> current = beanClass.getSuperclass();
+        while (current != null && !Object.class.equals(current)) {
+            out.add(current);
+            if (!hasSpecializesAnnotation(current)) {
+                break;
+            }
+            current = current.getSuperclass();
+        }
+        return out;
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {

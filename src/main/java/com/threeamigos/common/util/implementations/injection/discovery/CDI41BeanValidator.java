@@ -62,6 +62,7 @@ public class CDI41BeanValidator {
     private final BeanTypesExtractor beanTypesExtractor;
     private final TypeChecker typeChecker;
     private Annotation[] overrideAnnotations;
+    private Class<?> overrideAnnotationsClass;
 
     public CDI41BeanValidator(KnowledgeBase knowledgeBase) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
@@ -92,6 +93,7 @@ public class CDI41BeanValidator {
             overrideAnnotations = annotatedTypeOverride != null
                     ? annotatedTypeOverride.getAnnotations().toArray(new Annotation[0])
                     : null;
+            overrideAnnotationsClass = annotatedTypeOverride != null ? clazz : null;
 
         // CDI 4.1 §2.4.2: scope types with attributes are non-portable.
         validateNonPortableScopeTypes(clazz);
@@ -165,6 +167,11 @@ public class CDI41BeanValidator {
 
         boolean isInterceptor = hasInterceptorAnnotation(clazz);
         boolean isDecorator = hasDecoratorAnnotation(clazz);
+
+        if ((isInterceptor || isDecorator) && hasSpecializesAnnotation(clazz)) {
+            throw new NonPortableBehaviourException(clazz.getName() +
+                    ": interceptor or decorator annotated @Specializes is non-portable");
+        }
 
         // 4) Validate producers and injection points on fields/methods
         boolean hasInjectionPoints = false;
@@ -353,6 +360,7 @@ public class CDI41BeanValidator {
             valid = false;
         }
         bean.setTypes(managedBeanTypes.getTypes());
+        applySpecializationInheritance(bean, clazz, beanArchiveMode);
 
         bean.setStereotypes(extractBeanStereotypes(clazz));
 
@@ -397,6 +405,7 @@ public class CDI41BeanValidator {
         return bean;
         } finally {
             overrideAnnotations = null;
+            overrideAnnotationsClass = null;
         }
     }
 
@@ -762,12 +771,17 @@ public class CDI41BeanValidator {
     }
 
     private Annotation[] annotationsOf(Class<?> clazz) {
-        return overrideAnnotations != null ? overrideAnnotations : clazz.getAnnotations();
+        if (overrideAnnotations != null && overrideAnnotationsClass != null &&
+                overrideAnnotationsClass.equals(clazz)) {
+            return overrideAnnotations;
+        }
+        return clazz.getAnnotations();
     }
 
     private Annotation[] declaredAnnotationsOf(Class<?> clazz) {
         Annotation[] declaredAnnotations = clazz.getDeclaredAnnotations();
-        if (overrideAnnotations == null) {
+        if (overrideAnnotations == null || overrideAnnotationsClass == null ||
+                !overrideAnnotationsClass.equals(clazz)) {
             return declaredAnnotations;
         }
 
@@ -1998,6 +2012,101 @@ public class CDI41BeanValidator {
 
         return scopeAnnotation.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
                 scopeAnnotation.isAnnotationPresent(javax.enterprise.context.NormalScope.class);
+    }
+
+    private void applySpecializationInheritance(BeanImpl<?> bean, Class<?> clazz, BeanArchiveMode beanArchiveMode) {
+        if (!hasSpecializesAnnotation(clazz)) {
+            return;
+        }
+
+        List<Class<?>> specializedAncestors = specializationAncestors(clazz, beanArchiveMode);
+        if (specializedAncestors.isEmpty()) {
+            return;
+        }
+
+        Set<Annotation> mergedQualifiers = new HashSet<Annotation>(bean.getQualifiers());
+        String inheritedName = "";
+
+        for (Class<?> ancestor : specializedAncestors) {
+            mergedQualifiers.addAll(extractBeanQualifiers(ancestor));
+            if (inheritedName.isEmpty()) {
+                String ancestorName = extractBeanName(ancestor);
+                if (ancestorName != null && !ancestorName.isEmpty()) {
+                    inheritedName = ancestorName;
+                }
+            }
+
+            BeanTypesExtractor.ExtractionResult ancestorTypes = beanTypesExtractor.extractManagedBeanTypes(ancestor);
+            Set<Type> missingTypes = new HashSet<Type>(ancestorTypes.getTypes());
+            missingTypes.removeAll(bean.getTypes());
+            if (!missingTypes.isEmpty()) {
+                knowledgeBase.addDefinitionError(clazz.getName() +
+                        ": specializing bean does not have all bean types of specialized bean " +
+                        ancestor.getName() + ". Missing: " + missingTypes);
+            }
+        }
+
+        bean.setQualifiers(QualifiersHelper.normalizeBeanQualifiers(mergedQualifiers));
+
+        if (!inheritedName.isEmpty()) {
+            if (declaresBeanNameExplicitly(clazz)) {
+                knowledgeBase.addDefinitionError(clazz.getName() +
+                        ": specializing bean may not explicitly declare @Named when specialized bean has name '" +
+                        inheritedName + "'");
+            } else {
+                bean.setName(inheritedName);
+            }
+        }
+    }
+
+    private List<Class<?>> specializationAncestors(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
+        List<Class<?>> ancestors = new ArrayList<Class<?>>();
+        Class<?> direct = clazz.getSuperclass();
+        if (direct == null || Object.class.equals(direct)) {
+            return ancestors;
+        }
+
+        BeanArchiveMode directMode = knowledgeBase.getBeanArchiveMode(direct);
+        if (directMode == null) {
+            directMode = beanArchiveMode;
+        }
+        if (!isCandidateBeanClass(direct, directMode)
+                || Modifier.isAbstract(direct.getModifiers())
+                || hasInterceptorAnnotation(direct)
+                || hasDecoratorAnnotation(direct)) {
+            return ancestors;
+        }
+
+        ancestors.add(direct);
+        Class<?> current = direct;
+        while (hasSpecializesAnnotation(current)) {
+            Class<?> parent = current.getSuperclass();
+            if (parent == null || Object.class.equals(parent)) {
+                break;
+            }
+            BeanArchiveMode mode = knowledgeBase.getBeanArchiveMode(parent);
+            if (mode == null) {
+                mode = beanArchiveMode;
+            }
+            if (!isCandidateBeanClass(parent, mode)
+                    || Modifier.isAbstract(parent.getModifiers())
+                    || hasInterceptorAnnotation(parent)
+                    || hasDecoratorAnnotation(parent)) {
+                break;
+            }
+            ancestors.add(parent);
+            current = parent;
+        }
+        return ancestors;
+    }
+
+    private boolean declaresBeanNameExplicitly(Class<?> clazz) {
+        for (Annotation annotation : declaredAnnotationsOf(clazz)) {
+            if (annotation.annotationType().equals(Named.class)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

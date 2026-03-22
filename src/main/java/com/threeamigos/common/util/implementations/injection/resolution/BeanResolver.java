@@ -304,10 +304,7 @@ public class BeanResolver implements DependencyResolver {
         for (Bean<?> candidate : candidates) {
             Class<?> beanClass = candidate.getBeanClass();
             if (beanClass != null && hasSpecializesAnnotation(beanClass)) {
-                Class<?> superclass = beanClass.getSuperclass();
-                if (superclass != null && !Object.class.equals(superclass)) {
-                    specializedSuperclasses.add(superclass);
-                }
+                specializedSuperclasses.addAll(collectSpecializedSuperclasses(beanClass));
             }
         }
 
@@ -318,6 +315,22 @@ public class BeanResolver implements DependencyResolver {
         return candidates.stream()
                 .filter(candidate -> !specializedSuperclasses.contains(candidate.getBeanClass()))
                 .collect(Collectors.toList());
+    }
+
+    private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
+        Set<Class<?>> out = new HashSet<Class<?>>();
+        if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
+            return out;
+        }
+        Class<?> current = beanClass.getSuperclass();
+        while (current != null && !Object.class.equals(current)) {
+            out.add(current);
+            if (!hasSpecializesAnnotation(current)) {
+                break;
+            }
+            current = current.getSuperclass();
+        }
+        return out;
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {

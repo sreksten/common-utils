@@ -455,10 +455,7 @@ public class BeanManagerImpl implements BeanManager {
         for (Bean<? extends X> candidate : candidates) {
             Class<?> beanClass = candidate.getBeanClass();
             if (beanClass != null && hasSpecializesAnnotation(beanClass)) {
-                Class<?> superclass = beanClass.getSuperclass();
-                if (superclass != null && !Object.class.equals(superclass)) {
-                    specializedSuperclasses.add(superclass);
-                }
+                specializedSuperclasses.addAll(collectSpecializedSuperclasses(beanClass));
             }
         }
 
@@ -473,6 +470,22 @@ public class BeanManagerImpl implements BeanManager {
             }
         }
         return filtered;
+    }
+
+    private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
+        Set<Class<?>> out = new HashSet<Class<?>>();
+        if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
+            return out;
+        }
+        Class<?> current = beanClass.getSuperclass();
+        while (current != null && !Object.class.equals(current)) {
+            out.add(current);
+            if (!hasSpecializesAnnotation(current)) {
+                break;
+            }
+            current = current.getSuperclass();
+        }
+        return out;
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {
