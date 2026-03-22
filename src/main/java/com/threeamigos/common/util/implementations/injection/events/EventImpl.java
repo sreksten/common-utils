@@ -794,7 +794,31 @@ public class EventImpl<T> implements Event<T> {
             matching.add(createSyntheticObserverInfo(syntheticObserver));
         }
 
-        return matching;
+        List<ObserverMethodInfo> deduped = new ArrayList<ObserverMethodInfo>();
+        Set<String> seen = new HashSet<String>();
+        for (ObserverMethodInfo observerInfo : matching) {
+            String key = observerDedupKey(observerInfo);
+            if (seen.add(key)) {
+                deduped.add(observerInfo);
+            }
+        }
+        return deduped;
+    }
+
+    private String observerDedupKey(ObserverMethodInfo observerInfo) {
+        if (observerInfo == null) {
+            return "";
+        }
+        Method method = observerInfo.getObserverMethod();
+        String methodKey;
+        if (method != null) {
+            methodKey = method.getDeclaringClass().getName() + "#" + method.getName() + "/" + method.getParameterCount();
+        } else if (observerInfo.getSyntheticObserver() != null) {
+            methodKey = "synthetic:" + observerInfo.getSyntheticObserver().getClass().getName();
+        } else {
+            methodKey = "unknown";
+        }
+        return methodKey + "|" + observerInfo.getEventType() + "|" + observerInfo.isAsync() + "|" + observerInfo.getTransactionPhase();
     }
 
     /**

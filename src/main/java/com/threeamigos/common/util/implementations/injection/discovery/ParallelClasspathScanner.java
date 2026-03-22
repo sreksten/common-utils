@@ -60,7 +60,7 @@ public class ParallelClasspathScanner {
     /**
      * Detector for bean archive modes (EXPLICIT/IMPLICIT/NONE based on beans.xml).
      */
-    private final BeanArchiveDetector beanArchiveDetector = new BeanArchiveDetector();
+    private final BeanArchiveDetector beanArchiveDetector;
 
     /**
      * Collector for BeansXml configurations from all scanned archives.
@@ -74,6 +74,7 @@ public class ParallelClasspathScanner {
                      String... packageNames) throws IOException, ClassNotFoundException {
         Objects.requireNonNull(sink, "sink cannot be null");
         Objects.requireNonNull(packageNames, "packageNames cannot be null");
+        this.beanArchiveDetector = new BeanArchiveDetector(knowledgeBase);
 
         Collection<String> packageList = sanitizePackages(packageNames);
 

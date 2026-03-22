@@ -612,6 +612,8 @@ public class Syringe {
             // Extensions may add beans programmatically during AfterBeanDiscovery.
             // Re-apply dependency resolver wiring to cover newly registered BeanImpl/ProducerBean instances.
             initializeBeanDependencyResolvers();
+            // CDI 4.1 §13.5.2: after synthesis, run registration callbacks for newly registered synthetic components.
+            fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION);
 
             // ============================================================
             // PHASE 5: VALIDATION
@@ -1399,7 +1401,31 @@ public class Syringe {
         }
 
         knowledgeBase.getObserverMethodInfos().clear();
-        knowledgeBase.getObserverMethodInfos().addAll(updated);
+        List<ObserverMethodInfo> deduped = new ArrayList<ObserverMethodInfo>();
+        Set<String> seen = new HashSet<String>();
+        for (ObserverMethodInfo info : updated) {
+            String key = observerInfoKey(info);
+            if (seen.add(key)) {
+                deduped.add(info);
+            }
+        }
+        knowledgeBase.getObserverMethodInfos().addAll(deduped);
+    }
+
+    private String observerInfoKey(ObserverMethodInfo info) {
+        if (info == null) {
+            return "";
+        }
+        String methodKey = "";
+        if (info.getObserverMethod() != null) {
+            Method m = info.getObserverMethod();
+            methodKey = m.getDeclaringClass().getName() + "#" + m.getName() + "/" + m.getParameterCount();
+        } else if (info.getSyntheticObserver() != null) {
+            methodKey = "synthetic:" + info.getSyntheticObserver().getClass().getName();
+        }
+        String eventType = String.valueOf(info.getEventType());
+        String qualifiers = String.valueOf(info.getQualifiers());
+        return methodKey + "|" + eventType + "|" + qualifiers + "|" + info.isAsync();
     }
 
     /**
@@ -2051,7 +2077,7 @@ public class Syringe {
         // entries will be validated/registered.
         int updated = 0;
         for (Class<?> clazz : knowledgeBase.getClasses()) {
-            knowledgeBase.add(clazz, forcedBeanArchiveMode);
+            knowledgeBase.setBeanArchiveMode(clazz, forcedBeanArchiveMode);
             updated++;
         }
         info("Applied forced bean archive mode " + forcedBeanArchiveMode + " to " + updated + " class(es)");

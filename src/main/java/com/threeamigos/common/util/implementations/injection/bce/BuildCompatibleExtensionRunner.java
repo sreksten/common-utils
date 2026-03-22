@@ -29,6 +29,7 @@ import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.declarations.FieldInfo;
 import jakarta.enterprise.lang.model.declarations.MethodInfo;
+import jakarta.enterprise.inject.spi.Bean;
 import jakarta.annotation.Priority;
 import jakarta.interceptor.Interceptor;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
@@ -622,10 +623,14 @@ public class BuildCompatibleExtensionRunner {
         if (phase == BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION) {
             Registration registration = phaseMethod.getAnnotation(Registration.class);
             Class<?>[] acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
-            for (Class<?> clazz : knowledgeBase.getClasses()) {
-                if (acceptedTypes.length == 0 || isClassAcceptedByRegistrationTypes(clazz, acceptedTypes)) {
-                    beans.add(BceMetadata.beanInfo(clazz));
+            for (Bean<?> bean : knowledgeBase.getBeans()) {
+                if (bean == null || bean.getBeanClass() == null) {
+                    continue;
                 }
+                if (acceptedTypes.length > 0 && !isBeanAcceptedByRegistrationTypes(bean, acceptedTypes)) {
+                    continue;
+                }
+                beans.add(BceMetadata.beanInfo(bean.getBeanClass()));
             }
         } else {
             for (Class<?> clazz : knowledgeBase.getClasses()) {
@@ -807,6 +812,24 @@ public class BuildCompatibleExtensionRunner {
         for (Class<?> acceptedType : acceptedTypes) {
             if (acceptedType.isAssignableFrom(candidate)) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isBeanAcceptedByRegistrationTypes(Bean<?> bean, Class<?>[] acceptedTypes) {
+        if (bean == null) {
+            return false;
+        }
+        for (java.lang.reflect.Type beanType : bean.getTypes()) {
+            if (!(beanType instanceof Class<?>)) {
+                continue;
+            }
+            Class<?> beanTypeClass = (Class<?>) beanType;
+            for (Class<?> acceptedType : acceptedTypes) {
+                if (acceptedType.isAssignableFrom(beanTypeClass)) {
+                    return true;
+                }
             }
         }
         return false;

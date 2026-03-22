@@ -52,6 +52,7 @@ public class KnowledgeBase {
     private final Collection<InterceptorInfo> interceptorInfos = new ConcurrentLinkedQueue<>();
     private final Collection<DecoratorInfo> decoratorInfos = new ConcurrentLinkedQueue<>();
     private final Collection<ObserverMethodInfo> observerMethodInfos = new ConcurrentLinkedQueue<>();
+    private volatile boolean observerMethodsDiscovered;
 
     private final List<String> warnings = new ArrayList<>();
     private final List<String> errors = new ArrayList<>();
@@ -105,17 +106,19 @@ public class KnowledgeBase {
     }
 
     public void add(Class<?> clazz) {
-        if (!excludedClasses.contains(clazz)) {
+        if (!excludedClasses.contains(clazz) && !classes.contains(clazz)) {
             classes.add(clazz);
         }
     }
 
     public void add(Class<?> clazz, BeanArchiveMode mode) {
-        if (!excludedClasses.contains(clazz)) {
+        if (!excludedClasses.contains(clazz) && !classes.contains(clazz)) {
             classes.add(clazz);
             if (mode != null) {
                 classArchiveModes.put(clazz, mode);
             }
+        } else if (!excludedClasses.contains(clazz) && mode != null) {
+            classArchiveModes.put(clazz, mode);
         }
     }
 
@@ -125,6 +128,13 @@ public class KnowledgeBase {
 
     public BeanArchiveMode getBeanArchiveMode(Class<?> clazz) {
         return classArchiveModes.getOrDefault(clazz, BeanArchiveMode.IMPLICIT);
+    }
+
+    public void setBeanArchiveMode(Class<?> clazz, BeanArchiveMode mode) {
+        if (clazz == null || mode == null) {
+            return;
+        }
+        classArchiveModes.put(clazz, mode);
     }
 
     public void setAnnotatedTypeOverride(Class<?> clazz, AnnotatedType<?> annotatedType) {
@@ -401,6 +411,14 @@ public class KnowledgeBase {
      */
     public Collection<ObserverMethodInfo> getObserverMethodInfos() {
         return observerMethodInfos;
+    }
+
+    public boolean isObserverMethodsDiscovered() {
+        return observerMethodsDiscovered;
+    }
+
+    public void setObserverMethodsDiscovered(boolean observerMethodsDiscovered) {
+        this.observerMethodsDiscovered = observerMethodsDiscovered;
     }
 
     // ============================================================

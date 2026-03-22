@@ -1550,6 +1550,12 @@ public class CDI41InjectionValidator {
      * @return true if all observer methods are valid
      */
     private boolean scanAndValidateObserverMethods(Collection<Bean<?>> validBeans) {
+        // Validation can execute more than once during startup (for example, before and after BCE @Validation).
+        // Observer discovery must remain stable across passes; otherwise the same observer is registered repeatedly.
+        if (knowledgeBase.isObserverMethodsDiscovered()) {
+            return true;
+        }
+
         boolean allValid = true;
 
         for (Bean<?> bean : validBeans) {
@@ -1567,6 +1573,7 @@ public class CDI41InjectionValidator {
             }
         }
 
+        knowledgeBase.setObserverMethodsDiscovered(true);
         return allValid;
     }
 

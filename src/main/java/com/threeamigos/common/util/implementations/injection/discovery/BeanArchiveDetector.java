@@ -37,6 +37,10 @@ import java.util.zip.ZipEntry;
 public class BeanArchiveDetector {
 
     private static final String BEANS_XML_PATH = "META-INF/beans.xml";
+    private static final String PORTABLE_EXTENSION_SERVICE_PATH =
+            "META-INF/services/jakarta.enterprise.inject.spi.Extension";
+    private static final String BUILD_COMPATIBLE_EXTENSION_SERVICE_PATH =
+            "META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension";
 
     /**
      * Cache of already detected bean archive modes.
@@ -105,6 +109,9 @@ public class BeanArchiveDetector {
             ZipEntry beansXmlEntry = jar.getEntry(BEANS_XML_PATH);
 
             if (beansXmlEntry == null) {
+                if (hasExtensionServiceDescriptor(jar)) {
+                    return BeanArchiveMode.NONE;
+                }
                 // No beans.xml found - this is an implicit bean archive
                 // (will only discover classes with bean-defining annotations)
                 return BeanArchiveMode.IMPLICIT;
@@ -132,6 +139,9 @@ public class BeanArchiveDetector {
         File beansXmlFile = new File(directory, BEANS_XML_PATH);
 
         if (!beansXmlFile.exists()) {
+            if (hasExtensionServiceDescriptor(directory)) {
+                return BeanArchiveMode.NONE;
+            }
             // No beans.xml found - this is an implicit bean archive
             return BeanArchiveMode.IMPLICIT;
         }
@@ -153,6 +163,16 @@ public class BeanArchiveDetector {
         if (knowledgeBase != null) {
             knowledgeBase.addDefinitionError(msg);
         }
+    }
+
+    private boolean hasExtensionServiceDescriptor(JarFile jar) {
+        return jar.getEntry(PORTABLE_EXTENSION_SERVICE_PATH) != null
+                || jar.getEntry(BUILD_COMPATIBLE_EXTENSION_SERVICE_PATH) != null;
+    }
+
+    private boolean hasExtensionServiceDescriptor(File directory) {
+        return new File(directory, PORTABLE_EXTENSION_SERVICE_PATH).exists()
+                || new File(directory, BUILD_COMPATIBLE_EXTENSION_SERVICE_PATH).exists();
     }
 
     /**
@@ -268,6 +288,10 @@ public class BeanArchiveDetector {
         // <trim/> turns explicit discovery into trimmed explicit (behaves like implicit)
         if (beansXml.isTrimEnabled() && baseMode == BeanArchiveMode.EXPLICIT) {
             return BeanArchiveMode.TRIMMED;
+        }
+        if (baseMode == BeanArchiveMode.EXPLICIT && knowledgeBase != null) {
+            knowledgeBase.addDefinitionError(
+                    "CDI Lite does not support bean-discovery-mode=\"all\". This is a deployment problem.");
         }
         return baseMode;
     }
