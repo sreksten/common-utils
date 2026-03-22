@@ -317,32 +317,44 @@ public class EventImpl<T> implements Event<T> {
 
         // Create an async task
         CompletableFuture<U> future = CompletableFuture.supplyAsync(() -> {
-            for (ObserverMethodInfo observerInfo : matchingObservers) {
-                // Check reception condition per CDI 4.1 specification (Section 10.5.2):
-                // - Reception.IF_EXISTS: Only notify if bean instance already exists in scope
-                // - Reception.ALWAYS (default): Always notify, creating bean instance if needed
-                if (observerInfo.getReception() == Reception.IF_EXISTS) {
-                    // Only notify if a bean instance already exists in scope
-                    Bean<?> declaringBean = observerInfo.getDeclaringBean();
-                    if (declaringBean != null) {
-                        Class<? extends Annotation> scopeType = declaringBean.getScope();
-                        try {
-                            ScopeContext context = contextManager.getContext(scopeType);
-                            Object existingInstance = context.getIfExists(declaringBean);
+            ScopeContext requestScopeContext = contextManager.getContext(RequestScoped.class);
+            boolean activatedRequestContext = false;
+            if (!requestScopeContext.isActive() && requestScopeContext instanceof RequestScopedContext) {
+                ((RequestScopedContext) requestScopeContext).activateRequest();
+                activatedRequestContext = true;
+            }
+            try {
+                for (ObserverMethodInfo observerInfo : matchingObservers) {
+                    // Check reception condition per CDI 4.1 specification (Section 10.5.2):
+                    // - Reception.IF_EXISTS: Only notify if bean instance already exists in scope
+                    // - Reception.ALWAYS (default): Always notify, creating bean instance if needed
+                    if (observerInfo.getReception() == Reception.IF_EXISTS) {
+                        // Only notify if a bean instance already exists in scope
+                        Bean<?> declaringBean = observerInfo.getDeclaringBean();
+                        if (declaringBean != null) {
+                            Class<? extends Annotation> scopeType = declaringBean.getScope();
+                            try {
+                                ScopeContext context = contextManager.getContext(scopeType);
+                                Object existingInstance = context.getIfExists(declaringBean);
 
-                            // Skip this observer if the bean doesn't exist yet
-                            if (existingInstance == null) {
+                                // Skip this observer if the bean doesn't exist yet
+                                if (existingInstance == null) {
+                                    continue;
+                                }
+                            } catch (IllegalArgumentException e) {
+                                // Scope not registered - skip this observer
                                 continue;
                             }
-                        } catch (IllegalArgumentException e) {
-                            // Scope not registered - skip this observer
-                            continue;
                         }
                     }
-                }
-                // If Reception.ALWAYS: invokeObserver() will create the bean if needed via beanResolver
+                    // If Reception.ALWAYS: invokeObserver() will create the bean if needed via beanResolver
 
-                invokeObserver(observerInfo, event);
+                    invokeObserver(observerInfo, event);
+                }
+            } finally {
+                if (activatedRequestContext) {
+                    ((RequestScopedContext) requestScopeContext).deactivateRequest();
+                }
             }
             return event;
         }, executor);

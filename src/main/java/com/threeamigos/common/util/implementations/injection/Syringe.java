@@ -25,7 +25,13 @@ import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.BeforeDestroyed;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.context.Destroyed;
+import jakarta.enterprise.context.Initialized;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Reception;
@@ -558,6 +564,10 @@ public class Syringe {
             // Any deployment problems detected here will prevent application startup
             fireAfterDeploymentValidation();
 
+            // Fire built-in application context initialized event after deployment is fully validated
+            // so all observers are discovered and ready to receive it.
+            contextManager.fireApplicationContextInitialized();
+
             // ============================================================
             // PHASE 6: APPLICATION READY
             // ============================================================
@@ -596,6 +606,52 @@ public class Syringe {
                 ((ProducerBean<?>) bean).setDependencyResolver(beanResolver);
             }
         }
+
+        contextManager.setRequestContextLifecycleListener(new ContextManager.RequestContextLifecycleListener() {
+            @Override
+            public void onInitialized() {
+                beanManager.getEvent()
+                        .select(Object.class, Initialized.Literal.of(RequestScoped.class), Any.Literal.INSTANCE)
+                        .fire(new Object());
+            }
+
+            @Override
+            public void onBeforeDestroyed() {
+                beanManager.getEvent()
+                        .select(Object.class, BeforeDestroyed.Literal.of(RequestScoped.class), Any.Literal.INSTANCE)
+                        .fire(new Object());
+            }
+
+            @Override
+            public void onDestroyed() {
+                beanManager.getEvent()
+                        .select(Object.class, Destroyed.Literal.of(RequestScoped.class), Any.Literal.INSTANCE)
+                        .fire(new Object());
+            }
+        });
+
+        contextManager.setApplicationContextLifecycleListener(new ContextManager.ApplicationContextLifecycleListener() {
+            @Override
+            public void onInitialized() {
+                beanManager.getEvent()
+                        .select(Object.class, Initialized.Literal.of(ApplicationScoped.class), Any.Literal.INSTANCE)
+                        .fire(new Object());
+            }
+
+            @Override
+            public void onBeforeDestroyed() {
+                beanManager.getEvent()
+                        .select(Object.class, BeforeDestroyed.Literal.of(ApplicationScoped.class), Any.Literal.INSTANCE)
+                        .fire(new Object());
+            }
+
+            @Override
+            public void onDestroyed() {
+                beanManager.getEvent()
+                        .select(Object.class, Destroyed.Literal.of(ApplicationScoped.class), Any.Literal.INSTANCE)
+                        .fire(new Object());
+            }
+        });
     }
 
     /**

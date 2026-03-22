@@ -19,6 +19,17 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Stefano Reksten
  */
 public class ContextManager {
+    public interface RequestContextLifecycleListener {
+        void onInitialized();
+        void onBeforeDestroyed();
+        void onDestroyed();
+    }
+
+    public interface ApplicationContextLifecycleListener {
+        void onInitialized();
+        void onBeforeDestroyed();
+        void onDestroyed();
+    }
 
     private final MessageHandler messageHandler;
 
@@ -27,6 +38,8 @@ public class ContextManager {
     private final SessionScopedContext sessionContext;
     private final RequestScopedContext requestContext;
     private volatile boolean destroyed = false;
+    private volatile RequestContextLifecycleListener requestContextLifecycleListener;
+    private volatile ApplicationContextLifecycleListener applicationContextLifecycleListener;
 
     private final ClientProxyGenerator proxyGenerator;
 
@@ -73,9 +86,28 @@ public class ContextManager {
      * Destroys all contexts and their instances.
      */
     public void destroyAll() {
-        for (ScopeContext context : contexts.values()) {
+        ScopeContext applicationScopeContext = contexts.get(ApplicationScoped.class);
+        ApplicationContextLifecycleListener applicationListener = applicationContextLifecycleListener;
+        if (applicationScopeContext != null) {
             try {
-                context.destroy();
+                if (applicationListener != null) {
+                    applicationListener.onBeforeDestroyed();
+                }
+                applicationScopeContext.destroy();
+                if (applicationListener != null) {
+                    applicationListener.onDestroyed();
+                }
+            } catch (Exception e) {
+                messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
+            }
+        }
+
+        for (Map.Entry<Class<? extends Annotation>, ScopeContext> entry : contexts.entrySet()) {
+            if (ApplicationScoped.class.equals(entry.getKey())) {
+                continue;
+            }
+            try {
+                entry.getValue().destroy();
             } catch (Exception e) {
                 messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
             }
@@ -162,13 +194,25 @@ public class ContextManager {
      */
     public void activateRequest() {
         requestContext.activateRequest();
+        RequestContextLifecycleListener listener = requestContextLifecycleListener;
+        if (listener != null) {
+            listener.onInitialized();
+        }
     }
 
     /**
      * Deactivates the request scope for the current thread.
      */
     public void deactivateRequest() {
+        boolean wasActive = requestContext.isActive();
+        RequestContextLifecycleListener listener = requestContextLifecycleListener;
+        if (wasActive && listener != null) {
+            listener.onBeforeDestroyed();
+        }
         requestContext.deactivateRequest();
+        if (wasActive && listener != null) {
+            listener.onDestroyed();
+        }
     }
 
     // === Proxy Management ===
@@ -235,5 +279,20 @@ public class ContextManager {
             throw new IllegalArgumentException("Context cannot be null");
         }
         contexts.put(scopeAnnotation, context);
+    }
+
+    public void setRequestContextLifecycleListener(RequestContextLifecycleListener listener) {
+        this.requestContextLifecycleListener = listener;
+    }
+
+    public void setApplicationContextLifecycleListener(ApplicationContextLifecycleListener listener) {
+        this.applicationContextLifecycleListener = listener;
+    }
+
+    public void fireApplicationContextInitialized() {
+        ApplicationContextLifecycleListener listener = applicationContextLifecycleListener;
+        if (listener != null) {
+            listener.onInitialized();
+        }
     }
 }

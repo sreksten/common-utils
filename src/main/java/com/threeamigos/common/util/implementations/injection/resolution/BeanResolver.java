@@ -766,4 +766,8 @@ public class BeanResolver implements DependencyResolver {
     public jakarta.enterprise.inject.spi.InjectionPoint getCurrentInjectionPoint() {
         return currentInjectionPoint.get();
     }
+
+    public ContextManager getContextManager() {
+        return contextManager;
+    }
 }

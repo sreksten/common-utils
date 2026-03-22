@@ -9,10 +9,14 @@ import com.threeamigos.common.util.implementations.injection.interceptors.Interc
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
+import com.threeamigos.common.util.implementations.injection.scopes.RequestScopedContext;
+import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.spi.*;
@@ -390,7 +394,7 @@ public class BeanImpl<T> implements Bean<T> {
                 // Delegate lifecycle to custom InjectionTarget provided by extensions
                 T instance = customInjectionTarget.produce(creationalContext);
                 customInjectionTarget.inject(instance, creationalContext);
-                customInjectionTarget.postConstruct(instance);
+                invokeCustomInjectionTargetPostConstructWithRequestContext(instance);
 
                 if (hasInterceptors() && isDependent()) {
                     instance = createInterceptorAwareProxy(instance);
@@ -412,8 +416,8 @@ public class BeanImpl<T> implements Bean<T> {
             // 3. Perform method injection (initializer methods)
             performMethodInjection(instance, creationalContext);
 
-            // 4. Call @PostConstruct if present
-            invokePostConstruct(instance);
+            // 4. Call @PostConstruct if present (with request context active per CDI 6.6.1)
+            invokePostConstructWithRequestContext(instance);
 
             // 5. PHASE 2 - Wrap with interceptor-aware proxy if needed
             // IMPORTANT: This wrapping is ONLY for @Dependent scoped beans!
@@ -775,6 +779,64 @@ public class BeanImpl<T> implements Bean<T> {
             for (Method method : postConstructMethods) {
                 method.setAccessible(true);
                 method.invoke(instance);
+            }
+        }
+    }
+
+    private void invokePostConstructWithRequestContext(T instance) throws Exception {
+        if (!(dependencyResolver instanceof BeanResolver)) {
+            invokePostConstruct(instance);
+            return;
+        }
+
+        BeanResolver beanResolver = (BeanResolver) dependencyResolver;
+        ContextManager contextManager = beanResolver.getContextManager();
+        if (contextManager == null) {
+            invokePostConstruct(instance);
+            return;
+        }
+
+        ScopeContext requestScopeContext = contextManager.getContext(RequestScoped.class);
+        boolean activatedTemporarily = false;
+        if (!requestScopeContext.isActive() && requestScopeContext instanceof RequestScopedContext) {
+            contextManager.activateRequest();
+            activatedTemporarily = true;
+        }
+
+        try {
+            invokePostConstruct(instance);
+        } finally {
+            if (activatedTemporarily) {
+                contextManager.deactivateRequest();
+            }
+        }
+    }
+
+    private void invokeCustomInjectionTargetPostConstructWithRequestContext(T instance) throws Exception {
+        if (!(dependencyResolver instanceof BeanResolver)) {
+            customInjectionTarget.postConstruct(instance);
+            return;
+        }
+
+        BeanResolver beanResolver = (BeanResolver) dependencyResolver;
+        ContextManager contextManager = beanResolver.getContextManager();
+        if (contextManager == null) {
+            customInjectionTarget.postConstruct(instance);
+            return;
+        }
+
+        ScopeContext requestScopeContext = contextManager.getContext(RequestScoped.class);
+        boolean activatedTemporarily = false;
+        if (!requestScopeContext.isActive() && requestScopeContext instanceof RequestScopedContext) {
+            contextManager.activateRequest();
+            activatedTemporarily = true;
+        }
+
+        try {
+            customInjectionTarget.postConstruct(instance);
+        } finally {
+            if (activatedTemporarily) {
+                contextManager.deactivateRequest();
             }
         }
     }
