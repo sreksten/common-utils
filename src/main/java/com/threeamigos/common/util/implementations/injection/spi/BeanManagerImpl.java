@@ -19,6 +19,7 @@ import com.threeamigos.common.util.implementations.injection.util.tx.Transaction
 import jakarta.el.ELResolver;
 import jakarta.el.ExpressionFactory;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.context.spi.AlterableContext;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -2086,7 +2087,7 @@ public class BeanManagerImpl implements BeanManager {
      * Adapter to wrap internal ScopeContext as Jakarta Context.
      * Bridges the gap between internal scope management and CDI SPI.
      */
-    private static class ScopeContextAdapter implements Context {
+    private static class ScopeContextAdapter implements AlterableContext {
         private final com.threeamigos.common.util.implementations.injection.scopes.ScopeContext scopeContext;
         private final Class<? extends Annotation> scope;
 
@@ -2111,6 +2112,11 @@ public class BeanManagerImpl implements BeanManager {
 
         @Override
         public <T> T get(Contextual<T> contextual) {
+            if (!scopeContext.isActive()) {
+                throw new jakarta.enterprise.context.ContextNotActiveException(
+                    "Context not active for scope: " + scope.getName()
+                );
+            }
             if (!(contextual instanceof Bean)) {
                 return null;
             }
@@ -2123,9 +2129,12 @@ public class BeanManagerImpl implements BeanManager {
         }
 
         public void destroy(Contextual<?> contextual) {
-            // Delegate to scope context destroy
-            // Note: ScopeContext doesn't have per-bean destroy, only full scope destroy
-            // This is a limitation of the current design
+            if (!scopeContext.isActive()) {
+                throw new jakarta.enterprise.context.ContextNotActiveException(
+                    "Context not active for scope: " + scope.getName()
+                );
+            }
+            scopeContext.destroy(contextual);
         }
     }
 

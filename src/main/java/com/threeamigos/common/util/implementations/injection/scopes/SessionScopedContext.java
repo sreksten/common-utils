@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -308,6 +309,37 @@ public class SessionScopedContext implements ScopeContext {
         // when the HTTP session is passivated by the servlet container
         // Therefore, beans in this scope MUST be Serializable
         return true;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void destroy(Contextual<?> contextual) {
+        if (!active) {
+            throw new ContextNotActiveException("SessionScoped context is not active");
+        }
+        String sessionId = currentSessionId.get();
+        if (sessionId == null) {
+            throw new ContextNotActiveException("No active session. Call activateSession() first.");
+        }
+        if (!(contextual instanceof Bean)) {
+            return;
+        }
+
+        Bean<Object> bean = (Bean<Object>) contextual;
+        String beanId = getBeanId(bean);
+        Map<String, Object> instances = sessionInstances.get(sessionId);
+        Map<String, CreationalContext<?>> contexts = sessionContexts.get(sessionId);
+        Map<String, Bean<?>> beans = sessionBeans.get(sessionId);
+        if (instances == null || contexts == null || beans == null) {
+            return;
+        }
+
+        Object instance = instances.remove(beanId);
+        CreationalContext<Object> ctx = (CreationalContext<Object>) contexts.remove(beanId);
+        beans.remove(beanId);
+        if (instance != null) {
+            bean.destroy(instance, ctx);
+        }
     }
 
     @SuppressWarnings("unchecked")

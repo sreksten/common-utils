@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
@@ -94,6 +95,29 @@ public class RequestScopedContext implements ScopeContext {
         requestContexts.remove();
         requestActive.remove();
         active = false;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void destroy(Contextual<?> contextual) {
+        if (!active) {
+            throw new ContextNotActiveException("RequestScoped context is not active");
+        }
+        if (!requestActive.get()) {
+            throw new ContextNotActiveException("No active request. Call activateRequest() first.");
+        }
+        if (!(contextual instanceof Bean)) {
+            return;
+        }
+
+        Map<Bean<?>, Object> instances = requestInstances.get();
+        Map<Bean<?>, CreationalContext<?>> contexts = requestContexts.get();
+        Bean<Object> bean = (Bean<Object>) contextual;
+        Object instance = instances.remove(bean);
+        CreationalContext<Object> ctx = (CreationalContext<Object>) contexts.remove(bean);
+        if (instance != null) {
+            bean.destroy(instance, ctx);
+        }
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
@@ -81,6 +82,23 @@ public class ApplicationScopedContext implements ScopeContext {
         instances.clear();
         creationalContexts.clear();
         active = false;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void destroy(Contextual<?> contextual) {
+        if (!active) {
+            throw new ContextNotActiveException("ApplicationScoped context is not active");
+        }
+        if (!(contextual instanceof Bean)) {
+            return;
+        }
+        Bean<Object> bean = (Bean<Object>) contextual;
+        Object instance = instances.remove(bean);
+        CreationalContext<Object> ctx = (CreationalContext<Object>) creationalContexts.remove(bean);
+        if (instance != null) {
+            bean.destroy(instance, ctx);
+        }
     }
 
     @Override

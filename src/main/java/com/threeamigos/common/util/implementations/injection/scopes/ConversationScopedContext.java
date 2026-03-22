@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.enterprise.context.ContextNotActiveException;
+import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -365,6 +366,38 @@ public class ConversationScopedContext implements ScopeContext {
         // when long-running conversations are passivated by the servlet container
         // Therefore, beans in this scope MUST be Serializable
         return true;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void destroy(Contextual<?> contextual) {
+        if (!active) {
+            throw new ContextNotActiveException("ConversationScoped context is not active");
+        }
+        String conversationId = currentConversationId.get();
+        if (conversationId == null) {
+            throw new ContextNotActiveException("No active conversation. Call beginConversation() first.");
+        }
+        if (!(contextual instanceof Bean)) {
+            return;
+        }
+
+        Bean<Object> bean = (Bean<Object>) contextual;
+        Map<Bean<?>, Object> instances = conversationInstances.get(conversationId);
+        Map<Bean<?>, CreationalContext<?>> contexts = conversationContexts.get(conversationId);
+        Map<String, Bean<?>> beans = conversationBeans.get(conversationId);
+        if (instances == null || contexts == null) {
+            return;
+        }
+
+        Object instance = instances.remove(bean);
+        CreationalContext<Object> ctx = (CreationalContext<Object>) contexts.remove(bean);
+        if (beans != null) {
+            beans.remove(getBeanId(bean));
+        }
+        if (instance != null) {
+            bean.destroy(instance, ctx);
+        }
     }
 
     /**

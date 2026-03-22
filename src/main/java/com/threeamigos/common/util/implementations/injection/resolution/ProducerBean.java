@@ -296,6 +296,7 @@ public class ProducerBean<T> implements Bean<T> {
             return (T) producerMethod.invoke(declaringInstance, args);
         } finally {
             destroyDependentInvocationParameters(parameters, args, false);
+            destroyDependentDeclaringInstance(declaringInstance);
         }
     }
 
@@ -305,7 +306,11 @@ public class ProducerBean<T> implements Bean<T> {
     @SuppressWarnings("unchecked")
     private T accessProducerField(Object declaringInstance) throws Exception {
         producerField.setAccessible(true);
-        return (T) producerField.get(declaringInstance);
+        try {
+            return (T) producerField.get(declaringInstance);
+        } finally {
+            destroyDependentDeclaringInstance(declaringInstance);
+        }
     }
 
     private void validateProducerMethodNullProduct(T produced) {
@@ -369,7 +374,33 @@ public class ProducerBean<T> implements Bean<T> {
             disposerMethod.invoke(declaringInstance, args);
         } finally {
             destroyDependentInvocationParameters(parameters, args, true);
+            destroyDependentDeclaringInstance(declaringInstance);
         }
+    }
+
+    private void destroyDependentDeclaringInstance(Object declaringInstance) throws Exception {
+        if (declaringInstance == null) {
+            return;
+        }
+        if (!isDependentDeclaringClass(declaringInstance.getClass())) {
+            return;
+        }
+        LifecycleMethodHelper.invokeLifecycleMethod(declaringInstance, PreDestroy.class);
+    }
+
+    private boolean isDependentDeclaringClass(Class<?> type) {
+        if (type == null) {
+            return false;
+        }
+        if (type.isAnnotationPresent(Dependent.class)) {
+            return true;
+        }
+        for (Annotation annotation : type.getAnnotations()) {
+            if ("javax.enterprise.context.Dependent".equals(annotation.annotationType().getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void destroyDependentInvocationParameters(Parameter[] parameters, Object[] args, boolean skipDisposesParameter)

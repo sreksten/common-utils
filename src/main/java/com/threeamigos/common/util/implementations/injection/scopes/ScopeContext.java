@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
+import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
@@ -27,6 +28,18 @@ public interface ScopeContext {
      * @return the existing instance, or null if not present
      */
     <T> T getIfExists(Bean<T> bean);
+
+    /**
+     * Destroys a contextual instance for a specific contextual type, if present.
+     * Implementations for normal scopes should remove the instance from the context
+     * and invoke {@link jakarta.enterprise.context.spi.Contextual#destroy(Object, CreationalContext)}
+     * on the contextual type with the same CreationalContext used at creation time.
+     *
+     * @param contextual the contextual type
+     */
+    default void destroy(Contextual<?> contextual) {
+        // Optional operation for scope implementations that support per-contextual destruction.
+    }
 
     /**
      * Destroys all instances in this scope.

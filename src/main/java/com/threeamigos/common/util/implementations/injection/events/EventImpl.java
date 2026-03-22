@@ -625,6 +625,7 @@ public class EventImpl<T> implements Event<T> {
                 method.invoke(beanInstance, args);
             } finally {
                 destroyDependentInvocationParameters(parameters, args);
+                destroyDependentObserverReceiver(beanInstance, method);
             }
 
         } catch (Exception e) {
@@ -654,6 +655,24 @@ public class EventImpl<T> implements Event<T> {
                 continue;
             }
             LifecycleMethodHelper.invokeLifecycleMethod(arg, PreDestroy.class);
+        }
+    }
+
+    private void destroyDependentObserverReceiver(Object beanInstance, Method method) throws Exception {
+        if (beanInstance == null || method == null || Modifier.isStatic(method.getModifiers())) {
+            return;
+        }
+
+        Class<?> declaringClass = method.getDeclaringClass();
+        if (declaringClass.isAnnotationPresent(Dependent.class)) {
+            LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PreDestroy.class);
+            return;
+        }
+        for (Annotation annotation : declaringClass.getAnnotations()) {
+            if ("javax.enterprise.context.Dependent".equals(annotation.annotationType().getName())) {
+                LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PreDestroy.class);
+                return;
+            }
         }
     }
 
