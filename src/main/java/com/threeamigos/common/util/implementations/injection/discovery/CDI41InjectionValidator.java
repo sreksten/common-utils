@@ -15,6 +15,7 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Provider;
 import jakarta.inject.Qualifier;
@@ -26,6 +27,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -829,6 +831,11 @@ public class CDI41InjectionValidator {
             return true; // Always valid - resolved at runtime
         }
 
+        // Bean metadata built-ins are validated via definition rules and resolved at runtime.
+        if (isBeanMetadataType(requiredType) || isInterceptorMetadataType(requiredType)) {
+            return true;
+        }
+
         // Find all beans that match the required type
         Set<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
 
@@ -878,6 +885,22 @@ public class CDI41InjectionValidator {
 
         // Injection point is valid
         return true;
+    }
+
+    private boolean isBeanMetadataType(Type requiredType) {
+        if (!(requiredType instanceof ParameterizedType)) {
+            return false;
+        }
+        Type rawType = ((ParameterizedType) requiredType).getRawType();
+        return rawType instanceof Class && Bean.class.equals(rawType);
+    }
+
+    private boolean isInterceptorMetadataType(Type requiredType) {
+        if (!(requiredType instanceof ParameterizedType)) {
+            return false;
+        }
+        Type rawType = ((ParameterizedType) requiredType).getRawType();
+        return rawType instanceof Class && Interceptor.class.equals(rawType);
     }
 
     /**

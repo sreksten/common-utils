@@ -4,10 +4,19 @@ import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par55injection.par551.*;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par55injection.par552.*;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par55injection.par553.*;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par55injection.par554.*;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par55injection.par555.*;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par55injection.par556.*;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par55injection.par557.*;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par55injection.par558.*;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.context.spi.Contextual;
+import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -16,6 +25,10 @@ import jakarta.enterprise.inject.spi.InjectionTargetFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +36,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName( "5.5 - Dependency Injection Test")
@@ -32,6 +46,7 @@ public class DependencyInjectionTest {
     @DisplayName("5.5.1 - Container uses @Inject constructor and passes injectable references")
     void shouldUseInjectConstructorForManagedBeanInstantiation() {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), ConstructorInjectedBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -45,6 +60,7 @@ public class DependencyInjectionTest {
     @DisplayName("5.5.1 - Container uses no-arg constructor when no constructor is annotated @Inject")
     void shouldUseNoArgConstructorWhenNoInjectConstructorExists() {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), NoInjectConstructorBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -58,6 +74,7 @@ public class DependencyInjectionTest {
     @DisplayName("5.5.2 - Fields are injected before initializer methods and @PostConstruct runs afterwards")
     void shouldInjectFieldsThenCallInitializersThenPostConstructForContextualInstance() {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), LifecycleManagedBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -74,6 +91,7 @@ public class DependencyInjectionTest {
     @DisplayName("5.5 - Container performs dependency injection for non-contextual managed bean instances")
     void shouldPerformDependencyInjectionForNonContextualManagedBeanInstance() {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), LifecycleManagedBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -101,6 +119,7 @@ public class DependencyInjectionTest {
         DependentDestructionRecorder.reset();
 
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), ParentWithDependentChildBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -126,6 +145,7 @@ public class DependencyInjectionTest {
         ProducerInvocationRecorder.reset();
 
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), StaticProducerDisposerBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -160,6 +180,7 @@ public class DependencyInjectionTest {
         ProducerInvocationRecorder.reset();
 
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), NonStaticProducerDisposerBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -203,6 +224,7 @@ public class DependencyInjectionTest {
         StaticProducerFieldBean.reset();
 
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), StaticProducerFieldBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -219,6 +241,7 @@ public class DependencyInjectionTest {
         NonStaticProducerFieldBean.reset();
 
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), NonStaticProducerFieldBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -239,6 +262,7 @@ public class DependencyInjectionTest {
         StaticObserverBean.reset();
 
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), StaticObserverBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -262,6 +286,7 @@ public class DependencyInjectionTest {
         NonStaticObserverBean.reset();
 
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), NonStaticObserverBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -287,6 +312,7 @@ public class DependencyInjectionTest {
         ConditionalRequestScopedObserverBean.reset();
 
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), ConditionalRequestScopedObserverBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.setup();
 
@@ -313,6 +339,243 @@ public class DependencyInjectionTest {
         }
     }
 
+    @Test
+    @DisplayName("5.5.7 - InjectionPoint metadata is available for field, constructor, initializer and transient injection points")
+    void shouldExposeInjectionPointMetadataForBeanInjectionPoints() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InjectionPointMetadataBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.setup();
+
+        InjectionPointMetadataBean bean = syringe.inject(InjectionPointMetadataBean.class);
+
+        assertNotNull(bean.getFieldInjectionPoint());
+        assertNotNull(bean.getConstructorInjectionPoint());
+        assertNotNull(bean.getInitializerInjectionPoint());
+        assertNotNull(bean.getTransientFieldInjectionPoint());
+
+        assertEquals(Field.class, bean.getFieldInjectionPoint().getMember().getClass());
+        assertEquals("fieldInjectionPoint", bean.getFieldInjectionPoint().getMember().getName());
+        if (bean.getFieldInjectionPoint().getBean() != null) {
+            assertEquals(InjectionPointMetadataBean.class, bean.getFieldInjectionPoint().getBean().getBeanClass());
+        }
+        assertEquals("jakarta.enterprise.inject.spi.InjectionPoint", bean.getFieldInjectionPoint().getType().getTypeName());
+        assertFalse(bean.getFieldInjectionPoint().isTransient());
+        assertFalse(bean.getFieldInjectionPoint().isDelegate());
+
+        assertEquals(Constructor.class, bean.getConstructorInjectionPoint().getMember().getClass());
+        if (bean.getConstructorInjectionPoint().getBean() != null) {
+            assertEquals(InjectionPointMetadataBean.class, bean.getConstructorInjectionPoint().getBean().getBeanClass());
+        }
+        assertEquals("jakarta.enterprise.inject.spi.InjectionPoint", bean.getConstructorInjectionPoint().getType().getTypeName());
+        assertFalse(bean.getConstructorInjectionPoint().isTransient());
+        assertFalse(bean.getConstructorInjectionPoint().isDelegate());
+
+        assertEquals(Method.class, bean.getInitializerInjectionPoint().getMember().getClass());
+        assertEquals("initialize", bean.getInitializerInjectionPoint().getMember().getName());
+        if (bean.getInitializerInjectionPoint().getBean() != null) {
+            assertEquals(InjectionPointMetadataBean.class, bean.getInitializerInjectionPoint().getBean().getBeanClass());
+        }
+        assertEquals("jakarta.enterprise.inject.spi.InjectionPoint", bean.getInitializerInjectionPoint().getType().getTypeName());
+        assertFalse(bean.getInitializerInjectionPoint().isTransient());
+        assertFalse(bean.getInitializerInjectionPoint().isDelegate());
+
+        assertTrue(bean.getTransientFieldInjectionPoint().isTransient());
+        assertTrue(containsQualifier(bean.getFieldInjectionPoint().getQualifiers(), "jakarta.enterprise.inject.Default"));
+    }
+
+    @Test
+    @DisplayName("5.5.7 - InjectionPoint metadata is available for producer method parameters")
+    void shouldExposeInjectionPointMetadataForProducerParameters() {
+        InjectionPointProducerDisposerRecorder.reset();
+
+        Syringe syringe = new Syringe(
+                new InMemoryMessageHandler(),
+                InjectionPointProducerDisposerBean.class,
+                InjectionPointProducerConsumerBean.class
+        );
+        excludeInjectionPointRuleInvalidFixtures(syringe);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.setup();
+
+        InjectionPointProducerConsumerBean consumer = syringe.inject(InjectionPointProducerConsumerBean.class);
+        assertNotNull(consumer.getProducedInjectionPointPayload());
+
+        BeanManager beanManager = syringe.getBeanManager();
+        Set<Bean<?>> beans = beanManager.getBeans(ProducedInjectionPointPayload.class);
+        @SuppressWarnings("unchecked")
+        Bean<ProducedInjectionPointPayload> bean = (Bean<ProducedInjectionPointPayload>) beanManager.resolve((Set) beans);
+        CreationalContext<ProducedInjectionPointPayload> context = beanManager.createCreationalContext(bean);
+        ProducedInjectionPointPayload payload =
+                (ProducedInjectionPointPayload) beanManager.getReference(bean, ProducedInjectionPointPayload.class, context);
+        bean.destroy(payload, context);
+
+        List<String> events = InjectionPointProducerDisposerRecorder.events();
+        assertTrue(events.contains("producer-member:produce"));
+        assertTrue(events.contains("producer-bean:InjectionPointProducerDisposerBean"));
+        assertTrue(events.contains("producer-type:jakarta.enterprise.inject.spi.InjectionPoint"));
+        assertTrue(events.contains("disposer-member:dispose"));
+    }
+
+    @Test
+    @DisplayName("5.5.7 - InjectionPoint metadata is available for observer parameters")
+    void shouldExposeInjectionPointMetadataForObserverParameters() {
+        ObserverInjectionPointRecorder.reset();
+
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ObserverInjectionPointBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.setup();
+
+        syringe.getBeanManager().getEvent().select(ObserverInjectionPointEvent.class).fire(new ObserverInjectionPointEvent("evt-observer-ip"));
+
+        List<String> events = ObserverInjectionPointRecorder.events();
+        assertTrue(events.contains("observer-member:onEvent"));
+        assertTrue(events.contains("observer-bean:ObserverInjectionPointBean"));
+        assertTrue(events.contains("observer-type:jakarta.enterprise.inject.spi.InjectionPoint"));
+        assertTrue(events.contains("observer-event:evt-observer-ip"));
+    }
+
+    @Test
+    @DisplayName("5.5.7 - InjectionPoint metadata for Instance.get()/select() reflects dynamic required type and qualifiers")
+    void shouldExposeInjectionPointMetadataForDynamicInstanceLookups() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), DynamicInstanceInjectionPointConsumerBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.setup();
+
+        DynamicInstanceInjectionPointConsumerBean consumer = syringe.inject(DynamicInstanceInjectionPointConsumerBean.class);
+        jakarta.enterprise.inject.spi.InjectionPoint defaultIp = consumer.getDefaultPayload();
+        jakarta.enterprise.inject.spi.InjectionPoint redSelectedIp = consumer.getRedPayload();
+        jakarta.enterprise.inject.spi.InjectionPoint transientIp = consumer.getTransientPayload();
+
+        assertEquals("payloadInstance", defaultIp.getMember().getName());
+        if (defaultIp.getBean() != null) {
+            assertEquals(DynamicInstanceInjectionPointConsumerBean.class, defaultIp.getBean().getBeanClass());
+        }
+        assertEquals("jakarta.enterprise.inject.spi.InjectionPoint", defaultIp.getType().getTypeName());
+        assertFalse(defaultIp.isTransient());
+
+        assertEquals("payloadInstance", redSelectedIp.getMember().getName());
+        if (redSelectedIp.getBean() != null) {
+            assertEquals(DynamicInstanceInjectionPointConsumerBean.class, redSelectedIp.getBean().getBeanClass());
+        }
+        assertEquals("jakarta.enterprise.inject.spi.InjectionPoint", redSelectedIp.getType().getTypeName());
+        assertTrue(containsQualifier(redSelectedIp.getQualifiers(), DynamicRed.class.getName()));
+
+        assertEquals("transientPayloadInstance", transientIp.getMember().getName());
+        assertTrue(transientIp.isTransient());
+    }
+
+    @Test
+    @DisplayName("5.5.7 - Dependent producer can use InjectionPoint metadata to create injection-target-specific logger")
+    void shouldAllowDependentLoggerProducerUsingInjectionPointMetadata() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), DependentLoggerProducerBean.class, LoggerConsumerBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.setup();
+
+        LoggerConsumerBean consumer = syringe.inject(LoggerConsumerBean.class);
+        assertNotNull(consumer.getLogger());
+        assertEquals(LoggerConsumerBean.class.getName(), consumer.getLogger().getName());
+    }
+
+    @Test
+    @DisplayName("5.5.7 - Non-@Dependent bean injecting @Default InjectionPoint is a definition error")
+    void shouldRejectInjectionPointOnNonDependentScopedBean() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), NonDependentInjectionPointBean.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("5.5.7 - Disposer method InjectionPoint with @Default is a definition error")
+    void shouldRejectInjectionPointParameterInDisposerMethod() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), DisposerWithInjectionPointBean.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("5.5.7 - Non-bean class supporting injection cannot inject @Default InjectionPoint")
+    void shouldRejectInjectionPointForNonBeanInjectionTarget() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), LoggerConsumerBean.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.setup();
+
+        BeanManager beanManager = syringe.getBeanManager();
+        AnnotatedType<NonBeanInjectionSupportClass> annotatedType = beanManager.createAnnotatedType(NonBeanInjectionSupportClass.class);
+        InjectionTargetFactory<NonBeanInjectionSupportClass> factory = beanManager.getInjectionTargetFactory(annotatedType);
+        InjectionTarget<NonBeanInjectionSupportClass> injectionTarget = factory.createInjectionTarget(null);
+        CreationalContext<NonBeanInjectionSupportClass> creationalContext = beanManager.createCreationalContext(null);
+
+        NonBeanInjectionSupportClass instance = injectionTarget.produce(creationalContext);
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> injectionTarget.inject(instance, creationalContext));
+        assertTrue(containsCause(ex, DefinitionException.class));
+    }
+
+    @Test
+    @DisplayName("5.5.8 - Bean metadata with @Default is injectable and exposes current bean metadata")
+    void shouldInjectBeanMetadataForDeclaringBean() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), OrderProcessorBeanMetadataConsumer.class);
+        excludeInjectionPointRuleInvalidFixtures(syringe);
+        excludeBeanMetadataRuleInvalidFixtures(syringe);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.setup();
+
+        OrderProcessorBeanMetadataConsumer consumer = syringe.inject(OrderProcessorBeanMetadataConsumer.class);
+        assertEquals(OrderProcessorBeanMetadataConsumer.class, consumer.getInjectedBeanClass());
+        assertEquals("Order", consumer.getInjectedBeanName());
+    }
+
+    @Test
+    @DisplayName("5.5.8 - Interceptor metadata injected into non-interceptor bean is a definition error")
+    void shouldRejectInterceptorMetadataInjectionOutsideInterceptor() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidInterceptorMetadataConsumer.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("5.5.8 - @Intercepted Bean metadata injected into non-interceptor bean is a definition error")
+    void shouldRejectInterceptedBeanMetadataInjectionOutsideInterceptor() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidInterceptedBeanMetadataConsumer.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("5.5.8 - Bean metadata type parameter must match declaring bean type for @Default field injection")
+    void shouldRejectBeanMetadataWithMismatchedTypeParameterOnBeanField() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidBeanMetadataTypeParameterConsumer.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("5.5.8 - Producer method Bean metadata parameter type must match producer return type")
+    void shouldRejectProducerMethodBeanMetadataWithMismatchedTypeParameter() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidProducerBeanMetadataTypeParameterBean.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("5.5.8 - Disposer method Bean metadata parameter is a definition error")
+    void shouldRejectDisposerMethodBeanMetadataParameter() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InvalidDisposerBeanMetadataParameterBean.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
     private int indexOfPrefix(List<String> values, String prefix) {
         return indexOfPrefix(values, prefix, 0);
     }
@@ -324,6 +587,39 @@ public class DependencyInjectionTest {
             }
         }
         return -1;
+    }
+
+    private boolean containsQualifier(Set<Annotation> qualifiers, String annotationTypeName) {
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier.annotationType().getName().equals(annotationTypeName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void excludeInjectionPointRuleInvalidFixtures(Syringe syringe) {
+        syringe.exclude(NonDependentInjectionPointBean.class);
+        syringe.exclude(DisposerWithInjectionPointBean.class);
+    }
+
+    private void excludeBeanMetadataRuleInvalidFixtures(Syringe syringe) {
+        syringe.exclude(InvalidInterceptorMetadataConsumer.class);
+        syringe.exclude(InvalidInterceptedBeanMetadataConsumer.class);
+        syringe.exclude(InvalidBeanMetadataTypeParameterConsumer.class);
+        syringe.exclude(InvalidProducerBeanMetadataTypeParameterBean.class);
+        syringe.exclude(InvalidDisposerBeanMetadataParameterBean.class);
+    }
+
+    private boolean containsCause(Throwable throwable, Class<? extends Throwable> type) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (type.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

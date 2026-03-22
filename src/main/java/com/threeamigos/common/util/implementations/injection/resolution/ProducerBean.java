@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.injection.resolution;
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -256,10 +257,14 @@ public class ProducerBean<T> implements Bean<T> {
         Object[] args = new Object[parameters.length];
 
         for (int i = 0; i < parameters.length; i++) {
-            args[i] = dependencyResolver.resolve(
-                parameters[i].getParameterizedType(),
-                parameters[i].getAnnotations()
-            );
+            if (InjectionPoint.class.equals(parameters[i].getType())) {
+                args[i] = resolveProducerInjectionPoint(parameters[i]);
+            } else {
+                args[i] = dependencyResolver.resolve(
+                        parameters[i].getParameterizedType(),
+                        parameters[i].getAnnotations()
+                );
+            }
         }
 
         try {
@@ -331,10 +336,7 @@ public class ProducerBean<T> implements Bean<T> {
                 args[i] = instance;
             } else {
                 // Other parameters are normal injection points
-                args[i] = dependencyResolver.resolve(
-                    parameters[i].getParameterizedType(),
-                    parameters[i].getAnnotations()
-                );
+                args[i] = resolveDisposerParameter(parameters[i]);
             }
         }
 
@@ -378,6 +380,42 @@ public class ProducerBean<T> implements Bean<T> {
             }
         }
         return false;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private InjectionPoint resolveProducerInjectionPoint(Parameter parameter) {
+        if (dependencyResolver instanceof BeanResolver) {
+            BeanResolver beanResolver = (BeanResolver) dependencyResolver;
+            InjectionPoint current = beanResolver.getCurrentInjectionPoint();
+            if (current != null) {
+                return current;
+            }
+        }
+
+        BeanImpl syntheticDeclaringBean = new BeanImpl((Class) declaringClass, false);
+        return new InjectionPointImpl(parameter, syntheticDeclaringBean);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Object resolveDisposerParameter(Parameter parameter) {
+        if (dependencyResolver instanceof BeanResolver) {
+            BeanResolver beanResolver = (BeanResolver) dependencyResolver;
+            BeanImpl syntheticDeclaringBean = new BeanImpl((Class) declaringClass, false);
+            beanResolver.setCurrentInjectionPoint(new InjectionPointImpl(parameter, syntheticDeclaringBean));
+            try {
+                return dependencyResolver.resolve(
+                        parameter.getParameterizedType(),
+                        parameter.getAnnotations()
+                );
+            } finally {
+                beanResolver.clearCurrentInjectionPoint();
+            }
+        }
+
+        return dependencyResolver.resolve(
+                parameter.getParameterizedType(),
+                parameter.getAnnotations()
+        );
     }
 
     // Getters and setters

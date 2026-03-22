@@ -9,6 +9,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.SessionScope
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
+import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
@@ -23,6 +24,7 @@ import jakarta.enterprise.event.NotificationOptions;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
@@ -599,7 +601,7 @@ public class EventImpl<T> implements Event<T> {
                     // Other parameters are injection points - resolve them
                     Type paramType = param.getParameterizedType();
                     Annotation[] paramAnnotations = param.getAnnotations();
-                    args[i] = beanResolver.resolve(paramType, paramAnnotations);
+                    args[i] = resolveObserverParameterWithContext(param, paramType, paramAnnotations, declaringBean);
                 }
             }
 
@@ -652,6 +654,20 @@ public class EventImpl<T> implements Event<T> {
                 continue;
             }
             LifecycleMethodHelper.invokeLifecycleMethod(arg, PreDestroy.class);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Object resolveObserverParameterWithContext(Parameter parameter,
+                                                       Type parameterType,
+                                                       Annotation[] parameterAnnotations,
+                                                       Bean<?> declaringBean) {
+        InjectionPoint injectionPoint = new InjectionPointImpl(parameter, (Bean) declaringBean);
+        beanResolver.setCurrentInjectionPoint(injectionPoint);
+        try {
+            return beanResolver.resolve(parameterType, parameterAnnotations);
+        } finally {
+            beanResolver.clearCurrentInjectionPoint();
         }
     }
 

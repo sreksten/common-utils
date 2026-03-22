@@ -111,6 +111,10 @@ public class BeanManagerImpl implements BeanManager {
         return knowledgeBase;
     }
 
+    public BeanResolver getBeanResolver() {
+        return beanResolver;
+    }
+
     // ==================== BeanContainer Methods ====================
 
     /**
@@ -1024,40 +1028,87 @@ public class BeanManagerImpl implements BeanManager {
 
         Type requiredType = injectionPoint.getType();
         Set<Annotation> qualifiers = injectionPoint.getQualifiers();
+        Annotation[] qualifierArray = qualifiers.toArray(new Annotation[0]);
 
-        // Special case: inject Instance<T> handles for lazy/programmatic lookup.
-        if (requiredType instanceof ParameterizedType) {
-            ParameterizedType parameterizedType = (ParameterizedType) requiredType;
-            Type rawType = parameterizedType.getRawType();
-            if (rawType instanceof Class && Instance.class.isAssignableFrom((Class<?>) rawType)) {
-                Type selectedType = parameterizedType.getActualTypeArguments()[0];
-                Class<?> selectedClass = RawTypeExtractor.getRawType(selectedType);
+        // Special case for InjectionPoint built-in bean
+        if (requiredType instanceof Class &&
+                jakarta.enterprise.inject.spi.InjectionPoint.class.equals(requiredType)) {
+            if (isDefaultQualified(qualifiers)) {
+                Bean<?> owningBean = injectionPoint.getBean();
+                if (owningBean == null) {
+                    throw new jakarta.enterprise.inject.spi.DefinitionException(
+                            "InjectionPoint with qualifier @Default is not allowed for non-bean injection targets");
+                }
+
+                Class<? extends Annotation> owningScope = owningBean.getScope();
+                if (owningScope != null && !Dependent.class.equals(owningScope) &&
+                        !"javax.enterprise.context.Dependent".equals(owningScope.getName())) {
+                    throw new jakarta.enterprise.inject.spi.DefinitionException(
+                            "Bean " + owningBean.getBeanClass().getName() +
+                                    " declares scope @" + owningScope.getSimpleName() +
+                                    " and may not inject InjectionPoint with qualifier @Default");
+                }
+            }
+            return injectionPoint;
+        }
+
+        if (beanResolver != null) {
+            beanResolver.setCurrentInjectionPoint(injectionPoint);
+        }
+        try {
+            // Special case: inject Instance<T> handles for lazy/programmatic lookup.
+            if (requiredType instanceof ParameterizedType) {
+                ParameterizedType parameterizedType = (ParameterizedType) requiredType;
+                Type rawType = parameterizedType.getRawType();
+                if (rawType instanceof Class && (
+                        Instance.class.isAssignableFrom((Class<?>) rawType) ||
+                        Bean.class.equals(rawType) ||
+                        Interceptor.class.equals(rawType))) {
+                    return beanResolver != null
+                            ? beanResolver.resolve(requiredType, qualifierArray)
+                            : createInstance();
+                }
+            }
+
+            Set<Bean<?>> beans = getBeans(requiredType, qualifierArray);
+            Bean<?> bean = resolve(beans);
+
+            if (bean == null) {
+                throw new jakarta.enterprise.inject.UnsatisfiedResolutionException(
+                        "No bean found for injection point: " + injectionPoint);
+            }
+
+            if (bean.getScope() == Dependent.class && ctx instanceof CreationalContextImpl) {
                 @SuppressWarnings("unchecked")
-                Class<Object> selectedObjectClass = (Class<Object>) selectedClass;
-                return createInstance().select(selectedObjectClass, qualifiers.toArray(new Annotation[0]));
+                Bean<Object> dependentBean = (Bean<Object>) bean;
+                CreationalContext<Object> childContext = createCreationalContext(dependentBean);
+                Object instance = dependentBean.create(childContext);
+                @SuppressWarnings("unchecked")
+                CreationalContextImpl<Object> parentContext = (CreationalContextImpl<Object>) ctx;
+                parentContext.addDependentInstance(dependentBean, instance, childContext);
+                return instance;
+            }
+
+            return getReference(bean, requiredType, ctx);
+        } finally {
+            if (beanResolver != null) {
+                beanResolver.clearCurrentInjectionPoint();
             }
         }
+    }
 
-        Set<Bean<?>> beans = getBeans(requiredType, qualifiers.toArray(new Annotation[0]));
-        Bean<?> bean = resolve(beans);
-
-        if (bean == null) {
-            throw new jakarta.enterprise.inject.UnsatisfiedResolutionException(
-                "No bean found for injection point: " + injectionPoint);
+    private boolean isDefaultQualified(Set<Annotation> qualifiers) {
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            return true;
         }
-
-        if (bean.getScope() == Dependent.class && ctx instanceof CreationalContextImpl) {
-            @SuppressWarnings("unchecked")
-            Bean<Object> dependentBean = (Bean<Object>) bean;
-            CreationalContext<Object> childContext = createCreationalContext(dependentBean);
-            Object instance = dependentBean.create(childContext);
-            @SuppressWarnings("unchecked")
-            CreationalContextImpl<Object> parentContext = (CreationalContextImpl<Object>) ctx;
-            parentContext.addDependentInstance(dependentBean, instance, childContext);
-            return instance;
+        for (Annotation qualifier : qualifiers) {
+            String name = qualifier.annotationType().getName();
+            if ("jakarta.enterprise.inject.Default".equals(name) ||
+                    "javax.enterprise.inject.Default".equals(name)) {
+                return true;
+            }
         }
-
-        return getReference(bean, requiredType, ctx);
+        return false;
     }
 
     /**

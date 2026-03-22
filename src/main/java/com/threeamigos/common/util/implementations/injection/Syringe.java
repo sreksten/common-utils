@@ -574,7 +574,7 @@ public class Syringe {
      * delegate dependency lookup to {@link BeanResolver} during instance creation.
      */
     private void initializeBeanDependencyResolvers() {
-        BeanResolver beanResolver = new BeanResolver(knowledgeBase, contextManager);
+        BeanResolver beanResolver = beanManager.getBeanResolver();
         for (Bean<?> bean : knowledgeBase.getBeans()) {
             if (bean instanceof BeanImpl<?>) {
                 ((BeanImpl<?>) bean).setDependencyResolver(beanResolver);

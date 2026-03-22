@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.injection.events.propagation.
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
@@ -17,6 +18,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.inject.Named;
@@ -71,11 +73,7 @@ public class BeanResolver implements DependencyResolver {
 
     @Override
     public Object resolve(Type requiredType, Annotation[] qualifiers) {
-        Annotation[] effectiveQualifiers = qualifiers;
-        InjectionPoint injectionPointContext = currentInjectionPoint.get();
-        if (injectionPointContext != null && injectionPointContext.getQualifiers() != null) {
-            effectiveQualifiers = injectionPointContext.getQualifiers().toArray(new Annotation[0]);
-        }
+        Annotation[] effectiveQualifiers = qualifiers != null ? qualifiers : new Annotation[0];
 
         // Special handling for InjectionPoint built-in bean
         if (requiredType instanceof Class &&
@@ -108,6 +106,20 @@ public class BeanResolver implements DependencyResolver {
                     "\nSee CDI 4.1 Spec Section 3.10 for more details.");
             }
             return ip;
+        }
+
+        // Special handling for Bean/Interceptor metadata built-in beans
+        if (requiredType instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) requiredType;
+            Type rawType = parameterizedType.getRawType();
+            if (rawType instanceof Class &&
+                    (Bean.class.equals(rawType) || Interceptor.class.equals(rawType))) {
+                jakarta.enterprise.inject.spi.InjectionPoint ip = currentInjectionPoint.get();
+                if (ip == null || ip.getBean() == null) {
+                    throw new IllegalStateException("Bean metadata is not available in this context");
+                }
+                return ip.getBean();
+            }
         }
 
         // Handle Event<T>, Instance<T> and Provider<T> injection
@@ -525,13 +537,15 @@ public class BeanResolver implements DependencyResolver {
      */
     @SuppressWarnings("unchecked")
     private <T> Instance<T> createProviderWrapper(Class<T> type, Collection<Annotation> qualifiers) {
+        InjectionPoint ownerInjectionPoint = currentInjectionPoint.get();
+
         // Create a resolution strategy that delegates to BeanResolver
         InstanceImpl.ResolutionStrategy<T> strategy = new InstanceImpl.ResolutionStrategy<T>() {
             @Override
             public T resolveInstance(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
                 // Convert qualifiers to array
                 Annotation[] qualArray = quals.toArray(new Annotation[0]);
-                Object resolved = resolve(typeToResolve, qualArray);
+                Object resolved = resolveWithDynamicInjectionPoint(typeToResolve, qualArray, ownerInjectionPoint);
                 return (T) resolved;
             }
 
@@ -583,6 +597,34 @@ public class BeanResolver implements DependencyResolver {
         return new EventImpl<>(eventType, qualifiers, knowledgeBase, this, contextManager, transactionServices, contextTokenProvider);
     }
 
+    private Object resolveWithDynamicInjectionPoint(Type dynamicType,
+                                                    Annotation[] dynamicQualifiers,
+                                                    InjectionPoint ownerInjectionPoint) {
+        if (ownerInjectionPoint == null) {
+            return resolve(dynamicType, dynamicQualifiers);
+        }
+
+        Set<Annotation> qualifierSet = new HashSet<>();
+        if (dynamicQualifiers != null) {
+            qualifierSet.addAll(Arrays.asList(dynamicQualifiers));
+        }
+
+        InjectionPoint dynamicInjectionPoint = new ConfiguredInjectionPoint(
+                ownerInjectionPoint,
+                dynamicType,
+                qualifierSet,
+                ownerInjectionPoint.isDelegate(),
+                ownerInjectionPoint.isTransient()
+        );
+
+        setCurrentInjectionPoint(dynamicInjectionPoint);
+        try {
+            return resolve(dynamicType, dynamicQualifiers);
+        } finally {
+            clearCurrentInjectionPoint();
+        }
+    }
+
     public TransactionServices getTransactionServices() {
         return transactionServices;
     }
@@ -630,7 +672,7 @@ public class BeanResolver implements DependencyResolver {
      *
      * @param injectionPoint the current injection point being resolved
      */
-    void setCurrentInjectionPoint(jakarta.enterprise.inject.spi.InjectionPoint injectionPoint) {
+    public void setCurrentInjectionPoint(jakarta.enterprise.inject.spi.InjectionPoint injectionPoint) {
         currentInjectionPoint.set(injectionPoint);
     }
 
@@ -639,7 +681,7 @@ public class BeanResolver implements DependencyResolver {
      *
      * <p>This prevents memory leaks in thread pools and ensures clean state.
      */
-    void clearCurrentInjectionPoint() {
+    public void clearCurrentInjectionPoint() {
         currentInjectionPoint.remove();
     }
 
@@ -648,7 +690,7 @@ public class BeanResolver implements DependencyResolver {
      *
      * @return the current injection point, or null if not set
      */
-    jakarta.enterprise.inject.spi.InjectionPoint getCurrentInjectionPoint() {
+    public jakarta.enterprise.inject.spi.InjectionPoint getCurrentInjectionPoint() {
         return currentInjectionPoint.get();
     }
 }

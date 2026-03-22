@@ -16,6 +16,8 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.AnnotatedType;
+import jakarta.enterprise.inject.spi.Interceptor;
+import jakarta.enterprise.inject.Intercepted;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Named;
 import jakarta.inject.Qualifier;
@@ -1057,6 +1059,9 @@ public class CDI41BeanValidator {
                 valid = false;
                 continue;
             }
+            if (!validateInjectionPointMetadataUsage(p, false)) {
+                valid = false;
+            }
         }
 
         if (!hasValidInjectionParameters(constructor.getParameters(), fmtConstructor(constructor))) {
@@ -1102,6 +1107,10 @@ public class CDI41BeanValidator {
         }
 
         if (!validateNamedInjectionPointUsage(field)) {
+            valid = false;
+        }
+
+        if (!validateInjectionPointMetadataUsage(field, false)) {
             valid = false;
         }
 
@@ -1184,6 +1193,10 @@ public class CDI41BeanValidator {
             }
 
             if (!validateNamedInjectionPointUsage(p)) {
+                valid = false;
+            }
+
+            if (!validateInjectionPointMetadataUsage(p, false)) {
                 valid = false;
             }
         }
@@ -1299,6 +1312,10 @@ public class CDI41BeanValidator {
             }
 
             if (!validateNamedInjectionPointUsage(p)) {
+                valid = false;
+            }
+
+            if (!validateInjectionPointMetadataUsage(p, false)) {
                 valid = false;
             }
         }
@@ -1419,6 +1436,10 @@ public class CDI41BeanValidator {
                 if (!validateNamedInjectionPointUsage(p)) {
                     valid = false;
                 }
+
+                if (!validateInjectionPointMetadataUsage(p, true)) {
+                    valid = false;
+                }
             }
         }
 
@@ -1426,6 +1447,256 @@ public class CDI41BeanValidator {
         // Note: This is checked during producer-disposer linking phase, not here
 
         return valid;
+    }
+
+    private boolean validateInjectionPointMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter) {
+        boolean valid = true;
+
+        if (isInjectionPointMetadataType(injectionPoint) && hasDefaultQualifier(injectionPoint.getAnnotations())) {
+            if (disposerParameter) {
+                knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                        ": disposer method injection point of type InjectionPoint with qualifier @Default is not allowed");
+                valid = false;
+            } else {
+                Class<?> declaringClass = declaringClassOf(injectionPoint);
+                if (declaringClass != null && declaresNonDependentScope(declaringClass)) {
+                    knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                            ": bean declares scope other than @Dependent and may not inject InjectionPoint with qualifier @Default");
+                    valid = false;
+                }
+            }
+        }
+
+        if (isBeanMetadataType(injectionPoint) || isInterceptorMetadataType(injectionPoint)) {
+            valid = validateBeanAndInterceptorMetadataUsage(injectionPoint, disposerParameter) && valid;
+        }
+
+        return valid;
+    }
+
+    private boolean isInjectionPointMetadataType(AnnotatedElement injectionPoint) {
+        if (injectionPoint instanceof Field) {
+            return InjectionPoint.class.equals(((Field) injectionPoint).getType());
+        }
+        if (injectionPoint instanceof Parameter) {
+            return InjectionPoint.class.equals(((Parameter) injectionPoint).getType());
+        }
+        return false;
+    }
+
+    private Class<?> declaringClassOf(AnnotatedElement injectionPoint) {
+        if (injectionPoint instanceof Field) {
+            return ((Field) injectionPoint).getDeclaringClass();
+        }
+        if (injectionPoint instanceof Parameter) {
+            return ((Parameter) injectionPoint).getDeclaringExecutable().getDeclaringClass();
+        }
+        return null;
+    }
+
+    private boolean validateBeanAndInterceptorMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter) {
+        boolean beanMetadata = isBeanMetadataType(injectionPoint);
+        boolean interceptorMetadata = isInterceptorMetadataType(injectionPoint);
+        if (!beanMetadata && !interceptorMetadata) {
+            return true;
+        }
+
+        Class<?> declaringClass = declaringClassOf(injectionPoint);
+        boolean interceptorDeclaringClass = declaringClass != null && isInterceptorClass(declaringClass);
+        boolean interceptedQualified = hasQualifier(injectionPoint.getAnnotations(), Intercepted.class.getName());
+        boolean defaultQualified = hasDefaultQualifier(injectionPoint.getAnnotations());
+        Type metadataArgument = getSingleTypeArgument(injectionPoint);
+
+        if (interceptorMetadata && !interceptorDeclaringClass) {
+            knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                    ": Interceptor metadata may only be injected into interceptor instances");
+            return false;
+        }
+
+        if (interceptedQualified) {
+            if (!beanMetadata) {
+                knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                        ": qualifier @Intercepted may only be used with Bean metadata");
+                return false;
+            }
+            if (!interceptorDeclaringClass) {
+                knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                        ": Bean metadata with qualifier @Intercepted may only be injected into interceptor instances");
+                return false;
+            }
+            if (!isUnboundedWildcard(metadataArgument)) {
+                knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                        ": Bean metadata with qualifier @Intercepted must use an unbounded wildcard type parameter");
+                return false;
+            }
+            return true;
+        }
+
+        if (disposerParameter) {
+            knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                    ": disposer method parameter may not inject Bean or Interceptor metadata");
+            return false;
+        }
+
+        if (defaultQualified) {
+            if (injectionPoint instanceof Field ||
+                    isBeanConstructorParameter(injectionPoint) ||
+                    isInitializerMethodParameter(injectionPoint)) {
+                if (declaringClass == null || !isSameType(metadataArgument, declaringClass)) {
+                    String expected = declaringClass == null ? "<unknown>" : declaringClass.getTypeName();
+                    knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                            ": Bean/Interceptor metadata with qualifier @Default must declare type parameter " + expected);
+                    return false;
+                }
+                return true;
+            }
+
+            if (isProducerMethodParameter(injectionPoint)) {
+                Method producerMethod = (Method) ((Parameter) injectionPoint).getDeclaringExecutable();
+                Type expectedType = producerMethod.getGenericReturnType();
+                if (!isSameType(metadataArgument, expectedType)) {
+                    knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                            ": producer method parameter Bean metadata type must match producer return type " +
+                            expectedType.getTypeName());
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean isBeanMetadataType(AnnotatedElement injectionPoint) {
+        Type rawType = metadataRawType(injectionPoint);
+        return rawType instanceof Class && Bean.class.equals(rawType);
+    }
+
+    private boolean isInterceptorMetadataType(AnnotatedElement injectionPoint) {
+        Type rawType = metadataRawType(injectionPoint);
+        return rawType instanceof Class && Interceptor.class.equals(rawType);
+    }
+
+    private Type metadataRawType(AnnotatedElement injectionPoint) {
+        Type genericType = metadataGenericType(injectionPoint);
+        if (!(genericType instanceof ParameterizedType)) {
+            return null;
+        }
+        return ((ParameterizedType) genericType).getRawType();
+    }
+
+    private Type metadataGenericType(AnnotatedElement injectionPoint) {
+        if (injectionPoint instanceof Field) {
+            return ((Field) injectionPoint).getGenericType();
+        }
+        if (injectionPoint instanceof Parameter) {
+            return ((Parameter) injectionPoint).getParameterizedType();
+        }
+        return null;
+    }
+
+    private Type getSingleTypeArgument(AnnotatedElement injectionPoint) {
+        Type genericType = metadataGenericType(injectionPoint);
+        if (!(genericType instanceof ParameterizedType)) {
+            return null;
+        }
+        Type[] args = ((ParameterizedType) genericType).getActualTypeArguments();
+        return args.length == 1 ? args[0] : null;
+    }
+
+    private boolean isUnboundedWildcard(Type type) {
+        if (!(type instanceof WildcardType)) {
+            return false;
+        }
+        WildcardType wildcardType = (WildcardType) type;
+        Type[] uppers = wildcardType.getUpperBounds();
+        Type[] lowers = wildcardType.getLowerBounds();
+        return lowers.length == 0 && uppers.length == 1 && Object.class.equals(uppers[0]);
+    }
+
+    private boolean isBeanConstructorParameter(AnnotatedElement injectionPoint) {
+        if (!(injectionPoint instanceof Parameter)) {
+            return false;
+        }
+        return ((Parameter) injectionPoint).getDeclaringExecutable() instanceof Constructor;
+    }
+
+    private boolean isInitializerMethodParameter(AnnotatedElement injectionPoint) {
+        if (!(injectionPoint instanceof Parameter)) {
+            return false;
+        }
+        Executable executable = ((Parameter) injectionPoint).getDeclaringExecutable();
+        if (!(executable instanceof Method)) {
+            return false;
+        }
+        Method method = (Method) executable;
+        return hasInjectAnnotation(method) && !hasProducesAnnotation(method);
+    }
+
+    private boolean isProducerMethodParameter(AnnotatedElement injectionPoint) {
+        if (!(injectionPoint instanceof Parameter)) {
+            return false;
+        }
+        Executable executable = ((Parameter) injectionPoint).getDeclaringExecutable();
+        return executable instanceof Method && hasProducesAnnotation((Method) executable);
+    }
+
+    private boolean isSameType(Type left, Type right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        return left.getTypeName().equals(right.getTypeName());
+    }
+
+    private boolean isInterceptorClass(Class<?> clazz) {
+        for (Annotation annotation : annotationsOf(clazz)) {
+            String name = annotation.annotationType().getName();
+            if ("jakarta.interceptor.Interceptor".equals(name) ||
+                    "javax.interceptor.Interceptor".equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasQualifier(Annotation[] annotations, String qualifierTypeName) {
+        Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(annotations);
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier.annotationType().getName().equals(qualifierTypeName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean declaresNonDependentScope(Class<?> clazz) {
+        for (Annotation annotation : annotationsOf(clazz)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (annotationType.equals(Dependent.class) ||
+                    "javax.enterprise.context.Dependent".equals(annotationType.getName())) {
+                continue;
+            }
+            if (hasMetaAnnotation(annotationType, Scope.class) ||
+                    hasMetaAnnotation(annotationType, NormalScope.class)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasDefaultQualifier(Annotation[] annotations) {
+        Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(annotations);
+        if (qualifiers.isEmpty()) {
+            return true;
+        }
+        for (Annotation qualifier : qualifiers) {
+            String typeName = qualifier.annotationType().getName();
+            if ("jakarta.enterprise.inject.Default".equals(typeName) ||
+                    "javax.enterprise.inject.Default".equals(typeName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean hasAnyProducer(Class<?> clazz) {

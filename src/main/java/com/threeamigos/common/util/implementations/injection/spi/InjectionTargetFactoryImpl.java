@@ -84,7 +84,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             finalType = ((AnnotatedTypeConfiguratorImpl<T>) configurator).complete();
         }
 
-        return new InjectionTargetImpl<>(finalType, beanManager);
+        return new InjectionTargetImpl<>(finalType, beanManager, bean);
     }
 
     /**
@@ -108,11 +108,13 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
     private static class InjectionTargetImpl<T> implements InjectionTarget<T> {
         private final AnnotatedType<T> annotatedType;
         private final BeanManager beanManager;
+        private final Bean<T> bean;
         private final Set<InjectionPoint> injectionPoints;
 
-        public InjectionTargetImpl(AnnotatedType<T> annotatedType, BeanManager beanManager) {
+        public InjectionTargetImpl(AnnotatedType<T> annotatedType, BeanManager beanManager, Bean<T> bean) {
             this.annotatedType = annotatedType;
             this.beanManager = beanManager;
+            this.bean = bean;
             this.injectionPoints = discoverInjectionPoints();
         }
 
@@ -264,7 +266,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
                 if (hasInjectAnnotation(constructor)) {
                     for (java.lang.reflect.Parameter param : constructor.getParameters()) {
-                        points.add(new InjectionPointImpl(param, null));
+                        points.add(new InjectionPointImpl(param, bean));
                     }
                 }
             }
@@ -273,7 +275,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             for (Class<?> clazz : hierarchy) {
                 for (Field field : clazz.getDeclaredFields()) {
                     if (hasInjectAnnotation(field)) {
-                        points.add(new InjectionPointImpl(field, null));
+                        points.add(new InjectionPointImpl(field, bean));
                     }
                 }
             }
@@ -283,7 +285,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 for (Method method : clazz.getDeclaredMethods()) {
                     if (hasInjectAnnotation(method)) {
                         for (java.lang.reflect.Parameter param : method.getParameters()) {
-                            points.add(new InjectionPointImpl(param, null));
+                            points.add(new InjectionPointImpl(param, bean));
                         }
                     }
                 }
@@ -356,11 +358,11 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private InjectionPoint createInjectionPoint(Field field, Type resolvedType) {
-            return new ResolvedInjectionPoint(new InjectionPointImpl(field, null), resolvedType);
+            return new ResolvedInjectionPoint(new InjectionPointImpl(field, bean), resolvedType);
         }
 
         private InjectionPoint createInjectionPoint(Parameter parameter, Type resolvedType) {
-            return new ResolvedInjectionPoint(new InjectionPointImpl(parameter, null), resolvedType);
+            return new ResolvedInjectionPoint(new InjectionPointImpl(parameter, bean), resolvedType);
         }
 
         private Object defaultPrimitiveValue(Class<?> primitiveType) {
