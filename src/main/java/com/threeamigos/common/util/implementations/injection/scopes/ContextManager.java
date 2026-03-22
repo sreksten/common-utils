@@ -278,6 +278,14 @@ public class ContextManager {
         if (context == null) {
             throw new IllegalArgumentException("Context cannot be null");
         }
+        if (ApplicationScoped.class.equals(scopeAnnotation)
+                || Dependent.class.equals(scopeAnnotation)
+                || RequestScoped.class.equals(scopeAnnotation)
+                || SessionScoped.class.equals(scopeAnnotation)
+                || ConversationScoped.class.equals(scopeAnnotation)) {
+            throw new IllegalArgumentException(
+                    "Custom contexts cannot be registered for built-in scope @" + scopeAnnotation.getSimpleName());
+        }
         contexts.put(scopeAnnotation, context);
     }
 

@@ -141,7 +141,7 @@ public class CDI41BeanValidator {
         }
 
         if (clazz.isLocalClass() || clazz.isAnonymousClass() || clazz.isSynthetic()) {
-            knowledgeBase.addDefinitionError(clazz.getName() + ": is not a valid CDI bean class (local/anonymous/synthetic)");
+            // Compiler-generated helper classes can appear during discovery and must be ignored.
             return null;
         }
 
