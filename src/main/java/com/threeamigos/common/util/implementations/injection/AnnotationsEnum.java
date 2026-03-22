@@ -338,6 +338,41 @@ public enum AnnotationsEnum {
     ACTIVATE_REQUEST_CONTEXT(jakarta.enterprise.context.control.ActivateRequestContext.class),
 
     /**
+     * Declares a build compatible extension method executed during discovery phase.
+     * Maps: {@code jakarta.enterprise.inject.build.compatible.spi.Discovery}
+     * Since: CDI 4.0
+     */
+    DISCOVERY(jakarta.enterprise.inject.build.compatible.spi.Discovery.class),
+
+    /**
+     * Declares a build compatible extension method executed during enhancement phase.
+     * Maps: {@code jakarta.enterprise.inject.build.compatible.spi.Enhancement}
+     * Since: CDI 4.0
+     */
+    ENHANCEMENT(jakarta.enterprise.inject.build.compatible.spi.Enhancement.class),
+
+    /**
+     * Declares a build compatible extension method executed during registration phase.
+     * Maps: {@code jakarta.enterprise.inject.build.compatible.spi.Registration}
+     * Since: CDI 4.0
+     */
+    REGISTRATION(jakarta.enterprise.inject.build.compatible.spi.Registration.class),
+
+    /**
+     * Declares a build compatible extension method executed during synthesis phase.
+     * Maps: {@code jakarta.enterprise.inject.build.compatible.spi.Synthesis}
+     * Since: CDI 4.0
+     */
+    SYNTHESIS(jakarta.enterprise.inject.build.compatible.spi.Synthesis.class),
+
+    /**
+     * Declares a build compatible extension method executed during validation phase.
+     * Maps: {@code jakarta.enterprise.inject.build.compatible.spi.Validation}
+     * Since: CDI 4.0
+     */
+    VALIDATION(jakarta.enterprise.inject.build.compatible.spi.Validation.class),
+
+    /**
      * Conditional lookup filter based on a configuration property value.
      * Maps: {@code jakarta.enterprise.inject.LookupIfProperty}
      * Since: CDI 4.0
@@ -689,6 +724,41 @@ public enum AnnotationsEnum {
      */
     public static boolean hasActivateRequestContextAnnotation(AnnotatedElement element) {
         return ACTIVATE_REQUEST_CONTEXT.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @Discovery annotation (jakarta).
+     */
+    public static boolean hasDiscoveryAnnotation(AnnotatedElement element) {
+        return DISCOVERY.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has an @Enhancement annotation (jakarta).
+     */
+    public static boolean hasEnhancementAnnotation(AnnotatedElement element) {
+        return ENHANCEMENT.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @Registration annotation (jakarta).
+     */
+    public static boolean hasRegistrationAnnotation(AnnotatedElement element) {
+        return REGISTRATION.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @Synthesis annotation (jakarta).
+     */
+    public static boolean hasSynthesisAnnotation(AnnotatedElement element) {
+        return SYNTHESIS.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @Validation annotation (jakarta).
+     */
+    public static boolean hasValidationAnnotation(AnnotatedElement element) {
+        return VALIDATION.isPresent(element);
     }
 
     /**

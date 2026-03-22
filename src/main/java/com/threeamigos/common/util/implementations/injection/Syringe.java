@@ -46,6 +46,7 @@ import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
@@ -1679,8 +1680,20 @@ public class Syringe {
             try {
                 invocation.invoke(event);
             } catch (Exception e) {
-                log("Error invoking extension " + invocation.extension.getClass().getName() +
-                        " for event " + eventType.getSimpleName(), e);
+                Throwable cause = e;
+                if (e instanceof InvocationTargetException &&
+                    ((InvocationTargetException) e).getTargetException() != null) {
+                    cause = ((InvocationTargetException) e).getTargetException();
+                }
+                if (cause instanceof DefinitionException) {
+                    throw (DefinitionException) cause;
+                }
+                if (cause instanceof RuntimeException) {
+                    throw (RuntimeException) cause;
+                }
+                throw new DefinitionException("Error invoking extension " +
+                    invocation.extension.getClass().getName() + " for event " +
+                    eventType.getSimpleName(), cause);
             }
         }
     }
