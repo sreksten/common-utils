@@ -2,6 +2,9 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.bce.BuildCompatibleExtensionRunner;
+import com.threeamigos.common.util.implementations.injection.bce.BuildCompatibleExtensionSupport;
+import com.threeamigos.common.util.implementations.injection.bce.BceInvokerRegistry;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.BeanManagerBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ConversationBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.InjectionPointBean;
@@ -42,6 +45,7 @@ import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.IllegalProductException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
+import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
@@ -127,6 +131,10 @@ public class Syringe {
      * Extensions must implement jakarta.enterprise.inject.spi.Extension.
      */
     private final Set<String> extensionClassNames = new HashSet<>();
+    /**
+     * Set of build compatible extension class names to be loaded.
+     */
+    private final Set<String> buildCompatibleExtensionClassNames = new HashSet<>();
 
     /**
      * Optional forced bean archive mode used during validation/discovery processing.
@@ -144,6 +152,16 @@ public class Syringe {
      * Loaded extension instances.
      */
     private final List<Extension> extensions = new ArrayList<>();
+    /**
+     * Loaded build compatible extension instances.
+     */
+    private final List<BuildCompatibleExtension> buildCompatibleExtensions = new ArrayList<>();
+
+    /**
+     * BCE phase runner.
+     */
+    private BuildCompatibleExtensionRunner buildCompatibleExtensionRunner;
+    private final BceInvokerRegistry bceInvokerRegistry = new BceInvokerRegistry();
 
     /**
      * The BeanManager - central interface for programmatic CDI access.
@@ -208,6 +226,20 @@ public class Syringe {
         }
         extensionClassNames.add(extensionClassName);
         info("Queued extension: " + extensionClassName);
+    }
+
+    /**
+     * Registers a build compatible extension by class name.
+     * Build compatible extensions are loaded and invoked during {@link #setup()} BCE checkpoints.
+     *
+     * @param extensionClassName fully qualified class name of the build compatible extension
+     */
+    public void addBuildCompatibleExtension(String extensionClassName) {
+        if (initialized) {
+            throw new IllegalStateException("Cannot add build compatible extensions after container initialization");
+        }
+        buildCompatibleExtensionClassNames.add(extensionClassName);
+        info("Queued build compatible extension: " + extensionClassName);
     }
 
     /**
@@ -373,9 +405,12 @@ public class Syringe {
 
         // Step 1.1: Load portable extensions via ServiceLoader + explicitly registered
         loadExtensions();
+        loadBuildCompatibleExtensions();
 
         // Step 1.2: Create BeanManager
         beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
+        buildCompatibleExtensionRunner = new BuildCompatibleExtensionRunner(
+            messageHandler, knowledgeBase, beanManager, bceInvokerRegistry);
 
         // Register CDI built-in beans before any processing/validation
         registerBuiltInBeans();
@@ -385,6 +420,7 @@ public class Syringe {
         // - Add new qualifiers, scopes, stereotypes, interceptor bindings
         // - Register additional beans programmatically
         fireBeforeBeanDiscovery();
+        fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.DISCOVERY);
     }
 
     /**
@@ -494,6 +530,7 @@ public class Syringe {
             // - Add/remove/modify annotations
             // - Wrap AnnotatedType to customize metadata
             processAnnotatedTypes();
+            fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.ENHANCEMENT);
 
             // ============================================================
             // PHASE 3: BEAN PROCESSING
@@ -532,6 +569,7 @@ public class Syringe {
             // Step 3.7: Fire ProcessObserverMethod<T, X> events
             // Extensions can modify observer method metadata
             processObserverMethods();
+            fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION);
 
             // ============================================================
             // PHASE 4: AFTER BEAN DISCOVERY
@@ -545,6 +583,7 @@ public class Syringe {
             // - Add observer methods programmatically
             // - Register interceptors and decorators
             fireAfterBeanDiscovery();
+            fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.SYNTHESIS);
 
             // Extensions may add beans programmatically during AfterBeanDiscovery.
             // Re-apply dependency resolver wiring to cover newly registered BeanImpl/ProducerBean instances.
@@ -562,6 +601,7 @@ public class Syringe {
             // - Validate specialization
             // - Validate alternatives
             validateDeployment();
+            fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.VALIDATION);
 
             // Step 5.2: Fire AfterDeploymentValidation event
             // Extensions can perform final validation checks
@@ -698,6 +738,7 @@ public class Syringe {
 
         // Clear state
         extensions.clear();
+        buildCompatibleExtensions.clear();
         initialized = false;
 
         info("Container shutdown complete");
@@ -718,6 +759,7 @@ public class Syringe {
      */
     private void loadExtensions() {
         info("Loading extensions");
+        Set<String> loadedExtensionClassNames = new HashSet<String>();
 
         // Load extensions via ServiceLoader (standard CDI discovery)
         ServiceLoader<Extension> serviceLoader = ServiceLoader.load(
@@ -726,8 +768,11 @@ public class Syringe {
         );
 
         for (Extension extension : serviceLoader) {
-            extensions.add(extension);
-            info("Loaded extension: " + extension.getClass().getName());
+            String className = extension.getClass().getName();
+            if (loadedExtensionClassNames.add(className)) {
+                extensions.add(extension);
+                info("Loaded extension: " + className);
+            }
         }
 
         int loadedCount = extensions.size();
@@ -739,9 +784,13 @@ public class Syringe {
                 if (!Extension.class.isAssignableFrom(extensionClass)) {
                     knowledgeBase.addDefinitionError("Extension class " + className + " does not implement the jakarta.enterprise.inject.spi.Extension interface");
                 } else {
-                    Extension extension = (Extension) extensionClass.getDeclaredConstructor().newInstance();
-                    extensions.add(extension);
-                    info("Loaded extension: " + className);
+                    if (loadedExtensionClassNames.add(className)) {
+                        Extension extension = (Extension) extensionClass.getDeclaredConstructor().newInstance();
+                        extensions.add(extension);
+                        info("Loaded extension: " + className);
+                    } else {
+                        info("Skipped duplicate extension registration: " + className);
+                    }
                 }
                 loadedCount++;
             } catch (Exception e) {
@@ -751,6 +800,54 @@ public class Syringe {
         }
 
         info("Loaded " + loadedCount + " extension(s)");
+    }
+
+    /**
+     * Loads build compatible extensions via ServiceLoader and explicitly registered class names.
+     */
+    private void loadBuildCompatibleExtensions() {
+        info("Loading build compatible extensions");
+        Set<String> loadedBceClassNames = new HashSet<String>();
+
+        ServiceLoader<BuildCompatibleExtension> serviceLoader = ServiceLoader.load(
+            BuildCompatibleExtension.class,
+            Thread.currentThread().getContextClassLoader()
+        );
+
+        for (BuildCompatibleExtension extension : serviceLoader) {
+            String className = extension.getClass().getName();
+            if (loadedBceClassNames.add(className)) {
+                buildCompatibleExtensions.add(extension);
+                info("Loaded build compatible extension: " + className);
+            }
+        }
+
+        int loadedCount = buildCompatibleExtensions.size();
+
+        for (String className : buildCompatibleExtensionClassNames) {
+            try {
+                Class<?> extensionClass = Class.forName(className);
+                if (!BuildCompatibleExtension.class.isAssignableFrom(extensionClass)) {
+                    knowledgeBase.addDefinitionError("Build compatible extension class " + className +
+                        " does not implement jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension");
+                } else {
+                    if (loadedBceClassNames.add(className)) {
+                        BuildCompatibleExtension extension =
+                            (BuildCompatibleExtension) extensionClass.getDeclaredConstructor().newInstance();
+                        buildCompatibleExtensions.add(extension);
+                        info("Loaded build compatible extension: " + className);
+                    } else {
+                        info("Skipped duplicate build compatible extension registration: " + className);
+                    }
+                }
+                loadedCount++;
+            } catch (Exception e) {
+                knowledgeBase.addDefinitionError("Failed to load build compatible extension: " + className);
+                log("Failed to load build compatible extension: " + className, e);
+            }
+        }
+
+        info("Loaded " + loadedCount + " build compatible extension(s)");
     }
 
     // ============================================================
@@ -1067,7 +1164,7 @@ public class Syringe {
 
                     @SuppressWarnings({"rawtypes", "unchecked"})
                     ProcessManagedBeanImpl<?> event = new ProcessManagedBeanImpl(messageHandler, knowledgeBase,
-                         managedBean, annotatedType);
+                         managedBean, annotatedType, beanManager);
                     fireEventToExtensions(event);
                     managedCount++;
 
@@ -1633,6 +1730,14 @@ public class Syringe {
         info("Firing BeforeShutdown event");
         BeforeShutdown event = new BeforeShutdownImpl();
         fireEventToExtensions(event);
+    }
+
+    private void fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase phase) {
+        if (buildCompatibleExtensionRunner == null || buildCompatibleExtensions.isEmpty()) {
+            return;
+        }
+        info("Firing BCE phase: " + phase);
+        buildCompatibleExtensionRunner.runPhase(phase, buildCompatibleExtensions);
     }
 
     /**

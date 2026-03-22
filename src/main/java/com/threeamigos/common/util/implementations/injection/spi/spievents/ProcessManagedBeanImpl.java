@@ -18,13 +18,22 @@ import jakarta.enterprise.invoke.Invoker;
 import jakarta.enterprise.invoke.InvokerBuilder;
 import jakarta.enterprise.inject.spi.ProcessManagedBean;
 import jakarta.interceptor.Interceptor;
+import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.context.spi.CreationalContext;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Future;
+import java.util.concurrent.CompletionStage;
 
 /**
  * ProcessManagedBean event implementation.
@@ -37,11 +46,18 @@ import java.util.Set;
 public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements ProcessManagedBean<T> {
 
     private final AnnotatedType<T> annotatedType;
+    private final BeanManager beanManager;
 
     public ProcessManagedBeanImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<T> bean,
                                   AnnotatedType<T> annotatedType) {
+        this(messageHandler, knowledgeBase, bean, annotatedType, null);
+    }
+
+    public ProcessManagedBeanImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<T> bean,
+                                  AnnotatedType<T> annotatedType, BeanManager beanManager) {
         super(messageHandler, knowledgeBase, bean, annotatedType);
         this.annotatedType = annotatedType;
+        this.beanManager = beanManager;
     }
 
     @Override
@@ -61,7 +77,7 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
         validateTargetBean();
         validateTargetMethod(javaMethod);
         validateNonPortableTargetMethod(javaMethod);
-        return new SimpleInvokerBuilder<>(javaMethod, bean.getBeanClass());
+        return new SimpleInvokerBuilder<>(javaMethod, bean, bean.getBeanClass(), beanManager);
     }
 
     /**
@@ -181,28 +197,49 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
 
     private static class SimpleInvokerBuilder<T> implements InvokerBuilder<Invoker<T, ?>> {
         private final Method javaMethod;
+        private final Bean<T> bean;
         private final Class<?> targetBeanClass;
+        private final BeanManager beanManager;
+        private boolean instanceLookup;
+        private final Set<Integer> argumentLookups = new LinkedHashSet<Integer>();
 
-        SimpleInvokerBuilder(Method javaMethod, Class<?> targetBeanClass) {
+        SimpleInvokerBuilder(Method javaMethod, Bean<T> bean, Class<?> targetBeanClass, BeanManager beanManager) {
             this.javaMethod = javaMethod;
+            this.bean = bean;
             this.targetBeanClass = targetBeanClass;
+            this.beanManager = beanManager;
         }
 
         @Override
         public InvokerBuilder<Invoker<T, ?>> withInstanceLookup() {
+            ensureNotAsyncTargetMethod();
+            this.instanceLookup = true;
             return this;
         }
 
         @Override
         public InvokerBuilder<Invoker<T, ?>> withArgumentLookup(int position) {
+            ensureNotAsyncTargetMethod();
+            int paramCount = javaMethod.getParameterCount();
+            if (position < 0 || position >= paramCount) {
+                throw new IllegalArgumentException(
+                    "withArgumentLookup position must be in [0, " + (paramCount - 1) + "] for " + javaMethod);
+            }
+            this.argumentLookups.add(position);
             return this;
         }
 
         @Override
         public Invoker<T, ?> build() {
+            final Bean<?> instanceBean = resolveInstanceLookupBeanIfNeeded();
+            final List<LookupPlan> lookupPlans = resolveArgumentLookupBeans();
             return (instance, parameters) -> {
+                LookupContext lookupContext = new LookupContext(beanManager);
                 try {
                     if (!Modifier.isStatic(javaMethod.getModifiers())) {
+                        if (instanceLookup) {
+                            instance = (T) lookupContext.lookup(instanceBean, javaMethod.getDeclaringClass());
+                        }
                         if (instance == null) {
                             throw new IllegalArgumentException("Invoker requires non-null instance for non-static method: " + javaMethod);
                         }
@@ -213,6 +250,7 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
                         }
                     }
                     Object[] invocationArgs = adaptArguments(javaMethod, parameters);
+                    applyArgumentLookups(invocationArgs, lookupPlans, lookupContext);
                     if (!javaMethod.isAccessible()) {
                         javaMethod.setAccessible(true);
                     }
@@ -223,6 +261,8 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
                         throw (Exception) target;
                     }
                     throw new RuntimeException(target);
+                } finally {
+                    lookupContext.destroyDependents();
                 }
             };
         }
@@ -248,6 +288,126 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
             Object[] effectiveArgs = new Object[declaredParamCount];
             System.arraycopy(providedArguments, 0, effectiveArgs, 0, declaredParamCount);
             return effectiveArgs;
+        }
+
+        private void applyArgumentLookups(Object[] invocationArgs, List<LookupPlan> plans, LookupContext lookupContext) {
+            for (LookupPlan plan : plans) {
+                invocationArgs[plan.position] = lookupContext.lookup(plan.bean, plan.requiredType);
+            }
+        }
+
+        private Bean<?> resolveInstanceLookupBeanIfNeeded() {
+            if (!instanceLookup || Modifier.isStatic(javaMethod.getModifiers())) {
+                return null;
+            }
+            if (beanManager == null) {
+                throw new DefinitionException("Invoker withInstanceLookup requires BeanManager");
+            }
+            return resolveUniqueBean(javaMethod.getDeclaringClass(), new Annotation[0]);
+        }
+
+        private List<LookupPlan> resolveArgumentLookupBeans() {
+            List<LookupPlan> plans = new ArrayList<LookupPlan>();
+            if (argumentLookups.isEmpty()) {
+                return plans;
+            }
+            if (beanManager == null) {
+                throw new DefinitionException("Invoker withArgumentLookup requires BeanManager");
+            }
+            Parameter[] parameters = javaMethod.getParameters();
+            for (Integer position : argumentLookups) {
+                Parameter parameter = parameters[position];
+                Annotation[] qualifiers = extractQualifiers(parameter.getAnnotations());
+                Bean<?> lookedUpBean = resolveUniqueBean(parameter.getParameterizedType(), qualifiers);
+                plans.add(new LookupPlan(position, parameter.getParameterizedType(), lookedUpBean));
+            }
+            return plans;
+        }
+
+        private Annotation[] extractQualifiers(Annotation[] annotations) {
+            List<Annotation> qualifiers = new ArrayList<Annotation>();
+            for (Annotation annotation : annotations) {
+                if (beanManager.isQualifier(annotation.annotationType())) {
+                    qualifiers.add(annotation);
+                }
+            }
+            return qualifiers.toArray(new Annotation[qualifiers.size()]);
+        }
+
+        private Bean<?> resolveUniqueBean(Type requiredType, Annotation[] qualifiers) {
+            Set<Bean<?>> beans = beanManager.getBeans(requiredType, qualifiers);
+            if (beans == null || beans.isEmpty()) {
+                throw new DefinitionException("Unsatisfied looked up bean for type " + requiredType);
+            }
+            Bean<?> resolved = beanManager.resolve(beans);
+            if (resolved == null) {
+                throw new DefinitionException("Ambiguous looked up bean for type " + requiredType);
+            }
+            return resolved;
+        }
+
+        private void ensureNotAsyncTargetMethod() {
+            Class<?> returnType = javaMethod.getReturnType();
+            if (Future.class.isAssignableFrom(returnType) || CompletionStage.class.isAssignableFrom(returnType)) {
+                throw new NonPortableBehaviourException(
+                    "Invoker lookup configuration for asynchronous target methods is non-portable: " + javaMethod);
+            }
+        }
+    }
+
+    private static final class LookupPlan {
+        private final int position;
+        private final Type requiredType;
+        private final Bean<?> bean;
+
+        private LookupPlan(int position, Type requiredType, Bean<?> bean) {
+            this.position = position;
+            this.requiredType = requiredType;
+            this.bean = bean;
+        }
+    }
+
+    private static final class LookupContext {
+        private final BeanManager beanManager;
+        private final List<DependentHandle> dependentHandles = new ArrayList<DependentHandle>();
+
+        private LookupContext(BeanManager beanManager) {
+            this.beanManager = beanManager;
+        }
+
+        private Object lookup(Bean<?> bean, Type requiredType) {
+            Bean<Object> typedBean = (Bean<Object>) bean;
+            CreationalContext<Object> ctx = (CreationalContext<Object>) beanManager.createCreationalContext(typedBean);
+            Object reference = beanManager.getReference(typedBean, requiredType, ctx);
+            if (bean.getScope() == Dependent.class ||
+                "javax.enterprise.context.Dependent".equals(bean.getScope().getName())) {
+                dependentHandles.add(new DependentHandle(typedBean, reference, ctx));
+            }
+            return reference;
+        }
+
+        private void destroyDependents() {
+            for (DependentHandle handle : dependentHandles) {
+                handle.destroy();
+            }
+            dependentHandles.clear();
+        }
+    }
+
+    private static final class DependentHandle {
+        private final Bean<Object> bean;
+        private final Object instance;
+        private final CreationalContext<Object> creationalContext;
+
+        private DependentHandle(Bean<Object> bean, Object instance, CreationalContext<Object> creationalContext) {
+            this.bean = bean;
+            this.instance = instance;
+            this.creationalContext = creationalContext;
+        }
+
+        private void destroy() {
+            bean.destroy(instance, creationalContext);
+            creationalContext.release();
         }
     }
 }
