@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.spi.AnnotatedMethod;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
@@ -339,7 +340,12 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
             if (beans == null || beans.isEmpty()) {
                 throw new DefinitionException("Unsatisfied looked up bean for type " + requiredType);
             }
-            Bean<?> resolved = beanManager.resolve(beans);
+            Bean<?> resolved;
+            try {
+                resolved = beanManager.resolve(beans);
+            } catch (AmbiguousResolutionException e) {
+                throw new DefinitionException("Ambiguous looked up bean for type " + requiredType, e);
+            }
             if (resolved == null) {
                 throw new DefinitionException("Ambiguous looked up bean for type " + requiredType);
             }

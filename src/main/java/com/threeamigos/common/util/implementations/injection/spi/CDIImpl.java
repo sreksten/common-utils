@@ -1,12 +1,21 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.BeanContainer;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
 
 /**
@@ -31,8 +40,19 @@ import java.util.stream.Stream;
  */
 public class CDIImpl extends CDI<Object> {
 
+    private static final BooleanSupplier ALWAYS_ALLOWED = new BooleanSupplier() {
+        @Override
+        public boolean getAsBoolean() {
+            return true;
+        }
+    };
+
+    private static final Set<String> BEAN_CONTAINER_METHOD_SIGNATURES = beanContainerMethodSignatures();
+
     private final BeanManagerImpl beanManager;
+    private final BeanManager beanManagerView;
     private final Instance<Object> rootInstance;
+    private final BooleanSupplier accessGuard;
 
     /**
      * Creates a new CDI implementation wrapping the given BeanManager.
@@ -40,10 +60,16 @@ public class CDIImpl extends CDI<Object> {
      * @param beanManager The BeanManager to wrap
      */
     public CDIImpl(BeanManagerImpl beanManager) {
+        this(beanManager, false, ALWAYS_ALLOWED);
+    }
+
+    public CDIImpl(BeanManagerImpl beanManager, boolean cdiLiteMode, BooleanSupplier accessGuard) {
         if (beanManager == null) {
             throw new IllegalArgumentException("beanManager cannot be null");
         }
         this.beanManager = beanManager;
+        this.accessGuard = accessGuard != null ? accessGuard : ALWAYS_ALLOWED;
+        this.beanManagerView = cdiLiteMode ? createLiteBeanManagerView(beanManager) : beanManager;
 
         // Create root Instance<Object> for programmatic lookup
         // This gives us access to all beans in the container
@@ -64,7 +90,8 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public BeanManager getBeanManager() {
-        return beanManager;
+        ensurePortableAccessWindow();
+        return beanManagerView;
     }
 
     // ========================================================================
@@ -81,6 +108,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public <U> Instance<U> select(Class<U> subtype, Annotation... qualifiers) {
+        ensurePortableAccessWindow();
         return rootInstance.select(subtype, qualifiers);
     }
 
@@ -94,6 +122,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public <U> Instance<U> select(TypeLiteral<U> subtype, Annotation... qualifiers) {
+        ensurePortableAccessWindow();
         return rootInstance.select(subtype, qualifiers);
     }
 
@@ -105,6 +134,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public boolean isAmbiguous() {
+        ensurePortableAccessWindow();
         return rootInstance.isAmbiguous();
     }
 
@@ -116,6 +146,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public boolean isUnsatisfied() {
+        ensurePortableAccessWindow();
         return rootInstance.isUnsatisfied();
     }
 
@@ -127,6 +158,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public boolean isResolvable() {
+        ensurePortableAccessWindow();
         return rootInstance.isResolvable();
     }
 
@@ -139,6 +171,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public Object get() {
+        ensurePortableAccessWindow();
         return rootInstance.get();
     }
 
@@ -149,6 +182,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public Iterator<Object> iterator() {
+        ensurePortableAccessWindow();
         return rootInstance.iterator();
     }
 
@@ -159,6 +193,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public Stream<Object> stream() {
+        ensurePortableAccessWindow();
         return rootInstance.stream();
     }
 
@@ -169,6 +204,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public Handle<Object> getHandle() {
+        ensurePortableAccessWindow();
         return rootInstance.getHandle();
     }
 
@@ -179,6 +215,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public Iterable<? extends Handle<Object>> handles() {
+        ensurePortableAccessWindow();
         return rootInstance.handles();
     }
 
@@ -189,6 +226,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public Stream<? extends Handle<Object>> handlesStream() {
+        ensurePortableAccessWindow();
         return rootInstance.handlesStream();
     }
 
@@ -199,6 +237,7 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public void destroy(Object instance) {
+        ensurePortableAccessWindow();
         rootInstance.destroy(instance);
     }
 
@@ -210,6 +249,52 @@ public class CDIImpl extends CDI<Object> {
      */
     @Override
     public Instance<Object> select(Annotation... qualifiers) {
+        ensurePortableAccessWindow();
         return rootInstance.select(qualifiers);
+    }
+
+    private void ensurePortableAccessWindow() {
+        if (!accessGuard.getAsBoolean()) {
+            throw new NonPortableBehaviourException(
+                "CDI methods may only be invoked after initialization is complete and before shutdown starts");
+        }
+    }
+
+    private BeanManager createLiteBeanManagerView(final BeanManager delegate) {
+        InvocationHandler handler = new InvocationHandler() {
+            @Override
+            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                if (method.getDeclaringClass() == Object.class) {
+                    return method.invoke(delegate, args);
+                }
+                if (!isBeanContainerMethod(method)) {
+                    throw new NonPortableBehaviourException(
+                        "Invoking BeanManager methods not inherited from BeanContainer is non-portable in CDI Lite: " +
+                            method.toString());
+                }
+                return method.invoke(delegate, args);
+            }
+        };
+        return (BeanManager) Proxy.newProxyInstance(
+            BeanManager.class.getClassLoader(),
+            new Class[]{BeanManager.class},
+            handler
+        );
+    }
+
+    private static Set<String> beanContainerMethodSignatures() {
+        Set<String> signatures = new HashSet<String>();
+        for (Method method : BeanContainer.class.getMethods()) {
+            signatures.add(signatureOf(method));
+        }
+        return signatures;
+    }
+
+    private static boolean isBeanContainerMethod(Method method) {
+        return BEAN_CONTAINER_METHOD_SIGNATURES.contains(signatureOf(method));
+    }
+
+    private static String signatureOf(Method method) {
+        return method.getName() + "#" + Arrays.toString(method.getParameterTypes());
     }
 }

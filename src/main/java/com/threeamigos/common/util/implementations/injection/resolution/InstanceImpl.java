@@ -340,7 +340,7 @@ public class InstanceImpl<T> implements Instance<T> {
      * <p>Merge Rules:
      * <ul>
      *   <li>New annotations override existing ones of the same type</li>
-     *   <li>If specific qualifiers are added, the {@link jakarta.enterprise.inject.Default @Default} qualifier is removed</li>
+     *   <li>Existing qualifiers are preserved unless replaced by same-type annotations</li>
      *   <li>Returns the existing collection unchanged if no new annotations are provided</li>
      * </ul>
      *
@@ -358,6 +358,7 @@ public class InstanceImpl<T> implements Instance<T> {
         for (Annotation a : existing) {
             merged.put(a.annotationType(), a);
         }
+
         // Overwrite/Add new ones
         for (Annotation a : newAnnotations) {
             merged.put(a.annotationType(), a);

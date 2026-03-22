@@ -28,9 +28,11 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Repeatable;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -149,6 +151,10 @@ public class BeanManagerImpl implements BeanManager {
         if (beanType == null) {
             throw new IllegalArgumentException("beanType cannot be null");
         }
+        if (!bean.getTypes().contains(beanType)) {
+            throw new IllegalArgumentException(
+                "beanType " + beanType + " is not a bean type of bean " + bean.getBeanClass().getName());
+        }
 
         // For normal scopes, return a client proxy
         if (contextManager.isNormalScope(bean.getScope())) {
@@ -225,6 +231,10 @@ public class BeanManagerImpl implements BeanManager {
         if (beanType == null) {
             throw new IllegalArgumentException("beanType cannot be null");
         }
+        if (beanType instanceof TypeVariable<?>) {
+            throw new IllegalArgumentException("beanType cannot be a type variable: " + beanType);
+        }
+        validateRequiredQualifiers(qualifiers);
 
         Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
         Set<Bean<?>> matchingBeans = new HashSet<>();
@@ -254,6 +264,27 @@ public class BeanManagerImpl implements BeanManager {
         }
 
         return applySpecializationFiltering(matchingBeans);
+    }
+
+    private void validateRequiredQualifiers(Annotation[] qualifiers) {
+        if (qualifiers == null || qualifiers.length == 0) {
+            return;
+        }
+        Set<Class<? extends Annotation>> seenNonRepeatable = new HashSet<Class<? extends Annotation>>();
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null) {
+                continue;
+            }
+            Class<? extends Annotation> qualifierType = qualifier.annotationType();
+            if (!isQualifier(qualifierType)) {
+                throw new IllegalArgumentException("Annotation is not a qualifier type: " + qualifierType.getName());
+            }
+            if (qualifierType.getAnnotation(Repeatable.class) == null) {
+                if (!seenNonRepeatable.add(qualifierType)) {
+                    throw new IllegalArgumentException("Duplicate non-repeating qualifier: " + qualifierType.getName());
+                }
+            }
+        }
     }
 
     /**
@@ -393,7 +424,8 @@ public class BeanManagerImpl implements BeanManager {
             if (alternatives.size() > 1) {
                 int highestPriority = getPriority(highest);
                 if (getPriority(alternatives.get(1)) == highestPriority) {
-                    return null; // Ambiguous
+                    throw new jakarta.enterprise.inject.AmbiguousResolutionException(
+                        "Ambiguous dependency: multiple alternatives with same highest priority " + highestPriority);
                 }
             }
 
@@ -406,7 +438,8 @@ public class BeanManagerImpl implements BeanManager {
         }
 
         // Multiple non-alternatives = ambiguous
-        return null;
+        throw new jakarta.enterprise.inject.AmbiguousResolutionException(
+            "Ambiguous dependency: multiple beans match and no alternative can resolve ambiguity");
     }
 
     /**
@@ -511,6 +544,11 @@ public class BeanManagerImpl implements BeanManager {
         if (event == null) {
             throw new IllegalArgumentException("event cannot be null");
         }
+        if (event.getClass().getTypeParameters().length > 0) {
+            throw new IllegalArgumentException(
+                "Runtime event type contains unresolvable type variables: " + event.getClass().getName());
+        }
+        validateRequiredQualifiers(qualifiers);
 
         Type eventType = event.getClass();
         Set<Annotation> eventQualifiers = new HashSet<>(Arrays.asList(qualifiers));
@@ -585,11 +623,10 @@ public class BeanManagerImpl implements BeanManager {
         if (type == null) {
             throw new IllegalArgumentException("type cannot be null");
         }
+        validateInterceptorBindings(interceptorBindings);
 
         // Convert varargs to Set for query
-        Set<Annotation> requiredBindings = interceptorBindings.length > 0
-                ? new HashSet<>(Arrays.asList(interceptorBindings))
-                : Collections.emptySet();
+        Set<Annotation> requiredBindings = new HashSet<>(Arrays.asList(interceptorBindings));
 
         // Use KnowledgeBase query method - already filters by type and bindings, and sorts by priority
         List<InterceptorInfo> matchingInfos = requiredBindings.isEmpty()
@@ -600,6 +637,27 @@ public class BeanManagerImpl implements BeanManager {
         return matchingInfos.stream()
                 .map(this::createInterceptor)
                 .collect(Collectors.toList());
+    }
+
+    private void validateInterceptorBindings(Annotation[] interceptorBindings) {
+        if (interceptorBindings == null || interceptorBindings.length == 0) {
+            throw new IllegalArgumentException("At least one interceptor binding is required");
+        }
+        Set<Class<? extends Annotation>> seenNonRepeatable = new HashSet<Class<? extends Annotation>>();
+        for (Annotation binding : interceptorBindings) {
+            if (binding == null) {
+                throw new IllegalArgumentException("Interceptor binding cannot be null");
+            }
+            Class<? extends Annotation> bindingType = binding.annotationType();
+            if (!isInterceptorBinding(bindingType)) {
+                throw new IllegalArgumentException("Annotation is not an interceptor binding type: " + bindingType.getName());
+            }
+            if (bindingType.getAnnotation(Repeatable.class) == null) {
+                if (!seenNonRepeatable.add(bindingType)) {
+                    throw new IllegalArgumentException("Duplicate non-repeating interceptor binding: " + bindingType.getName());
+                }
+            }
+        }
     }
 
     /**
@@ -829,8 +887,7 @@ public class BeanManagerImpl implements BeanManager {
     /**
      * Returns an Event object for firing events.
      *
-     * <p>The returned Event has type Object with @Any qualifier,
-     * allowing any event to be fired after narrowing with select().
+     * <p>The returned Event has type Object with @Default qualifier.
      *
      * <p><b>Example:</b>
      * <pre>{@code
@@ -850,8 +907,9 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public Event<Object> getEvent() {
-        // Create an Event<Object> with @Any qualifier
+        // Create an Event<Object> with @Default specified qualifier
         Set<Annotation> qualifiers = new HashSet<>();
+        qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
         qualifiers.add(new AnyLiteral());
 
         return new EventImpl<>(Object.class, qualifiers, knowledgeBase, beanResolver, contextManager, beanResolver.getTransactionServices());
@@ -885,8 +943,9 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public Instance<Object> createInstance() {
-        // Create an Instance<Object> with @Any qualifier
+        // Create an Instance<Object> with @Default specified qualifier
         Set<Annotation> qualifiers = new HashSet<>();
+        qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
         qualifiers.add(new AnyLiteral());
 
         // Create resolution strategy
@@ -2009,12 +2068,135 @@ public class BeanManagerImpl implements BeanManager {
 
     /**
      * Creates an Interceptor wrapper from InterceptorInfo.
-     * Not yet fully implemented.
      */
     private <T> Interceptor<T> createInterceptor(InterceptorInfo info) {
-        // For now, return a basic implementation
-        // Full implementation would need more metadata
-        throw new UnsupportedOperationException("Interceptor creation not yet fully implemented");
+        final Class<?> interceptorClass = info.getInterceptorClass();
+        final Set<Annotation> bindings = new HashSet<Annotation>(info.getInterceptorBindings());
+        return new Interceptor<T>() {
+            @Override
+            public Set<Annotation> getInterceptorBindings() {
+                return Collections.unmodifiableSet(bindings);
+            }
+
+            @Override
+            public boolean intercepts(InterceptionType type) {
+                if (type == null) {
+                    return false;
+                }
+                switch (type) {
+                    case AROUND_INVOKE:
+                        return info.getAroundInvokeMethod() != null;
+                    case AROUND_CONSTRUCT:
+                        return info.getAroundConstructMethod() != null;
+                    case POST_CONSTRUCT:
+                        return info.getPostConstructMethod() != null;
+                    case PRE_DESTROY:
+                        return info.getPreDestroyMethod() != null;
+                    default:
+                        return false;
+                }
+            }
+
+            @Override
+            public Object intercept(InterceptionType type, T instance, jakarta.interceptor.InvocationContext ctx) throws Exception {
+                Method interceptorMethod;
+                switch (type) {
+                    case AROUND_INVOKE:
+                        interceptorMethod = info.getAroundInvokeMethod();
+                        break;
+                    case AROUND_CONSTRUCT:
+                        interceptorMethod = info.getAroundConstructMethod();
+                        break;
+                    case POST_CONSTRUCT:
+                        interceptorMethod = info.getPostConstructMethod();
+                        break;
+                    case PRE_DESTROY:
+                        interceptorMethod = info.getPreDestroyMethod();
+                        break;
+                    default:
+                        interceptorMethod = null;
+                }
+                if (interceptorMethod == null) {
+                    return ctx != null ? ctx.proceed() : null;
+                }
+                if (!interceptorMethod.isAccessible()) {
+                    interceptorMethod.setAccessible(true);
+                }
+                try {
+                    return interceptorMethod.invoke(instance, ctx);
+                } catch (java.lang.reflect.InvocationTargetException e) {
+                    Throwable target = e.getTargetException();
+                    if (target instanceof Exception) {
+                        throw (Exception) target;
+                    }
+                    throw new RuntimeException(target);
+                }
+            }
+
+            @Override
+            public Class<?> getBeanClass() {
+                return interceptorClass;
+            }
+
+            @Override
+            public Set<InjectionPoint> getInjectionPoints() {
+                return Collections.emptySet();
+            }
+
+            @Override
+            public T create(CreationalContext<T> context) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    T created = (T) interceptorClass.getDeclaredConstructor().newInstance();
+                    return created;
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to create interceptor instance: " + interceptorClass.getName(), e);
+                }
+            }
+
+            @Override
+            public void destroy(T instance, CreationalContext<T> context) {
+                if (context != null) {
+                    context.release();
+                }
+            }
+
+            @Override
+            public Set<Type> getTypes() {
+                Set<Type> types = new HashSet<Type>();
+                types.add(interceptorClass);
+                types.add(Object.class);
+                return Collections.unmodifiableSet(types);
+            }
+
+            @Override
+            public Set<Annotation> getQualifiers() {
+                Set<Annotation> qualifiers = new HashSet<Annotation>();
+                qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
+                qualifiers.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
+                return qualifiers;
+            }
+
+            @Override
+            public Class<? extends Annotation> getScope() {
+                return Dependent.class;
+            }
+
+            @Override
+            public String getName() {
+                return null;
+            }
+
+            @Override
+            public Set<Class<? extends Annotation>> getStereotypes() {
+                return Collections.emptySet();
+            }
+
+            @Override
+            public boolean isAlternative() {
+                return false;
+            }
+        };
     }
 
     /**

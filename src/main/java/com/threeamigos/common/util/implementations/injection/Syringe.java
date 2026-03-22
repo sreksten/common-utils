@@ -172,6 +172,15 @@ public class Syringe {
      * Whether the container has been initialized.
      */
     private boolean initialized = false;
+    /**
+     * Whether container shutdown has started.
+     */
+    private boolean shutdownStarted = false;
+    /**
+     * If true, expose CDI Lite behavior for CDI#getBeanManager() where only BeanContainer
+     * methods are portable.
+     */
+    private boolean cdiLiteMode = false;
 
     /**
      * Custom contexts to register programmatically before container initialization.
@@ -240,6 +249,20 @@ public class Syringe {
         }
         buildCompatibleExtensionClassNames.add(extensionClassName);
         info("Queued build compatible extension: " + extensionClassName);
+    }
+
+    /**
+     * Forces CDI Lite mode semantics for CDI#getBeanManager() view.
+     * In this mode, invoking BeanManager methods not inherited from BeanContainer
+     * is treated as non-portable behavior.
+     *
+     * @param cdiLiteMode true to enable CDI Lite BeanManager surface restrictions
+     */
+    public void forceCdiLiteMode(boolean cdiLiteMode) {
+        if (initialized) {
+            throw new IllegalStateException("Cannot change CDI mode after container initialization");
+        }
+        this.cdiLiteMode = cdiLiteMode;
     }
 
     /**
@@ -397,6 +420,7 @@ public class Syringe {
         if (initialized) {
             throw new IllegalStateException("Container already initialized");
         }
+        shutdownStarted = false;
 
         // ============================================================
         // PHASE 1: CONTAINER INITIALIZATION
@@ -719,6 +743,7 @@ public class Syringe {
         if (!initialized) {
             return;
         }
+        shutdownStarted = true;
 
         info("Shutting down container");
 
@@ -1993,7 +2018,14 @@ public class Syringe {
         if (!initialized) {
             throw new IllegalStateException("Container not initialized. Call setup() first.");
         }
-        return new com.threeamigos.common.util.implementations.injection.spi.CDIImpl(beanManager);
+        return new com.threeamigos.common.util.implementations.injection.spi.CDIImpl(
+                beanManager,
+                cdiLiteMode,
+                this::isCdiPortableAccessWindow);
+    }
+
+    private boolean isCdiPortableAccessWindow() {
+        return initialized && !shutdownStarted;
     }
 
     public KnowledgeBase getKnowledgeBase() {
