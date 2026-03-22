@@ -29,16 +29,24 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Repeatable;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -91,6 +99,16 @@ public class EventImpl<T> implements Event<T> {
     private static final AtomicBoolean TRANSACTION_DOWNGRADE_WARNED = new AtomicBoolean(false);
     private static final ConcurrentHashMap<Class<? extends Annotation>, AtomicBoolean> INACTIVE_SCOPE_WARNED =
         new ConcurrentHashMap<>();
+    private static final Executor DEFAULT_ASYNC_EXECUTOR = Executors.newCachedThreadPool(new ThreadFactory() {
+        private final AtomicInteger counter = new AtomicInteger(1);
+
+        @Override
+        public Thread newThread(Runnable runnable) {
+            Thread thread = new Thread(runnable, "syringe-event-async-" + counter.getAndIncrement());
+            thread.setDaemon(true);
+            return thread;
+        }
+    });
 
     /**
      * Creates an Event instance for firing events of a specific type with qualifiers.
@@ -104,6 +122,7 @@ public class EventImpl<T> implements Event<T> {
     public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
                     BeanResolver beanResolver, ContextManager contextManager, TransactionServices transactionServices) {
         this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
+        validateEventType(this.eventType);
         this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
@@ -117,6 +136,7 @@ public class EventImpl<T> implements Event<T> {
                      BeanResolver beanResolver, ContextManager contextManager,
                      TransactionServices transactionServices, ContextTokenProvider tokenProvider) {
         this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
+        validateEventType(this.eventType);
         this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
@@ -151,6 +171,7 @@ public class EventImpl<T> implements Event<T> {
         if (event == null) {
             throw new IllegalArgumentException("Event cannot be null");
         }
+        validateEventObject(event);
 
         // Find all matching synchronous observers
         List<ObserverMethodInfo> matchingObservers = findMatchingObservers(event, false);
@@ -273,7 +294,7 @@ public class EventImpl<T> implements Event<T> {
      */
     @Override
     public <U extends T> CompletionStage<U> fireAsync(U event) {
-        return fireAsync(event, NotificationOptions.ofExecutor(ForkJoinPool.commonPool()));
+        return fireAsync(event, NotificationOptions.ofExecutor(DEFAULT_ASYNC_EXECUTOR));
     }
 
     /**
@@ -300,6 +321,7 @@ public class EventImpl<T> implements Event<T> {
         if (event == null) {
             throw new IllegalArgumentException("Event cannot be null");
         }
+        validateEventObject(event);
         if (options == null) {
             throw new IllegalArgumentException("NotificationOptions cannot be null");
         }
@@ -313,7 +335,7 @@ public class EventImpl<T> implements Event<T> {
         // Get executor from options or use default
         Executor executor = options.getExecutor();
         if (executor == null) {
-            executor = ForkJoinPool.commonPool();
+            executor = DEFAULT_ASYNC_EXECUTOR;
         }
 
         // Create an async task
@@ -386,6 +408,7 @@ public class EventImpl<T> implements Event<T> {
      */
     @Override
     public Event<T> select(Annotation... qualifiers) {
+        validateAdditionalQualifiers(qualifiers);
         Set<Annotation> newQualifiers = new HashSet<>(this.qualifiers);
         for (Annotation qualifier : qualifiers) {
             if (qualifier == null) {
@@ -421,6 +444,8 @@ public class EventImpl<T> implements Event<T> {
         if (subtype == null) {
             throw new IllegalArgumentException("Subtype cannot be null");
         }
+        validateEventType(subtype);
+        validateAdditionalQualifiers(qualifiers);
 
         Set<Annotation> newQualifiers = new HashSet<>(this.qualifiers);
         for (Annotation qualifier : qualifiers) {
@@ -458,6 +483,8 @@ public class EventImpl<T> implements Event<T> {
         if (subtype == null) {
             throw new IllegalArgumentException("Subtype cannot be null");
         }
+        validateEventType(subtype.getType());
+        validateAdditionalQualifiers(qualifiers);
 
         Set<Annotation> newQualifiers = new HashSet<>(this.qualifiers);
         for (Annotation qualifier : qualifiers) {
@@ -469,6 +496,159 @@ public class EventImpl<T> implements Event<T> {
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
         return (Event<U>) new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager, transactionServices);
+    }
+
+    private void validateEventType(Type type) {
+        if (containsUnresolvableTypeVariable(type)) {
+            throw new IllegalArgumentException(
+                    "Event type may not contain an unresolvable type variable: " + type.getTypeName());
+        }
+    }
+
+    private void validateAdditionalQualifiers(Annotation[] qualifiers) {
+        if (qualifiers == null || qualifiers.length == 0) {
+            return;
+        }
+
+        Set<Class<? extends Annotation>> seenNonRepeatableQualifiers = new HashSet<>();
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null) {
+                throw new IllegalArgumentException("Qualifier cannot be null");
+            }
+
+            Class<? extends Annotation> qualifierType = qualifier.annotationType();
+            if (!AnnotationsEnum.hasQualifierAnnotation(qualifierType)) {
+                throw new IllegalArgumentException(
+                        "Annotation is not a qualifier type: " + qualifierType.getName());
+            }
+
+            if (!isRepeatableQualifier(qualifierType) && !seenNonRepeatableQualifiers.add(qualifierType)) {
+                throw new IllegalArgumentException(
+                        "Duplicate non-repeatable qualifier type passed to select(): " + qualifierType.getName());
+            }
+        }
+    }
+
+    private boolean isRepeatableQualifier(Class<? extends Annotation> qualifierType) {
+        return qualifierType.isAnnotationPresent(Repeatable.class);
+    }
+
+    private void validateEventObject(Object event) {
+        Class<?> runtimeType = event.getClass();
+        if (runtimeType.getTypeParameters().length > 0) {
+            throw new IllegalArgumentException(
+                    "Runtime type of event object contains unresolvable type variable(s): " +
+                            runtimeType.getName());
+        }
+
+        if (isContainerLifecycleEventType(runtimeType)) {
+            throw new IllegalArgumentException(
+                    "Runtime type of event object is assignable to a container lifecycle event type: " +
+                            runtimeType.getName());
+        }
+    }
+
+    private boolean isContainerLifecycleEventType(Class<?> type) {
+        Set<Class<?>> allTypes = new HashSet<>();
+        collectTypeClosure(type, allTypes);
+        for (Class<?> candidate : allTypes) {
+            String name = candidate.getName();
+            if (CONTAINER_LIFECYCLE_EVENT_TYPES.contains(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void collectTypeClosure(Class<?> type, Set<Class<?>> acc) {
+        if (type == null || !acc.add(type)) {
+            return;
+        }
+        collectTypeClosure(type.getSuperclass(), acc);
+        for (Class<?> itf : type.getInterfaces()) {
+            collectTypeClosure(itf, acc);
+        }
+    }
+
+    private static final Set<String> CONTAINER_LIFECYCLE_EVENT_TYPES = new HashSet<String>(Arrays.asList(
+            "jakarta.enterprise.inject.spi.BeforeBeanDiscovery",
+            "jakarta.enterprise.inject.spi.AfterTypeDiscovery",
+            "jakarta.enterprise.inject.spi.AfterBeanDiscovery",
+            "jakarta.enterprise.inject.spi.AfterDeploymentValidation",
+            "jakarta.enterprise.inject.spi.BeforeShutdown",
+            "jakarta.enterprise.inject.spi.ProcessAnnotatedType",
+            "jakarta.enterprise.inject.spi.ProcessSyntheticAnnotatedType",
+            "jakarta.enterprise.inject.spi.ProcessInjectionTarget",
+            "jakarta.enterprise.inject.spi.ProcessInjectionPoint",
+            "jakarta.enterprise.inject.spi.ProcessBeanAttributes",
+            "jakarta.enterprise.inject.spi.ProcessBean",
+            "jakarta.enterprise.inject.spi.ProcessManagedBean",
+            "jakarta.enterprise.inject.spi.ProcessSessionBean",
+            "jakarta.enterprise.inject.spi.ProcessSyntheticBean",
+            "jakarta.enterprise.inject.spi.ProcessProducer",
+            "jakarta.enterprise.inject.spi.ProcessProducerMethod",
+            "jakarta.enterprise.inject.spi.ProcessProducerField",
+            "jakarta.enterprise.inject.spi.ProcessObserverMethod",
+            "jakarta.enterprise.inject.spi.ProcessSyntheticObserverMethod",
+            "javax.enterprise.inject.spi.BeforeBeanDiscovery",
+            "javax.enterprise.inject.spi.AfterTypeDiscovery",
+            "javax.enterprise.inject.spi.AfterBeanDiscovery",
+            "javax.enterprise.inject.spi.AfterDeploymentValidation",
+            "javax.enterprise.inject.spi.BeforeShutdown",
+            "javax.enterprise.inject.spi.ProcessAnnotatedType",
+            "javax.enterprise.inject.spi.ProcessInjectionTarget",
+            "javax.enterprise.inject.spi.ProcessInjectionPoint",
+            "javax.enterprise.inject.spi.ProcessBeanAttributes",
+            "javax.enterprise.inject.spi.ProcessBean",
+            "javax.enterprise.inject.spi.ProcessManagedBean",
+            "javax.enterprise.inject.spi.ProcessSessionBean",
+            "javax.enterprise.inject.spi.ProcessProducer",
+            "javax.enterprise.inject.spi.ProcessProducerMethod",
+            "javax.enterprise.inject.spi.ProcessProducerField",
+            "javax.enterprise.inject.spi.ProcessObserverMethod"
+    ));
+
+    private boolean containsUnresolvableTypeVariable(Type type) {
+        if (type instanceof TypeVariable) {
+            return true;
+        }
+
+        if (type instanceof ParameterizedType) {
+            for (Type argument : ((ParameterizedType) type).getActualTypeArguments()) {
+                if (containsUnresolvableTypeVariable(argument)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (type instanceof GenericArrayType) {
+            return containsUnresolvableTypeVariable(((GenericArrayType) type).getGenericComponentType());
+        }
+
+        if (type instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) type;
+            for (Type lowerBound : wildcardType.getLowerBounds()) {
+                if (containsUnresolvableTypeVariable(lowerBound)) {
+                    return true;
+                }
+            }
+            for (Type upperBound : wildcardType.getUpperBounds()) {
+                if (containsUnresolvableTypeVariable(upperBound)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (type instanceof Class<?>) {
+            Class<?> clazz = (Class<?>) type;
+            if (clazz.isArray()) {
+                return containsUnresolvableTypeVariable(clazz.getComponentType());
+            }
+        }
+
+        return false;
     }
 
     /**

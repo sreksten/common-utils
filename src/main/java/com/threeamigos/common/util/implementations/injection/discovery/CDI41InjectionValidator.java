@@ -825,9 +825,9 @@ public class CDI41InjectionValidator {
         Type requiredType = injectionPoint.getType();
         Set<Annotation> qualifiers = injectionPoint.getQualifiers();
 
-        // Special handling for Instance<T> and Provider<T>
-        // These are always satisfiable as they provide lazy/programmatic access
-        if (isInstanceOrProvider(requiredType)) {
+        // Special handling for Event<T>, Instance<T> and Provider<T>.
+        // These are built-in programmatic constructs resolved lazily at runtime.
+        if (isEventType(requiredType) || isInstanceOrProvider(requiredType)) {
             return true; // Always valid - resolved at runtime
         }
 
@@ -893,6 +893,14 @@ public class CDI41InjectionValidator {
         }
         Type rawType = ((ParameterizedType) requiredType).getRawType();
         return rawType instanceof Class && Bean.class.equals(rawType);
+    }
+
+    private boolean isEventType(Type requiredType) {
+        if (!(requiredType instanceof ParameterizedType)) {
+            return false;
+        }
+        Type rawType = ((ParameterizedType) requiredType).getRawType();
+        return rawType instanceof Class && jakarta.enterprise.event.Event.class.equals(rawType);
     }
 
     private boolean isInterceptorMetadataType(Type requiredType) {

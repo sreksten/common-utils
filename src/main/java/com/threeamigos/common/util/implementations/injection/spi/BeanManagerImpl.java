@@ -1064,6 +1064,7 @@ public class BeanManagerImpl implements BeanManager {
                 ParameterizedType parameterizedType = (ParameterizedType) requiredType;
                 Type rawType = parameterizedType.getRawType();
                 if (rawType instanceof Class && (
+                        Event.class.isAssignableFrom((Class<?>) rawType) ||
                         Instance.class.isAssignableFrom((Class<?>) rawType) ||
                         jakarta.inject.Provider.class.isAssignableFrom((Class<?>) rawType) ||
                         Bean.class.equals(rawType) ||
