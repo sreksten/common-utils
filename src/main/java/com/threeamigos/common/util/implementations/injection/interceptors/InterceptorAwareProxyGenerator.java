@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
+import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
 import jakarta.enterprise.inject.spi.Bean;
 import net.bytebuddy.ByteBuddy;
@@ -351,6 +353,11 @@ public class InterceptorAwareProxyGenerator {
                 throw new IllegalStateException(
                     "Interceptor-aware proxy has not been initialized. " +
                     "Call $$_setInterceptorProxyState first. Method: " + method.getName()
+                );
+            }
+            if (DestroyedInstanceTracker.isDestroyed(targetInstance)) {
+                throw new NonPortableBehaviourException(
+                    "Invocation on destroyed contextual instance of " + targetInstance.getClass().getName()
                 );
             }
 

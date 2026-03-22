@@ -32,7 +32,9 @@ public class ApplicationScopedContext implements ScopeContext {
         }
 
         return (T) instances.computeIfAbsent(bean, b -> {
-            creationalContexts.put(bean, creationalContext);
+            if (creationalContext != null) {
+                creationalContexts.put(bean, creationalContext);
+            }
 
             // Step 1: Create the actual bean instance (with full dependency injection and lifecycle callbacks)
             T instance = bean.create(creationalContext);

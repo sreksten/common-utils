@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.InjectionPoi
 import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
 
@@ -139,9 +140,22 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 // Create instance
                 return constructor.newInstance(args);
 
+            } catch (RuntimeException e) {
+                throw e;
             } catch (Exception e) {
-                throw new RuntimeException("Failed to produce instance of " +
-                    annotatedType.getJavaClass().getName(), e);
+                Throwable cause = e;
+                if (e instanceof java.lang.reflect.InvocationTargetException) {
+                    Throwable target = ((java.lang.reflect.InvocationTargetException) e).getTargetException();
+                    cause = target != null ? target : e;
+                }
+                if (cause instanceof RuntimeException) {
+                    throw (RuntimeException) cause;
+                }
+                if (cause instanceof Error) {
+                    throw (Error) cause;
+                }
+                throw new CreationException("Failed to produce instance of " +
+                    annotatedType.getJavaClass().getName(), cause);
             }
         }
 

@@ -296,7 +296,9 @@ public class ConversationScopedContext implements ScopeContext {
 
         String beanId = getBeanId(bean);
         return (T) instances.computeIfAbsent(bean, b -> {
-            contexts.put(bean, creationalContext);
+            if (creationalContext != null) {
+                contexts.put(bean, creationalContext);
+            }
             beans.put(beanId, bean);
 
             // Step 1: Create the actual bean instance

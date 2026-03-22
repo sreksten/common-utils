@@ -14,6 +14,7 @@ import com.threeamigos.common.util.implementations.injection.util.GenericTypeRes
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
@@ -440,8 +441,17 @@ public class BeanImpl<T> implements Bean<T> {
             }
 
             return instance;
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create bean instance of " + beanClass.getName(), e);
+            Throwable cause = unwrapInvocationCause(e);
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            if (cause instanceof Error) {
+                throw (Error) cause;
+            }
+            throw new CreationException("Failed to create bean instance of " + beanClass.getName(), cause);
         }
     }
 
@@ -476,26 +486,41 @@ public class BeanImpl<T> implements Bean<T> {
             return;
         }
 
+        Throwable ignored = null;
         try {
             if (customInjectionTarget != null) {
                 customInjectionTarget.preDestroy(instance);
                 customInjectionTarget.dispose(instance);
+            } else {
+                // 1. Call @PreDestroy if present
+                invokePreDestroy(instance);
+            }
+        } catch (Exception e) {
+            ignored = e;
+        } finally {
+            try {
+                // 2. Release CreationalContext (destroys dependent objects)
                 if (creationalContext != null) {
                     creationalContext.release();
                 }
-                return;
+            } catch (Exception e) {
+                if (ignored == null) {
+                    ignored = e;
+                }
+            } finally {
+                // CDI 6.1: invoking destroyed contextual instances is undefined.
+                // Syringe rejects this non-portable usage explicitly.
+                DestroyedInstanceTracker.markDestroyed(instance);
             }
-
-            // 1. Call @PreDestroy if present
-            invokePreDestroy(instance);
-
-            // 2. Release CreationalContext (destroys dependent objects)
-            if (creationalContext != null) {
-                creationalContext.release();
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to destroy bean instance of " + beanClass.getName(), e);
         }
+    }
+
+    private Throwable unwrapInvocationCause(Exception e) {
+        if (e instanceof InvocationTargetException) {
+            Throwable target = ((InvocationTargetException) e).getTargetException();
+            return target != null ? target : e;
+        }
+        return e;
     }
 
     /**

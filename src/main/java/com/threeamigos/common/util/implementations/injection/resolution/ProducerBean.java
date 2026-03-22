@@ -7,6 +7,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.InjectionPoi
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.IllegalProductException;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -220,7 +221,14 @@ public class ProducerBean<T> implements Bean<T> {
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create instance from producer", e);
+            Throwable cause = unwrapInvocationCause(e);
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            if (cause instanceof Error) {
+                throw (Error) cause;
+            }
+            throw new CreationException("Failed to create instance from producer", cause);
         }
     }
 
@@ -230,19 +238,36 @@ public class ProducerBean<T> implements Bean<T> {
             return;
         }
 
+        Throwable ignored = null;
         try {
             // Invoke the disposer method if present
             if (disposerMethod != null) {
                 invokeDisposerMethod(instance);
             }
-
-            // Release CreationalContext
-            if (creationalContext != null) {
-                creationalContext.release();
-            }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to destroy producer instance", e);
+            ignored = e;
+        } finally {
+            try {
+                // Release CreationalContext
+                if (creationalContext != null) {
+                    creationalContext.release();
+                }
+            } catch (Exception e) {
+                if (ignored == null) {
+                    ignored = e;
+                }
+            } finally {
+                DestroyedInstanceTracker.markDestroyed(instance);
+            }
         }
+    }
+
+    private Throwable unwrapInvocationCause(Exception e) {
+        if (e instanceof java.lang.reflect.InvocationTargetException) {
+            Throwable target = ((java.lang.reflect.InvocationTargetException) e).getTargetException();
+            return target != null ? target : e;
+        }
+        return e;
     }
 
     /**

@@ -107,7 +107,9 @@ public class SessionScopedContext implements ScopeContext {
         String beanId = getBeanId(bean);
 
         return (T) instances.computeIfAbsent(beanId, b -> {
-            contexts.put(beanId, creationalContext);
+            if (creationalContext != null) {
+                contexts.put(beanId, creationalContext);
+            }
             beans.put(beanId, bean);
 
             // Step 1: Create the actual bean instance

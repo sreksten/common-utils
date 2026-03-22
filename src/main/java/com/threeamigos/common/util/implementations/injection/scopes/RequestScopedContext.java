@@ -59,7 +59,9 @@ public class RequestScopedContext implements ScopeContext {
         Map<Bean<?>, CreationalContext<?>> contexts = requestContexts.get();
 
         return (T) instances.computeIfAbsent(bean, b -> {
-            contexts.put(bean, creationalContext);
+            if (creationalContext != null) {
+                contexts.put(bean, creationalContext);
+            }
 
             // Step 1: Create the actual bean instance
             T instance = bean.create(creationalContext);

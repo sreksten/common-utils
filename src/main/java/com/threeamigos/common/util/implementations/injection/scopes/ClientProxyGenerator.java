@@ -1,6 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -399,6 +401,11 @@ public class ClientProxyGenerator {
                 throw new IllegalStateException(
                     "No contextual instance available for bean: " + bean.getBeanClass().getName() +
                     " in scope: " + scopeType.getName() + ". Is the scope active?"
+                );
+            }
+            if (DestroyedInstanceTracker.isDestroyed(contextualInstance)) {
+                throw new NonPortableBehaviourException(
+                    "Invocation on destroyed contextual instance of " + bean.getBeanClass().getName()
                 );
             }
 
