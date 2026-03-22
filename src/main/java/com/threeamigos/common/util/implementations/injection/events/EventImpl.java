@@ -7,6 +7,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.RequestScope
 import com.threeamigos.common.util.implementations.injection.scopes.ConversationScopedContext;
 import com.threeamigos.common.util.implementations.injection.scopes.SessionScopedContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
@@ -633,8 +634,12 @@ public class EventImpl<T> implements Event<T> {
 
             try {
                 // Invoke the observer method
-                method.setAccessible(true);
-                method.invoke(beanInstance, args);
+                if (shouldUseRuntimeMethodDispatch(declaringBean, method, beanInstance)) {
+                    invokeOnRuntimeMethod(beanInstance, method, args);
+                } else {
+                    method.setAccessible(true);
+                    method.invoke(beanInstance, args);
+                }
             } finally {
                 destroyDependentInvocationParameters(parameters, args);
                 destroyDependentObserverReceiver(beanInstance, method);
@@ -668,6 +673,40 @@ public class EventImpl<T> implements Event<T> {
             }
             LifecycleMethodHelper.invokeLifecycleMethod(arg, PreDestroy.class);
         }
+    }
+
+    private Object invokeOnRuntimeMethod(Object targetInstance, Method method, Object[] args) throws Exception {
+        Method invocable = method;
+        if (targetInstance != null && !Modifier.isStatic(method.getModifiers())) {
+            Method resolved = findMethodInHierarchy(targetInstance.getClass(), method.getName(), method.getParameterTypes());
+            if (resolved != null) {
+                invocable = resolved;
+            }
+        }
+        invocable.setAccessible(true);
+        return invocable.invoke(targetInstance, args);
+    }
+
+    private Method findMethodInHierarchy(Class<?> type, String methodName, Class<?>[] parameterTypes) {
+        Class<?> current = type;
+        while (current != null && current != Object.class) {
+            try {
+                return current.getDeclaredMethod(methodName, parameterTypes);
+            } catch (NoSuchMethodException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        return null;
+    }
+
+    private boolean shouldUseRuntimeMethodDispatch(Bean<?> declaringBean, Method method, Object beanInstance) {
+        if (beanInstance == null || method == null || Modifier.isStatic(method.getModifiers())) {
+            return false;
+        }
+        if (!(declaringBean instanceof BeanImpl<?>)) {
+            return false;
+        }
+        return ((BeanImpl<?>) declaringBean).hasInterceptors();
     }
 
     private void destroyDependentObserverReceiver(Object beanInstance, Method method) throws Exception {

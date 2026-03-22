@@ -302,7 +302,7 @@ public class ProducerBean<T> implements Bean<T> {
         T produced = null;
         boolean invocationSucceeded = false;
         try {
-            produced = (T) producerMethod.invoke(declaringInstance, args);
+            produced = (T) invokeOnRuntimeMethod(declaringInstance, producerMethod, args);
             invocationSucceeded = true;
             return produced;
         } finally {
@@ -386,11 +386,35 @@ public class ProducerBean<T> implements Bean<T> {
         }
 
         try {
-            disposerMethod.invoke(declaringInstance, args);
+            invokeOnRuntimeMethod(declaringInstance, disposerMethod, args);
         } finally {
             destroyDependentInvocationParameters(parameters, args, true);
             destroyDependentDeclaringInstance(declaringInstance);
         }
+    }
+
+    private Object invokeOnRuntimeMethod(Object targetInstance, Method method, Object[] args) throws Exception {
+        Method invocable = method;
+        if (targetInstance != null && !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+            Method resolved = findMethodInHierarchy(targetInstance.getClass(), method.getName(), method.getParameterTypes());
+            if (resolved != null) {
+                invocable = resolved;
+            }
+        }
+        invocable.setAccessible(true);
+        return invocable.invoke(targetInstance, args);
+    }
+
+    private Method findMethodInHierarchy(Class<?> type, String methodName, Class<?>[] parameterTypes) {
+        Class<?> current = type;
+        while (current != null && current != Object.class) {
+            try {
+                return current.getDeclaredMethod(methodName, parameterTypes);
+            } catch (NoSuchMethodException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        return null;
     }
 
     private void destroyDependentDeclaringInstance(Object declaringInstance) throws Exception {

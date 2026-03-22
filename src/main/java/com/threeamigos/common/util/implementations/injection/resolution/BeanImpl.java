@@ -6,6 +6,7 @@ import com.threeamigos.common.util.implementations.injection.decorators.Decorato
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorResolver;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorChain;
+import com.threeamigos.common.util.implementations.injection.interceptors.InvocationContextImpl;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -493,7 +494,7 @@ public class BeanImpl<T> implements Bean<T> {
         Throwable ignored = null;
         try {
             if (customInjectionTarget != null) {
-                customInjectionTarget.preDestroy(instance);
+                invokeCustomInjectionTargetPreDestroyWithInterceptors(instance);
                 customInjectionTarget.dispose(instance);
             } else {
                 // 1. Call @PreDestroy if present
@@ -768,6 +769,7 @@ public class BeanImpl<T> implements Bean<T> {
      * </ol>
      */
     private void invokePostConstruct(T instance) throws Exception {
+        ensureLifecycleInterceptorChainsInitialized();
         // PHASE 4: Check for @PostConstruct interceptors
         if (postConstructInterceptorChain != null) {
             // Invoke the interceptor chain which will then invoke all target @PostConstruct methods
@@ -833,12 +835,35 @@ public class BeanImpl<T> implements Bean<T> {
         }
 
         try {
-            customInjectionTarget.postConstruct(instance);
+            if (postConstructInterceptorChain != null) {
+                invokeLifecycleChainWithCustomTarget(instance, postConstructInterceptorChain, new Runnable() {
+                    @Override
+                    public void run() {
+                        customInjectionTarget.postConstruct(instance);
+                    }
+                });
+            } else {
+                customInjectionTarget.postConstruct(instance);
+            }
         } finally {
             if (activatedTemporarily) {
                 contextManager.deactivateRequest();
             }
         }
+    }
+
+    private void invokeCustomInjectionTargetPreDestroyWithInterceptors(T instance) throws Exception {
+        ensureLifecycleInterceptorChainsInitialized();
+        if (preDestroyInterceptorChain != null) {
+            invokeLifecycleChainWithCustomTarget(instance, preDestroyInterceptorChain, new Runnable() {
+                @Override
+                public void run() {
+                    customInjectionTarget.preDestroy(instance);
+                }
+            });
+            return;
+        }
+        customInjectionTarget.preDestroy(instance);
     }
 
     /**
@@ -862,6 +887,7 @@ public class BeanImpl<T> implements Bean<T> {
      * </ol>
      */
     private void invokePreDestroy(T instance) throws Exception {
+        ensureLifecycleInterceptorChainsInitialized();
         // PHASE 4: Check for @PreDestroy interceptors
         if (preDestroyInterceptorChain != null) {
             // Invoke the interceptor chain which will then invoke all target @PreDestroy methods.
@@ -1296,42 +1322,41 @@ public class BeanImpl<T> implements Bean<T> {
         // ========================================================================
         Map<Method, InterceptorChain> chains = new HashMap<>();
 
-        // Iterate through all public methods in the bean class hierarchy.
-        // Using getMethods() includes inherited public methods and naturally keeps
-        // subclass overrides over superclass declarations.
-        for (Method method : beanClass.getMethods()) {
-            if (Object.class.equals(method.getDeclaringClass())) {
-                continue;
-            }
+        // Iterate through non-private, non-static methods in the bean class hierarchy.
+        // Prefer the subclass declaration when a method is overridden.
+        java.util.List<Class<?>> hierarchy = new java.util.ArrayList<Class<?>>();
+        Class<?> current = beanClass;
+        while (current != null && current != Object.class) {
+            hierarchy.add(current);
+            current = current.getSuperclass();
+        }
+        java.util.Set<String> seenSignatures = new java.util.HashSet<String>();
+        for (Class<?> type : hierarchy) {
+            for (Method method : type.getDeclaredMethods()) {
+                if (Object.class.equals(method.getDeclaringClass())) {
+                    continue;
+                }
+                if (Modifier.isPrivate(method.getModifiers()) || Modifier.isStatic(method.getModifiers())) {
+                    continue;
+                }
+                String signature = method.getName() + java.util.Arrays.toString(method.getParameterTypes());
+                if (!seenSignatures.add(signature)) {
+                    continue;
+                }
 
-            // Skip non-public methods - CDI only intercepts public business methods
-            if (!Modifier.isPublic(method.getModifiers())) {
-                continue;
-            }
+                // Use InterceptorResolver to find applicable interceptors for this method
+                List<InterceptorInfo> interceptors = interceptorResolver.resolve(
+                    beanClass,
+                    method,
+                    InterceptionType.AROUND_INVOKE
+                );
 
-            // Skip static methods - CDI doesn't intercept static methods
-            if (Modifier.isStatic(method.getModifiers())) {
-                continue;
+                // If interceptors were found for this method, build a chain
+                if (!interceptors.isEmpty()) {
+                    InterceptorChain chain = buildInterceptorChain(interceptors, InterceptionType.AROUND_INVOKE);
+                    chains.put(method, chain);
+                }
             }
-
-            // Use InterceptorResolver to find applicable interceptors for this method
-            // This considers:
-            // 1. Class-level interceptor bindings (e.g., @Transactional on the class)
-            // 2. Method-level interceptor bindings (e.g., @Transactional on the method)
-            // 3. Stereotype bindings (e.g., @Transactional inherited from a stereotype)
-            // 4. Method-level bindings OVERRIDE class-level bindings (CDI spec)
-            List<InterceptorInfo> interceptors = interceptorResolver.resolve(
-                beanClass,
-                method,
-                InterceptionType.AROUND_INVOKE
-            );
-
-            // If interceptors were found for this method, build a chain
-            if (!interceptors.isEmpty()) {
-                InterceptorChain chain = buildInterceptorChain(interceptors, InterceptionType.AROUND_INVOKE);
-                chains.put(method, chain);
-            }
-            // If no interceptors, we don't add an entry (memory optimization)
         }
 
         // Store the chains map (immutable after this point)
@@ -1594,6 +1619,62 @@ public class BeanImpl<T> implements Bean<T> {
         return methodInterceptorChains != null && !methodInterceptorChains.isEmpty();
     }
 
+    private void ensureLifecycleInterceptorChainsInitialized() {
+        if (interceptorResolver == null) {
+            return;
+        }
+
+        if (postConstructInterceptorChain == null) {
+            List<InterceptorInfo> postConstructInterceptors = interceptorResolver.resolve(
+                    beanClass,
+                    null,
+                    InterceptionType.POST_CONSTRUCT
+            );
+            if (!postConstructInterceptors.isEmpty()) {
+                postConstructInterceptorChain = buildLifecycleInterceptorChain(
+                        postConstructInterceptors,
+                        InterceptionType.POST_CONSTRUCT
+                );
+            }
+        }
+
+        if (preDestroyInterceptorChain == null) {
+            List<InterceptorInfo> preDestroyInterceptors = interceptorResolver.resolve(
+                    beanClass,
+                    null,
+                    InterceptionType.PRE_DESTROY
+            );
+            if (!preDestroyInterceptors.isEmpty()) {
+                preDestroyInterceptorChain = buildLifecycleInterceptorChain(
+                        preDestroyInterceptors,
+                        InterceptionType.PRE_DESTROY
+                );
+            }
+        }
+    }
+
+    private void invokeLifecycleChainWithCustomTarget(
+            T instance,
+            InterceptorChain lifecycleChain,
+            Runnable targetCallback) throws Exception {
+
+        InvocationContextImpl.TargetInvocation targetInvocation = new InvocationContextImpl.TargetInvocation() {
+            @Override
+            public Object invoke(jakarta.interceptor.InvocationContext context) {
+                targetCallback.run();
+                return null;
+            }
+        };
+
+        InvocationContextImpl invocationContext = new InvocationContextImpl(
+                instance,
+                lifecycleChain,
+                targetInvocation
+        );
+
+        invocationContext.proceed();
+    }
+
     /**
      * Gets the method interceptor chains for this bean.
      * <p>
@@ -1780,7 +1861,7 @@ public class BeanImpl<T> implements Bean<T> {
         Class<?> currentClass = clazz;
         while (currentClass != null && currentClass != Object.class) {
             for (Method method : currentClass.getDeclaredMethods()) {
-                if (AnnotationsEnum.hasPostConstructAnnotation(method)) {
+                if (AnnotationsEnum.hasPostConstructAnnotation(method) && method.getParameterCount() == 0) {
                     method.setAccessible(true);
                     method.invoke(instance);
                     return; // Only one @PostConstruct per class hierarchy

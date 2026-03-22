@@ -424,6 +424,7 @@ public class ClientProxyGenerator {
             //     → If no: RealInstance.method()
             //
             // So interceptors are invoked TRANSPARENTLY through the contextual instance!
+            method.setAccessible(true);
             return method.invoke(contextualInstance, args);
         }
     }
