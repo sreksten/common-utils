@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("Paragraph 2.5.1 - Bean defining annotations")
+@DisplayName("2.5.1 - Bean defining annotations")
 public class BeanDefiningAnnotationsTest {
 
     @Test

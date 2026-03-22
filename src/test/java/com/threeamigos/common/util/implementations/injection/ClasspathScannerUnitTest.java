@@ -125,8 +125,7 @@ class ClasspathScannerUnitTest {
         void getClassesFromResourceShouldReturnAnEmptyCollectionIfProtocolNotRecognized() throws Exception {
             // Given
             ClasspathScanner sut = new ClasspathScanner();
-            URL url = mock(URL.class);
-            when(url.getProtocol()).thenReturn("unknown");
+            URL url = new URL("http://example.com");
             // When
             Collection<Class<?>> classes = sut.getClassesFromResource(Thread.currentThread().getContextClassLoader(), url, "my-package");
             // Then
@@ -593,8 +592,7 @@ class ClasspathScannerUnitTest {
         void shouldReturnEmptyForUnknownProtocol() throws Exception {
             // Given
             ClasspathScanner sut = new ClasspathScanner();
-            URL mockUrl = mock(URL.class);
-            when(mockUrl.getProtocol()).thenReturn("http");
+            URL mockUrl = new URL("http://example.com/test");
 
             // When
             Collection<Class<?>> classes = sut.getClassesFromResource(
@@ -647,17 +645,14 @@ class ClasspathScannerUnitTest {
             // new URL(...).toURI() will fail on this string.
             String nonStandardUrl = "jar:file:/C:/My Documents/test.jar!/com/package";
 
-            // 2. Mock the URL object
-            URL mockUrl = mock(URL.class);
-            when(mockUrl.toString()).thenReturn(nonStandardUrl);
-
+            // 2. Create a real URL object.
             // 3. Since we want to test the catch block, we don't need the JarFile to actually open.
             // The test will likely throw an IOException later when trying to open "C:/My Documents/test.jar",
             // but we can verify that the code reached the fallback by checking the logs or
             // debugging the File object creation.
-
+            URL jarUrl = assertDoesNotThrow(() -> new URL(nonStandardUrl));
             assertThrows(IOException.class, () -> sut.findClassesInJar(Thread.currentThread().getContextClassLoader(),
-                    mockUrl, "com.package"));
+                    jarUrl, "com.package"));
         }
 
         private void createJarFile(Path jarPath, String baseEntryName) throws Exception {

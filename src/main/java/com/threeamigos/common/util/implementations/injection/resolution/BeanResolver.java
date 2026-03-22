@@ -553,7 +553,7 @@ public class BeanResolver implements DependencyResolver {
             public Collection<Class<? extends T>> resolveImplementations(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
                 // Find all matching beans
                 Annotation[] qualArray = quals.toArray(new Annotation[0]);
-                Collection<Bean<?>> beans = findMatchingBeans(typeToResolve, qualArray);
+                Collection<Bean<?>> beans = findMatchingBeansForIterator(typeToResolve, qualArray);
 
                 // Extract bean classes
                 List<Class<? extends T>> implementations = new ArrayList<>();
@@ -583,6 +583,79 @@ public class BeanResolver implements DependencyResolver {
         };
 
         return new InstanceImpl<>(type, qualifiers, strategy, beanLookup);
+    }
+
+    /**
+     * Applies CDI iterator() ambiguity semantics for Instance:
+     * - unsatisfied => empty set
+     * - ambiguous with at least one alternative => eliminate non-alternatives, then
+     *   if all remaining have explicit priority keep highest-priority subset
+     * - ambiguous with no alternatives => keep all candidates
+     */
+    private Collection<Bean<?>> findMatchingBeansForIterator(Type requiredType, Annotation[] qualifiers) {
+        Collection<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
+        if (candidates.size() <= 1) {
+            return candidates;
+        }
+
+        boolean hasAlternative = candidates.stream().anyMatch(Bean::isAlternative);
+        if (!hasAlternative) {
+            return candidates;
+        }
+
+        List<Bean<?>> remaining = candidates.stream()
+                .filter(Bean::isAlternative)
+                .collect(Collectors.toList());
+
+        if (remaining.size() <= 1) {
+            return remaining;
+        }
+
+        boolean allHaveExplicitPriority = remaining.stream()
+                .allMatch(bean -> getExplicitAlternativePriority(bean) != null);
+        if (!allHaveExplicitPriority) {
+            return remaining;
+        }
+
+        int highestPriority = remaining.stream()
+                .map(this::getExplicitAlternativePriority)
+                .filter(Objects::nonNull)
+                .max(Integer::compareTo)
+                .orElse(Integer.MIN_VALUE);
+
+        return remaining.stream()
+                .filter(bean -> Objects.equals(getExplicitAlternativePriority(bean), highestPriority))
+                .collect(Collectors.toList());
+    }
+
+    private Integer getExplicitAlternativePriority(Bean<?> bean) {
+        if (bean instanceof ProducerBean) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Integer memberPriority = extractPriorityFromProducerMember(producerBean);
+            if (memberPriority != null) {
+                return memberPriority;
+            }
+
+            Integer producerPriority = producerBean.getPriority();
+            if (producerPriority != null) {
+                return producerPriority;
+            }
+
+            Integer declaringPriority = extractPriorityFromClass(producerBean.getDeclaringClass());
+            if (declaringPriority != null) {
+                return declaringPriority;
+            }
+            return null;
+        }
+
+        if (bean instanceof BeanImpl) {
+            Integer beanPriority = ((BeanImpl<?>) bean).getPriority();
+            if (beanPriority != null) {
+                return beanPriority;
+            }
+        }
+
+        return extractPriorityFromClass(bean.getBeanClass());
     }
 
     /**

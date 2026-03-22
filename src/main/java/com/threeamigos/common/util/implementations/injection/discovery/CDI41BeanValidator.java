@@ -2169,6 +2169,10 @@ public class CDI41BeanValidator {
     }
 
     private void checkInjectionTypeValidity(Type type) {
+        if (type instanceof Class && jakarta.enterprise.inject.Instance.class.equals(type)) {
+            throw new DefinitionException("injection point of raw type Instance is not allowed");
+        }
+
         if (type instanceof TypeVariable) {
             throw new DefinitionException("injection point may not be a type variable (" + type.getTypeName() + ")");
         }

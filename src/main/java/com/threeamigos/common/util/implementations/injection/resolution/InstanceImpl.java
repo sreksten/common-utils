@@ -7,6 +7,7 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Repeatable;
 import java.lang.reflect.InvocationTargetException;
 import java.util.*;
 import java.util.function.Function;
@@ -118,6 +119,17 @@ public class InstanceImpl<T> implements Instance<T> {
     public T get() {
         try {
             return resolutionStrategy.resolveInstance(type, qualifiers);
+        } catch (UnsatisfiedResolutionException | AmbiguousResolutionException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof UnsatisfiedResolutionException) {
+                throw (UnsatisfiedResolutionException) cause;
+            }
+            if (cause instanceof AmbiguousResolutionException) {
+                throw (AmbiguousResolutionException) cause;
+            }
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject " + type.getName(), e);
         }
@@ -125,11 +137,13 @@ public class InstanceImpl<T> implements Instance<T> {
 
     @Override
     public Instance<T> select(Annotation... annotations) {
+        validateSelectAnnotations(annotations);
         return new InstanceImpl<>(type, mergeQualifiers(qualifiers, annotations), resolutionStrategy, beanLookup);
     }
 
     @Override
     public <U extends T> Instance<U> select(Class<U> subtype, Annotation... annotations) {
+        validateSelectAnnotations(annotations);
         @SuppressWarnings("unchecked")
         ResolutionStrategy<U> castStrategy = (ResolutionStrategy<U>) resolutionStrategy;
         return new InstanceImpl<>(subtype, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup());
@@ -137,6 +151,7 @@ public class InstanceImpl<T> implements Instance<T> {
 
     @Override
     public <U extends T> Instance<U> select(TypeLiteral<U> subtype, Annotation... annotations) {
+        validateSelectAnnotations(annotations);
         // Extract the raw class from the TypeLiteral to maintain compatibility
         @SuppressWarnings("unchecked")
         Class<U> rawType = (Class<U>) RawTypeExtractor.getRawType(subtype.getType());
@@ -169,6 +184,14 @@ public class InstanceImpl<T> implements Instance<T> {
             if (instance != null) {
                 resolutionStrategy.invokePreDestroy(instance);
             }
+        } catch (UnsupportedOperationException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof UnsupportedOperationException) {
+                throw (UnsupportedOperationException) cause;
+            }
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to invoke @PreDestroy on " + type.getName(), e);
         }
@@ -202,20 +225,24 @@ public class InstanceImpl<T> implements Instance<T> {
 
     @Override
     public Iterable<? extends Handle<T>> handles() {
-        // Per CDI spec: return handles for ALL matching beans
-        try {
-            Collection<Class<? extends T>> implementations = resolutionStrategy.resolveImplementations(type, qualifiers);
+        // Per CDI spec this iterable is stateless: each iterator() call creates a fresh handle set.
+        return new Iterable<Handle<T>>() {
+            @Override
+            public Iterator<Handle<T>> iterator() {
+                try {
+                    Collection<Class<? extends T>> implementations =
+                            resolutionStrategy.resolveImplementations(type, qualifiers);
 
-            List<Handle<T>> handleList = new ArrayList<>();
-            for (Class<? extends T> implClass : implementations) {
-                handleList.add(createHandle(implClass));
+                    List<Handle<T>> handleList = new ArrayList<>();
+                    for (Class<? extends T> implClass : implementations) {
+                        handleList.add(createHandle(implClass));
+                    }
+                    return handleList.iterator();
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to get handles for " + type.getName(), e);
+                }
             }
-
-            return handleList;
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to get handles for " + type.getName(), e);
-        }
+        };
     }
 
     /**
@@ -336,11 +363,46 @@ public class InstanceImpl<T> implements Instance<T> {
             merged.put(a.annotationType(), a);
         }
 
-        // If we now have specific qualifiers, remove the @Default literal if it exists
-        if (merged.size() > 1) {
-            merged.remove(jakarta.enterprise.inject.Default.class);
+        return new ArrayList<>(merged.values());
+    }
+
+    private void validateSelectAnnotations(Annotation... annotations) {
+        if (annotations == null || annotations.length == 0) {
+            return;
         }
 
-        return new ArrayList<>(merged.values());
+        Map<Class<? extends Annotation>, Integer> counts = new HashMap<>();
+        for (Annotation annotation : annotations) {
+            if (annotation == null) {
+                throw new IllegalArgumentException("select() qualifier cannot be null");
+            }
+
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (!isQualifierType(annotationType)) {
+                throw new IllegalArgumentException(
+                        "Annotation @" + annotationType.getName() + " is not a qualifier type");
+            }
+
+            int count = counts.getOrDefault(annotationType, 0) + 1;
+            counts.put(annotationType, count);
+            if (count > 1 && !annotationType.isAnnotationPresent(Repeatable.class)) {
+                throw new IllegalArgumentException(
+                        "Duplicate non-repeating qualifier type passed to select(): @" + annotationType.getName());
+            }
+        }
+    }
+
+    private boolean isQualifierType(Class<? extends Annotation> annotationType) {
+        if (annotationType == null) {
+            return false;
+        }
+        for (Annotation meta : annotationType.getAnnotations()) {
+            String name = meta.annotationType().getName();
+            if ("jakarta.inject.Qualifier".equals(name) ||
+                    "javax.inject.Qualifier".equals(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

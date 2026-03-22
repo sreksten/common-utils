@@ -89,8 +89,8 @@ class InstanceImplUnitTest {
         }
 
         @Test
-        @DisplayName("mergeQualifiers should remove Default when adding specific qualifiers")
-        void mergeQualifiersShouldRemoveDefault() throws Exception {
+        @DisplayName("mergeQualifiers should keep Default and add specific qualifiers")
+        void mergeQualifiersShouldKeepDefault() throws Exception {
             // Given
             InstanceImpl<String> wrapper = createTestWrapper();
             Collection<Annotation> existing = Collections.singletonList(new DefaultLiteral());
@@ -100,8 +100,8 @@ class InstanceImplUnitTest {
             Collection<Annotation> merged = invokeMergeQualifiers(wrapper, existing, newAnnotations);
 
             // Then
-            assertEquals(1, merged.size());
-            assertFalse(merged.contains(new DefaultLiteral()));
+            assertEquals(2, merged.size());
+            assertTrue(merged.contains(new DefaultLiteral()));
             assertTrue(merged.contains(new NamedLiteral("test2")));
         }
     }
@@ -178,7 +178,7 @@ class InstanceImplUnitTest {
             // Then
             assertEquals("test-instance", result);
             verify(mockStrategy).resolveInstance(eq(String.class), argThat(quals ->
-                quals.contains(new NamedLiteral("specific")) && !quals.contains(new DefaultLiteral())
+                quals.contains(new NamedLiteral("specific")) && quals.contains(new DefaultLiteral())
             ));
         }
 

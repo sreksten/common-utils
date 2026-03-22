@@ -18,7 +18,7 @@ import java.lang.annotation.Annotation;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("Paragraph 2.4 - Scopes")
+@DisplayName("2.4 - Scopes")
 public class ScopesTest {
 
     @Test

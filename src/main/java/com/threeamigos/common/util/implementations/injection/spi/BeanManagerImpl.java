@@ -1062,6 +1062,7 @@ public class BeanManagerImpl implements BeanManager {
                 Type rawType = parameterizedType.getRawType();
                 if (rawType instanceof Class && (
                         Instance.class.isAssignableFrom((Class<?>) rawType) ||
+                        jakarta.inject.Provider.class.isAssignableFrom((Class<?>) rawType) ||
                         Bean.class.equals(rawType) ||
                         Interceptor.class.equals(rawType))) {
                     return beanResolver != null

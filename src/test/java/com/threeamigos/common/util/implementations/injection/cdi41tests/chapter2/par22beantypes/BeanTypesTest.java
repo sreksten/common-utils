@@ -18,7 +18,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("Paragraph 2.2 - Bean Types")
+@DisplayName("2.2 - Bean Types")
 public class BeanTypesTest {
 
     private BeanTypesExtractor extractor;

@@ -16,7 +16,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("Paragraph 2.3 - Qualifiers")
+@DisplayName("2.3 - Qualifiers")
 public class QualifiersTest {
 
     @Test

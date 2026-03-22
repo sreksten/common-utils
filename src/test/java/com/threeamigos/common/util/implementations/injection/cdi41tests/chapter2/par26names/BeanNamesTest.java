@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("Paragraph 2.6 - Bean Names")
+@DisplayName("2.6 - Bean Names")
 public class BeanNamesTest {
 
     @Test
