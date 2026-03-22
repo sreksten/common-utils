@@ -12,6 +12,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanReso
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionSynchronizationCallbacks;
@@ -677,12 +678,12 @@ public class EventImpl<T> implements Event<T> {
             }
 
             // Check if observer event type is assignable from the runtime type
-            if (!typeChecker.isAssignable(observerInfo.getEventType(), eventRuntimeType)) {
+            if (!typeChecker.isEventTypeAssignable(observerInfo.getEventType(), eventRuntimeType)) {
                 continue;
             }
 
-            // Check if all observer qualifiers are present in event qualifiers
-            if (!qualifiers.containsAll(observerInfo.getQualifiers())) {
+            // CDI qualifier matching must honor annotation members and @Nonbinding.
+            if (!QualifiersHelper.qualifiersMatch(observerInfo.getQualifiers(), qualifiers)) {
                 continue;
             }
 
@@ -697,12 +698,12 @@ public class EventImpl<T> implements Event<T> {
             }
 
             // Check if observer event type is assignable from the runtime type
-            if (!typeChecker.isAssignable(syntheticObserver.getObservedType(), eventRuntimeType)) {
+            if (!typeChecker.isEventTypeAssignable(syntheticObserver.getObservedType(), eventRuntimeType)) {
                 continue;
             }
 
-            // Check if all observer qualifiers are present in event qualifiers
-            if (!qualifiers.containsAll(syntheticObserver.getObservedQualifiers())) {
+            // CDI qualifier matching must honor annotation members and @Nonbinding.
+            if (!QualifiersHelper.qualifiersMatch(syntheticObserver.getObservedQualifiers(), qualifiers)) {
                 continue;
             }
 

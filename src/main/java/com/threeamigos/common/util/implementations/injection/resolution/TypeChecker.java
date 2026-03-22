@@ -168,6 +168,14 @@ public class TypeChecker {
     }
 
     /**
+     * Checks observer/event assignability without applying injection-point legality validation.
+     * CDI observer event types may include type variables and wildcards.
+     */
+    public boolean isEventTypeAssignable(Type observedEventType, Type eventType) {
+        return isAssignableInternal(observedEventType, eventType, false);
+    }
+
+    /**
      * Internal implementation of type assignability checking (not cached).
      *
      * <p>This method performs the actual type checking logic:
@@ -201,6 +209,21 @@ public class TypeChecker {
         }
 
         if (targetType.equals(implementationType)) {
+            return true;
+        }
+
+        // Observed event type may be a type variable: event type must be assignable to its upper bound.
+        if (targetType instanceof TypeVariable) {
+            TypeVariable<?> tv = (TypeVariable<?>) targetType;
+            Type[] bounds = tv.getBounds();
+            if (bounds == null || bounds.length == 0 || isOnlyObjectBound(bounds)) {
+                return true;
+            }
+            for (Type bound : bounds) {
+                if (!isAssignableInternal(bound, implementationType, false)) {
+                    return false;
+                }
+            }
             return true;
         }
 
@@ -405,6 +428,30 @@ public class TypeChecker {
             return true;
         }
 
+        // CDI 4.1 observer rule: raw event type is assignable to parameterized observed type
+        // when observed type parameters are only Object or unbounded type variables.
+        if (target instanceof ParameterizedType && candidate instanceof Class<?>) {
+            ParameterizedType observed = (ParameterizedType) target;
+            Class<?> rawObserved = (Class<?>) observed.getRawType();
+            Class<?> rawEvent = (Class<?>) candidate;
+            if (rawObserved.equals(rawEvent)) {
+                for (Type arg : observed.getActualTypeArguments()) {
+                    if (Object.class.equals(arg)) {
+                        continue;
+                    }
+                    if (arg instanceof TypeVariable) {
+                        TypeVariable<?> tv = (TypeVariable<?>) arg;
+                        Type[] bounds = tv.getBounds();
+                        if (bounds == null || bounds.length == 0 || isOnlyObjectBound(bounds)) {
+                            continue;
+                        }
+                    }
+                    return false;
+                }
+                return true;
+            }
+        }
+
         if (target instanceof ParameterizedType && candidate instanceof ParameterizedType) {
             ParameterizedType pt1 = (ParameterizedType) target;
             ParameterizedType pt2 = (ParameterizedType) candidate;
@@ -479,6 +526,21 @@ public class TypeChecker {
      */
     public boolean typeArgsMatch(Type t1, Type t2) {
         if (t1.equals(t2)) {
+            return true;
+        }
+
+        // Observed type argument may be a type variable: event type argument must satisfy bounds.
+        if (t1 instanceof TypeVariable) {
+            TypeVariable<?> tv = (TypeVariable<?>) t1;
+            Type[] bounds = tv.getBounds();
+            if (bounds == null || bounds.length == 0 || isOnlyObjectBound(bounds)) {
+                return true;
+            }
+            for (Type bound : bounds) {
+                if (!isAssignableInternal(bound, t2, false)) {
+                    return false;
+                }
+            }
             return true;
         }
 

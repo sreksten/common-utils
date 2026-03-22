@@ -161,6 +161,14 @@ public final class QualifiersHelper {
             if (required.annotationType().equals(jakarta.enterprise.inject.Any.class)) {
                 continue;
             }
+            if (isDefaultQualifier(required)) {
+                // CDI event rule: @Default observer matches events with no qualifiers
+                // or with only @Default (ignoring the implicit/internal @Any).
+                if (hasExplicitNonDefaultQualifier(availableQualifiers)) {
+                    return false;
+                }
+                continue;
+            }
             if (required instanceof Named) {
                 continue;
             }
@@ -176,6 +184,37 @@ public final class QualifiersHelper {
             }
         }
         return true;
+    }
+
+    private static boolean hasExplicitNonDefaultQualifier(Set<Annotation> qualifiers) {
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            return false;
+        }
+        for (Annotation qualifier : qualifiers) {
+            Class<? extends Annotation> type = qualifier.annotationType();
+            if (type.equals(jakarta.enterprise.inject.Any.class) ||
+                type.getName().equals("javax.enterprise.inject.Any")) {
+                continue;
+            }
+            if (type.equals(jakarta.inject.Named.class) ||
+                type.getName().equals("javax.inject.Named")) {
+                continue;
+            }
+            if (isDefaultQualifier(qualifier)) {
+                continue;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isDefaultQualifier(Annotation annotation) {
+        if (annotation == null) {
+            return false;
+        }
+        Class<? extends Annotation> type = annotation.annotationType();
+        return type.equals(jakarta.enterprise.inject.Default.class) ||
+                type.getName().equals("javax.enterprise.inject.Default");
     }
 
     public static boolean qualifiersEqual(Annotation q1, Annotation q2) {
