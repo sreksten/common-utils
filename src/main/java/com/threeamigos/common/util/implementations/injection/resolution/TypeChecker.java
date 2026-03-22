@@ -287,7 +287,7 @@ public class TypeChecker {
                 }
                 implComponentType = implementationRaw.getComponentType();
             }
-            return isAssignable(targetComponent, implComponentType);
+            return isAssignableInternal(targetComponent, implComponentType, validateTarget);
         }
 
         throw new IllegalStateException(

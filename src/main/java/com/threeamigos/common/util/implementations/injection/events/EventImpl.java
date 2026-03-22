@@ -26,6 +26,7 @@ import jakarta.enterprise.event.NotificationOptions;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.EventMetadata;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.util.TypeLiteral;
 
@@ -97,6 +98,7 @@ public class EventImpl<T> implements Event<T> {
     private final TypeChecker typeChecker;
     private final TransactionServices transactionServices;
     private final ContextTokenProvider tokenProvider;
+    private final InjectionPoint firingInjectionPoint;
     private static final AtomicBoolean TRANSACTION_DOWNGRADE_WARNED = new AtomicBoolean(false);
     private static final ConcurrentHashMap<Class<? extends Annotation>, AtomicBoolean> INACTIVE_SCOPE_WARNED =
         new ConcurrentHashMap<>();
@@ -131,6 +133,7 @@ public class EventImpl<T> implements Event<T> {
         this.typeChecker = new TypeChecker();
         this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
         this.tokenProvider = new NoopContextTokenProvider();
+        this.firingInjectionPoint = null;
     }
 
     public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
@@ -145,6 +148,23 @@ public class EventImpl<T> implements Event<T> {
         this.typeChecker = new TypeChecker();
         this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
         this.tokenProvider = tokenProvider == null ? new NoopContextTokenProvider() : tokenProvider;
+        this.firingInjectionPoint = null;
+    }
+
+    public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
+                     BeanResolver beanResolver, ContextManager contextManager,
+                     TransactionServices transactionServices, ContextTokenProvider tokenProvider,
+                     InjectionPoint firingInjectionPoint) {
+        this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
+        validateEventType(this.eventType);
+        this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
+        this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
+        this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
+        this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
+        this.typeChecker = new TypeChecker();
+        this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
+        this.tokenProvider = tokenProvider == null ? new NoopContextTokenProvider() : tokenProvider;
+        this.firingInjectionPoint = firingInjectionPoint;
     }
 
     /**
@@ -243,22 +263,30 @@ public class EventImpl<T> implements Event<T> {
 
         if (txActive && (!beforeCompletion.isEmpty() || !afterSuccess.isEmpty() ||
             !afterFailure.isEmpty() || !afterCompletion.isEmpty())) {
-            transactionServices.registerSynchronization(new TransactionSynchronizationCallbacks() {
-                @Override
-                public void beforeCompletion() {
-                    invokeObserverList(beforeCompletion, event);
-                }
-
-                @Override
-                public void afterCompletion(boolean committed) {
-                    if (committed) {
-                        invokeObserverList(afterSuccess, event);
-                    } else {
-                        invokeObserverList(afterFailure, event);
+            try {
+                transactionServices.registerSynchronization(new TransactionSynchronizationCallbacks() {
+                    @Override
+                    public void beforeCompletion() {
+                        invokeObserverList(beforeCompletion, event);
                     }
-                    invokeObserverList(afterCompletion, event);
-                }
-            });
+
+                    @Override
+                    public void afterCompletion(boolean committed) {
+                        if (committed) {
+                            invokeObserverList(afterSuccess, event);
+                        } else {
+                            invokeObserverList(afterFailure, event);
+                        }
+                        invokeObserverList(afterCompletion, event);
+                    }
+                });
+            } catch (RuntimeException registrationFailure) {
+                // CDI 4.1: If synchronization callbacks cannot be registered, notify BEFORE_COMPLETION,
+                // AFTER_COMPLETION and AFTER_FAILURE immediately, and skip AFTER_SUCCESS observers.
+                invokeObserverList(beforeCompletion, event);
+                invokeObserverList(afterFailure, event);
+                invokeObserverList(afterCompletion, event);
+            }
         }
     }
 
@@ -417,7 +445,8 @@ public class EventImpl<T> implements Event<T> {
             }
             newQualifiers.add(qualifier);
         }
-        return new EventImpl<>(eventType, newQualifiers, knowledgeBase, beanResolver, contextManager, transactionServices);
+        return new EventImpl<>(eventType, newQualifiers, knowledgeBase, beanResolver, contextManager,
+                transactionServices, tokenProvider, firingInjectionPoint);
     }
 
     /**
@@ -457,7 +486,8 @@ public class EventImpl<T> implements Event<T> {
         }
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
-        return (Event<U>) new EventImpl<U>(subtype, newQualifiers, knowledgeBase, beanResolver, contextManager, transactionServices);
+        return (Event<U>) new EventImpl<U>(subtype, newQualifiers, knowledgeBase, beanResolver, contextManager,
+                transactionServices, tokenProvider, firingInjectionPoint);
     }
 
     /**
@@ -496,7 +526,8 @@ public class EventImpl<T> implements Event<T> {
         }
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
-        return (Event<U>) new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager, transactionServices);
+        return (Event<U>) new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager,
+                transactionServices, tokenProvider, firingInjectionPoint);
     }
 
     private void validateEventType(Type type) {
@@ -791,6 +822,8 @@ public class EventImpl<T> implements Event<T> {
                 if (AnnotationsEnum.hasObservesAnnotation(param) ||
                     AnnotationsEnum.hasObservesAsyncAnnotation(param)) {
                     args[i] = event;
+                } else if (EventMetadata.class.equals(param.getType())) {
+                    args[i] = new EventMetadataImpl(qualifiers, firingInjectionPoint, event.getClass());
                 } else {
                     // Other parameters are injection points - resolve them
                     Type paramType = param.getParameterizedType();
@@ -1156,6 +1189,33 @@ public class EventImpl<T> implements Event<T> {
         @Override
         public ContextSnapshot capture() {
             return null;
+        }
+    }
+
+    private static final class EventMetadataImpl implements EventMetadata {
+        private final Set<Annotation> qualifiers;
+        private final InjectionPoint injectionPoint;
+        private final Type type;
+
+        private EventMetadataImpl(Set<Annotation> qualifiers, InjectionPoint injectionPoint, Type type) {
+            this.qualifiers = Collections.unmodifiableSet(new HashSet<>(qualifiers));
+            this.injectionPoint = injectionPoint;
+            this.type = type;
+        }
+
+        @Override
+        public Set<Annotation> getQualifiers() {
+            return qualifiers;
+        }
+
+        @Override
+        public InjectionPoint getInjectionPoint() {
+            return injectionPoint;
+        }
+
+        @Override
+        public Type getType() {
+            return type;
         }
     }
 

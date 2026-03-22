@@ -17,6 +17,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.inject.Provider;
 import jakarta.inject.Qualifier;
 
@@ -27,6 +28,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.*;
@@ -831,6 +833,18 @@ public class CDI41InjectionValidator {
             return true; // Always valid - resolved at runtime
         }
 
+        // EventMetadata is only valid as an observer method parameter.
+        if (isEventMetadataType(requiredType)) {
+            if (isObserverMethodParameter(injectionPoint)) {
+                return true;
+            }
+            knowledgeBase.addDefinitionError(
+                    formatInjectionPoint(injectionPoint, owningBean) +
+                    ": EventMetadata may only be injected as a parameter of an observer method"
+            );
+            return false;
+        }
+
         // Bean metadata built-ins are validated via definition rules and resolved at runtime.
         if (isBeanMetadataType(requiredType) || isInterceptorMetadataType(requiredType)) {
             return true;
@@ -909,6 +923,28 @@ public class CDI41InjectionValidator {
         }
         Type rawType = ((ParameterizedType) requiredType).getRawType();
         return rawType instanceof Class && Interceptor.class.equals(rawType);
+    }
+
+    private boolean isEventMetadataType(Type requiredType) {
+        return requiredType instanceof Class &&
+                jakarta.enterprise.inject.spi.EventMetadata.class.equals(requiredType);
+    }
+
+    private boolean isObserverMethodParameter(InjectionPoint injectionPoint) {
+        if (injectionPoint == null || !(injectionPoint.getAnnotated() instanceof AnnotatedParameter)) {
+            return false;
+        }
+        if (!(injectionPoint.getMember() instanceof Method)) {
+            return false;
+        }
+        Method method = (Method) injectionPoint.getMember();
+        for (Parameter parameter : method.getParameters()) {
+            if (AnnotationsEnum.hasObservesAnnotation(parameter) ||
+                AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1565,7 +1601,7 @@ public class CDI41InjectionValidator {
 
         // Validate exactly one observer annotation
         if (observesCount + observesAsyncCount > 1) {
-            knowledgeBase.addError(
+            knowledgeBase.addDefinitionError(
                 "Observer method " + method.getName() + " in " + declaringBean.getBeanClass().getName() +
                 " must have exactly one parameter with @Observes or @ObservesAsync, found " +
                 (observesCount + observesAsyncCount)
@@ -1575,7 +1611,7 @@ public class CDI41InjectionValidator {
 
         // Cannot mix @Observes and @ObservesAsync
         if (observesCount > 0 && observesAsyncCount > 0) {
-            knowledgeBase.addError(
+            knowledgeBase.addDefinitionError(
                 "Observer method " + method.getName() + " in " + declaringBean.getBeanClass().getName() +
                 " cannot have both @Observes and @ObservesAsync"
             );
@@ -1606,6 +1642,22 @@ public class CDI41InjectionValidator {
                 observedParameter.getAnnotation(jakarta.enterprise.event.Observes.class);
             reception = observes.notifyObserver();
             transactionPhase = observes.during();
+        }
+
+        // CDI 4.1: @Dependent beans may not declare conditional observer methods (IF_EXISTS).
+        if (reception == jakarta.enterprise.event.Reception.IF_EXISTS) {
+            Class<? extends Annotation> scope = declaringBean.getScope();
+            if (scope != null) {
+                String scopeName = scope.getName();
+                if ("jakarta.enterprise.context.Dependent".equals(scopeName) ||
+                    "javax.enterprise.context.Dependent".equals(scopeName)) {
+                    knowledgeBase.addDefinitionError(
+                        "Observer method " + method.getName() + " in " + declaringBean.getBeanClass().getName() +
+                        " declares notifyObserver=IF_EXISTS but bean scope is @Dependent"
+                    );
+                    return false;
+                }
+            }
         }
 
         // Extract priority

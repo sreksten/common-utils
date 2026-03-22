@@ -669,7 +669,9 @@ public class BeanResolver implements DependencyResolver {
     private <T> Event<T> createEventWrapper(Type eventType, Set<Annotation> qualifiers) {
         Set<Annotation> normalizedQualifiers = new HashSet<>(qualifiers);
         normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
-        return new EventImpl<>(eventType, normalizedQualifiers, knowledgeBase, this, contextManager, transactionServices, contextTokenProvider);
+        InjectionPoint ownerInjectionPoint = currentInjectionPoint.get();
+        return new EventImpl<>(eventType, normalizedQualifiers, knowledgeBase, this, contextManager,
+                transactionServices, contextTokenProvider, ownerInjectionPoint);
     }
 
     private Object resolveWithDynamicInjectionPoint(Type dynamicType,
