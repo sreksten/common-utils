@@ -58,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class BuildCompatibleExtensionLifecycleTest {
 
     @AfterEach
-    void cleanup() {
+    public void cleanup() {
         PhaseRecorder.reset();
         ServiceMatrixRecorder.reset();
         OrderingRecorder.reset();
@@ -91,7 +91,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Explicitly registered build compatible extension runs supported phases in spec order")
-    void shouldRunBuildCompatibleExtensionPhasesInOrder() {
+    public void shouldRunBuildCompatibleExtensionPhasesInOrder() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(TrackingBuildCompatibleExtension.class.getName());
         syringe.setup();
@@ -104,7 +104,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Portable extensions and build compatible extensions are registered independently")
-    void shouldKeepPortableAndBuildCompatibleExtensionsSeparate() {
+    public void shouldKeepPortableAndBuildCompatibleExtensionsSeparate() {
         Syringe syringe = newSyringe();
         syringe.addExtension(HybridPortableAndBuildCompatibleExtension.class.getName());
         syringe.setup();
@@ -114,7 +114,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Unsupported build compatible extension method signatures are deployment problems")
-    void shouldRejectUnsupportedBuildCompatiblePhaseMethodSignature() {
+    public void shouldRejectUnsupportedBuildCompatiblePhaseMethodSignature() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidSignatureBuildCompatibleExtension.class.getName());
 
@@ -123,7 +123,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - BCE method with multiple phase annotations is a deployment problem")
-    void shouldRejectMethodWithMultiplePhaseAnnotations() {
+    public void shouldRejectMethodWithMultiplePhaseAnnotations() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(MultiPhaseAnnotatedExtension.class.getName());
 
@@ -132,7 +132,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - BCE phase methods must declare void return type")
-    void shouldRejectNonVoidPhaseMethod() {
+    public void shouldRejectNonVoidPhaseMethod() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(NonVoidPhaseMethodExtension.class.getName());
 
@@ -141,7 +141,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration phase can receive InvokerFactory and discovered metadata context")
-    void shouldInjectInvokerFactoryAndRegistrationContext() {
+    public void shouldInjectInvokerFactoryAndRegistrationContext() {
         RegistrationContextRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(RegistrationContextExtension.class.getName());
@@ -155,7 +155,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Portable and BCE lifecycles run in deterministic order and once per channel")
-    void shouldRunPortableAndBceLifecyclesInOrderWithoutDuplicates() {
+    public void shouldRunPortableAndBceLifecyclesInOrderWithoutDuplicates() {
         MixedLifecycleRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addExtension(HybridPortableAndBuildCompatibleExtension.class.getName());
@@ -171,7 +171,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - BuildServices is available to BCE phases and through BuildServicesResolver")
-    void shouldExposeBuildServicesDuringBcePhases() {
+    public void shouldExposeBuildServicesDuringBcePhases() {
         BuildServicesRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(BuildServicesExtension.class.getName());
@@ -188,7 +188,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Allowed BCE service parameters are injected for all supported phases")
-    void shouldInjectAllowedServiceParametersForSupportedPhases() {
+    public void shouldInjectAllowedServiceParametersForSupportedPhases() {
         ServiceMatrixRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(AllowedServiceParametersExtension.class.getName());
@@ -211,7 +211,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Discovery methods reject duplicate BCE service parameters")
-    void shouldRejectDuplicateDiscoveryServiceParameters() {
+    public void shouldRejectDuplicateDiscoveryServiceParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidDiscoveryDuplicateTypesExtension.class.getName());
 
@@ -220,7 +220,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement methods reject unsupported service parameter types")
-    void shouldRejectUnsupportedEnhancementServiceParameters() {
+    public void shouldRejectUnsupportedEnhancementServiceParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidEnhancementMetaAnnotationsExtension.class.getName());
 
@@ -229,7 +229,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration methods reject unsupported ScannedClasses parameter")
-    void shouldRejectUnsupportedRegistrationScannedClassesParameter() {
+    public void shouldRejectUnsupportedRegistrationScannedClassesParameter() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidRegistrationScannedClassesExtension.class.getName());
 
@@ -238,7 +238,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Synthesis methods must declare SyntheticComponents")
-    void shouldRejectSynthesisMethodWithoutSyntheticComponents() {
+    public void shouldRejectSynthesisMethodWithoutSyntheticComponents() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidSynthesisMissingSyntheticComponentsExtension.class.getName());
 
@@ -247,7 +247,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - BCE Messages.error in phase method produces deployment problem")
-    void shouldFailDeploymentWhenMessagesErrorIsReported() {
+    public void shouldFailDeploymentWhenMessagesErrorIsReported() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(MessagesErrorExtension.class.getName());
 
@@ -256,7 +256,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - BCE Messages.info and warn do not fail deployment")
-    void shouldAllowMessagesInfoAndWarnWithoutDeploymentFailure() {
+    public void shouldAllowMessagesInfoAndWarnWithoutDeploymentFailure() {
         DiagnosticsRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(MessagesInfoWarnExtension.class.getName());
@@ -269,7 +269,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - BCE Messages.error(Exception) produces deployment problem")
-    void shouldFailDeploymentWhenMessagesErrorExceptionIsReported() {
+    public void shouldFailDeploymentWhenMessagesErrorExceptionIsReported() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(MessagesErrorExceptionExtension.class.getName());
 
@@ -278,7 +278,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - BCE phase method ordering is deterministic across multiple extensions")
-    void shouldRunBcePhaseMethodsInDeterministicOrderAcrossExtensions() {
+    public void shouldRunBcePhaseMethodsInDeterministicOrderAcrossExtensions() {
         OrderingRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(BetaOrderedExtension.class.getName());
@@ -294,7 +294,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Duplicate BCE extension registration in same channel is deduplicated")
-    void shouldDeduplicateDuplicateBceExtensionRegistrations() {
+    public void shouldDeduplicateDuplicateBceExtensionRegistrations() {
         DuplicateRegistrationRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(DuplicateBceExtension.class.getName());
@@ -308,7 +308,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Duplicate portable extension registration in same channel is deduplicated")
-    void shouldDeduplicateDuplicatePortableExtensionRegistrations() {
+    public void shouldDeduplicateDuplicatePortableExtensionRegistrations() {
         PortableDuplicateRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addExtension(PortableDuplicateExtension.class.getName());
@@ -322,7 +322,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Synthesis methods reject duplicate SyntheticComponents parameters")
-    void shouldRejectDuplicateSyntheticComponentsParameters() {
+    public void shouldRejectDuplicateSyntheticComponentsParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidSynthesisDuplicateSyntheticComponentsExtension.class.getName());
 
@@ -331,7 +331,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration methods reject duplicate Messages parameters")
-    void shouldRejectDuplicateRegistrationMessagesParameters() {
+    public void shouldRejectDuplicateRegistrationMessagesParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidRegistrationDuplicateMessagesExtension.class.getName());
 
@@ -340,7 +340,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Synthesis methods reject unsupported MetaAnnotations parameter")
-    void shouldRejectUnsupportedSynthesisMetaAnnotationsParameter() {
+    public void shouldRejectUnsupportedSynthesisMetaAnnotationsParameter() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidSynthesisMetaAnnotationsExtension.class.getName());
 
@@ -349,7 +349,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration methods reject duplicate BuildServices parameters")
-    void shouldRejectDuplicateRegistrationBuildServicesParameters() {
+    public void shouldRejectDuplicateRegistrationBuildServicesParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidRegistrationDuplicateBuildServicesExtension.class.getName());
 
@@ -358,7 +358,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement can receive ClassInfo/ClassConfig and runs per matching class")
-    void shouldInvokeEnhancementPerMatchingClassForClassModel() {
+    public void shouldInvokeEnhancementPerMatchingClassForClassModel() {
         EnhancementModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementClassModelExtension.class.getName());
@@ -371,7 +371,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement can receive MethodInfo and runs per matching annotated method")
-    void shouldInvokeEnhancementPerMatchingMethodForMethodModel() {
+    public void shouldInvokeEnhancementPerMatchingMethodForMethodModel() {
         EnhancementModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementMethodModelExtension.class.getName());
@@ -383,7 +383,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement can receive MethodConfig and runs per matching annotated method")
-    void shouldInvokeEnhancementPerMatchingMethodForMethodConfigModel() {
+    public void shouldInvokeEnhancementPerMatchingMethodForMethodConfigModel() {
         EnhancementModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementMethodConfigModelExtension.class.getName());
@@ -395,7 +395,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement can receive FieldInfo/FieldConfig and runs per matching annotated field")
-    void shouldInvokeEnhancementPerMatchingFieldForFieldModels() {
+    public void shouldInvokeEnhancementPerMatchingFieldForFieldModels() {
         EnhancementModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementFieldModelExtension.class.getName());
@@ -408,7 +408,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - ClassConfig exposes constructors, methods, fields and nested parameter configs")
-    void shouldExposeClassConfigMemberGraphs() {
+    public void shouldExposeClassConfigMemberGraphs() {
         EnhancementConfigGraphRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementClassConfigGraphExtension.class.getName());
@@ -424,7 +424,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement annotation mutations are reflected in info views for class/method/field/parameter configs")
-    void shouldMaterializeEnhancementAnnotationMutationsInConfigInfoViews() {
+    public void shouldMaterializeEnhancementAnnotationMutationsInConfigInfoViews() {
         EnhancementAnnotationMutationRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementAnnotationMutationExtension.class.getName());
@@ -443,7 +443,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement config mutations persist across enhancement methods for the same target")
-    void shouldPersistEnhancementConfigMutationsAcrossMethods() {
+    public void shouldPersistEnhancementConfigMutationsAcrossMethods() {
         EnhancementCrossMethodPersistenceRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementCrossMethodPersistenceExtension.class.getName());
@@ -456,7 +456,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - MethodConfig mutations are visible through ClassConfig method views in same enhancement phase")
-    void shouldShareMethodConfigMutationsAcrossClassAndMethodViews() {
+    public void shouldShareMethodConfigMutationsAcrossClassAndMethodViews() {
         EnhancementCrossViewPersistenceRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementCrossViewPersistenceExtension.class.getName());
@@ -469,7 +469,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - FieldConfig mutations stay coherent across ClassConfig and FieldInfo enhancement views")
-    void shouldShareFieldConfigMutationsAcrossClassAndFieldViews() {
+    public void shouldShareFieldConfigMutationsAcrossClassAndFieldViews() {
         EnhancementFieldCrossViewRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementFieldCrossViewExtension.class.getName());
@@ -484,7 +484,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - ClassConfig method mutations are visible through later MethodInfo enhancement views")
-    void shouldShareMethodMutationsFromClassViewToMethodInfoView() {
+    public void shouldShareMethodMutationsFromClassViewToMethodInfoView() {
         EnhancementMethodReverseCrossViewRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementMethodReverseCrossViewExtension.class.getName());
@@ -497,7 +497,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - removeAllAnnotations stays coherent across MethodConfig/FieldConfig and later info views")
-    void shouldPropagateRemoveAllAnnotationsAcrossEnhancementViews() {
+    public void shouldPropagateRemoveAllAnnotationsAcrossEnhancementViews() {
         EnhancementRemoveAllCrossViewRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementRemoveAllCrossViewExtension.class.getName());
@@ -514,7 +514,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - removeAnnotation(predicate) stays coherent across method/field config and later info views")
-    void shouldPropagateRemoveAnnotationPredicateAcrossEnhancementViews() {
+    public void shouldPropagateRemoveAnnotationPredicateAcrossEnhancementViews() {
         EnhancementRemovePredicateCrossViewRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementRemovePredicateCrossViewExtension.class.getName());
@@ -531,7 +531,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - ParameterConfig mutations are visible through later MethodInfo parameter views")
-    void shouldPropagateParameterMutationsToMethodInfoViews() {
+    public void shouldPropagateParameterMutationsToMethodInfoViews() {
         EnhancementParameterCrossViewRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementParameterCrossViewExtension.class.getName());
@@ -546,7 +546,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Language model repeatableAnnotation resolves repeated annotations from container")
-    void shouldResolveRepeatableAnnotationsFromLanguageModel() {
+    public void shouldResolveRepeatableAnnotationsFromLanguageModel() {
         LanguageModelEdgeCaseRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(LanguageModelRepeatableExtension.class.getName());
@@ -559,7 +559,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement rejects multiple model/config parameters")
-    void shouldRejectEnhancementWithMultipleModelParameters() {
+    public void shouldRejectEnhancementWithMultipleModelParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidEnhancementMultipleModelsExtension.class.getName());
 
@@ -568,7 +568,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Discovery ScannedClasses can add classes that become injectable")
-    void shouldAllowScannedClassesToAddInjectableClass() {
+    public void shouldAllowScannedClassesToAddInjectableClass() {
         ScannedClassesRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(ScannedClassesAddsBeanExtension.class.getName());
@@ -582,7 +582,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Discovery ScannedClasses rejects unknown class names")
-    void shouldRejectUnknownScannedClassName() {
+    public void shouldRejectUnknownScannedClassName() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidScannedClassesExtension.class.getName());
 
@@ -591,7 +591,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement withSubtypes=true matches subclasses")
-    void shouldMatchSubtypesWhenEnhancementWithSubtypesIsTrue() {
+    public void shouldMatchSubtypesWhenEnhancementWithSubtypesIsTrue() {
         SubtypeEnhancementRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementWithSubtypesTrueExtension.class.getName());
@@ -603,7 +603,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement withSubtypes=false excludes subclasses")
-    void shouldExcludeSubtypesWhenEnhancementWithSubtypesIsFalse() {
+    public void shouldExcludeSubtypesWhenEnhancementWithSubtypesIsFalse() {
         SubtypeEnhancementRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementWithSubtypesFalseExtension.class.getName());
@@ -615,7 +615,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement allows model plus BuildServices/Types/Messages")
-    void shouldAllowEnhancementModelWithServices() {
+    public void shouldAllowEnhancementModelWithServices() {
         EnhancementServiceModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementModelWithServicesExtension.class.getName());
@@ -630,7 +630,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement rejects duplicate Messages when model parameter is present")
-    void shouldRejectEnhancementDuplicateMessagesWithModel() {
+    public void shouldRejectEnhancementDuplicateMessagesWithModel() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidEnhancementDuplicateMessagesWithModelExtension.class.getName());
 
@@ -639,7 +639,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement class model is not invoked when class annotation filter does not match")
-    void shouldNotInvokeEnhancementClassModelWhenAnnotationFilterDoesNotMatch() {
+    public void shouldNotInvokeEnhancementClassModelWhenAnnotationFilterDoesNotMatch() {
         EnhancementNoMatchRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementClassNoMatchExtension.class.getName());
@@ -651,7 +651,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement method model is not invoked when method annotation filter does not match")
-    void shouldNotInvokeEnhancementMethodModelWhenAnnotationFilterDoesNotMatch() {
+    public void shouldNotInvokeEnhancementMethodModelWhenAnnotationFilterDoesNotMatch() {
         EnhancementNoMatchRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(EnhancementMethodNoMatchExtension.class.getName());
@@ -663,7 +663,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Discovery methods reject duplicate MetaAnnotations parameters")
-    void shouldRejectDuplicateDiscoveryMetaAnnotationsParameters() {
+    public void shouldRejectDuplicateDiscoveryMetaAnnotationsParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidDiscoveryDuplicateMetaAnnotationsExtension.class.getName());
 
@@ -672,7 +672,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Discovery methods reject duplicate ScannedClasses parameters")
-    void shouldRejectDuplicateDiscoveryScannedClassesParameters() {
+    public void shouldRejectDuplicateDiscoveryScannedClassesParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidDiscoveryDuplicateScannedClassesExtension.class.getName());
 
@@ -681,7 +681,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Enhancement methods reject duplicate BuildServices parameters")
-    void shouldRejectDuplicateEnhancementBuildServicesParameters() {
+    public void shouldRejectDuplicateEnhancementBuildServicesParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidEnhancementDuplicateBuildServicesExtension.class.getName());
 
@@ -690,7 +690,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation methods reject duplicate Messages parameters")
-    void shouldRejectDuplicateValidationMessagesParameters() {
+    public void shouldRejectDuplicateValidationMessagesParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidValidationDuplicateMessagesExtension.class.getName());
 
@@ -699,7 +699,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration can receive BeanInfo and ObserverInfo model parameters")
-    void shouldInjectRegistrationBeanInfoAndObserverInfo() {
+    public void shouldInjectRegistrationBeanInfoAndObserverInfo() {
         RegistrationValidationModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(RegistrationModelParametersExtension.class.getName());
@@ -711,7 +711,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation can receive BeanInfo and ObserverInfo model parameters")
-    void shouldInjectValidationBeanInfoAndObserverInfo() {
+    public void shouldInjectValidationBeanInfoAndObserverInfo() {
         RegistrationValidationModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(ValidationModelParametersExtension.class.getName());
@@ -724,7 +724,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration rejects multiple model parameters")
-    void shouldRejectRegistrationWithMultipleModelParameters() {
+    public void shouldRejectRegistrationWithMultipleModelParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidRegistrationMultipleModelsExtension.class.getName());
 
@@ -733,7 +733,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation rejects multiple model parameters")
-    void shouldRejectValidationWithMultipleModelParameters() {
+    public void shouldRejectValidationWithMultipleModelParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidValidationMultipleModelsExtension.class.getName());
 
@@ -742,7 +742,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration can receive InterceptorInfo model parameter")
-    void shouldInjectRegistrationInterceptorInfo() {
+    public void shouldInjectRegistrationInterceptorInfo() {
         InterceptorModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(RegistrationInterceptorModelExtension.class.getName());
@@ -752,7 +752,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation can receive InterceptorInfo model parameter")
-    void shouldInjectValidationInterceptorInfo() {
+    public void shouldInjectValidationInterceptorInfo() {
         InterceptorModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(ValidationInterceptorModelExtension.class.getName());
@@ -762,7 +762,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration rejects BeanInfo plus InterceptorInfo model parameters")
-    void shouldRejectRegistrationBeanAndInterceptorModelParameters() {
+    public void shouldRejectRegistrationBeanAndInterceptorModelParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidRegistrationBeanAndInterceptorModelsExtension.class.getName());
 
@@ -771,7 +771,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration can receive InjectionPointInfo model parameter")
-    void shouldInjectRegistrationInjectionPointInfo() {
+    public void shouldInjectRegistrationInjectionPointInfo() {
         InjectionPointModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(RegistrationInjectionPointModelExtension.class.getName());
@@ -783,7 +783,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation can receive InjectionPointInfo model parameter")
-    void shouldInjectValidationInjectionPointInfo() {
+    public void shouldInjectValidationInjectionPointInfo() {
         InjectionPointModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(ValidationInjectionPointModelExtension.class.getName());
@@ -795,7 +795,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation rejects BeanInfo plus InjectionPointInfo model parameters")
-    void shouldRejectValidationBeanAndInjectionPointModelParameters() {
+    public void shouldRejectValidationBeanAndInjectionPointModelParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidValidationBeanAndInjectionPointModelsExtension.class.getName());
 
@@ -804,7 +804,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration can receive DisposerInfo model parameter")
-    void shouldInjectRegistrationDisposerInfo() {
+    public void shouldInjectRegistrationDisposerInfo() {
         DisposerModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(RegistrationDisposerModelExtension.class.getName());
@@ -816,7 +816,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation can receive DisposerInfo model parameter")
-    void shouldInjectValidationDisposerInfo() {
+    public void shouldInjectValidationDisposerInfo() {
         DisposerModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(ValidationDisposerModelExtension.class.getName());
@@ -828,7 +828,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration rejects BeanInfo plus DisposerInfo model parameters")
-    void shouldRejectRegistrationBeanAndDisposerModelParameters() {
+    public void shouldRejectRegistrationBeanAndDisposerModelParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidRegistrationBeanAndDisposerModelsExtension.class.getName());
 
@@ -837,7 +837,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration can receive ScopeInfo model parameter")
-    void shouldInjectRegistrationScopeInfo() {
+    public void shouldInjectRegistrationScopeInfo() {
         ScopeModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(RegistrationScopeModelExtension.class.getName());
@@ -849,7 +849,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation can receive ScopeInfo model parameter")
-    void shouldInjectValidationScopeInfo() {
+    public void shouldInjectValidationScopeInfo() {
         ScopeModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(ValidationScopeModelExtension.class.getName());
@@ -861,7 +861,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation rejects BeanInfo plus ScopeInfo model parameters")
-    void shouldRejectValidationBeanAndScopeModelParameters() {
+    public void shouldRejectValidationBeanAndScopeModelParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidValidationBeanAndScopeModelsExtension.class.getName());
 
@@ -870,7 +870,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration can receive StereotypeInfo model parameter")
-    void shouldInjectRegistrationStereotypeInfo() {
+    public void shouldInjectRegistrationStereotypeInfo() {
         StereotypeModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(RegistrationStereotypeModelExtension.class.getName());
@@ -882,7 +882,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation can receive StereotypeInfo model parameter")
-    void shouldInjectValidationStereotypeInfo() {
+    public void shouldInjectValidationStereotypeInfo() {
         StereotypeModelRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(ValidationStereotypeModelExtension.class.getName());
@@ -894,7 +894,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Registration rejects BeanInfo plus StereotypeInfo model parameters")
-    void shouldRejectRegistrationBeanAndStereotypeModelParameters() {
+    public void shouldRejectRegistrationBeanAndStereotypeModelParameters() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(InvalidRegistrationBeanAndStereotypeModelsExtension.class.getName());
 
@@ -903,7 +903,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     @Test
     @DisplayName("10.3 - Validation ObserverInfo model includes synthetic observers and supports diagnostics logging")
-    void shouldExposeSyntheticObserversThroughObserverInfoModelInValidation() {
+    public void shouldExposeSyntheticObserversThroughObserverInfoModelInValidation() {
         SyntheticObserverParityRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(SyntheticObserverParityExtension.class.getName());
@@ -955,27 +955,27 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class TrackingBuildCompatibleExtension implements BuildCompatibleExtension {
         @Discovery
-        void onDiscovery() {
+        public void onDiscovery() {
             PhaseRecorder.add("DISCOVERY");
         }
 
-        @Enhancement(types = Object.class)
-        void onEnhancement() {
+        @Enhancement(types = TrackedBean.class, withSubtypes = false)
+        public void onEnhancement(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
             PhaseRecorder.add("ENHANCEMENT");
         }
 
         @Registration(types = Object.class)
-        void onRegistration() {
+        public void onRegistration() {
             PhaseRecorder.add("REGISTRATION");
         }
 
         @Synthesis
-        void onSynthesis(SyntheticComponents ignored) {
+        public void onSynthesis(SyntheticComponents ignored) {
             PhaseRecorder.add("SYNTHESIS");
         }
 
         @Validation
-        void onValidation() {
+        public void onValidation() {
             PhaseRecorder.add("VALIDATION");
         }
     }
@@ -987,7 +987,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Discovery
-        void onDiscovery() {
+        public void onDiscovery() {
             MixedLifecycleRecorder.bceDiscoveryCalls++;
             MixedLifecycleRecorder.events.add("bce-discovery");
         }
@@ -995,7 +995,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidSignatureBuildCompatibleExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void invalidRegistrationSignature(String notSupportedYet) {
+        public void invalidRegistrationSignature(String notSupportedYet) {
             // intentionally invalid for step-2 BCE support
         }
     }
@@ -1003,7 +1003,7 @@ public class BuildCompatibleExtensionLifecycleTest {
     public static class MultiPhaseAnnotatedExtension implements BuildCompatibleExtension {
         @Discovery
         @Validation
-        void invalidMultiPhaseMethod() {
+        public void invalidMultiPhaseMethod() {
         }
     }
 
@@ -1030,7 +1030,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class BuildServicesExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(BuildServices buildServices) {
+        public void discovery(BuildServices buildServices) {
             BuildServicesRecorder.discoveryAvailable = buildServices != null;
             BuildServicesRecorder.resolverBoundInDiscovery = isResolverBound(buildServices);
             jakarta.enterprise.lang.model.AnnotationInfo built =
@@ -1040,18 +1040,18 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Registration(types = TrackedBean.class)
-        void registration(BuildServices buildServices) {
+        public void registration(BuildServices buildServices) {
             BuildServicesRecorder.registrationAvailable = buildServices != null;
         }
 
         @Synthesis
-        void synthesis(SyntheticComponents components,
+        public void synthesis(SyntheticComponents components,
                        BuildServices buildServices) {
             BuildServicesRecorder.synthesisAvailable = buildServices != null;
         }
 
         @Validation
-        void validation(BuildServices buildServices) {
+        public void validation(BuildServices buildServices) {
             BuildServicesRecorder.validationAvailable = buildServices != null;
         }
 
@@ -1081,33 +1081,35 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class AllowedServiceParametersExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(Types types, Messages messages, MetaAnnotations metaAnnotations, ScannedClasses scannedClasses) {
+        public void discovery(Types types, Messages messages, MetaAnnotations metaAnnotations, ScannedClasses scannedClasses) {
             ServiceMatrixRecorder.discoveryTypesInjected = types != null;
             ServiceMatrixRecorder.discoveryMessagesInjected = messages != null;
             ServiceMatrixRecorder.discoveryMetaAnnotationsInjected = metaAnnotations != null;
             ServiceMatrixRecorder.discoveryScannedClassesInjected = scannedClasses != null;
         }
 
-        @Enhancement(types = Object.class)
-        void enhancement(Types types, Messages messages) {
-            ServiceMatrixRecorder.enhancementTypesInjected = types != null;
-            ServiceMatrixRecorder.enhancementMessagesInjected = messages != null;
+        @Enhancement(types = TrackedBean.class, withSubtypes = false)
+        public void enhancement(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo,
+                                Types types,
+                                Messages messages) {
+            ServiceMatrixRecorder.enhancementTypesInjected = classInfo != null && types != null;
+            ServiceMatrixRecorder.enhancementMessagesInjected = classInfo != null && messages != null;
         }
 
         @Registration(types = Object.class)
-        void registration(Types types, Messages messages) {
+        public void registration(Types types, Messages messages) {
             ServiceMatrixRecorder.registrationTypesInjected = types != null;
             ServiceMatrixRecorder.registrationMessagesInjected = messages != null;
         }
 
         @Synthesis
-        void synthesis(SyntheticComponents syntheticComponents, Types types, Messages messages) {
+        public void synthesis(SyntheticComponents syntheticComponents, Types types, Messages messages) {
             ServiceMatrixRecorder.synthesisTypesInjected = syntheticComponents != null && types != null;
             ServiceMatrixRecorder.synthesisMessagesInjected = syntheticComponents != null && messages != null;
         }
 
         @Validation
-        void validation(Types types, Messages messages) {
+        public void validation(Types types, Messages messages) {
             ServiceMatrixRecorder.validationTypesInjected = types != null;
             ServiceMatrixRecorder.validationMessagesInjected = messages != null;
         }
@@ -1115,63 +1117,63 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidDiscoveryDuplicateTypesExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(Types one, Types two) {
+        public void discovery(Types one, Types two) {
             // invalid by contract: duplicate Types parameter
         }
     }
 
     public static class InvalidEnhancementMetaAnnotationsExtension implements BuildCompatibleExtension {
         @Enhancement(types = Object.class)
-        void enhancement(MetaAnnotations metaAnnotations) {
+        public void enhancement(MetaAnnotations metaAnnotations) {
             // invalid by contract: MetaAnnotations not allowed in Enhancement
         }
     }
 
     public static class InvalidRegistrationScannedClassesExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(ScannedClasses scannedClasses) {
+        public void registration(ScannedClasses scannedClasses) {
             // invalid by contract: ScannedClasses not allowed in Registration
         }
     }
 
     public static class InvalidSynthesisMissingSyntheticComponentsExtension implements BuildCompatibleExtension {
         @Synthesis
-        void synthesis(Types types, Messages messages) {
+        public void synthesis(Types types, Messages messages) {
             // invalid by contract: missing SyntheticComponents parameter
         }
     }
 
     public static class InvalidSynthesisDuplicateSyntheticComponentsExtension implements BuildCompatibleExtension {
         @Synthesis
-        void synthesis(SyntheticComponents one, SyntheticComponents two) {
+        public void synthesis(SyntheticComponents one, SyntheticComponents two) {
             // invalid by contract: duplicate SyntheticComponents
         }
     }
 
     public static class InvalidRegistrationDuplicateMessagesExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(Messages one, Messages two) {
+        public void registration(Messages one, Messages two) {
             // invalid by contract: duplicate Messages parameter
         }
     }
 
     public static class InvalidSynthesisMetaAnnotationsExtension implements BuildCompatibleExtension {
         @Synthesis
-        void synthesis(SyntheticComponents syntheticComponents, MetaAnnotations metaAnnotations) {
+        public void synthesis(SyntheticComponents syntheticComponents, MetaAnnotations metaAnnotations) {
             // invalid by contract: MetaAnnotations not allowed in Synthesis
         }
     }
 
     public static class InvalidRegistrationDuplicateBuildServicesExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(BuildServices one, BuildServices two) {
+        public void registration(BuildServices one, BuildServices two) {
             // invalid by contract: duplicate BuildServices parameter
         }
     }
 
     public static class EnhancementClassModelExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void enhanceClass(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo, Messages messages) {
+        public void enhanceClass(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo, Messages messages) {
             if (EnhancementTargetBean.class.getName().equals(classInfo.name())) {
                 EnhancementModelRecorder.classInfoInvocations++;
                 messages.info("class-info");
@@ -1179,7 +1181,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void enhanceClassConfig(ClassConfig classConfig) {
+        public void enhanceClassConfig(ClassConfig classConfig) {
             if (EnhancementTargetBean.class.getName().equals(classConfig.info().name())) {
                 EnhancementModelRecorder.classConfigInvocations++;
             }
@@ -1188,7 +1190,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementMethodModelExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void enhanceMethod(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
+        public void enhanceMethod(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
             if ("markedMethod".equals(methodInfo.name())) {
                 EnhancementModelRecorder.methodInfoInvocations++;
             }
@@ -1197,7 +1199,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementMethodConfigModelExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void enhanceMethodConfig(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
+        public void enhanceMethodConfig(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
             if ("markedMethod".equals(methodConfig.info().name())) {
                 EnhancementModelRecorder.methodConfigInvocations++;
             }
@@ -1206,14 +1208,14 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementFieldModelExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void enhanceField(jakarta.enterprise.lang.model.declarations.FieldInfo fieldInfo) {
+        public void enhanceField(jakarta.enterprise.lang.model.declarations.FieldInfo fieldInfo) {
             if ("markedField".equals(fieldInfo.name())) {
                 EnhancementModelRecorder.fieldInfoInvocations++;
             }
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void enhanceFieldConfig(jakarta.enterprise.inject.build.compatible.spi.FieldConfig fieldConfig) {
+        public void enhanceFieldConfig(jakarta.enterprise.inject.build.compatible.spi.FieldConfig fieldConfig) {
             if ("markedField".equals(fieldConfig.info().name())) {
                 EnhancementModelRecorder.fieldConfigInvocations++;
             }
@@ -1222,7 +1224,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementClassConfigGraphExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementConfigGraphTarget.class, withSubtypes = false)
-        void enhance(jakarta.enterprise.inject.build.compatible.spi.ClassConfig classConfig) {
+        public void enhance(jakarta.enterprise.inject.build.compatible.spi.ClassConfig classConfig) {
             if (!EnhancementConfigGraphTarget.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1241,7 +1243,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementAnnotationMutationExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementConfigGraphTarget.class, withSubtypes = false)
-        void enhance(ClassConfig classConfig) {
+        public void enhance(ClassConfig classConfig) {
             if (!EnhancementConfigGraphTarget.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1290,7 +1292,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementCrossMethodPersistenceExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementConfigGraphTarget.class, withSubtypes = false)
-        void aAddMarker(ClassConfig classConfig) {
+        public void aAddMarker(ClassConfig classConfig) {
             if (!EnhancementConfigGraphTarget.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1299,7 +1301,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementConfigGraphTarget.class, withSubtypes = false)
-        void zVerifyMarker(ClassConfig classConfig) {
+        public void zVerifyMarker(ClassConfig classConfig) {
             if (!EnhancementConfigGraphTarget.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1310,7 +1312,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementCrossViewPersistenceExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void aMutateMethodConfig(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
+        public void aMutateMethodConfig(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
             if (!"markedMethod".equals(methodConfig.info().name())) {
                 return;
             }
@@ -1319,7 +1321,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void zVerifyViaClassConfig(ClassConfig classConfig) {
+        public void zVerifyViaClassConfig(ClassConfig classConfig) {
             if (!EnhancementTargetBean.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1334,7 +1336,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementFieldCrossViewExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void aMutateFieldConfig(jakarta.enterprise.inject.build.compatible.spi.FieldConfig fieldConfig) {
+        public void aMutateFieldConfig(jakarta.enterprise.inject.build.compatible.spi.FieldConfig fieldConfig) {
             if (!"markedField".equals(fieldConfig.info().name())) {
                 return;
             }
@@ -1343,7 +1345,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void bVerifyClassSeesFieldMutation(ClassConfig classConfig) {
+        public void bVerifyClassSeesFieldMutation(ClassConfig classConfig) {
             if (!EnhancementTargetBean.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1356,7 +1358,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void cMutateClassFieldView(ClassConfig classConfig) {
+        public void cMutateClassFieldView(ClassConfig classConfig) {
             if (!EnhancementTargetBean.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1369,7 +1371,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void zVerifyFieldInfoSeesClassMutation(jakarta.enterprise.lang.model.declarations.FieldInfo fieldInfo) {
+        public void zVerifyFieldInfoSeesClassMutation(jakarta.enterprise.lang.model.declarations.FieldInfo fieldInfo) {
             if (!"markedField".equals(fieldInfo.name())) {
                 return;
             }
@@ -1380,7 +1382,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementMethodReverseCrossViewExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void aMutateClassMethodView(ClassConfig classConfig) {
+        public void aMutateClassMethodView(ClassConfig classConfig) {
             if (!EnhancementTargetBean.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1393,7 +1395,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void zVerifyMethodInfoSeesClassMutation(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
+        public void zVerifyMethodInfoSeesClassMutation(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
             if (!"markedMethod".equals(methodInfo.name())) {
                 return;
             }
@@ -1404,7 +1406,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementRemoveAllCrossViewExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void aRemoveMethodAnnotations(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
+        public void aRemoveMethodAnnotations(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
             if (!"markedMethod".equals(methodConfig.info().name())) {
                 return;
             }
@@ -1413,7 +1415,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void bVerifyMethodViaClassConfig(ClassConfig classConfig) {
+        public void bVerifyMethodViaClassConfig(ClassConfig classConfig) {
             if (!EnhancementTargetBean.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1426,7 +1428,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void cVerifyMethodViaMethodInfo(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
+        public void cVerifyMethodViaMethodInfo(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
             if (!"markedMethod".equals(methodInfo.name())) {
                 return;
             }
@@ -1435,7 +1437,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void dRemoveFieldAnnotations(jakarta.enterprise.inject.build.compatible.spi.FieldConfig fieldConfig) {
+        public void dRemoveFieldAnnotations(jakarta.enterprise.inject.build.compatible.spi.FieldConfig fieldConfig) {
             if (!"markedField".equals(fieldConfig.info().name())) {
                 return;
             }
@@ -1444,7 +1446,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void eVerifyFieldViaClassConfig(ClassConfig classConfig) {
+        public void eVerifyFieldViaClassConfig(ClassConfig classConfig) {
             if (!EnhancementTargetBean.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1457,7 +1459,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void fVerifyFieldViaFieldInfo(jakarta.enterprise.lang.model.declarations.FieldInfo fieldInfo) {
+        public void fVerifyFieldViaFieldInfo(jakarta.enterprise.lang.model.declarations.FieldInfo fieldInfo) {
             if (!"markedField".equals(fieldInfo.name())) {
                 return;
             }
@@ -1468,7 +1470,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementRemovePredicateCrossViewExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void aRemoveMethodEnhanced(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
+        public void aRemoveMethodEnhanced(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
             if (!"markedMethod".equals(methodConfig.info().name())) {
                 return;
             }
@@ -1477,7 +1479,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void bVerifyMethodViaClassConfig(ClassConfig classConfig) {
+        public void bVerifyMethodViaClassConfig(ClassConfig classConfig) {
             if (!EnhancementTargetBean.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1490,7 +1492,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void cVerifyMethodViaMethodInfo(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
+        public void cVerifyMethodViaMethodInfo(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
             if (!"markedMethod".equals(methodInfo.name())) {
                 return;
             }
@@ -1499,7 +1501,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void dRemoveFieldEnhanced(jakarta.enterprise.inject.build.compatible.spi.FieldConfig fieldConfig) {
+        public void dRemoveFieldEnhanced(jakarta.enterprise.inject.build.compatible.spi.FieldConfig fieldConfig) {
             if (!"markedField".equals(fieldConfig.info().name())) {
                 return;
             }
@@ -1508,7 +1510,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void eVerifyFieldViaClassConfig(ClassConfig classConfig) {
+        public void eVerifyFieldViaClassConfig(ClassConfig classConfig) {
             if (!EnhancementTargetBean.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1521,7 +1523,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void fVerifyFieldViaFieldInfo(jakarta.enterprise.lang.model.declarations.FieldInfo fieldInfo) {
+        public void fVerifyFieldViaFieldInfo(jakarta.enterprise.lang.model.declarations.FieldInfo fieldInfo) {
             if (!"markedField".equals(fieldInfo.name())) {
                 return;
             }
@@ -1532,7 +1534,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementParameterCrossViewExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementConfigGraphTarget.class, withSubtypes = false)
-        void aAddParameterAnnotation(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
+        public void aAddParameterAnnotation(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
             if (!"update".equals(methodConfig.info().name()) || methodConfig.parameters().isEmpty()) {
                 return;
             }
@@ -1541,7 +1543,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementConfigGraphTarget.class, withSubtypes = false)
-        void bVerifyParameterAdded(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
+        public void bVerifyParameterAdded(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
             if (!"update".equals(methodInfo.name()) || methodInfo.parameters().isEmpty()) {
                 return;
             }
@@ -1550,7 +1552,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementConfigGraphTarget.class, withSubtypes = false)
-        void cRemoveParameterAnnotation(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
+        public void cRemoveParameterAnnotation(jakarta.enterprise.inject.build.compatible.spi.MethodConfig methodConfig) {
             if (!"update".equals(methodConfig.info().name()) || methodConfig.parameters().isEmpty()) {
                 return;
             }
@@ -1560,7 +1562,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = EnhancementConfigGraphTarget.class, withSubtypes = false)
-        void dVerifyParameterRemoved(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
+        public void dVerifyParameterRemoved(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
             if (!"update".equals(methodInfo.name()) || methodInfo.parameters().isEmpty()) {
                 return;
             }
@@ -1571,7 +1573,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class LanguageModelRepeatableExtension implements BuildCompatibleExtension {
         @Enhancement(types = RepeatableTargetBean.class, withSubtypes = false)
-        void inspect(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
+        public void inspect(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
             if (!RepeatableTargetBean.class.getName().equals(classInfo.name())) {
                 return;
             }
@@ -1580,7 +1582,7 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Enhancement(types = RepeatableTargetBean.class, withSubtypes = false)
-        void inspectConfig(ClassConfig classConfig) {
+        public void inspectConfig(ClassConfig classConfig) {
             if (!RepeatableTargetBean.class.getName().equals(classConfig.info().name())) {
                 return;
             }
@@ -1591,7 +1593,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidEnhancementMultipleModelsExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class)
-        void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo,
+        public void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo,
                      jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
             // invalid by contract: only one enhancement model/config parameter allowed
         }
@@ -1599,7 +1601,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class ScannedClassesAddsBeanExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(ScannedClasses scannedClasses) {
+        public void discovery(ScannedClasses scannedClasses) {
             scannedClasses.add(ScannedAddedBean.class.getName());
             ScannedClassesRecorder.discoveryRan = true;
         }
@@ -1607,14 +1609,14 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidScannedClassesExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(ScannedClasses scannedClasses) {
+        public void discovery(ScannedClasses scannedClasses) {
             scannedClasses.add("missing.DoesNotExist");
         }
     }
 
     public static class EnhancementWithSubtypesTrueExtension implements BuildCompatibleExtension {
         @Enhancement(types = BaseEnhancementType.class, withSubtypes = true)
-        void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
+        public void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
             if (BaseEnhancementType.class.getName().equals(classInfo.name()) ||
                 SubEnhancementType.class.getName().equals(classInfo.name())) {
                 SubtypeEnhancementRecorder.classInfoHits++;
@@ -1624,7 +1626,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementWithSubtypesFalseExtension implements BuildCompatibleExtension {
         @Enhancement(types = BaseEnhancementType.class, withSubtypes = false)
-        void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
+        public void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
             if (BaseEnhancementType.class.getName().equals(classInfo.name())) {
                 SubtypeEnhancementRecorder.classInfoHits++;
             }
@@ -1633,7 +1635,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementModelWithServicesExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
-        void enhance(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo,
+        public void enhance(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo,
                      BuildServices buildServices,
                      Types types,
                      Messages messages) {
@@ -1646,7 +1648,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidEnhancementDuplicateMessagesWithModelExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class)
-        void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo,
+        public void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo,
                      Messages one,
                      Messages two) {
             // invalid by contract: duplicate Messages
@@ -1655,49 +1657,49 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementClassNoMatchExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = NonMatchingMarker.class)
-        void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
+        public void enhance(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
             EnhancementNoMatchRecorder.classInfoHits++;
         }
     }
 
     public static class EnhancementMethodNoMatchExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = NonMatchingMarker.class)
-        void enhance(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
+        public void enhance(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo) {
             EnhancementNoMatchRecorder.methodInfoHits++;
         }
     }
 
     public static class InvalidDiscoveryDuplicateMetaAnnotationsExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(MetaAnnotations one, MetaAnnotations two) {
+        public void discovery(MetaAnnotations one, MetaAnnotations two) {
             // invalid by contract: duplicate MetaAnnotations
         }
     }
 
     public static class InvalidDiscoveryDuplicateScannedClassesExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(ScannedClasses one, ScannedClasses two) {
+        public void discovery(ScannedClasses one, ScannedClasses two) {
             // invalid by contract: duplicate ScannedClasses
         }
     }
 
     public static class InvalidEnhancementDuplicateBuildServicesExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class)
-        void enhance(BuildServices one, BuildServices two) {
+        public void enhance(BuildServices one, BuildServices two) {
             // invalid by contract: duplicate BuildServices
         }
     }
 
     public static class InvalidValidationDuplicateMessagesExtension implements BuildCompatibleExtension {
         @Validation
-        void validate(Messages one, Messages two) {
+        public void validate(Messages one, Messages two) {
             // invalid by contract: duplicate Messages
         }
     }
 
     public static class RegistrationModelParametersExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo) {
+        public void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo) {
             if (beanInfo != null) {
                 RegistrationValidationModelRecorder.registrationBeanInfoCount++;
             }
@@ -1706,14 +1708,14 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class ValidationModelParametersExtension implements BuildCompatibleExtension {
         @Validation
-        void validation(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo) {
+        public void validation(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo) {
             if (beanInfo != null) {
                 RegistrationValidationModelRecorder.validationBeanInfoCount++;
             }
         }
 
         @Validation
-        void validationObserver(jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observerInfo) {
+        public void validationObserver(jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observerInfo) {
             if (observerInfo != null) {
                 RegistrationValidationModelRecorder.validationObserverInfoCount++;
             }
@@ -1722,7 +1724,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidRegistrationMultipleModelsExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
+        public void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
                           jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observerInfo) {
             // invalid by contract: more than one model parameter
         }
@@ -1730,7 +1732,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidValidationMultipleModelsExtension implements BuildCompatibleExtension {
         @Validation
-        void validation(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
+        public void validation(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
                         jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observerInfo) {
             // invalid by contract: more than one model parameter
         }
@@ -1738,7 +1740,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class RegistrationInterceptorModelExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(jakarta.enterprise.inject.build.compatible.spi.InterceptorInfo interceptorInfo) {
+        public void registration(jakarta.enterprise.inject.build.compatible.spi.InterceptorInfo interceptorInfo) {
             if (interceptorInfo != null) {
                 InterceptorModelRecorder.registrationInterceptorInfoCount++;
             }
@@ -1747,7 +1749,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class ValidationInterceptorModelExtension implements BuildCompatibleExtension {
         @Validation
-        void validation(jakarta.enterprise.inject.build.compatible.spi.InterceptorInfo interceptorInfo) {
+        public void validation(jakarta.enterprise.inject.build.compatible.spi.InterceptorInfo interceptorInfo) {
             if (interceptorInfo != null) {
                 InterceptorModelRecorder.validationInterceptorInfoCount++;
             }
@@ -1756,7 +1758,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidRegistrationBeanAndInterceptorModelsExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
+        public void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
                           jakarta.enterprise.inject.build.compatible.spi.InterceptorInfo interceptorInfo) {
             // invalid by contract: more than one model parameter
         }
@@ -1764,7 +1766,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class RegistrationInjectionPointModelExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo injectionPointInfo) {
+        public void registration(jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo injectionPointInfo) {
             if (injectionPointInfo != null) {
                 InjectionPointModelRecorder.registrationInjectionPointInfoCount++;
             }
@@ -1773,7 +1775,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class ValidationInjectionPointModelExtension implements BuildCompatibleExtension {
         @Validation
-        void validation(jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo injectionPointInfo) {
+        public void validation(jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo injectionPointInfo) {
             if (injectionPointInfo != null) {
                 InjectionPointModelRecorder.validationInjectionPointInfoCount++;
             }
@@ -1782,7 +1784,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidValidationBeanAndInjectionPointModelsExtension implements BuildCompatibleExtension {
         @Validation
-        void validation(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
+        public void validation(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
                         jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo injectionPointInfo) {
             // invalid by contract: more than one model parameter
         }
@@ -1790,7 +1792,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class RegistrationDisposerModelExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(DisposerInfo disposerInfo) {
+        public void registration(DisposerInfo disposerInfo) {
             if (disposerInfo != null) {
                 DisposerModelRecorder.registrationDisposerInfoCount++;
             }
@@ -1799,7 +1801,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class ValidationDisposerModelExtension implements BuildCompatibleExtension {
         @Validation
-        void validation(DisposerInfo disposerInfo) {
+        public void validation(DisposerInfo disposerInfo) {
             if (disposerInfo != null) {
                 DisposerModelRecorder.validationDisposerInfoCount++;
             }
@@ -1808,7 +1810,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidRegistrationBeanAndDisposerModelsExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
+        public void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
                           DisposerInfo disposerInfo) {
             // invalid by contract: more than one model parameter
         }
@@ -1816,7 +1818,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class RegistrationScopeModelExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(ScopeInfo scopeInfo) {
+        public void registration(ScopeInfo scopeInfo) {
             if (scopeInfo != null) {
                 ScopeModelRecorder.registrationScopeInfoCount++;
             }
@@ -1825,7 +1827,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class ValidationScopeModelExtension implements BuildCompatibleExtension {
         @Validation
-        void validation(ScopeInfo scopeInfo) {
+        public void validation(ScopeInfo scopeInfo) {
             if (scopeInfo != null) {
                 ScopeModelRecorder.validationScopeInfoCount++;
             }
@@ -1834,7 +1836,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidValidationBeanAndScopeModelsExtension implements BuildCompatibleExtension {
         @Validation
-        void validation(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
+        public void validation(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
                         ScopeInfo scopeInfo) {
             // invalid by contract: more than one model parameter
         }
@@ -1842,7 +1844,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class RegistrationStereotypeModelExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(StereotypeInfo stereotypeInfo) {
+        public void registration(StereotypeInfo stereotypeInfo) {
             if (stereotypeInfo != null) {
                 StereotypeModelRecorder.registrationStereotypeInfoCount++;
             }
@@ -1851,7 +1853,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class ValidationStereotypeModelExtension implements BuildCompatibleExtension {
         @Validation
-        void validation(StereotypeInfo stereotypeInfo) {
+        public void validation(StereotypeInfo stereotypeInfo) {
             if (stereotypeInfo != null) {
                 StereotypeModelRecorder.validationStereotypeInfoCount++;
             }
@@ -1860,7 +1862,7 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class InvalidRegistrationBeanAndStereotypeModelsExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
+        public void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo,
                           StereotypeInfo stereotypeInfo) {
             // invalid by contract: more than one model parameter
         }
@@ -1868,14 +1870,14 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class SyntheticObserverParityExtension implements BuildCompatibleExtension {
         @Synthesis
-        void synthesis(SyntheticComponents syntheticComponents) {
+        public void synthesis(SyntheticComponents syntheticComponents) {
             syntheticComponents.addObserver(FixtureEvent.class)
                 .declaringClass(StereotypeFixtureBean.class)
                 .observeWith(FixtureSyntheticObserver.class);
         }
 
         @Validation
-        void validation(jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observerInfo, Messages messages) {
+        public void validation(jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observerInfo, Messages messages) {
             if (observerInfo != null && observerInfo.isSynthetic()) {
                 SyntheticObserverParityRecorder.syntheticObserverSeen++;
                 if (observerInfo.observerMethod() != null) {
@@ -1895,54 +1897,54 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class AlphaOrderedExtension implements BuildCompatibleExtension {
         @Discovery
-        void second() {
+        public void second() {
             OrderingRecorder.record("alpha-second");
         }
 
         @Discovery
-        void first() {
+        public void first() {
             OrderingRecorder.record("alpha-first");
         }
     }
 
     public static class BetaOrderedExtension implements BuildCompatibleExtension {
         @Discovery
-        void only() {
+        public void only() {
             OrderingRecorder.record("beta-only");
         }
     }
 
     public static class DuplicateBceExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery() {
+        public void discovery() {
             DuplicateRegistrationRecorder.discoveryCalls++;
         }
     }
 
     public static class MessagesErrorExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(Messages messages) {
+        public void discovery(Messages messages) {
             messages.error("forced diagnostics deployment error");
         }
     }
 
     public static class MessagesErrorExceptionExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(Messages messages) {
+        public void discovery(Messages messages) {
             messages.error(new IllegalStateException("forced diagnostics exception"));
         }
     }
 
     public static class MessagesInfoWarnExtension implements BuildCompatibleExtension {
         @Discovery
-        void discovery(Messages messages) {
+        public void discovery(Messages messages) {
             messages.info("bce diagnostics info");
             messages.warn("bce diagnostics warn");
             DiagnosticsRecorder.discoveryRan = true;
         }
 
         @Validation
-        void validation(Messages messages) {
+        public void validation(Messages messages) {
             messages.info("bce diagnostics validation");
             DiagnosticsRecorder.validationRan = true;
         }
@@ -2354,10 +2356,10 @@ public class BuildCompatibleExtensionLifecycleTest {
         String markedField;
 
         @EnhancedMarker
-        void markedMethod() {
+        public void markedMethod() {
         }
 
-        void plainMethod() {
+        public void plainMethod() {
         }
     }
 
@@ -2371,7 +2373,7 @@ public class BuildCompatibleExtensionLifecycleTest {
             this.data = data;
         }
 
-        void update(String value, int version) {
+        public void update(String value, int version) {
             this.data = value + version;
         }
     }
@@ -2405,7 +2407,7 @@ public class BuildCompatibleExtensionLifecycleTest {
     }
 
     public static class NonEnhancedTargetBean {
-        void plainMethod() {
+        public void plainMethod() {
         }
     }
 
@@ -2445,7 +2447,7 @@ public class BuildCompatibleExtensionLifecycleTest {
             return "fixture";
         }
 
-        void disposeText(@Disposes String value) {
+        public void disposeText(@Disposes String value) {
             // disposer fixture
         }
     }

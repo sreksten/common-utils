@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class BuildCompatibleInvokerMaterializationTest {
 
     @AfterEach
-    void resetState() {
+    public void resetState() {
         RecordingSynthesisExtension.invokerTokenForBean = null;
         RecordingSynthesisExtension.invokerTokenForObserver = null;
         ContextDrivenSynthesisExtension.invokerToken = null;
@@ -52,7 +52,7 @@ public class BuildCompatibleInvokerMaterializationTest {
 
     @Test
     @DisplayName("10.3 - Synthetic bean creator receives materialized Invoker from InvokerInfo parameter")
-    void shouldMaterializeInvokerInfoForSyntheticBeanCreator() {
+    public void shouldMaterializeInvokerInfoForSyntheticBeanCreator() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(RecordingSynthesisExtension.class.getName());
         syringe.setup();
@@ -63,7 +63,7 @@ public class BuildCompatibleInvokerMaterializationTest {
 
     @Test
     @DisplayName("10.3 - Synthetic observer receives materialized Invoker from InvokerInfo parameter")
-    void shouldMaterializeInvokerInfoForSyntheticObserver() {
+    public void shouldMaterializeInvokerInfoForSyntheticObserver() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(RecordingSynthesisExtension.class.getName());
         syringe.setup();
@@ -77,7 +77,7 @@ public class BuildCompatibleInvokerMaterializationTest {
 
     @Test
     @DisplayName("10.3 - Synthetic builders accept ClassInfo, AnnotationInfo and lang-model Type surfaces")
-    void shouldSupportClassInfoAnnotationInfoAndLangModelTypeSurfaces() {
+    public void shouldSupportClassInfoAnnotationInfoAndLangModelTypeSurfaces() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(SurfaceSynthesisExtension.class.getName());
         syringe.setup();
@@ -97,7 +97,7 @@ public class BuildCompatibleInvokerMaterializationTest {
 
     @Test
     @DisplayName("10.3 - Full registration to synthesis flow can use discovered registration metadata context")
-    void shouldUseDiscoveredRegistrationMetadataContextEndToEnd() {
+    public void shouldUseDiscoveredRegistrationMetadataContextEndToEnd() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(ContextDrivenSynthesisExtension.class.getName());
         syringe.setup();

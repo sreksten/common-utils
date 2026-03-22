@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
 import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -28,12 +29,16 @@ import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.declarations.FieldInfo;
 import jakarta.enterprise.lang.model.declarations.MethodInfo;
+import jakarta.annotation.Priority;
+import jakarta.interceptor.Interceptor;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -92,7 +97,8 @@ public class BuildCompatibleExtensionRunner {
         }
 
         invocations.sort(Comparator
-            .comparing((PhaseMethodInvocation i) -> i.extension.getClass().getName())
+            .comparingInt((PhaseMethodInvocation i) -> priorityOf(i.method))
+            .thenComparing(i -> i.extension.getClass().getName())
             .thenComparing(i -> i.method.getName()));
 
         BceSyntheticComponents syntheticComponents = null;
@@ -176,16 +182,40 @@ public class BuildCompatibleExtensionRunner {
             if (target instanceof DefinitionException) {
                 throw (DefinitionException) target;
             }
-            if (target instanceof RuntimeException) {
-                throw (RuntimeException) target;
+            if (isCdiCurrentAccessFailure(target)) {
+                throw new NonPortableBehaviourException(
+                    "Calling CDI.current() from a build compatible extension method is non-portable", target);
             }
             throw new DefinitionException("Error invoking BCE phase method " +
                 invocation.extension.getClass().getName() + "." + method.getName(), target);
         }
     }
 
+    private int priorityOf(Method method) {
+        Priority priority = method.getAnnotation(Priority.class);
+        return priority != null ? priority.value() : Interceptor.Priority.APPLICATION + 500;
+    }
+
     private void validatePhaseMethodSignature(Method method,
                                               BuildCompatibleExtensionSupport.SupportedPhase phase) {
+        if (!Modifier.isPublic(method.getModifiers())) {
+            throw new DefinitionException("Invalid BCE " + phase + " method " +
+                method.getDeclaringClass().getName() + "." + method.getName() +
+                ": method must be public.");
+        }
+
+        if (Modifier.isStatic(method.getModifiers())) {
+            throw new DefinitionException("Invalid BCE " + phase + " method " +
+                method.getDeclaringClass().getName() + "." + method.getName() +
+                ": method must not be static.");
+        }
+
+        if (method.getTypeParameters().length > 0) {
+            throw new DefinitionException("Invalid BCE " + phase + " method " +
+                method.getDeclaringClass().getName() + "." + method.getName() +
+                ": type parameters are not allowed.");
+        }
+
         int phaseAnnotationCount = 0;
         if (AnnotationsEnum.hasDiscoveryAnnotation(method)) {
             phaseAnnotationCount++;
@@ -340,6 +370,11 @@ public class BuildCompatibleExtensionRunner {
             throw new DefinitionException("Invalid BCE ENHANCEMENT method " +
                 method.getDeclaringClass().getName() + "." + method.getName() +
                 ": at most one model/config parameter is allowed from {ClassInfo, ClassConfig, MethodInfo, MethodConfig, FieldInfo, FieldConfig}.");
+        }
+        if (modelParamCount != 1) {
+            throw new DefinitionException("Invalid BCE ENHANCEMENT method " +
+                method.getDeclaringClass().getName() + "." + method.getName() +
+                ": exactly one model/config parameter is required from {ClassInfo, ClassConfig, MethodInfo, MethodConfig, FieldInfo, FieldConfig}.");
         }
     }
 
@@ -611,8 +646,7 @@ public class BuildCompatibleExtensionRunner {
             if (acceptedTypes.length > 0) {
                 List<ObserverInfo> filtered = new ArrayList<ObserverInfo>();
                 for (ObserverInfo observerInfo : out) {
-                    Class<?> declaringClass = BceMetadata.unwrapClassInfo(observerInfo.declaringClass());
-                    if (isClassAcceptedByRegistrationTypes(declaringClass, acceptedTypes)) {
+                    if (isObserverAcceptedByRegistrationTypes(observerInfo, acceptedTypes)) {
                         filtered.add(observerInfo);
                     }
                 }
@@ -778,6 +812,26 @@ public class BuildCompatibleExtensionRunner {
         return false;
     }
 
+    private boolean isObserverAcceptedByRegistrationTypes(ObserverInfo observerInfo, Class<?>[] acceptedTypes) {
+        if (observerInfo == null) {
+            return false;
+        }
+        try {
+            Class<?> eventType = BceMetadata.unwrapType(observerInfo.eventType());
+            if (eventType == null) {
+                return false;
+            }
+            for (Class<?> acceptedType : acceptedTypes) {
+                if (acceptedType.isAssignableFrom(eventType)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private void invokeRegistrationOrValidationForModel(PhaseMethodInvocation invocation,
                                                         BuildCompatibleExtensionSupport.SupportedPhase phase,
                                                         BeanInfo beanInfo,
@@ -849,8 +903,9 @@ public class BuildCompatibleExtensionRunner {
             if (target instanceof DefinitionException) {
                 throw (DefinitionException) target;
             }
-            if (target instanceof RuntimeException) {
-                throw (RuntimeException) target;
+            if (isCdiCurrentAccessFailure(target)) {
+                throw new NonPortableBehaviourException(
+                    "Calling CDI.current() from a build compatible extension method is non-portable", target);
             }
             throw new DefinitionException("Error invoking BCE " + phase + " method " +
                 invocation.extension.getClass().getName() + "." + invocation.method.getName(), target);
@@ -873,7 +928,7 @@ public class BuildCompatibleExtensionRunner {
 
         if (ClassInfo.class.isAssignableFrom(modelType) || ClassConfig.class.isAssignableFrom(modelType)) {
             for (Class<?> clazz : getEnhancedClasses(phaseMethod)) {
-                invokeEnhancementForTarget(invocation, clazz, null, null, enhancementModelState);
+                invokeEnhancementForTarget(invocation, clazz, null, null, null, enhancementModelState);
             }
             return;
         }
@@ -883,7 +938,14 @@ public class BuildCompatibleExtensionRunner {
                 methods.sort(Comparator.comparing(Method::getName).thenComparingInt(Method::getParameterCount));
                 for (Method method : methods) {
                     if (matchesEnhancementAnnotationFilter(method, phaseMethod)) {
-                        invokeEnhancementForTarget(invocation, clazz, method, null, enhancementModelState);
+                        invokeEnhancementForTarget(invocation, clazz, method, null, null, enhancementModelState);
+                    }
+                }
+                List<Constructor<?>> constructors = new ArrayList<Constructor<?>>(Arrays.asList(clazz.getDeclaredConstructors()));
+                constructors.sort(Comparator.comparingInt(Constructor::getParameterCount));
+                for (Constructor<?> constructor : constructors) {
+                    if (matchesEnhancementAnnotationFilter(constructor, phaseMethod)) {
+                        invokeEnhancementForTarget(invocation, clazz, null, constructor, null, enhancementModelState);
                     }
                 }
             }
@@ -895,7 +957,7 @@ public class BuildCompatibleExtensionRunner {
                 fields.sort(Comparator.comparing(Field::getName));
                 for (Field field : fields) {
                     if (matchesEnhancementAnnotationFilter(field, phaseMethod)) {
-                        invokeEnhancementForTarget(invocation, clazz, null, field, enhancementModelState);
+                        invokeEnhancementForTarget(invocation, clazz, null, null, field, enhancementModelState);
                     }
                 }
             }
@@ -906,12 +968,13 @@ public class BuildCompatibleExtensionRunner {
                                             Class<?> clazz,
                                             Method method,
                                             Field field) {
-        invokeEnhancementForTarget(invocation, clazz, method, field, new EnhancementModelState());
+        invokeEnhancementForTarget(invocation, clazz, method, null, field, new EnhancementModelState());
     }
 
     private void invokeEnhancementForTarget(PhaseMethodInvocation invocation,
                                             Class<?> clazz,
                                             Method method,
+                                            Constructor<?> constructor,
                                             Field field,
                                             EnhancementModelState enhancementModelState) {
         try {
@@ -921,7 +984,8 @@ public class BuildCompatibleExtensionRunner {
             Object[] args = new Object[parameterTypes.length];
             for (int i = 0; i < parameterTypes.length; i++) {
                 Class<?> parameterType = parameterTypes[i];
-                Object mapped = mapEnhancementParameter(parameterType, clazz, method, field, enhancementModelState);
+                Object mapped = mapEnhancementParameter(
+                    parameterType, clazz, method, constructor, field, enhancementModelState);
                 if (mapped == null) {
                     throw new DefinitionException("Unsupported ENHANCEMENT parameter type " +
                         parameterType.getName() + " for method " +
@@ -940,17 +1004,36 @@ public class BuildCompatibleExtensionRunner {
             if (target instanceof DefinitionException) {
                 throw (DefinitionException) target;
             }
-            if (target instanceof RuntimeException) {
-                throw (RuntimeException) target;
+            if (isCdiCurrentAccessFailure(target)) {
+                throw new NonPortableBehaviourException(
+                    "Calling CDI.current() from a build compatible extension method is non-portable", target);
             }
             throw new DefinitionException("Error invoking BCE ENHANCEMENT method " +
                 invocation.extension.getClass().getName() + "." + invocation.method.getName(), target);
         }
     }
 
+    private boolean isCdiCurrentAccessFailure(Throwable target) {
+        if (!(target instanceof IllegalStateException)) {
+            return false;
+        }
+        String message = target.getMessage();
+        if ("Unable to access CDI".equals(message)) {
+            return true;
+        }
+        for (StackTraceElement element : target.getStackTrace()) {
+            if ("jakarta.enterprise.inject.spi.CDI".equals(element.getClassName()) &&
+                "current".equals(element.getMethodName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Object mapEnhancementParameter(Class<?> parameterType,
                                            Class<?> clazz,
                                            Method method,
+                                           Constructor<?> constructor,
                                            Field field,
                                            EnhancementModelState enhancementModelState) {
         if (ClassInfo.class.isAssignableFrom(parameterType)) {
@@ -966,22 +1049,30 @@ public class BuildCompatibleExtensionRunner {
             return enhancementModelState.classConfig(clazz);
         }
         if (MethodInfo.class.isAssignableFrom(parameterType)) {
-            if (method == null) {
+            if (method == null && constructor == null) {
                 return null;
             }
-            if (enhancementModelState != null && enhancementModelState.methodConfigs.containsKey(method)) {
+            if (method != null &&
+                enhancementModelState != null &&
+                enhancementModelState.methodConfigs.containsKey(method)) {
                 return enhancementModelState.methodConfigs.get(method).info();
             }
-            return BceMetadata.methodInfo(method);
+            if (method != null) {
+                return BceMetadata.methodInfo(method);
+            }
+            return BceMetadata.methodInfo(constructor);
         }
         if (MethodConfig.class.isAssignableFrom(parameterType)) {
-            if (method == null) {
+            if (method == null && constructor == null) {
                 return null;
             }
-            if (enhancementModelState == null) {
-                return BceEnhancementModels.methodConfig(method);
+            if (method != null) {
+                if (enhancementModelState == null) {
+                    return BceEnhancementModels.methodConfig(method);
+                }
+                return enhancementModelState.methodConfig(method);
             }
-            return enhancementModelState.methodConfig(method);
+            return BceEnhancementModels.methodConfig(constructor);
         }
         if (FieldInfo.class.isAssignableFrom(parameterType)) {
             if (field == null) {

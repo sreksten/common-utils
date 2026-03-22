@@ -64,7 +64,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3 - InvokerBuilder is obtained from InvokerFactory.createInvoker(BeanInfo, MethodInfo)")
-    void shouldExposeInvokerFactoryCreateInvokerContract() throws Exception {
+    public void shouldExposeInvokerFactoryCreateInvokerContract() throws Exception {
         Method method = InvokerFactory.class.getMethod("createInvoker", BeanInfo.class, MethodInfo.class);
         assertNotNull(method);
         assertEquals(InvokerBuilder.class, method.getReturnType());
@@ -75,7 +75,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3 - InvokerFactory.createInvoker returns InvokerBuilder parameterized with InvokerInfo token")
-    void shouldReturnInvokerBuilderOfInvokerInfo() throws Exception {
+    public void shouldReturnInvokerBuilderOfInvokerInfo() throws Exception {
         Method method = InvokerFactory.class.getMethod("createInvoker", BeanInfo.class, MethodInfo.class);
         Type genericReturn = method.getGenericReturnType();
         assertTrue(genericReturn instanceof ParameterizedType);
@@ -87,7 +87,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3 - InvokerFactory may be declared as parameter of @Registration build compatible extension method")
-    void shouldAllowInvokerFactoryParameterOnRegistrationMethod() throws Exception {
+    public void shouldAllowInvokerFactoryParameterOnRegistrationMethod() throws Exception {
         Method registration = ExampleBuildCompatibleExtension.class.getDeclaredMethod("registration", InvokerFactory.class);
 
         assertTrue(AnnotationsEnum.hasRegistrationAnnotation(registration));
@@ -97,7 +97,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3 - InvokerBuilder.build produces opaque token type that can be carried as InvokerInfo")
-    void shouldExposeInvokerBuilderBuildTokenType() throws Exception {
+    public void shouldExposeInvokerBuilderBuildTokenType() throws Exception {
         Method build = InvokerBuilder.class.getMethod("build");
         assertEquals(Object.class, build.getReturnType());
 
@@ -108,7 +108,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3 - InvokerInfo token can be passed to SyntheticBeanBuilder and SyntheticObserverBuilder")
-    void shouldAllowPassingInvokerInfoToSyntheticBuilders() throws Exception {
+    public void shouldAllowPassingInvokerInfoToSyntheticBuilders() throws Exception {
         Method beanWithParam = SyntheticBeanBuilder.class.getMethod("withParam", String.class, InvokerInfo.class);
         Method observerWithParam = SyntheticObserverBuilder.class.getMethod("withParam", String.class, InvokerInfo.class);
 
@@ -120,7 +120,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - InvokerBuilder exposes withInstanceLookup() and withArgumentLookup(int) methods")
-    void shouldExposeLookupConfigurationMethods() throws Exception {
+    public void shouldExposeLookupConfigurationMethods() throws Exception {
         Method withInstanceLookup = InvokerBuilder.class.getMethod("withInstanceLookup");
         Method withArgumentLookup = InvokerBuilder.class.getMethod("withArgumentLookup", int.class);
         assertEquals(InvokerBuilder.class, withInstanceLookup.getReturnType());
@@ -129,7 +129,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - withArgumentLookup rejects positions below 0 and beyond target parameter count")
-    void shouldRejectOutOfRangeArgumentLookupPositions() throws Exception {
+    public void shouldRejectOutOfRangeArgumentLookupPositions() throws Exception {
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(LookupTargetBean.class);
         syringe.setup();
@@ -144,7 +144,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - withInstanceLookup ignores instance for non-static methods and uses contextual bean instance")
-    void shouldUseContextualInstanceWhenInstanceLookupConfigured() throws Exception {
+    public void shouldUseContextualInstanceWhenInstanceLookupConfigured() throws Exception {
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(LookupTargetBean.class);
         syringe.setup();
@@ -164,7 +164,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - withInstanceLookup has no effect for static target method")
-    void shouldHaveNoEffectForStaticMethodInstanceLookup() throws Exception {
+    public void shouldHaveNoEffectForStaticMethodInstanceLookup() throws Exception {
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(LookupTargetBean.class);
         syringe.setup();
@@ -179,7 +179,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - withArgumentLookup resolves bean by parameter type and qualifiers and ignores provided argument")
-    void shouldResolveLookedUpArgumentByTypeAndQualifier() throws Exception {
+    public void shouldResolveLookedUpArgumentByTypeAndQualifier() throws Exception {
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(ArgumentLookupBean.class, BlueService.class, RedService.class);
         syringe.setup();
@@ -195,7 +195,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - Lookup configuration does not relax invoke argument-length requirements")
-    void shouldStillRequireAllArgumentsEvenWithLookupConfigured() throws Exception {
+    public void shouldStillRequireAllArgumentsEvenWithLookupConfigured() throws Exception {
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(ArgumentLookupBean.class, BlueService.class);
         syringe.setup();
@@ -210,7 +210,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - Unsatisfied looked up bean causes deployment problem when building invoker")
-    void shouldFailBuildForUnsatisfiedLookedUpBean() throws Exception {
+    public void shouldFailBuildForUnsatisfiedLookedUpBean() throws Exception {
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(UnsatisfiedLookupBean.class);
         syringe.setup();
@@ -224,7 +224,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - Ambiguous looked up bean causes deployment problem when building invoker")
-    void shouldFailBuildForAmbiguousLookedUpBean() throws Exception {
+    public void shouldFailBuildForAmbiguousLookedUpBean() throws Exception {
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(AmbiguousLookupBean.class, AmbiguousServiceA.class, AmbiguousServiceB.class);
         syringe.setup();
@@ -238,7 +238,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - @Dependent looked up bean instances are destroyed before invoke() returns")
-    void shouldDestroyDependentLookedUpBeansAfterInvoke() throws Exception {
+    public void shouldDestroyDependentLookedUpBeansAfterInvoke() throws Exception {
         DependentLookupService.destroyed.set(0);
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(DependentLookupBean.class, DependentLookupService.class);
@@ -255,7 +255,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - Invoker.invoke obtains all looked up bean instances without requiring a specific obtain order")
-    void shouldObtainAllLookedUpBeansWithoutAssumingOrder() throws Exception {
+    public void shouldObtainAllLookedUpBeansWithoutAssumingOrder() throws Exception {
         OrderedLookupRecorder.reset();
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(MultiLookupBean.class, FirstLookupService.class, SecondLookupService.class);
@@ -277,7 +277,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - If creating a looked up bean throws, the exception is rethrown by Invoker.invoke()")
-    void shouldRethrowExceptionFromLookedUpBeanCreation() throws Exception {
+    public void shouldRethrowExceptionFromLookedUpBeanCreation() throws Exception {
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(FailingLookupTargetBean.class, ExplodingLookupService.class);
         syringe.setup();
@@ -294,7 +294,7 @@ public class UsingInvokerBuilderTest {
 
     @Test
     @DisplayName("10.3.1 - Lookup configuration for asynchronous target methods is non-portable")
-    void shouldRejectLookupConfigurationForAsyncTargetMethod() throws Exception {
+    public void shouldRejectLookupConfigurationForAsyncTargetMethod() throws Exception {
         CapturedManagedBeans.reset();
         Syringe syringe = newSyringe(AsyncLookupTargetBean.class, BlueService.class);
         syringe.setup();
@@ -513,7 +513,7 @@ public class UsingInvokerBuilderTest {
         }
 
         @PreDestroy
-        void preDestroy() {
+        public void preDestroy() {
             destroyed.incrementAndGet();
         }
     }

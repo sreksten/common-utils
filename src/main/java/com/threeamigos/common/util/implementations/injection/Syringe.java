@@ -626,6 +626,8 @@ public class Syringe {
             // - Validate alternatives
             validateDeployment();
             fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.VALIDATION);
+            // Re-validate after BCE @Validation; calls to Messages.error(...) must become deployment problems.
+            validateDeployment();
 
             // Step 5.2: Fire AfterDeploymentValidation event
             // Extensions can perform final validation checks

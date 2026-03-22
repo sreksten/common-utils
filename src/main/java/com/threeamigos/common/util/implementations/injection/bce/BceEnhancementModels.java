@@ -45,6 +45,10 @@ final class BceEnhancementModels {
         return new SimpleMethodConfig(method);
     }
 
+    static MethodConfig methodConfig(java.lang.reflect.Constructor<?> constructor) {
+        return new SimpleMethodConfig(constructor);
+    }
+
     static FieldConfig fieldConfig(Field field) {
         return new SimpleFieldConfig(field);
     }
