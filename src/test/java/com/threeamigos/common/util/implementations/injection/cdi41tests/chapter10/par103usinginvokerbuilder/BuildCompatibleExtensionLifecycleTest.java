@@ -90,14 +90,16 @@ public class BuildCompatibleExtensionLifecycleTest {
     }
 
     @Test
-    @DisplayName("10.3 - Explicitly registered build compatible extension runs supported phases in spec order")
+    @DisplayName("10.3 - Explicitly registered build compatible extension runs supported phases in deployment order")
     public void shouldRunBuildCompatibleExtensionPhasesInOrder() {
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(TrackingBuildCompatibleExtension.class.getName());
         syringe.setup();
 
+        // CDI 4.1 §13.5.2: registration callbacks run before and after synthesis
+        // (the second registration pass processes synthetic components).
         assertEquals(
-            Arrays.asList("DISCOVERY", "ENHANCEMENT", "REGISTRATION", "SYNTHESIS", "VALIDATION"),
+            Arrays.asList("DISCOVERY", "ENHANCEMENT", "REGISTRATION", "SYNTHESIS", "REGISTRATION", "VALIDATION"),
             PhaseRecorder.snapshot()
         );
     }
