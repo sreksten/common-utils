@@ -744,7 +744,9 @@ public class BeanManagerImpl implements BeanManager {
             return false;
         }
         // Check both annotation-based and programmatically registered interceptor bindings
-        return annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
+        return com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+                   .hasActivateRequestContextAnnotation(annotationType) ||
+               annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
                knowledgeBase.isRegisteredInterceptorBinding(annotationType);
     }
 

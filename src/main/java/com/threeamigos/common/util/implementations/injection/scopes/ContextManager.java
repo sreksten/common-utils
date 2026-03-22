@@ -26,6 +26,7 @@ public class ContextManager {
     private final ConversationScopedContext conversationContext;
     private final SessionScopedContext sessionContext;
     private final RequestScopedContext requestContext;
+    private volatile boolean destroyed = false;
 
     private final ClientProxyGenerator proxyGenerator;
 
@@ -58,6 +59,9 @@ public class ContextManager {
      * @throws IllegalArgumentException if the scope is not supported
      */
     public ScopeContext getContext(Class<? extends Annotation> scopeAnnotation) {
+        if (destroyed) {
+            throw new IllegalStateException("CDI container is shut down");
+        }
         ScopeContext context = contexts.get(scopeAnnotation);
         if (context == null) {
             throw new IllegalArgumentException("Unsupported scope: " + scopeAnnotation.getName());
@@ -76,6 +80,7 @@ public class ContextManager {
                 messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
             }
         }
+        destroyed = true;
     }
 
     // === Conversation Scope Management ===

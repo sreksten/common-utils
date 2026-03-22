@@ -16,8 +16,12 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -53,6 +57,8 @@ public class ProducerBean<T> implements Bean<T> {
 
     // Injection points (for producer method parameters)
     private final Set<InjectionPoint> injectionPoints = new HashSet<>();
+    private final Map<Object, List<Object>> producerMethodDependentArguments =
+            Collections.synchronizedMap(new IdentityHashMap<Object, List<Object>>());
 
     // Validation state
     private boolean hasValidationErrors = false;
@@ -244,6 +250,7 @@ public class ProducerBean<T> implements Bean<T> {
             if (disposerMethod != null) {
                 invokeDisposerMethod(instance);
             }
+            destroyTrackedProducerMethodDependentArguments(instance);
         } catch (Exception e) {
             ignored = e;
         } finally {
@@ -292,10 +299,18 @@ public class ProducerBean<T> implements Bean<T> {
             }
         }
 
+        T produced = null;
+        boolean invocationSucceeded = false;
         try {
-            return (T) producerMethod.invoke(declaringInstance, args);
+            produced = (T) producerMethod.invoke(declaringInstance, args);
+            invocationSucceeded = true;
+            return produced;
         } finally {
-            destroyDependentInvocationParameters(parameters, args, false);
+            if (invocationSucceeded && produced != null) {
+                trackDependentProducerParametersForProducedInstance(parameters, args, produced);
+            } else {
+                destroyDependentInvocationParameters(parameters, args, false);
+            }
             destroyDependentDeclaringInstance(declaringInstance);
         }
     }
@@ -436,6 +451,41 @@ public class ProducerBean<T> implements Bean<T> {
             }
         }
         return false;
+    }
+
+    private void trackDependentProducerParametersForProducedInstance(
+            Parameter[] parameters,
+            Object[] args,
+            Object produced
+    ) {
+        List<Object> tracked = new ArrayList<>();
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter parameter = parameters[i];
+            Object arg = args[i];
+            if (arg == null) {
+                continue;
+            }
+            if (!isDependentParameter(parameter)) {
+                continue;
+            }
+            tracked.add(arg);
+        }
+        if (!tracked.isEmpty()) {
+            producerMethodDependentArguments.put(produced, tracked);
+        }
+    }
+
+    private void destroyTrackedProducerMethodDependentArguments(Object produced) throws Exception {
+        List<Object> tracked = producerMethodDependentArguments.remove(produced);
+        if (tracked == null || tracked.isEmpty()) {
+            return;
+        }
+        for (Object dependent : tracked) {
+            if (dependent == null) {
+                continue;
+            }
+            LifecycleMethodHelper.invokeLifecycleMethod(dependent, PreDestroy.class);
+        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

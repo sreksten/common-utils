@@ -234,7 +234,13 @@ public enum AnnotationsEnum {
      * Note: Only available in jakarta.enterprise (CDI 2.0+), not in older javax.enterprise (CDI 1.2).
      * Maps: {@code jakarta.enterprise.event.ObservesAsync}
      */
-    OBSERVES_ASYNC(jakarta.enterprise.event.ObservesAsync.class);
+    OBSERVES_ASYNC(jakarta.enterprise.event.ObservesAsync.class),
+
+    /**
+     * Interceptor binding that activates request context for a method invocation.
+     * Maps: {@code jakarta.enterprise.context.control.ActivateRequestContext}
+     */
+    ACTIVATE_REQUEST_CONTEXT(jakarta.enterprise.context.control.ActivateRequestContext.class);
 
     // ==================== Implementation ====================
 
@@ -459,6 +465,13 @@ public enum AnnotationsEnum {
      */
     public static boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
         return OBSERVES_ASYNC.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has an @ActivateRequestContext annotation.
+     */
+    public static boolean hasActivateRequestContextAnnotation(AnnotatedElement element) {
+        return ACTIVATE_REQUEST_CONTEXT.isPresent(element);
     }
 
     /**

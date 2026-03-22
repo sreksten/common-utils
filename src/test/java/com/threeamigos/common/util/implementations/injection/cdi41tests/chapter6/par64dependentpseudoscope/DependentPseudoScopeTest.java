@@ -175,6 +175,9 @@ public class DependentPseudoScopeTest {
         String producerParamId = produced.producerParamId();
         assertEquals(1, DependentObjectsRecorder.producerParamIds().size());
         assertEquals(producerParamId, DependentObjectsRecorder.producerParamIds().get(0));
+        assertFalse(DependentObjectsRecorder.preDestroyIds().contains(producerParamId));
+
+        producedBean.destroy(produced, producedContext);
         assertTrue(DependentObjectsRecorder.preDestroyIds().contains(producerParamId));
     }
 

@@ -163,13 +163,16 @@ public class DependencyInjectionTest {
         List<String> events = ProducerInvocationRecorder.events();
         int producerIndex = indexOfPrefix(events, "static-producer:");
         int disposerIndex = indexOfPrefix(events, "static-disposer:");
-        int dependentAfterProducer = indexOfPrefix(events, "dependent-pre:", producerIndex + 1);
+        int firstDependentAfterProducer = indexOfPrefix(events, "dependent-pre:", producerIndex + 1);
+        int secondDependentAfterFirst = indexOfPrefix(events, "dependent-pre:", firstDependentAfterProducer + 1);
         int dependentAfterDisposer = indexOfPrefix(events, "dependent-pre:", disposerIndex + 1);
 
         assertTrue(producerIndex >= 0, "Missing static producer invocation event: " + events);
         assertTrue(disposerIndex > producerIndex, "Missing static disposer invocation event: " + events);
-        assertTrue(dependentAfterProducer > producerIndex && dependentAfterProducer < disposerIndex,
-                "Expected dependent cleanup after static producer invocation: " + events);
+        assertTrue(firstDependentAfterProducer > producerIndex,
+                "Expected dependent cleanup for producer/disposer dependencies: " + events);
+        assertTrue(secondDependentAfterFirst > firstDependentAfterProducer,
+                "Expected two dependent cleanup events for producer/disposer dependencies: " + events);
         assertTrue(dependentAfterDisposer > disposerIndex,
                 "Expected dependent cleanup after static disposer invocation: " + events);
     }
@@ -198,13 +201,16 @@ public class DependencyInjectionTest {
         List<String> events = ProducerInvocationRecorder.events();
         int producerIndex = indexOfPrefix(events, "nonstatic-producer:");
         int disposerIndex = indexOfPrefix(events, "nonstatic-disposer:");
-        int dependentAfterProducer = indexOfPrefix(events, "dependent-pre:", producerIndex + 1);
+        int firstDependentAfterProducer = indexOfPrefix(events, "dependent-pre:", producerIndex + 1);
+        int secondDependentAfterFirst = indexOfPrefix(events, "dependent-pre:", firstDependentAfterProducer + 1);
         int dependentAfterDisposer = indexOfPrefix(events, "dependent-pre:", disposerIndex + 1);
 
         assertTrue(producerIndex >= 0, "Missing non-static producer invocation event: " + events);
         assertTrue(disposerIndex > producerIndex, "Missing non-static disposer invocation event: " + events);
-        assertTrue(dependentAfterProducer > producerIndex && dependentAfterProducer < disposerIndex,
-                "Expected dependent cleanup after non-static producer invocation: " + events);
+        assertTrue(firstDependentAfterProducer > producerIndex,
+                "Expected dependent cleanup for producer/disposer dependencies: " + events);
+        assertTrue(secondDependentAfterFirst > firstDependentAfterProducer,
+                "Expected two dependent cleanup events for producer/disposer dependencies: " + events);
         assertTrue(dependentAfterDisposer > disposerIndex,
                 "Expected dependent cleanup after non-static disposer invocation: " + events);
 

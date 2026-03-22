@@ -5,10 +5,14 @@ import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.BeanManagerBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ConversationBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.InjectionPointBean;
+import com.threeamigos.common.util.implementations.injection.builtinbeans.RequestContextControllerBean;
+import com.threeamigos.common.util.implementations.injection.builtinbeans.ActivateRequestContextInterceptor;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.discovery.*;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
+import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanAttributesImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
@@ -444,6 +448,8 @@ public class Syringe {
         knowledgeBase.addBean(new BeanManagerBean(beanManager));
         knowledgeBase.addBean(new InjectionPointBean());
         knowledgeBase.addBean(new ConversationBean());
+        knowledgeBase.addBean(new RequestContextControllerBean(contextManager));
+        knowledgeBase.add(ActivateRequestContextInterceptor.class, BeanArchiveMode.IMPLICIT);
     }
 
     /**
@@ -575,9 +581,17 @@ public class Syringe {
      */
     private void initializeBeanDependencyResolvers() {
         BeanResolver beanResolver = beanManager.getBeanResolver();
+        InterceptorResolver interceptorResolver = new InterceptorResolver(knowledgeBase);
+        InterceptorAwareProxyGenerator interceptorAwareProxyGenerator = new InterceptorAwareProxyGenerator();
+
         for (Bean<?> bean : knowledgeBase.getBeans()) {
             if (bean instanceof BeanImpl<?>) {
-                ((BeanImpl<?>) bean).setDependencyResolver(beanResolver);
+                BeanImpl<?> beanImpl = (BeanImpl<?>) bean;
+                beanImpl.setDependencyResolver(beanResolver);
+                beanImpl.setInterceptorResolver(interceptorResolver);
+                beanImpl.setKnowledgeBase(knowledgeBase);
+                beanImpl.setInterceptorAwareProxyGenerator(interceptorAwareProxyGenerator);
+                beanImpl.buildMethodInterceptorChains();
             } else if (bean instanceof ProducerBean<?>) {
                 ((ProducerBean<?>) bean).setDependencyResolver(beanResolver);
             }
