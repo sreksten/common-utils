@@ -105,6 +105,8 @@ public class CDI41BeanValidator {
         validateStereotypeNonPortableDeclarations(clazz);
         // CDI 4.1 §2.8.1.6: target compatibility for stereotypes-with-stereotypes.
         validateStereotypeTargetCompatibility(clazz);
+        // CDI Lite §8: only interceptor binding based interception is portable.
+        validateNonPortableInterceptionForms(clazz);
 
         // 1) Bean class eligibility (managed bean type)
         if (!isCandidateBeanClass(clazz, beanArchiveMode)) {
@@ -473,6 +475,37 @@ public class CDI41BeanValidator {
         }
 
         validateStereotypeNamedDeclaration(annotationType, new HashSet<>());
+    }
+
+    private void validateNonPortableInterceptionForms(Class<?> clazz) {
+        if (hasLegacyInterceptorDeclaration(annotationsOf(clazz))) {
+            throw new NonPortableBehaviourException(clazz.getName() +
+                    ": uses @Interceptors/@ExcludeClassInterceptors/@ExcludeDefaultInterceptors. " +
+                    "These interception forms are non-portable in CDI Lite.");
+        }
+
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (hasLegacyInterceptorDeclaration(method.getAnnotations())) {
+                throw new NonPortableBehaviourException(fmtMethod(method) +
+                        ": uses @Interceptors/@ExcludeClassInterceptors/@ExcludeDefaultInterceptors. " +
+                        "These interception forms are non-portable in CDI Lite.");
+            }
+        }
+    }
+
+    private boolean hasLegacyInterceptorDeclaration(Annotation[] annotations) {
+        for (Annotation annotation : annotations) {
+            String annotationName = annotation.annotationType().getName();
+            if ("jakarta.interceptor.Interceptors".equals(annotationName) ||
+                "javax.interceptor.Interceptors".equals(annotationName) ||
+                "jakarta.interceptor.ExcludeClassInterceptors".equals(annotationName) ||
+                "javax.interceptor.ExcludeClassInterceptors".equals(annotationName) ||
+                "jakarta.interceptor.ExcludeDefaultInterceptors".equals(annotationName) ||
+                "javax.interceptor.ExcludeDefaultInterceptors".equals(annotationName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void validateStereotypeNamedDeclaration(Class<? extends Annotation> stereotypeType,

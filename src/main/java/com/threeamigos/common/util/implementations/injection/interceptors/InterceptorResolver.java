@@ -180,21 +180,33 @@ public class InterceptorResolver {
      * type hides farther ancestors. Interface annotations are not inherited.
      */
     private Set<Annotation> extractInterceptorBindingsFromHierarchy(Class<?> type) {
-        Set<Annotation> bindings = new HashSet<>();
+        java.util.Map<Class<? extends Annotation>, Annotation> bindingsByType = new java.util.LinkedHashMap<Class<? extends Annotation>, Annotation>();
         if (type == null) {
-            return bindings;
+            return new HashSet<Annotation>();
         }
 
+        // 1) Direct class-level interceptor bindings (including inherited Java @Inherited ones)
+        // take precedence over bindings declared on stereotypes.
         for (Annotation annotation : type.getAnnotations()) {
             if (isInterceptorBinding(annotation.annotationType())) {
-                bindings.add(annotation);
-            }
-            if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
-                bindings.addAll(extractInterceptorBindingsFromStereotype(annotation.annotationType()));
+                bindingsByType.put(annotation.annotationType(), annotation);
             }
         }
 
-        return bindings;
+        // 2) Add stereotype-declared bindings only when the bean class doesn't already
+        // declare the same interceptor binding type.
+        for (Annotation annotation : type.getAnnotations()) {
+            if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
+                Set<Annotation> stereotypeBindings = extractInterceptorBindingsFromStereotype(annotation.annotationType());
+                for (Annotation stereotypeBinding : stereotypeBindings) {
+                    if (!bindingsByType.containsKey(stereotypeBinding.annotationType())) {
+                        bindingsByType.put(stereotypeBinding.annotationType(), stereotypeBinding);
+                    }
+                }
+            }
+        }
+
+        return new HashSet<Annotation>(bindingsByType.values());
     }
 
     /**

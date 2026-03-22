@@ -393,8 +393,17 @@ public class BeanImpl<T> implements Bean<T> {
         try {
             if (customInjectionTarget != null) {
                 // Delegate lifecycle to custom InjectionTarget provided by extensions
-                T instance = customInjectionTarget.produce(creationalContext);
-                customInjectionTarget.inject(instance, creationalContext);
+                T instance;
+                if (constructorInterceptorChain != null) {
+                    // AroundConstruct interception must wrap bean construction.
+                    // InjectionTarget.produce() hides constructor invocation, so use internal
+                    // construction path when constructor interceptors are present.
+                    instance = createInstance(creationalContext);
+                    customInjectionTarget.inject(instance, creationalContext);
+                } else {
+                    instance = customInjectionTarget.produce(creationalContext);
+                    customInjectionTarget.inject(instance, creationalContext);
+                }
                 invokeCustomInjectionTargetPostConstructWithRequestContext(instance);
 
                 if (hasInterceptors() && isDependent()) {
