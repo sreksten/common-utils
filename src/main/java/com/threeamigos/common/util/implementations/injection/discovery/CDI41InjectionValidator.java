@@ -1660,11 +1660,27 @@ public class CDI41InjectionValidator {
             }
         }
 
-        // Extract priority
-        int priority = 0;
-        jakarta.annotation.Priority priorityAnnotation = method.getAnnotation(jakarta.annotation.Priority.class);
-        if (priorityAnnotation != null) {
-            priority = priorityAnnotation.value();
+        // Extract observer ordering priority (CDI 4.1 9.5.2):
+        // - Declared on observed event parameter via @Priority
+        // - Default is Interceptor.Priority.APPLICATION + 500
+        // - @Priority on async observed parameter is non-portable
+        int priority = jakarta.interceptor.Interceptor.Priority.APPLICATION + 500;
+        jakarta.annotation.Priority parameterPriority = observedParameter.getAnnotation(jakarta.annotation.Priority.class);
+        if (parameterPriority != null) {
+            if (async) {
+                throw new NonPortableBehaviourException(
+                    "Asynchronous observer method " + method.getName() + " in " +
+                    declaringBean.getBeanClass().getName() +
+                    " declares @Priority on observed event parameter; this is non-portable behavior"
+                );
+            }
+            priority = parameterPriority.value();
+        } else {
+            // Backward-compatible fallback for existing method-level priority declarations.
+            jakarta.annotation.Priority methodPriority = method.getAnnotation(jakarta.annotation.Priority.class);
+            if (methodPriority != null) {
+                priority = methodPriority.value();
+            }
         }
 
         // Create and register observer method info

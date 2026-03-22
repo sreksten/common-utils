@@ -10,6 +10,7 @@ import com.threeamigos.common.util.implementations.injection.builtinbeans.Activa
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.discovery.*;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
@@ -34,6 +35,8 @@ import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.event.Startup;
+import jakarta.enterprise.event.Shutdown;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
@@ -568,6 +571,13 @@ public class Syringe {
             // so all observers are discovered and ready to receive it.
             contextManager.fireApplicationContextInitialized();
 
+            // CDI 4.1 9.6.1: fire Startup after application context initialization.
+            Set<Annotation> startupQualifiers = new HashSet<Annotation>();
+            startupQualifiers.add(Any.Literal.INSTANCE);
+            new EventImpl<Startup>(Startup.class, startupQualifiers, knowledgeBase, beanManager.getBeanResolver(),
+                    contextManager, beanManager.getBeanResolver().getTransactionServices(),
+                    null, null, true).fire(new Startup());
+
             // ============================================================
             // PHASE 6: APPLICATION READY
             // ============================================================
@@ -673,6 +683,14 @@ public class Syringe {
 
         // Fire BeforeShutdown event
         fireBeforeShutdown();
+
+        // CDI 4.1 9.6.2: fire Shutdown during container shutdown and not later than
+        // @BeforeDestroyed(ApplicationScoped.class).
+        Set<Annotation> shutdownQualifiers = new HashSet<Annotation>();
+        shutdownQualifiers.add(Any.Literal.INSTANCE);
+        new EventImpl<Shutdown>(Shutdown.class, shutdownQualifiers, knowledgeBase, beanManager.getBeanResolver(),
+                contextManager, beanManager.getBeanResolver().getTransactionServices(),
+                null, null, true).fire(new Shutdown());
 
         // Destroy all beans (call @PreDestroy methods)
         destroyAllBeans();

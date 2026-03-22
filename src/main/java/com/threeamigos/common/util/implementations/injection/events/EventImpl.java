@@ -23,6 +23,7 @@ import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.NotificationOptions;
+import jakarta.enterprise.event.ObserverException;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.spi.Bean;
@@ -33,6 +34,7 @@ import jakarta.enterprise.util.TypeLiteral;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Repeatable;
 import java.lang.reflect.GenericArrayType;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
@@ -42,6 +44,7 @@ import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
@@ -99,6 +102,7 @@ public class EventImpl<T> implements Event<T> {
     private final TransactionServices transactionServices;
     private final ContextTokenProvider tokenProvider;
     private final InjectionPoint firingInjectionPoint;
+    private final boolean allowStartupEventDispatch;
     private static final AtomicBoolean TRANSACTION_DOWNGRADE_WARNED = new AtomicBoolean(false);
     private static final ConcurrentHashMap<Class<? extends Annotation>, AtomicBoolean> INACTIVE_SCOPE_WARNED =
         new ConcurrentHashMap<>();
@@ -134,6 +138,7 @@ public class EventImpl<T> implements Event<T> {
         this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
         this.tokenProvider = new NoopContextTokenProvider();
         this.firingInjectionPoint = null;
+        this.allowStartupEventDispatch = false;
     }
 
     public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
@@ -149,6 +154,7 @@ public class EventImpl<T> implements Event<T> {
         this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
         this.tokenProvider = tokenProvider == null ? new NoopContextTokenProvider() : tokenProvider;
         this.firingInjectionPoint = null;
+        this.allowStartupEventDispatch = false;
     }
 
     public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
@@ -165,6 +171,24 @@ public class EventImpl<T> implements Event<T> {
         this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
         this.tokenProvider = tokenProvider == null ? new NoopContextTokenProvider() : tokenProvider;
         this.firingInjectionPoint = firingInjectionPoint;
+        this.allowStartupEventDispatch = false;
+    }
+
+    public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
+                     BeanResolver beanResolver, ContextManager contextManager,
+                     TransactionServices transactionServices, ContextTokenProvider tokenProvider,
+                     InjectionPoint firingInjectionPoint, boolean allowStartupEventDispatch) {
+        this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
+        validateEventType(this.eventType);
+        this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
+        this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
+        this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
+        this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
+        this.typeChecker = new TypeChecker();
+        this.transactionServices = Objects.requireNonNull(transactionServices, "transactionServices cannot be null");
+        this.tokenProvider = tokenProvider == null ? new NoopContextTokenProvider() : tokenProvider;
+        this.firingInjectionPoint = firingInjectionPoint;
+        this.allowStartupEventDispatch = allowStartupEventDispatch;
     }
 
     /**
@@ -235,11 +259,11 @@ public class EventImpl<T> implements Event<T> {
             TransactionPhase phase = observerInfo.getTransactionPhase();
 
             if (phase == TransactionPhase.IN_PROGRESS) {
-                invokeObserver(observerInfo, event);
+                invokeObserverWithContextCheck(observerInfo, event);
             } else if (!txActive) {
                 // Spec: if no transaction is active, transactional observers fire immediately
                 maybeWarnTransactionalDowngrade(observerInfo);
-                invokeObserver(observerInfo, event);
+                invokeObserverWithContextCheck(observerInfo, event);
             } else {
                 switch (phase) {
                     case BEFORE_COMPLETION:
@@ -256,7 +280,7 @@ public class EventImpl<T> implements Event<T> {
                         break;
                     default:
                         // fallback
-                        invokeObserver(observerInfo, event);
+                        invokeObserverWithContextCheck(observerInfo, event);
                 }
             }
         }
@@ -376,6 +400,7 @@ public class EventImpl<T> implements Event<T> {
                 activatedRequestContext = true;
             }
             try {
+                List<Throwable> observerFailures = new ArrayList<>();
                 for (ObserverMethodInfo observerInfo : matchingObservers) {
                     // Check reception condition per CDI 4.1 specification (Section 10.5.2):
                     // - Reception.IF_EXISTS: Only notify if bean instance already exists in scope
@@ -401,7 +426,27 @@ public class EventImpl<T> implements Event<T> {
                     }
                     // If Reception.ALWAYS: invokeObserver() will create the bean if needed via beanResolver
 
-                    invokeObserver(observerInfo, event);
+                    ContextActivation activation = ensureObserverContext(observerInfo);
+                    if (activation.isSkip()) {
+                        continue;
+                    }
+                    try {
+                        invokeObserver(observerInfo, event);
+                    } catch (RuntimeException e) {
+                        // Async observer failure aborts that observer, not whole event delivery.
+                        observerFailures.add(e);
+                    } finally {
+                        activation.close();
+                    }
+                }
+                if (!observerFailures.isEmpty()) {
+                    Throwable primary = observerFailures.get(0);
+                    CompletionException completionException =
+                        new CompletionException("Asynchronous observer notification failed", primary);
+                    for (Throwable failure : observerFailures) {
+                        completionException.addSuppressed(failure);
+                    }
+                    throw completionException;
                 }
             } finally {
                 if (activatedRequestContext) {
@@ -446,7 +491,7 @@ public class EventImpl<T> implements Event<T> {
             newQualifiers.add(qualifier);
         }
         return new EventImpl<>(eventType, newQualifiers, knowledgeBase, beanResolver, contextManager,
-                transactionServices, tokenProvider, firingInjectionPoint);
+                transactionServices, tokenProvider, firingInjectionPoint, allowStartupEventDispatch);
     }
 
     /**
@@ -487,7 +532,7 @@ public class EventImpl<T> implements Event<T> {
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
         return (Event<U>) new EventImpl<U>(subtype, newQualifiers, knowledgeBase, beanResolver, contextManager,
-                transactionServices, tokenProvider, firingInjectionPoint);
+                transactionServices, tokenProvider, firingInjectionPoint, allowStartupEventDispatch);
     }
 
     /**
@@ -527,7 +572,7 @@ public class EventImpl<T> implements Event<T> {
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
         return (Event<U>) new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager,
-                transactionServices, tokenProvider, firingInjectionPoint);
+                transactionServices, tokenProvider, firingInjectionPoint, allowStartupEventDispatch);
     }
 
     private void validateEventType(Type type) {
@@ -571,6 +616,12 @@ public class EventImpl<T> implements Event<T> {
             throw new IllegalArgumentException(
                     "Runtime type of event object contains unresolvable type variable(s): " +
                             runtimeType.getName());
+        }
+
+        if (("jakarta.enterprise.event.Startup".equals(runtimeType.getName()) ||
+             "jakarta.enterprise.event.Shutdown".equals(runtimeType.getName())) && !allowStartupEventDispatch) {
+            throw new IllegalArgumentException(
+                    "Application must not manually fire events with payload type " + runtimeType.getName());
         }
 
         if (isContainerLifecycleEventType(runtimeType)) {
@@ -859,15 +910,30 @@ public class EventImpl<T> implements Event<T> {
                 destroyDependentObserverReceiver(beanInstance, method);
             }
 
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            throw new ObserverException(cause);
+        } catch (ObserverException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
-            String observerName = observerInfo.isSynthetic() ?
-                "synthetic observer for " + observerInfo.getEventType() :
-                observerInfo.getObserverMethod().getName() + " in " + observerInfo.getObserverMethod().getDeclaringClass().getName();
+            throw new ObserverException(e);
+        }
+    }
 
-            throw new RuntimeException(
-                "Failed to invoke observer: " + observerName,
-                e
-            );
+    private void invokeObserverWithContextCheck(ObserverMethodInfo observerInfo, Object event) {
+        ContextActivation activation = ensureObserverContext(observerInfo);
+        if (activation.isSkip()) {
+            return;
+        }
+        try {
+            invokeObserver(observerInfo, event);
+        } finally {
+            activation.close();
         }
     }
 
@@ -1011,23 +1077,8 @@ public class EventImpl<T> implements Event<T> {
                 return ContextActivation.NOOP;
             }
 
-            // try provider-assisted restoration
-            ContextSnapshot snapshot = tokenProvider.capture();
-            ContextActivation providerActivation = tryProviderRestore(scope, snapshot);
-            if (providerActivation != null) {
-                warnOnce(scope, declaringBean, true);
-                return providerActivation;
-            }
-
-            // Optional reactivation for RequestScoped
-            if (scope == RequestScoped.class && ctx instanceof RequestScopedContext) {
-                ((RequestScopedContext) ctx).activateRequest();
-                warnOnce(scope, declaringBean, true);
-                return new ContextActivation((RequestScopedContext) ctx);
-            }
-
-            // Conversation/Session or other scopes: warn and skip
-            warnOnce(scope, declaringBean, false);
+            // Per CDI 4.1 (9.5), observers are not called when declaring scope context is inactive.
+            warnOnce(scope, declaringBean);
             return ContextActivation.SKIP;
         } catch (IllegalArgumentException e) {
             // Unknown scope; proceed to avoid hiding functionality
@@ -1035,13 +1086,11 @@ public class EventImpl<T> implements Event<T> {
         }
     }
 
-    private void warnOnce(Class<? extends Annotation> scope, Bean<?> bean, boolean reactivated) {
+    private void warnOnce(Class<? extends Annotation> scope, Bean<?> bean) {
         AtomicBoolean flag = INACTIVE_SCOPE_WARNED.computeIfAbsent(scope, k -> new AtomicBoolean(false));
         if (flag.compareAndSet(false, true)) {
-            String action = reactivated ? "Reactivated" : "Skipping";
-            System.out.println("[Event] " + action + " transactional observer for @" +
-                scope.getSimpleName() + " (" + bean.getBeanClass().getName() + ")" +
-                (reactivated ? " during tx callback" : " because scope inactive"));
+            System.out.println("[Event] Skipping observer for @" +
+                scope.getSimpleName() + " (" + bean.getBeanClass().getName() + ") because scope inactive");
         }
     }
 
