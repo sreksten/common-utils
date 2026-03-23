@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("Paragraph 2.8 - Alternatives")
+@DisplayName("2.8 - Alternatives")
 public class AlternativesTest {
 
     @Test

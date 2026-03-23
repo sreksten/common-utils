@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.beansxml.Alternatives;
 import com.threeamigos.common.util.implementations.injection.bce.BuildCompatibleExtensionRunner;
 import com.threeamigos.common.util.implementations.injection.bce.BuildCompatibleExtensionSupport;
 import com.threeamigos.common.util.implementations.injection.bce.BceInvokerRegistry;
@@ -49,6 +50,7 @@ import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -1733,6 +1735,9 @@ public class Syringe {
         CDI41InjectionValidator injectionValidator = new CDI41InjectionValidator(knowledgeBase);
         injectionValidator.validateAllInjectionPoints();
 
+        // 1.1 Validate beans.xml alternatives declarations (CDI Full modularity rules)
+        validateBeansXmlAlternativesConfiguration();
+
         // 2. Check definition errors
         if (knowledgeBase.hasErrors()) {
             error("Deployment validation failed:");
@@ -1756,6 +1761,170 @@ public class Syringe {
         }
 
         info("Deployment validation passed");
+    }
+
+    private void validateBeansXmlAlternativesConfiguration() {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (classLoader == null) {
+            classLoader = Syringe.class.getClassLoader();
+        }
+
+        for (BeansXml beansXml : knowledgeBase.getBeansXmlConfigurations()) {
+            if (beansXml == null) {
+                continue;
+            }
+            Alternatives alternatives = beansXml.getAlternatives();
+            if (alternatives == null) {
+                continue;
+            }
+
+            List<String> classes = alternatives.getClasses() != null ? alternatives.getClasses() : Collections.<String>emptyList();
+            List<String> stereotypes = alternatives.getStereotypes() != null ? alternatives.getStereotypes() : Collections.<String>emptyList();
+
+            validateNoDuplicateEntries(classes, "beans.xml <alternatives><class>");
+            validateNoDuplicateEntries(stereotypes, "beans.xml <alternatives><stereotype>");
+
+            for (String className : classes) {
+                validateAlternativeClassEntry(className, classLoader);
+            }
+            for (String stereotypeName : stereotypes) {
+                validateAlternativeStereotypeEntry(stereotypeName, classLoader);
+            }
+        }
+    }
+
+    private void validateNoDuplicateEntries(List<String> entries, String location) {
+        if (entries == null || entries.isEmpty()) {
+            return;
+        }
+        Set<String> seen = new HashSet<String>();
+        Set<String> duplicates = new LinkedHashSet<String>();
+        for (String entry : entries) {
+            if (entry == null) {
+                continue;
+            }
+            if (!seen.add(entry)) {
+                duplicates.add(entry);
+            }
+        }
+        if (!duplicates.isEmpty()) {
+            knowledgeBase.addDefinitionError(location + " contains duplicate entries: " + duplicates);
+        }
+    }
+
+    private void validateAlternativeClassEntry(String className, ClassLoader classLoader) {
+        if (className == null || className.trim().isEmpty()) {
+            knowledgeBase.addDefinitionError("beans.xml <alternatives><class> must not be empty");
+            return;
+        }
+
+        Class<?> clazz;
+        try {
+            clazz = Class.forName(className, false, classLoader);
+        } catch (ClassNotFoundException e) {
+            knowledgeBase.addDefinitionError("beans.xml alternative class not found: " + className);
+            return;
+        }
+
+        if (isAlternativeDeclaration(clazz) ||
+                declaresAlternativeProducerMember(clazz) ||
+                hasAlternativeBeanWithBeanClassName(className)) {
+            return;
+        }
+
+        knowledgeBase.addDefinitionError(
+                "beans.xml alternative class '" + className + "' is invalid: " +
+                        "not an @Alternative bean, not an alternative producer holder, and no matching alternative bean exists");
+    }
+
+    private void validateAlternativeStereotypeEntry(String stereotypeName, ClassLoader classLoader) {
+        if (stereotypeName == null || stereotypeName.trim().isEmpty()) {
+            knowledgeBase.addDefinitionError("beans.xml <alternatives><stereotype> must not be empty");
+            return;
+        }
+
+        Class<?> loaded;
+        try {
+            loaded = Class.forName(stereotypeName, false, classLoader);
+        } catch (ClassNotFoundException e) {
+            knowledgeBase.addDefinitionError("beans.xml alternative stereotype not found: " + stereotypeName);
+            return;
+        }
+
+        if (!loaded.isAnnotation()) {
+            knowledgeBase.addDefinitionError(
+                    "beans.xml alternative stereotype '" + stereotypeName + "' is not an annotation type");
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        Class<? extends Annotation> annotationType = (Class<? extends Annotation>) loaded;
+        if (!annotationType.isAnnotationPresent(jakarta.enterprise.inject.Stereotype.class) ||
+                !declaresAlternativeViaStereotype(annotationType, new HashSet<Class<? extends Annotation>>())) {
+            knowledgeBase.addDefinitionError(
+                    "beans.xml alternative stereotype '" + stereotypeName + "' is not an @Alternative stereotype");
+        }
+    }
+
+    private boolean hasAlternativeBeanWithBeanClassName(String className) {
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            Class<?> beanClass = bean.getBeanClass();
+            if (beanClass != null &&
+                    className.equals(beanClass.getName()) &&
+                    bean.isAlternative()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean declaresAlternativeProducerMember(Class<?> clazz) {
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (AnnotationsEnum.hasProducesAnnotation(method) && isAlternativeDeclaration(method)) {
+                return true;
+            }
+        }
+        for (Field field : clazz.getDeclaredFields()) {
+            if (AnnotationsEnum.hasProducesAnnotation(field) && isAlternativeDeclaration(field)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isAlternativeDeclaration(AnnotatedElement element) {
+        if (element == null) {
+            return false;
+        }
+        if (element.isAnnotationPresent(jakarta.enterprise.inject.Alternative.class)) {
+            return true;
+        }
+        for (Annotation annotation : element.getAnnotations()) {
+            Class<? extends Annotation> type = annotation.annotationType();
+            if (type.isAnnotationPresent(jakarta.enterprise.inject.Stereotype.class) &&
+                    declaresAlternativeViaStereotype(type, new HashSet<Class<? extends Annotation>>())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean declaresAlternativeViaStereotype(Class<? extends Annotation> stereotypeType,
+                                                     Set<Class<? extends Annotation>> visited) {
+        if (stereotypeType == null || !visited.add(stereotypeType)) {
+            return false;
+        }
+        if (stereotypeType.isAnnotationPresent(jakarta.enterprise.inject.Alternative.class)) {
+            return true;
+        }
+        for (Annotation meta : stereotypeType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (metaType.isAnnotationPresent(jakarta.enterprise.inject.Stereotype.class) &&
+                    declaresAlternativeViaStereotype(metaType, visited)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

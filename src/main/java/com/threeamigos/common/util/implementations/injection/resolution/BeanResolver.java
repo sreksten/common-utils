@@ -25,6 +25,8 @@ import jakarta.inject.Named;
 import jakarta.inject.Provider;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Member;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -241,6 +243,9 @@ public class BeanResolver implements DependencyResolver {
 
             // Check qualifier match
             if (qualifiersMatch(requiredQualifiers, bean.getQualifiers())) {
+                if (!isBeanClassAccessibleFromCurrentInjectionPoint(bean)) {
+                    continue;
+                }
                 matches.add(bean);
             }
         }
@@ -423,16 +428,118 @@ public class BeanResolver implements DependencyResolver {
         if (bean == null) {
             return false;
         }
+        if (bean instanceof ProducerBean) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Bean<?> declaringBean = findDeclaringBean(producerBean.getDeclaringClass());
+            if (declaringBean != null && !isBeanEnabledForResolution(declaringBean)) {
+                return false;
+            }
+            if (!bean.isAlternative()) {
+                return true;
+            }
+            return producerBean.isAlternativeEnabled();
+        }
         if (!bean.isAlternative()) {
             return true;
         }
         if (bean instanceof BeanImpl) {
             return ((BeanImpl<?>) bean).isAlternativeEnabled();
         }
-        if (bean instanceof ProducerBean) {
-            return ((ProducerBean<?>) bean).isAlternativeEnabled();
+        return true;
+    }
+
+    private Bean<?> findDeclaringBean(Class<?> declaringClass) {
+        if (declaringClass == null) {
+            return null;
+        }
+        for (Bean<?> candidate : knowledgeBase.getValidBeans()) {
+            if (candidate instanceof ProducerBean) {
+                continue;
+            }
+            if (declaringClass.equals(candidate.getBeanClass())) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private boolean isBeanClassAccessibleFromCurrentInjectionPoint(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        InjectionPoint injectionPoint = currentInjectionPoint.get();
+        Class<?> beanClass = bean.getBeanClass();
+        if (injectionPoint == null) {
+            return beanClass == null || !Modifier.isPrivate(beanClass.getModifiers());
+        }
+        Member member = injectionPoint.getMember();
+        Class<?> declaringClass = member != null ? member.getDeclaringClass() : null;
+        if (declaringClass == null && injectionPoint.getBean() != null) {
+            declaringClass = injectionPoint.getBean().getBeanClass();
+        }
+        return isClassAccessibleTo(beanClass, declaringClass);
+    }
+
+    private boolean isClassAccessibleTo(Class<?> beanClass, Class<?> consumerClass) {
+        if (beanClass == null || consumerClass == null) {
+            return true;
+        }
+        if (beanClass.equals(consumerClass)) {
+            return true;
+        }
+
+        int modifiers = beanClass.getModifiers();
+        if (Modifier.isPublic(modifiers)) {
+            return enclosingClassesAccessible(beanClass, consumerClass);
+        }
+
+        if (Modifier.isPrivate(modifiers)) {
+            Class<?> owner = beanClass.getEnclosingClass();
+            return owner != null && (owner.equals(consumerClass) || isEnclosedWithin(consumerClass, owner));
+        }
+
+        if (Modifier.isProtected(modifiers)) {
+            return inSamePackage(beanClass, consumerClass) || beanClass.isAssignableFrom(consumerClass);
+        }
+
+        return inSamePackage(beanClass, consumerClass);
+    }
+
+    private boolean enclosingClassesAccessible(Class<?> beanClass, Class<?> consumerClass) {
+        Class<?> enclosing = beanClass.getEnclosingClass();
+        while (enclosing != null) {
+            int modifiers = enclosing.getModifiers();
+            if (Modifier.isPrivate(modifiers)) {
+                return enclosing.equals(consumerClass) || isEnclosedWithin(consumerClass, enclosing);
+            }
+            if (!Modifier.isPublic(modifiers) && !inSamePackage(enclosing, consumerClass)) {
+                return false;
+            }
+            enclosing = enclosing.getEnclosingClass();
         }
         return true;
+    }
+
+    private boolean isEnclosedWithin(Class<?> nestedClass, Class<?> enclosingClass) {
+        Class<?> current = nestedClass;
+        while (current != null) {
+            if (current.equals(enclosingClass)) {
+                return true;
+            }
+            current = current.getEnclosingClass();
+        }
+        return false;
+    }
+
+    private boolean inSamePackage(Class<?> a, Class<?> b) {
+        String pa = packageName(a);
+        String pb = packageName(b);
+        return pa.equals(pb);
+    }
+
+    private String packageName(Class<?> clazz) {
+        Package pkg = clazz.getPackage();
+        return pkg != null ? pkg.getName() : "";
     }
 
     /**

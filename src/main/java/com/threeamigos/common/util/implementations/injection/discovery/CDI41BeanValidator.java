@@ -18,6 +18,7 @@ import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.Intercepted;
+import jakarta.enterprise.inject.spi.Prioritized;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Named;
 import jakarta.inject.Qualifier;
@@ -734,7 +735,32 @@ public class CDI41BeanValidator {
             return stereotypePriorities.iterator().next();
         }
 
-        return null;
+        return extractPrioritizedInterfacePriority(clazz);
+    }
+
+    /**
+     * Supports CDI custom component style priority declaration via {@link Prioritized}.
+     * When present, this priority enables alternatives for the whole application.
+     */
+    private Integer extractPrioritizedInterfacePriority(Class<?> clazz) {
+        if (clazz == null || !Prioritized.class.isAssignableFrom(clazz)) {
+            return null;
+        }
+
+        if (clazz.isInterface() || Modifier.isAbstract(clazz.getModifiers())) {
+            return null;
+        }
+
+        try {
+            Constructor<?> constructor = clazz.getDeclaredConstructor();
+            if (!Modifier.isPublic(constructor.getModifiers()) || !Modifier.isPublic(clazz.getModifiers())) {
+                constructor.setAccessible(true);
+            }
+            Prioritized prioritized = (Prioritized) constructor.newInstance();
+            return prioritized.getPriority();
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return null;
+        }
     }
 
     private Integer extractDeclaredPriorityFromClass(Class<?> clazz) {

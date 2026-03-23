@@ -1305,16 +1305,39 @@ public class CDI41InjectionValidator {
         if (bean == null) {
             return false;
         }
+        if (bean instanceof ProducerBean) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Bean<?> declaringBean = findDeclaringBean(producerBean.getDeclaringClass());
+            if (declaringBean != null && !isBeanEnabledForResolution(declaringBean)) {
+                return false;
+            }
+            if (!bean.isAlternative()) {
+                return true;
+            }
+            return producerBean.isAlternativeEnabled();
+        }
         if (!bean.isAlternative()) {
             return true;
         }
         if (bean instanceof BeanImpl) {
             return ((BeanImpl<?>) bean).isAlternativeEnabled();
         }
-        if (bean instanceof ProducerBean) {
-            return ((ProducerBean<?>) bean).isAlternativeEnabled();
-        }
         return true;
+    }
+
+    private Bean<?> findDeclaringBean(Class<?> declaringClass) {
+        if (declaringClass == null) {
+            return null;
+        }
+        for (Bean<?> candidate : knowledgeBase.getValidBeans()) {
+            if (candidate instanceof ProducerBean) {
+                continue;
+            }
+            if (declaringClass.equals(candidate.getBeanClass())) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     /**
