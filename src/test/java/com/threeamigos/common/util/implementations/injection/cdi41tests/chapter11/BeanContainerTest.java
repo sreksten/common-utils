@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter11.par111beancontainer;
+package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter11;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;

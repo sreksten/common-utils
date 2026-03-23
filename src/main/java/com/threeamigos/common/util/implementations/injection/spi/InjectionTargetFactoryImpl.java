@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
+import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
@@ -138,7 +139,8 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 Object[] args = resolveConstructorParameters(constructor, ctx);
 
                 // Create instance
-                return constructor.newInstance(args);
+                T instance = constructor.newInstance(args);
+                return wrapWithBusinessMethodInterceptionIfRequired(instance, ctx);
 
             } catch (RuntimeException e) {
                 throw e;
@@ -168,7 +170,8 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         @Override
         public void inject(T instance, CreationalContext<T> ctx) {
             try {
-                List<Class<?>> hierarchy = buildHierarchy(instance.getClass());
+                T targetInstance = unwrapProxyTarget(instance);
+                List<Class<?>> hierarchy = buildHierarchy(targetInstance.getClass());
 
                 // Inject fields
                 for (Class<?> clazz : hierarchy) {
@@ -177,7 +180,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                             field.setAccessible(true);
                             Type resolvedFieldType = GenericTypeResolver.resolve(
                                     field.getGenericType(),
-                                    instance.getClass(),
+                                    targetInstance.getClass(),
                                     field.getDeclaringClass()
                             );
                             Object value = beanManager.getInjectableReference(
@@ -185,7 +188,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                             if (value == null && field.getType().isPrimitive()) {
                                 value = defaultPrimitiveValue(field.getType());
                             }
-                            field.set(instance, value);
+                            field.set(targetInstance, value);
                         }
                     }
                 }
@@ -194,12 +197,12 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 for (Class<?> clazz : hierarchy) {
                     for (Method method : clazz.getDeclaredMethods()) {
                         if (hasInjectAnnotation(method)) {
-                            if (isOverridden(method, instance.getClass())) {
+                            if (isOverridden(method, targetInstance.getClass())) {
                                 continue;
                             }
                             method.setAccessible(true);
                             Object[] args = resolveMethodParameters(method, ctx);
-                            method.invoke(instance, args);
+                            method.invoke(targetInstance, args);
                         }
                     }
                 }
@@ -218,9 +221,10 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         @Override
         public void postConstruct(T instance) {
             try {
-                for (Method method : collectLifecycleMethods(instance.getClass(), true)) {
+                T targetInstance = unwrapProxyTarget(instance);
+                for (Method method : collectLifecycleMethods(targetInstance.getClass(), true)) {
                     method.setAccessible(true);
-                    method.invoke(instance);
+                    method.invoke(targetInstance);
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Failed to invoke @PostConstruct on " +
@@ -236,11 +240,12 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         @Override
         public void preDestroy(T instance) {
             try {
-                List<Method> methods = collectLifecycleMethods(instance.getClass(), false);
+                T targetInstance = unwrapProxyTarget(instance);
+                List<Method> methods = collectLifecycleMethods(targetInstance.getClass(), false);
                 Collections.reverse(methods);
                 for (Method method : methods) {
                     method.setAccessible(true);
-                    method.invoke(instance);
+                    method.invoke(targetInstance);
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Failed to invoke @PreDestroy on " +
@@ -257,6 +262,53 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         public void dispose(T instance) {
             // For managed beans, disposal is handled via preDestroy
             // For producers, this would call the disposer method
+        }
+
+        @SuppressWarnings("unchecked")
+        private T unwrapProxyTarget(T instance) {
+            if (instance instanceof InterceptorAwareProxyGenerator.InterceptorProxyState) {
+                Object target = ((InterceptorAwareProxyGenerator.InterceptorProxyState) instance).$$_getTargetInstance();
+                if (target != null && annotatedType.getJavaClass().isInstance(target)) {
+                    return (T) target;
+                }
+            }
+            return instance;
+        }
+
+        private T wrapWithBusinessMethodInterceptionIfRequired(T instance, CreationalContext<T> creationalContext) {
+            // Only non-contextual instances (bean == null) should be enhanced here.
+            // Contextual bean instances are interceptor/decorator wrapped by regular bean/context lifecycle.
+            if (bean != null) {
+                return instance;
+            }
+            if (!hasBusinessMethodInterceptors(annotatedType.getJavaClass())) {
+                return instance;
+            }
+            InterceptionFactory<T> interceptionFactory =
+                    beanManager.createInterceptionFactory(creationalContext, annotatedType.getJavaClass());
+            return interceptionFactory.createInterceptedInstance(instance);
+        }
+
+        private boolean hasBusinessMethodInterceptors(Class<?> beanClass) {
+            if (beanClass == null) {
+                return false;
+            }
+
+            for (Annotation annotation : beanClass.getAnnotations()) {
+                if (beanManager.isInterceptorBinding(annotation.annotationType())) {
+                    return true;
+                }
+            }
+
+            for (Method method : beanClass.getDeclaredMethods()) {
+                for (Annotation annotation : method.getAnnotations()) {
+                    if (beanManager.isInterceptorBinding(annotation.annotationType())) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         /**
