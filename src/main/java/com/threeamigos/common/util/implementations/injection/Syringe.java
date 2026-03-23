@@ -185,6 +185,7 @@ public class Syringe {
      * methods are portable.
      */
     private boolean cdiLiteMode = false;
+    private boolean cdiFullLegacyInterceptionEnabled = false;
 
     /**
      * Custom contexts to register programmatically before container initialization.
@@ -267,6 +268,20 @@ public class Syringe {
             throw new IllegalStateException("Cannot change CDI mode after container initialization");
         }
         this.cdiLiteMode = cdiLiteMode;
+    }
+
+    /**
+     * Enables CDI Full legacy interception forms such as {@code @jakarta.interceptor.Interceptors}.
+     *
+     * <p>When disabled (default), these forms are treated as non-portable behavior for CDI Lite compatibility.
+     *
+     * @param enabled true to enable legacy interception forms
+     */
+    public void enableCdiFullLegacyInterception(boolean enabled) {
+        if (initialized) {
+            throw new IllegalStateException("Cannot change CDI interception mode after container initialization");
+        }
+        this.cdiFullLegacyInterceptionEnabled = enabled;
     }
 
     /**
@@ -1022,7 +1037,10 @@ public class Syringe {
     private void validateAndRegisterBeans() {
         info("Validating and registering beans");
 
-        CDI41BeanValidator validator = new CDI41BeanValidator(knowledgeBase);
+        CDI41BeanValidator validator = new CDI41BeanValidator(
+                knowledgeBase,
+                cdiFullLegacyInterceptionEnabled
+        );
         int validated = 0;
 
         for (Class<?> clazz : knowledgeBase.getClasses()) {

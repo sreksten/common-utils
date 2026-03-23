@@ -14,6 +14,7 @@ import net.bytebuddy.matcher.ElementMatchers;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -79,6 +80,8 @@ public class InterceptorAwareProxyGenerator {
     // Key: Bean class
     // Value: Generated proxy class
     private final ConcurrentHashMap<Class<?>, Class<?>> proxyClassCache = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, Optional<Method>> targetAroundInvokeCache =
+            new ConcurrentHashMap<Class<?>, Optional<Method>>();
 
     /**
      * Creates an interceptor-aware proxy for a bean.
@@ -374,12 +377,51 @@ public class InterceptorAwareProxyGenerator {
                 // 4. Results propagate back through the chain
                 return chain.invoke(targetInstance, method, args);
             } else {
+                Method targetAroundInvoke = findTargetClassAroundInvokeMethod(targetInstance.getClass());
+                if (targetAroundInvoke != null && !method.equals(targetAroundInvoke)) {
+                    InterceptorChain dynamicChain = InterceptorChain.builder()
+                            .addInterceptor(targetInstance, targetAroundInvoke)
+                            .build();
+                    return dynamicChain.invoke(targetInstance, method, args);
+                }
+
                 // Step 3b: No interceptors for this method - direct invocation
                 // This is the fast path for non-intercepted methods
                 // Simply invoke the method on the target instance and return the result
                 method.setAccessible(true);
                 return method.invoke(targetInstance, args);
             }
+        }
+
+        private static Method findTargetClassAroundInvokeMethod(Class<?> targetClass) {
+            if (targetClass == null) {
+                return null;
+            }
+
+            Optional<Method> cached = targetAroundInvokeCache.get(targetClass);
+            if (cached != null) {
+                return cached.orElse(null);
+            }
+
+            Class<?> current = targetClass;
+            Method found = null;
+            while (current != null && current != Object.class && found == null) {
+                for (Method candidate : current.getDeclaredMethods()) {
+                    if (candidate.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+                        if (candidate.getParameterCount() == 1 &&
+                                jakarta.interceptor.InvocationContext.class.isAssignableFrom(candidate.getParameterTypes()[0])) {
+                            candidate.setAccessible(true);
+                            found = candidate;
+                            break;
+                        }
+                    }
+                }
+                current = current.getSuperclass();
+            }
+
+            Optional<Method> value = Optional.ofNullable(found);
+            targetAroundInvokeCache.put(targetClass, value);
+            return found;
         }
     }
 }

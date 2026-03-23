@@ -880,9 +880,55 @@ public class BeanManagerImpl implements BeanManager {
                 : knowledgeBase.getInterceptorsByBindingsAndType(type, requiredBindings);
 
         // Convert InterceptorInfo to Interceptor<?> beans
-        return matchingInfos.stream()
+        List<Interceptor<?>> resolved = matchingInfos.stream()
                 .map(this::createInterceptor)
                 .collect(Collectors.toList());
+
+        // CDI Full extension: include custom Interceptor implementations registered as beans.
+        Set<Class<?>> seenInterceptorClasses = new HashSet<Class<?>>();
+        for (Interceptor<?> interceptor : resolved) {
+            seenInterceptorClasses.add(interceptor.getBeanClass());
+        }
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (!(bean instanceof Interceptor)) {
+                continue;
+            }
+            Interceptor<?> interceptor = (Interceptor<?>) bean;
+            if (seenInterceptorClasses.contains(interceptor.getBeanClass())) {
+                continue;
+            }
+            if (!interceptor.intercepts(type)) {
+                continue;
+            }
+            if (!matchesInterceptorBindings(requiredBindings, interceptor.getInterceptorBindings())) {
+                continue;
+            }
+            resolved.add(interceptor);
+            seenInterceptorClasses.add(interceptor.getBeanClass());
+        }
+
+        return resolved;
+    }
+
+    private boolean matchesInterceptorBindings(Set<Annotation> required, Set<Annotation> candidate) {
+        if (required == null || required.isEmpty()) {
+            return true;
+        }
+        if (candidate == null || candidate.isEmpty()) {
+            return false;
+        }
+        Set<Class<? extends Annotation>> candidateTypes = new HashSet<Class<? extends Annotation>>();
+        for (Annotation annotation : candidate) {
+            if (annotation != null) {
+                candidateTypes.add(annotation.annotationType());
+            }
+        }
+        for (Annotation requiredAnnotation : required) {
+            if (requiredAnnotation == null || !candidateTypes.contains(requiredAnnotation.annotationType())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void validateInterceptorBindings(Annotation[] interceptorBindings) {

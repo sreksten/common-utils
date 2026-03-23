@@ -216,6 +216,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * Null if no @PreDestroy interceptors are present.
      */
     private InterceptorChain preDestroyInterceptorChain;
+    private Method targetClassAroundInvokeMethod;
 
     /**
      * Cache of interceptor instances.
@@ -1336,6 +1337,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             this.constructorInterceptorChain = null;
             this.postConstructInterceptorChain = null;
             this.preDestroyInterceptorChain = null;
+            this.targetClassAroundInvokeMethod = null;
             return;
         }
 
@@ -1343,6 +1345,9 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         // PHASE 2: Build business method interceptor chains (@AroundInvoke)
         // ========================================================================
         Map<Method, InterceptorChain> chains = new HashMap<>();
+        this.targetClassAroundInvokeMethod = findTargetClassAroundInvokeMethod(beanClass);
+        List<Class<?>> classLevelLegacyInterceptors =
+                extractLegacyInterceptorClasses(beanClass.getAnnotations());
 
         // Iterate through non-private, non-static methods in the bean class hierarchy.
         // Prefer the subclass declaration when a method is overridden.
@@ -1377,6 +1382,18 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 if (!interceptors.isEmpty()) {
                     InterceptorChain chain = buildInterceptorChain(interceptors, InterceptionType.AROUND_INVOKE);
                     chains.put(method, chain);
+                    continue;
+                }
+
+                List<Class<?>> legacyInterceptors = extractLegacyInterceptorClasses(method.getAnnotations());
+                if (legacyInterceptors.isEmpty()) {
+                    legacyInterceptors = classLevelLegacyInterceptors;
+                }
+                if (!legacyInterceptors.isEmpty()) {
+                    InterceptorChain legacyChain = buildLegacyInterceptorChain(legacyInterceptors);
+                    if (legacyChain != null) {
+                        chains.put(method, legacyChain);
+                    }
                 }
             }
         }
@@ -1638,7 +1655,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * @return true if this bean has at least one method with interceptors, false otherwise
      */
     public boolean hasInterceptors() {
-        return methodInterceptorChains != null && !methodInterceptorChains.isEmpty();
+        return (methodInterceptorChains != null && !methodInterceptorChains.isEmpty())
+                || targetClassAroundInvokeMethod != null;
     }
 
     private void ensureLifecycleInterceptorChainsInitialized() {
@@ -1737,13 +1755,153 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             );
         }
 
-        if (methodInterceptorChains == null || methodInterceptorChains.isEmpty()) {
+        boolean hasMethodChains = methodInterceptorChains != null && !methodInterceptorChains.isEmpty();
+        if (!hasMethodChains && targetClassAroundInvokeMethod == null) {
             // No interceptors, return the instance as-is
             return targetInstance;
         }
 
+        Map<Method, InterceptorChain> effectiveChains = new HashMap<Method, InterceptorChain>();
+        if (hasMethodChains) {
+            effectiveChains.putAll(methodInterceptorChains);
+        }
+
+        if (targetClassAroundInvokeMethod != null) {
+            List<Class<?>> hierarchy = new ArrayList<Class<?>>();
+            Class<?> current = beanClass;
+            while (current != null && current != Object.class) {
+                hierarchy.add(current);
+                current = current.getSuperclass();
+            }
+            Set<String> seenSignatures = new HashSet<String>();
+            for (Class<?> type : hierarchy) {
+                for (Method method : type.getDeclaredMethods()) {
+                    if (Modifier.isPrivate(method.getModifiers()) || Modifier.isStatic(method.getModifiers())) {
+                        continue;
+                    }
+                    if (method.equals(targetClassAroundInvokeMethod)) {
+                        continue;
+                    }
+                    String signature = method.getName() + Arrays.toString(method.getParameterTypes());
+                    if (!seenSignatures.add(signature)) {
+                        continue;
+                    }
+                    if (effectiveChains.containsKey(method)) {
+                        continue;
+                    }
+                    InterceptorChain dynamicChain = InterceptorChain.builder()
+                            .addInterceptor(targetInstance, targetClassAroundInvokeMethod)
+                            .build();
+                    effectiveChains.put(method, dynamicChain);
+                }
+            }
+        }
+
         // Create and return an interceptor-aware proxy
-        return interceptorAwareProxyGenerator.createProxy(this, targetInstance, methodInterceptorChains);
+        return interceptorAwareProxyGenerator.createProxy(this, targetInstance, effectiveChains);
+    }
+
+    private Method findTargetClassAroundInvokeMethod(Class<?> type) {
+        Class<?> current = type;
+        while (current != null && current != Object.class) {
+            for (Method method : current.getDeclaredMethods()) {
+                if (method.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+                    if (Modifier.isStatic(method.getModifiers())) {
+                        continue;
+                    }
+                    if (method.getParameterCount() == 1 &&
+                            jakarta.interceptor.InvocationContext.class.isAssignableFrom(method.getParameterTypes()[0])) {
+                        method.setAccessible(true);
+                        return method;
+                    }
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
+    private List<Class<?>> extractLegacyInterceptorClasses(Annotation[] annotations) {
+        if (annotations == null || annotations.length == 0) {
+            return Collections.emptyList();
+        }
+        for (Annotation annotation : annotations) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            String name = annotationType.getName();
+            if (!"jakarta.interceptor.Interceptors".equals(name) &&
+                    !"javax.interceptor.Interceptors".equals(name)) {
+                continue;
+            }
+            try {
+                Method valueMethod = annotationType.getMethod("value");
+                Object raw = valueMethod.invoke(annotation);
+                if (raw instanceof Class[]) {
+                    Class<?>[] classes = (Class<?>[]) raw;
+                    return Arrays.<Class<?>>asList(classes);
+                }
+            } catch (Exception ignored) {
+                return Collections.emptyList();
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    private InterceptorChain buildLegacyInterceptorChain(List<Class<?>> interceptorClasses) {
+        if (interceptorClasses == null || interceptorClasses.isEmpty()) {
+            return null;
+        }
+        InterceptorChain.Builder builder = InterceptorChain.builder();
+        for (Class<?> interceptorClass : interceptorClasses) {
+            if (interceptorClass == null) {
+                continue;
+            }
+            Object interceptorInstance = getOrCreateLegacyInterceptorInstance(interceptorClass);
+            Method aroundInvokeMethod = findAroundInvokeMethod(interceptorClass);
+            if (aroundInvokeMethod != null) {
+                builder.addInterceptor(interceptorInstance, aroundInvokeMethod);
+            }
+        }
+        return builder.build();
+    }
+
+    private Method findAroundInvokeMethod(Class<?> interceptorClass) {
+        Class<?> current = interceptorClass;
+        while (current != null && current != Object.class) {
+            for (Method method : current.getDeclaredMethods()) {
+                if (method.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+                    if (Modifier.isStatic(method.getModifiers())) {
+                        continue;
+                    }
+                    if (method.getParameterCount() == 1 &&
+                            jakarta.interceptor.InvocationContext.class.isAssignableFrom(method.getParameterTypes()[0])) {
+                        method.setAccessible(true);
+                        return method;
+                    }
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
+    private Object getOrCreateLegacyInterceptorInstance(Class<?> interceptorClass) {
+        return interceptorInstanceCache.computeIfAbsent(interceptorClass, clazz -> {
+            try {
+                Constructor<?> constructor = selectInterceptorConstructor(clazz);
+                constructor.setAccessible(true);
+                Object[] constructorArgs = resolveConstructorParameters(constructor);
+                Object instance = constructor.newInstance(constructorArgs);
+                injectInterceptorFields(instance, clazz);
+                injectInterceptorMethods(instance, clazz);
+                invokeInterceptorPostConstruct(instance, clazz);
+                return instance;
+            } catch (Exception e) {
+                throw new RuntimeException(
+                        "Failed to create legacy interceptor instance of " + clazz.getName() +
+                                " for bean " + beanClass.getName(), e
+                );
+            }
+        });
     }
 
     // ====================================================================================

@@ -64,13 +64,19 @@ public class CDI41BeanValidator {
     private final KnowledgeBase knowledgeBase;
     private final BeanTypesExtractor beanTypesExtractor;
     private final TypeChecker typeChecker;
+    private final boolean cdiFullLegacyInterceptionEnabled;
     private Annotation[] overrideAnnotations;
     private Class<?> overrideAnnotationsClass;
 
     public CDI41BeanValidator(KnowledgeBase knowledgeBase) {
+        this(knowledgeBase, false);
+    }
+
+    public CDI41BeanValidator(KnowledgeBase knowledgeBase, boolean cdiFullLegacyInterceptionEnabled) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.beanTypesExtractor = new BeanTypesExtractor();
         this.typeChecker = new TypeChecker();
+        this.cdiFullLegacyInterceptionEnabled = cdiFullLegacyInterceptionEnabled;
     }
 
     /**
@@ -497,6 +503,9 @@ public class CDI41BeanValidator {
     }
 
     private void validateNonPortableInterceptionForms(Class<?> clazz) {
+        if (cdiFullLegacyInterceptionEnabled) {
+            return;
+        }
         if (hasLegacyInterceptorDeclaration(annotationsOf(clazz))) {
             throw new NonPortableBehaviourException(clazz.getName() +
                     ": uses @Interceptors/@ExcludeClassInterceptors/@ExcludeDefaultInterceptors. " +
