@@ -18,6 +18,8 @@ import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
+import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.decorators.DecoratorResolver;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanAttributesImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
@@ -674,6 +676,8 @@ public class Syringe {
         BeanResolver beanResolver = beanManager.getBeanResolver();
         InterceptorResolver interceptorResolver = new InterceptorResolver(knowledgeBase);
         InterceptorAwareProxyGenerator interceptorAwareProxyGenerator = new InterceptorAwareProxyGenerator();
+        DecoratorResolver decoratorResolver = new DecoratorResolver(knowledgeBase);
+        DecoratorAwareProxyGenerator decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
 
         for (Bean<?> bean : knowledgeBase.getBeans()) {
             if (bean instanceof BeanImpl<?>) {
@@ -682,6 +686,9 @@ public class Syringe {
                 beanImpl.setInterceptorResolver(interceptorResolver);
                 beanImpl.setKnowledgeBase(knowledgeBase);
                 beanImpl.setInterceptorAwareProxyGenerator(interceptorAwareProxyGenerator);
+                beanImpl.setDecoratorResolver(decoratorResolver);
+                beanImpl.setDecoratorAwareProxyGenerator(decoratorAwareProxyGenerator);
+                beanImpl.setBeanManager(beanManager);
                 beanImpl.buildMethodInterceptorChains();
             } else if (bean instanceof ProducerBean<?>) {
                 ((ProducerBean<?>) bean).setDependencyResolver(beanResolver);

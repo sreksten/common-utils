@@ -2,9 +2,11 @@ package com.threeamigos.common.util.implementations.injection.resolution;
 
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.propagation.RegistryContextTokenProvider;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
@@ -18,6 +20,8 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.Decorator;
+import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
@@ -25,6 +29,7 @@ import jakarta.inject.Named;
 import jakarta.inject.Provider;
 
 import java.lang.annotation.Annotation;
+import java.io.Serializable;
 import java.lang.reflect.Member;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.InvocationTargetException;
@@ -58,6 +63,7 @@ public class BeanResolver implements DependencyResolver {
     private final TypeChecker typeChecker;
     private TransactionServices transactionServices;
     private EventImpl.ContextTokenProvider contextTokenProvider = new RegistryContextTokenProvider();
+    private volatile BeanManagerImpl owningBeanManager;
 
     // ThreadLocal to pass injection point context during resolution
     private final ThreadLocal<InjectionPoint> currentInjectionPoint = new ThreadLocal<>();
@@ -71,6 +77,10 @@ public class BeanResolver implements DependencyResolver {
         this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
         this.typeChecker = new TypeChecker();
         this.transactionServices = transactionServices == null ? new NoOpTransactionServices() : transactionServices;
+    }
+
+    public void setOwningBeanManager(BeanManagerImpl beanManager) {
+        this.owningBeanManager = beanManager;
     }
 
     @Override
@@ -114,11 +124,19 @@ public class BeanResolver implements DependencyResolver {
         if (requiredType instanceof ParameterizedType) {
             ParameterizedType parameterizedType = (ParameterizedType) requiredType;
             Type rawType = parameterizedType.getRawType();
+            if (rawType instanceof Class && Decorator.class.equals(rawType)) {
+                jakarta.enterprise.inject.spi.InjectionPoint ip = currentInjectionPoint.get();
+                return resolveDecoratorMetadata(ip, parameterizedType);
+            }
+
             if (rawType instanceof Class &&
                     (Bean.class.equals(rawType) || Interceptor.class.equals(rawType))) {
                 jakarta.enterprise.inject.spi.InjectionPoint ip = currentInjectionPoint.get();
                 if (ip == null || ip.getBean() == null) {
                     throw new IllegalStateException("Bean metadata is not available in this context");
+                }
+                if (Bean.class.equals(rawType) && hasDecoratedQualifier(effectiveQualifiers)) {
+                    return resolveDecoratedBeanMetadata(ip, parameterizedType, effectiveQualifiers);
                 }
                 return ip.getBean();
             }
@@ -347,6 +365,157 @@ public class BeanResolver implements DependencyResolver {
             }
         }
         return false;
+    }
+
+    private Object resolveDecoratorMetadata(InjectionPoint injectionPoint, ParameterizedType requiredType) {
+        if (injectionPoint == null || injectionPoint.getBean() == null) {
+            throw new IllegalStateException("Decorator metadata is not available in this context");
+        }
+
+        Class<?> declaringClass = injectionPoint.getMember().getDeclaringClass();
+        DecoratorInfo decoratorInfo = findDecoratorInfo(declaringClass);
+        if (decoratorInfo == null) {
+            throw new DefinitionException("Decorator metadata may only be injected into decorator instances");
+        }
+
+        Type requestedType = requiredType.getActualTypeArguments()[0];
+        if (!requestedType.getTypeName().equals(declaringClass.getTypeName())) {
+            throw new DefinitionException("Decorator metadata type parameter must match decorator type " +
+                    declaringClass.getName());
+        }
+
+        return new SerializableDecoratorMetadata<>(decoratorInfo, injectionPoint.getBean());
+    }
+
+    private Object resolveDecoratedBeanMetadata(InjectionPoint injectionPoint,
+                                                ParameterizedType requiredType,
+                                                Annotation[] qualifiers) {
+        if (injectionPoint == null || injectionPoint.getBean() == null) {
+            throw new IllegalStateException("@Decorated Bean metadata is not available in this context");
+        }
+
+        Class<?> declaringClass = injectionPoint.getMember().getDeclaringClass();
+        DecoratorInfo decoratorInfo = findDecoratorInfo(declaringClass);
+        if (decoratorInfo == null) {
+            throw new DefinitionException("@Decorated Bean metadata may only be injected into decorator instances");
+        }
+
+        Type delegateType = decoratorInfo.getDelegateInjectionPoint().getType();
+        Type requestedType = requiredType.getActualTypeArguments()[0];
+        if (!requestedType.getTypeName().equals(delegateType.getTypeName())) {
+            throw new DefinitionException("@Decorated Bean metadata type parameter must match delegate type " +
+                    delegateType.getTypeName());
+        }
+
+        Annotation[] delegateQualifiers =
+                decoratorInfo.getDelegateInjectionPoint().getQualifiers().toArray(new Annotation[0]);
+        Collection<Bean<?>> candidates = findMatchingBeans(delegateType, delegateQualifiers);
+        candidates = candidates.stream()
+                .filter(bean -> !declaringClass.equals(bean.getBeanClass()))
+                .collect(Collectors.toList());
+
+        if (candidates.isEmpty()) {
+            throw new UnsatisfiedResolutionException("No decorated bean found for delegate type " +
+                    delegateType.getTypeName());
+        }
+        if (candidates.size() > 1) {
+            Optional<Bean<?>> resolved = resolveByAlternativePrecedence(candidates);
+            if (resolved.isPresent()) {
+                return new SerializableBeanMetadata<>(resolved.get());
+            }
+            throw new AmbiguousResolutionException("Ambiguous decorated bean metadata for delegate type " +
+                    delegateType.getTypeName());
+        }
+
+        return new SerializableBeanMetadata<>(candidates.iterator().next());
+    }
+
+    private DecoratorInfo findDecoratorInfo(Class<?> decoratorClass) {
+        for (DecoratorInfo info : knowledgeBase.getDecoratorInfos()) {
+            if (info.getDecoratorClass().equals(decoratorClass)) {
+                return info;
+            }
+        }
+        return null;
+    }
+
+    private boolean hasDecoratedQualifier(Annotation[] qualifiers) {
+        if (qualifiers == null) {
+            return false;
+        }
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null) {
+                continue;
+            }
+            String name = qualifier.annotationType().getName();
+            if ("jakarta.enterprise.inject.Decorated".equals(name) ||
+                    "javax.enterprise.inject.Decorated".equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static class SerializableBeanMetadata<T> implements Bean<T>, Serializable {
+        private static final long serialVersionUID = 1L;
+        private final Bean<T> delegate;
+
+        @SuppressWarnings("unchecked")
+        private SerializableBeanMetadata(Bean<?> delegate) {
+            this.delegate = (Bean<T>) delegate;
+        }
+
+        @Override
+        public Class<?> getBeanClass() { return delegate.getBeanClass(); }
+        @Override
+        public Set<InjectionPoint> getInjectionPoints() { return delegate.getInjectionPoints(); }
+        @Override
+        public String getName() { return delegate.getName(); }
+        @Override
+        public Set<Annotation> getQualifiers() { return delegate.getQualifiers(); }
+        @Override
+        public Class<? extends Annotation> getScope() { return delegate.getScope(); }
+        @Override
+        public Set<Class<? extends Annotation>> getStereotypes() { return delegate.getStereotypes(); }
+        @Override
+        public Set<Type> getTypes() { return delegate.getTypes(); }
+        @Override
+        public boolean isAlternative() { return delegate.isAlternative(); }
+        @Override
+        public T create(CreationalContext<T> creationalContext) { return delegate.create(creationalContext); }
+        @Override
+        public void destroy(T instance, CreationalContext<T> creationalContext) { delegate.destroy(instance, creationalContext); }
+    }
+
+    private static final class SerializableDecoratorMetadata<T> extends SerializableBeanMetadata<T>
+            implements Decorator<T> {
+        private static final long serialVersionUID = 1L;
+        private final Type delegateType;
+        private final Set<Annotation> delegateQualifiers;
+        private final Set<Type> decoratedTypes;
+
+        private SerializableDecoratorMetadata(DecoratorInfo info, Bean<?> bean) {
+            super(bean);
+            this.delegateType = info.getDelegateInjectionPoint().getType();
+            this.delegateQualifiers = Collections.unmodifiableSet(
+                    new HashSet<Annotation>(info.getDelegateInjectionPoint().getQualifiers()));
+            this.decoratedTypes = Collections.unmodifiableSet(new HashSet<Type>(info.getDecoratedTypes()));
+        }
+
+        @Override
+        public Type getDelegateType() {
+            return delegateType;
+        }
+
+        @Override
+        public Set<Annotation> getDelegateQualifiers() {
+            return delegateQualifiers;
+        }
+
+        @Override
+        public Set<Type> getDecoratedTypes() {
+            return decoratedTypes;
+        }
     }
 
     private int getAlternativePriority(Bean<?> bean) {
@@ -702,7 +871,7 @@ public class BeanResolver implements DependencyResolver {
             return null;
         };
 
-        return new InstanceImpl<>(type, qualifiers, strategy, beanLookup);
+        return new InstanceImpl<>(type, qualifiers, strategy, beanLookup, owningBeanManager);
     }
 
     /**

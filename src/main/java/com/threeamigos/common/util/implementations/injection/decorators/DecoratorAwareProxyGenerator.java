@@ -7,12 +7,20 @@ import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.inject.Inject;
+import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Default;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -205,24 +213,29 @@ public class DecoratorAwareProxyGenerator {
             CreationalContext<?> creationalContext) {
 
         Class<?> decoratorClass = decoratorInfo.getDecoratorClass();
+        Bean<?> decoratorBean = createSyntheticDecoratorBean(decoratorClass);
 
-        // Resolve the decorator bean
-        Bean<?> decoratorBean = resolveDecoratorBean(decoratorClass, beanManager);
-        if (decoratorBean == null) {
-            throw new IllegalStateException(
-                    "Cannot create decorator instance: bean not found for " + decoratorClass.getName()
-            );
+        try {
+            Constructor<?> constructor = findInjectionConstructor(decoratorClass);
+            constructor.setAccessible(true);
+            Parameter[] parameters = constructor.getParameters();
+            Object[] args = new Object[parameters.length];
+            for (int i = 0; i < parameters.length; i++) {
+                Parameter parameter = parameters[i];
+                if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                    throw new IllegalStateException("Decorator " + decoratorClass.getName() +
+                            " requires @Delegate constructor injection, but createDecoratorInstance was used");
+                }
+                args[i] = beanManager.getInjectableReference(
+                        new InjectionPointImpl<>(parameter, decoratorBean), creationalContext);
+            }
+
+            Object instance = constructor.newInstance(args);
+            injectNonDelegateMembers(instance, decoratorClass, decoratorBean, beanManager, creationalContext);
+            return instance;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to create decorator instance " + decoratorClass.getName(), e);
         }
-
-        // Create a decorator instance via BeanManager
-        // Note: We pass null for the @Delegate injection point here because we'll inject it manually
-        // after all decorators are created
-
-        return beanManager.getReference(
-                decoratorBean,
-                decoratorClass,
-                creationalContext
-        );
     }
 
     /**
@@ -248,23 +261,16 @@ public class DecoratorAwareProxyGenerator {
         InjectionPoint delegateInjectionPoint = decoratorInfo.getDelegateInjectionPoint();
 
         try {
-            // Get the constructor
             Constructor<?> constructor = (Constructor<?>) delegateInjectionPoint.getMember();
             constructor.setAccessible(true);
-
-            // Prepare constructor parameters
             Parameter[] parameters = constructor.getParameters();
             Object[] args = new Object[parameters.length];
-
-            // Find @Delegate parameter and fill args array
-            // First resolve the decorator bean
-            Bean<?> decoratorBean = resolveDecoratorBean(decoratorClass, beanManager);
+            Bean<?> decoratorBean = createSyntheticDecoratorBean(decoratorClass);
 
             for (int i = 0; i < parameters.length; i++) {
                 if (parameters[i].isAnnotationPresent(jakarta.decorator.Delegate.class)) {
                     args[i] = delegate;
                 } else {
-                    // Resolve other parameters via BeanManager
                     args[i] = beanManager.getInjectableReference(
                             new InjectionPointImpl<>(parameters[i], decoratorBean),
                             creationalContext
@@ -272,14 +278,8 @@ public class DecoratorAwareProxyGenerator {
                 }
             }
 
-            // Create instance
             Object decoratorInstance = constructor.newInstance(args);
-
-            // Perform field and method injection (non-@Delegate injections)
-            // Note: This is handled by CDI automatically if we use BeanManager.getReference()
-            // For manual instantiation, we'd need to call field/method injection
-            // For simplicity, we'll assume constructor injection is enough for now
-
+            injectNonDelegateMembers(decoratorInstance, decoratorClass, decoratorBean, beanManager, creationalContext);
             return decoratorInstance;
 
         } catch (Exception e) {
@@ -300,9 +300,117 @@ public class DecoratorAwareProxyGenerator {
     private Bean<?> resolveDecoratorBean(Class<?> decoratorClass, BeanManager beanManager) {
         Set<Bean<?>> beans = beanManager.getBeans(decoratorClass);
         if (beans.isEmpty()) {
-            return null;
+            return createSyntheticDecoratorBean(decoratorClass);
         }
         return beanManager.resolve(beans);
+    }
+
+    private Constructor<?> findInjectionConstructor(Class<?> decoratorClass) throws NoSuchMethodException {
+        Constructor<?> injectConstructor = null;
+        for (Constructor<?> constructor : decoratorClass.getDeclaredConstructors()) {
+            if (constructor.isAnnotationPresent(Inject.class)) {
+                injectConstructor = constructor;
+                break;
+            }
+        }
+        if (injectConstructor != null) {
+            return injectConstructor;
+        }
+        return decoratorClass.getDeclaredConstructor();
+    }
+
+    private void injectNonDelegateMembers(Object instance,
+                                          Class<?> decoratorClass,
+                                          Bean<?> decoratorBean,
+                                          BeanManager beanManager,
+                                          CreationalContext<?> creationalContext) throws Exception {
+        for (Field field : decoratorClass.getDeclaredFields()) {
+            if (!field.isAnnotationPresent(Inject.class) || field.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                continue;
+            }
+            field.setAccessible(true);
+            Object value = beanManager.getInjectableReference(new InjectionPointImpl<>(field, decoratorBean), creationalContext);
+            field.set(instance, value);
+        }
+
+        for (Method method : decoratorClass.getDeclaredMethods()) {
+            if (!method.isAnnotationPresent(Inject.class)) {
+                continue;
+            }
+            Parameter[] parameters = method.getParameters();
+            Object[] args = new Object[parameters.length];
+            for (int i = 0; i < parameters.length; i++) {
+                if (parameters[i].isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                    continue;
+                }
+                args[i] = beanManager.getInjectableReference(
+                        new InjectionPointImpl<>(parameters[i], decoratorBean), creationalContext);
+            }
+            method.setAccessible(true);
+            method.invoke(instance, args);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Bean<?> createSyntheticDecoratorBean(Class<?> decoratorClass) {
+        Set<Type> types = new HashSet<>();
+        types.add(decoratorClass);
+        Collections.addAll(types, decoratorClass.getGenericInterfaces());
+
+        return new Bean<Object>() {
+            @Override
+            public Class<?> getBeanClass() {
+                return decoratorClass;
+            }
+
+            @Override
+            public Set<InjectionPoint> getInjectionPoints() {
+                return Collections.emptySet();
+            }
+
+            @Override
+            public String getName() {
+                return null;
+            }
+
+            @Override
+            public Set<Annotation> getQualifiers() {
+                Set<Annotation> qualifiers = new HashSet<>();
+                qualifiers.add(Default.Literal.INSTANCE);
+                qualifiers.add(Any.Literal.INSTANCE);
+                return qualifiers;
+            }
+
+            @Override
+            public Class<? extends Annotation> getScope() {
+                return Dependent.class;
+            }
+
+            @Override
+            public Set<Class<? extends Annotation>> getStereotypes() {
+                return Collections.emptySet();
+            }
+
+            @Override
+            public Set<Type> getTypes() {
+                return types;
+            }
+
+            @Override
+            public boolean isAlternative() {
+                return false;
+            }
+
+            @Override
+            public Object create(CreationalContext<Object> creationalContext) {
+                throw new UnsupportedOperationException("Synthetic decorator bean does not support create()");
+            }
+
+            @Override
+            public void destroy(Object instance, CreationalContext<Object> creationalContext) {
+                // no-op
+            }
+        };
     }
 
     /**

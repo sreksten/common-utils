@@ -25,6 +25,8 @@ import jakarta.inject.Qualifier;
 import jakarta.inject.Scope;
 import jakarta.enterprise.context.*;
 import jakarta.enterprise.inject.Alternative;
+import jakarta.enterprise.inject.Decorated;
+import jakarta.enterprise.inject.spi.Decorator;
 import jakarta.enterprise.inject.Stereotype;
 
 import java.lang.annotation.Annotation;
@@ -1596,6 +1598,10 @@ public class CDI41BeanValidator {
             valid = validateBeanAndInterceptorMetadataUsage(injectionPoint, disposerParameter) && valid;
         }
 
+        if (isDecoratorMetadataType(injectionPoint) || isDecoratedBeanMetadataType(injectionPoint)) {
+            valid = validateDecoratorMetadataUsage(injectionPoint, disposerParameter) && valid;
+        }
+
         return valid;
     }
 
@@ -1702,6 +1708,16 @@ public class CDI41BeanValidator {
         return rawType instanceof Class && Interceptor.class.equals(rawType);
     }
 
+    private boolean isDecoratorMetadataType(AnnotatedElement injectionPoint) {
+        Type rawType = metadataRawType(injectionPoint);
+        return rawType instanceof Class && Decorator.class.equals(rawType);
+    }
+
+    private boolean isDecoratedBeanMetadataType(AnnotatedElement injectionPoint) {
+        return isBeanMetadataType(injectionPoint)
+                && hasQualifier(injectionPoint.getAnnotations(), Decorated.class.getName());
+    }
+
     private Type metadataRawType(AnnotatedElement injectionPoint) {
         Type genericType = metadataGenericType(injectionPoint);
         if (!(genericType instanceof ParameterizedType)) {
@@ -1764,6 +1780,76 @@ public class CDI41BeanValidator {
         }
         Executable executable = ((Parameter) injectionPoint).getDeclaringExecutable();
         return executable instanceof Method && hasProducesAnnotation((Method) executable);
+    }
+
+    private boolean validateDecoratorMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter) {
+        if (disposerParameter) {
+            knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                    ": disposer method parameter may not inject Decorator metadata or @Decorated Bean metadata");
+            return false;
+        }
+
+        Class<?> declaringClass = declaringClassOf(injectionPoint);
+        if (declaringClass == null || !hasDecoratorAnnotation(declaringClass)) {
+            knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                    ": Decorator metadata and @Decorated Bean metadata may only be injected into decorator instances");
+            return false;
+        }
+
+        Type metadataArgument = getSingleTypeArgument(injectionPoint);
+
+        if (isDecoratorMetadataType(injectionPoint) && hasDefaultQualifier(injectionPoint.getAnnotations())) {
+            if (!isSameType(metadataArgument, declaringClass)) {
+                knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                        ": Decorator metadata with qualifier @Default must declare type parameter " +
+                        declaringClass.getTypeName());
+                return false;
+            }
+        }
+
+        if (isDecoratedBeanMetadataType(injectionPoint)) {
+            Type delegateType = findDecoratorDelegateType(declaringClass);
+            if (delegateType == null || !isSameType(metadataArgument, delegateType)) {
+                String expected = delegateType == null ? "<unknown>" : delegateType.getTypeName();
+                knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
+                        ": @Decorated Bean metadata must declare the delegate type " + expected);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private Type findDecoratorDelegateType(Class<?> decoratorClass) {
+        if (decoratorClass == null) {
+            return null;
+        }
+
+        for (Field field : decoratorClass.getDeclaredFields()) {
+            if (field.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                return field.getGenericType();
+            }
+        }
+
+        for (Constructor<?> constructor : decoratorClass.getDeclaredConstructors()) {
+            for (Parameter parameter : constructor.getParameters()) {
+                if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                    return parameter.getParameterizedType();
+                }
+            }
+        }
+
+        for (Method method : decoratorClass.getDeclaredMethods()) {
+            if (!hasInjectAnnotation(method)) {
+                continue;
+            }
+            for (Parameter parameter : method.getParameters()) {
+                if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                    return parameter.getParameterizedType();
+                }
+            }
+        }
+        return null;
     }
 
     private boolean isSameType(Type left, Type right) {

@@ -1,6 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.*;
 import jakarta.enterprise.inject.spi.Bean;
@@ -9,6 +11,9 @@ import jakarta.enterprise.util.TypeLiteral;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Repeatable;
 import java.lang.reflect.InvocationTargetException;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.Serializable;
 import java.util.*;
 import java.util.function.Function;
 
@@ -37,20 +42,24 @@ import java.util.function.Function;
  * @author Stefano Reksten
  * @see jakarta.enterprise.inject.Instance
  */
-public class InstanceImpl<T> implements Instance<T> {
+public class InstanceImpl<T> implements Instance<T>, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final Class<T> type;
     private final Collection<Annotation> qualifiers;
-    private final ResolutionStrategy<T> resolutionStrategy;
-    private final Function<Class<? extends T>, Bean<? extends T>> beanLookup;
+    private final String beanManagerId;
+    private transient ResolutionStrategy<T> resolutionStrategy;
+    private transient Function<Class<? extends T>, Bean<? extends T>> beanLookup;
 
     @SuppressWarnings("unchecked")
     private <U extends T> Function<Class<? extends U>, Bean<? extends U>> adaptBeanLookup() {
-        if (beanLookup == null) {
+        Function<Class<? extends T>, Bean<? extends T>> lookup = beanLookup;
+        if (lookup == null) {
             return null;
         }
         return clazz -> {
-            Bean<? extends T> bean = beanLookup.apply((Class<? extends T>) clazz);
+            Bean<? extends T> bean = lookup.apply((Class<? extends T>) clazz);
             return (Bean<? extends U>) bean;
         };
     }
@@ -102,23 +111,32 @@ public class InstanceImpl<T> implements Instance<T> {
     public InstanceImpl(Class<T> type,
                  Collection<Annotation> qualifiers,
                  ResolutionStrategy<T> resolutionStrategy) {
-        this(type, qualifiers, resolutionStrategy, null);
+        this(type, qualifiers, resolutionStrategy, null, null);
     }
 
     public InstanceImpl(Class<T> type,
                  Collection<Annotation> qualifiers,
                  ResolutionStrategy<T> resolutionStrategy,
                  Function<Class<? extends T>, Bean<? extends T>> beanLookup) {
+        this(type, qualifiers, resolutionStrategy, beanLookup, null);
+    }
+
+    public InstanceImpl(Class<T> type,
+                 Collection<Annotation> qualifiers,
+                 ResolutionStrategy<T> resolutionStrategy,
+                 Function<Class<? extends T>, Bean<? extends T>> beanLookup,
+                 BeanManagerImpl owningBeanManager) {
         this.type = Objects.requireNonNull(type, "type cannot be null");
-        this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
+        this.qualifiers = new ArrayList<>(Objects.requireNonNull(qualifiers, "qualifiers cannot be null"));
         this.resolutionStrategy = Objects.requireNonNull(resolutionStrategy, "resolutionStrategy cannot be null");
         this.beanLookup = beanLookup;
+        this.beanManagerId = owningBeanManager != null ? owningBeanManager.getBeanManagerId() : null;
     }
 
     @Override
     public T get() {
         try {
-            return resolutionStrategy.resolveInstance(type, qualifiers);
+            return strategy().resolveInstance(type, qualifiers);
         } catch (UnsatisfiedResolutionException | AmbiguousResolutionException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -138,15 +156,17 @@ public class InstanceImpl<T> implements Instance<T> {
     @Override
     public Instance<T> select(Annotation... annotations) {
         validateSelectAnnotations(annotations);
-        return new InstanceImpl<>(type, mergeQualifiers(qualifiers, annotations), resolutionStrategy, beanLookup);
+        return new InstanceImpl<>(type, mergeQualifiers(qualifiers, annotations), strategy(), beanLookup,
+                BeanManagerImpl.getRegisteredBeanManager(beanManagerId));
     }
 
     @Override
     public <U extends T> Instance<U> select(Class<U> subtype, Annotation... annotations) {
         validateSelectAnnotations(annotations);
         @SuppressWarnings("unchecked")
-        ResolutionStrategy<U> castStrategy = (ResolutionStrategy<U>) resolutionStrategy;
-        return new InstanceImpl<>(subtype, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup());
+        ResolutionStrategy<U> castStrategy = (ResolutionStrategy<U>) strategy();
+        return new InstanceImpl<>(subtype, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup(),
+                BeanManagerImpl.getRegisteredBeanManager(beanManagerId));
     }
 
     @Override
@@ -156,14 +176,15 @@ public class InstanceImpl<T> implements Instance<T> {
         @SuppressWarnings("unchecked")
         Class<U> rawType = (Class<U>) RawTypeExtractor.getRawType(subtype.getType());
         @SuppressWarnings("unchecked")
-        ResolutionStrategy<U> castStrategy = (ResolutionStrategy<U>) resolutionStrategy;
-        return new InstanceImpl<>(rawType, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup());
+        ResolutionStrategy<U> castStrategy = (ResolutionStrategy<U>) strategy();
+        return new InstanceImpl<>(rawType, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup(),
+                BeanManagerImpl.getRegisteredBeanManager(beanManagerId));
     }
 
     @Override
     public boolean isUnsatisfied() {
         try {
-            return resolutionStrategy.resolveImplementations(type, qualifiers).isEmpty();
+            return strategy().resolveImplementations(type, qualifiers).isEmpty();
         } catch (Exception e) {
             return true; // treating an Exception as unsatisfied
         }
@@ -172,7 +193,7 @@ public class InstanceImpl<T> implements Instance<T> {
     @Override
     public boolean isAmbiguous() {
         try {
-            return resolutionStrategy.resolveImplementations(type, qualifiers).size() > 1;
+            return strategy().resolveImplementations(type, qualifiers).size() > 1;
         } catch (Exception e) {
             return false; // If we can't resolve the class, it's not ambiguous (it's unsatisfied)
         }
@@ -182,7 +203,7 @@ public class InstanceImpl<T> implements Instance<T> {
     public void destroy(T instance) {
         try {
             if (instance != null) {
-                resolutionStrategy.invokePreDestroy(instance);
+                strategy().invokePreDestroy(instance);
             }
         } catch (UnsupportedOperationException e) {
             throw e;
@@ -201,7 +222,8 @@ public class InstanceImpl<T> implements Instance<T> {
     public Handle<T> getHandle() {
         // Per CDI spec: get the single bean or throw exception if ambiguous/unsatisfied
         try {
-            Collection<Class<? extends T>> implementations = resolutionStrategy.resolveImplementations(type, qualifiers);
+            Collection<Class<? extends T>> implementations = strategy().resolveImplementations(type, qualifiers);
+            
 
             if (implementations.isEmpty()) {
                 throw new UnsatisfiedResolutionException(
@@ -231,7 +253,7 @@ public class InstanceImpl<T> implements Instance<T> {
             public Iterator<Handle<T>> iterator() {
                 try {
                     Collection<Class<? extends T>> implementations =
-                            resolutionStrategy.resolveImplementations(type, qualifiers);
+                            strategy().resolveImplementations(type, qualifiers);
 
                     List<Handle<T>> handleList = new ArrayList<>();
                     for (Class<? extends T> implClass : implementations) {
@@ -265,7 +287,7 @@ public class InstanceImpl<T> implements Instance<T> {
                     try {
                         @SuppressWarnings("unchecked")
                         Class<T> classToResolve = (Class<T>) beanClass;
-                        instance = resolutionStrategy.resolveInstance(classToResolve, qualifiers);
+                        instance = strategy().resolveInstance(classToResolve, qualifiers);
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to create instance of " + beanClass.getName(), e);
                     }
@@ -276,9 +298,10 @@ public class InstanceImpl<T> implements Instance<T> {
 
             @Override
             public jakarta.enterprise.inject.spi.Bean<T> getBean() {
-                if (beanLookup != null) {
+                Function<Class<? extends T>, Bean<? extends T>> lookup = beanLookup;
+                if (lookup != null) {
                     @SuppressWarnings("unchecked")
-                    Bean<T> bean = (Bean<T>) beanLookup.apply(beanClass);
+                    Bean<T> bean = (Bean<T>) lookup.apply(beanClass);
                     if (bean != null) {
                         return bean;
                     }
@@ -300,7 +323,7 @@ public class InstanceImpl<T> implements Instance<T> {
             public void destroy() {
                 if (!destroyed && instance != null) {
                     try {
-                        resolutionStrategy.invokePreDestroy(instance);
+                        strategy().invokePreDestroy(instance);
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to destroy instance of " + beanClass.getName(), e);
                     }
@@ -321,11 +344,11 @@ public class InstanceImpl<T> implements Instance<T> {
     @Override
     public @Nonnull Iterator<T> iterator() {
         try {
-            Collection<Class<? extends T>> classes = resolutionStrategy.resolveImplementations(type, qualifiers);
+            Collection<Class<? extends T>> classes = strategy().resolveImplementations(type, qualifiers);
 
             List<T> instances = new ArrayList<>();
             for (Class<? extends T> clazz : classes) {
-                instances.add(resolutionStrategy.resolveInstance((Class<T>) clazz, qualifiers));
+                instances.add(strategy().resolveInstance((Class<T>) clazz, qualifiers));
             }
             return instances.iterator();
         } catch (Exception e) {
@@ -405,5 +428,82 @@ public class InstanceImpl<T> implements Instance<T> {
             }
         }
         return false;
+    }
+
+    private ResolutionStrategy<T> strategy() {
+        ResolutionStrategy<T> current = resolutionStrategy;
+        if (current == null) {
+            initializeTransientState();
+            current = resolutionStrategy;
+        }
+        if (current == null) {
+            throw new IllegalStateException("Cannot resolve Instance strategy for type " + type.getName());
+        }
+        return current;
+    }
+
+    private Function<Class<? extends T>, Bean<? extends T>> beanLookup() {
+        if (beanLookup == null) {
+            initializeTransientState();
+        }
+        return beanLookup;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void initializeTransientState() {
+        BeanManagerImpl beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+        if (beanManager == null) {
+            beanManager = BeanManagerImpl.getRegisteredBeanManager(type.getClassLoader());
+        }
+        if (beanManager == null) {
+            ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+            beanManager = BeanManagerImpl.getRegisteredBeanManager(contextClassLoader);
+        }
+        if (beanManager == null) {
+            beanManager = BeanManagerImpl.getRegisteredBeanManager(InstanceImpl.class.getClassLoader());
+        }
+        if (beanManager == null) {
+            throw new IllegalStateException(
+                    "Cannot restore Instance for " + type.getName() + ": no BeanManager registered for classloader");
+        }
+        BeanManagerImpl resolvedBeanManager = beanManager;
+
+        resolutionStrategy = new ResolutionStrategy<T>() {
+            @Override
+            public T resolveInstance(Class<T> typeToResolve, Collection<Annotation> quals) {
+                Annotation[] qualArray = quals.toArray(new Annotation[0]);
+                return (T) resolvedBeanManager.createInstance().select((Class) typeToResolve, qualArray).get();
+            }
+
+            @Override
+            public Collection<Class<? extends T>> resolveImplementations(Class<T> typeToResolve, Collection<Annotation> quals) {
+                Annotation[] qualArray = quals.toArray(new Annotation[0]);
+                Set<Bean<?>> beans = resolvedBeanManager.getBeans(typeToResolve, qualArray);
+                List<Class<? extends T>> implementations = new ArrayList<>();
+                for (Bean<?> bean : beans) {
+                    implementations.add((Class<? extends T>) bean.getBeanClass());
+                }
+                return implementations;
+            }
+
+            @Override
+            public void invokePreDestroy(T instance) throws InvocationTargetException, IllegalAccessException {
+                LifecycleMethodHelper.invokeLifecycleMethod(instance, jakarta.annotation.PreDestroy.class);
+            }
+        };
+
+        beanLookup = beanClass -> {
+            Set<Bean<?>> beans = resolvedBeanManager.getBeans(beanClass);
+            for (Bean<?> bean : beans) {
+                if (beanClass.equals(bean.getBeanClass())) {
+                    return (Bean<? extends T>) bean;
+                }
+            }
+            return null;
+        };
+    }
+
+    private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
+        stream.defaultReadObject();
     }
 }

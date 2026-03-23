@@ -2,12 +2,15 @@ package com.threeamigos.common.util.implementations.injection.util;
 
 import jakarta.enterprise.inject.Default;
 import java.lang.annotation.Annotation;
+import java.io.Serializable;
 
 /**
  * Helper class to create instances of @Default.
  */
 @SuppressWarnings("all")
-public class DefaultLiteral implements Default {
+public class DefaultLiteral implements Default, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     @Override
     public Class<? extends Annotation> annotationType() {

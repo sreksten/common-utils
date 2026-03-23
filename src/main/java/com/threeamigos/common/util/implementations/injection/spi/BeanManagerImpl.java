@@ -36,6 +36,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
@@ -87,10 +88,16 @@ import static com.threeamigos.common.util.implementations.injection.util.Qualifi
  */
 public class BeanManagerImpl implements BeanManager {
 
+    private static final ConcurrentHashMap<ClassLoader, BeanManagerImpl> BEAN_MANAGER_REGISTRY =
+            new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, BeanManagerImpl> BEAN_MANAGER_ID_REGISTRY =
+            new ConcurrentHashMap<>();
+
     private final KnowledgeBase knowledgeBase;
     private final BeanResolver beanResolver;
     private final ContextManager contextManager;
     private final TypeChecker typeChecker;
+    private final String beanManagerId;
 
     /**
      * Creates a new BeanManager implementation.
@@ -103,7 +110,34 @@ public class BeanManagerImpl implements BeanManager {
         this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
         this.beanResolver = new BeanResolver(knowledgeBase, contextManager,
             TransactionServicesFactory.create());
+        this.beanManagerId = UUID.randomUUID().toString();
+        this.beanResolver.setOwningBeanManager(this);
         this.typeChecker = new TypeChecker();
+
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (classLoader == null) {
+            classLoader = BeanManagerImpl.class.getClassLoader();
+        }
+        BEAN_MANAGER_REGISTRY.put(classLoader, this);
+        BEAN_MANAGER_ID_REGISTRY.put(beanManagerId, this);
+    }
+
+    public static BeanManagerImpl getRegisteredBeanManager(ClassLoader classLoader) {
+        if (classLoader == null) {
+            return null;
+        }
+        return BEAN_MANAGER_REGISTRY.get(classLoader);
+    }
+
+    public static BeanManagerImpl getRegisteredBeanManager(String beanManagerId) {
+        if (beanManagerId == null) {
+            return null;
+        }
+        return BEAN_MANAGER_ID_REGISTRY.get(beanManagerId);
+    }
+
+    public String getBeanManagerId() {
+        return beanManagerId;
     }
 
     /**
@@ -1191,7 +1225,7 @@ public class BeanManagerImpl implements BeanManager {
             return null;
         };
 
-        return new InstanceImpl<>(Object.class, qualifiers, strategy, beanLookup);
+        return new InstanceImpl<>(Object.class, qualifiers, strategy, beanLookup, this);
     }
 
     /**
@@ -1337,6 +1371,7 @@ public class BeanManagerImpl implements BeanManager {
                         Event.class.isAssignableFrom((Class<?>) rawType) ||
                         Instance.class.isAssignableFrom((Class<?>) rawType) ||
                         jakarta.inject.Provider.class.isAssignableFrom((Class<?>) rawType) ||
+                        Decorator.class.equals(rawType) ||
                         Bean.class.equals(rawType) ||
                         Interceptor.class.equals(rawType))) {
                     return beanResolver != null

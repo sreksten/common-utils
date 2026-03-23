@@ -2,12 +2,15 @@ package com.threeamigos.common.util.implementations.injection.util;
 
 import jakarta.enterprise.inject.Any;
 import java.lang.annotation.Annotation;
+import java.io.Serializable;
 
 /**
  * Helper class to create instances of @Any.
  */
 @SuppressWarnings("all")
-public class AnyLiteral implements Any {
+public class AnyLiteral implements Any, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     @Override
     public Class<? extends Annotation> annotationType() {
