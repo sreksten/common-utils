@@ -1,8 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.builtinbeans;
 
 import com.threeamigos.common.util.implementations.injection.scopes.ConversationImpl;
-import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Conversation;
+import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
@@ -59,17 +59,6 @@ import java.util.*;
  */
 public class ConversationBean implements Bean<Conversation> {
 
-    private final Conversation conversationInstance;
-
-    /**
-     * Creates a built-in bean for Conversation.
-     */
-    public ConversationBean() {
-        // Create a single ConversationImpl instance
-        // It uses ThreadLocal internally for per-request state
-        this.conversationInstance = new ConversationImpl();
-    }
-
     @Override
     public Class<?> getBeanClass() {
         return Conversation.class;
@@ -82,8 +71,7 @@ public class ConversationBean implements Bean<Conversation> {
 
     @Override
     public Conversation create(CreationalContext<Conversation> context) {
-        // Return the singleton instance (ThreadLocal handles per-request state)
-        return conversationInstance;
+        return new ConversationImpl();
     }
 
     @Override
@@ -113,14 +101,12 @@ public class ConversationBean implements Bean<Conversation> {
 
     @Override
     public Class<? extends Annotation> getScope() {
-        // @ApplicationScoped - singleton bean
-        // (ConversationImpl uses ThreadLocal for per-request state)
-        return ApplicationScoped.class;
+        return RequestScoped.class;
     }
 
     @Override
     public String getName() {
-        return null; // Not a named bean
+        return "jakarta.enterprise.context.conversation";
     }
 
     @Override
@@ -135,6 +121,6 @@ public class ConversationBean implements Bean<Conversation> {
 
     @Override
     public String toString() {
-        return "ConversationBean[type=Conversation, scope=@ApplicationScoped, qualifiers=@Default]";
+        return "ConversationBean[type=Conversation, scope=@RequestScoped, qualifiers=@Default]";
     }
 }

@@ -3,6 +3,8 @@ package com.threeamigos.common.util.implementations.injection.discovery;
 import com.threeamigos.common.util.implementations.injection.*;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
@@ -14,6 +16,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.PassivationCapable;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -638,6 +641,12 @@ public class CDI41InjectionValidator {
                 // Recursively validate all dependencies are passivation-capable
                 visited.clear();
                 allValid &= validateDependenciesPassivationCapable(bean, visited, validBeans);
+
+                // Producer members with passivating scope must have serializable final product types.
+                allValid &= validatePassivatingProducerDeclaration(bean);
+
+                // Interceptors and decorators attached to passivating beans must be passivation-capable.
+                allValid &= validateInterceptorsAndDecoratorsPassivation(bean, validBeans);
             }
         }
 
@@ -673,6 +682,12 @@ public class CDI41InjectionValidator {
         boolean allValid = true;
 
         for (InjectionPoint injectionPoint : bean.getInjectionPoints()) {
+            // CDI 4.1 §17.5.2: transient fields and @TransientReference parameters
+            // are passivation-capable injection points by definition.
+            if (isPassivationCapableInjectionPointByDeclaration(injectionPoint)) {
+                continue;
+            }
+
             Type requiredType = injectionPoint.getType();
             Set<Annotation> qualifiers = injectionPoint.getQualifiers();
 
@@ -704,6 +719,22 @@ public class CDI41InjectionValidator {
 
             // Check if dependency is passivation-capable
             Class<? extends Annotation> dependencyScope = resolvedBean.getScope();
+
+            // CDI 4.1 §17.5.3: these built-in beans are passivation-capable dependencies.
+            if (isBuiltInPassivationCapableDependency(requiredType)) {
+                continue;
+            }
+
+            // CDI 4.1 §17.5.3: custom Bean implementations that implement PassivationCapable
+            // are passivation-capable dependencies.
+            if (resolvedBean instanceof PassivationCapable &&
+                    !(resolvedBean instanceof BeanImpl) &&
+                    !(resolvedBean instanceof ProducerBean)) {
+                if (isDependentScope(dependencyScope)) {
+                    allValid &= validateDependenciesPassivationCapable(resolvedBean, visited, validBeans);
+                }
+                continue;
+            }
 
             // Normal-scoped beans are ALWAYS passivation-capable because they inject as proxies
             if (isNormalScope(dependencyScope)) {
@@ -751,6 +782,316 @@ public class CDI41InjectionValidator {
         return allValid;
     }
 
+    private boolean isBuiltInPassivationCapableDependency(Type requiredType) {
+        Class<?> rawType = RawTypeExtractor.getRawType(requiredType);
+        if (rawType == null) {
+            return false;
+        }
+
+        String rawTypeName = rawType.getName();
+        return "jakarta.enterprise.inject.Instance".equals(rawTypeName) ||
+                "javax.enterprise.inject.Instance".equals(rawTypeName) ||
+                "jakarta.inject.Provider".equals(rawTypeName) ||
+                "javax.inject.Provider".equals(rawTypeName) ||
+                "jakarta.enterprise.event.Event".equals(rawTypeName) ||
+                "javax.enterprise.event.Event".equals(rawTypeName) ||
+                "jakarta.enterprise.inject.spi.InjectionPoint".equals(rawTypeName) ||
+                "javax.enterprise.inject.spi.InjectionPoint".equals(rawTypeName) ||
+                "jakarta.enterprise.inject.spi.BeanManager".equals(rawTypeName) ||
+                "javax.enterprise.inject.spi.BeanManager".equals(rawTypeName);
+    }
+
+    private boolean validatePassivatingProducerDeclaration(Bean<?> bean) {
+        if (!(bean instanceof ProducerBean)) {
+            return true;
+        }
+
+        ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+        Method producerMethod = producerBean.getProducerMethod();
+        if (producerMethod != null) {
+            Class<?> returnType = producerMethod.getReturnType();
+            if (Modifier.isFinal(returnType.getModifiers()) &&
+                    !java.io.Serializable.class.isAssignableFrom(returnType)) {
+                knowledgeBase.addError(
+                        "Producer method " + producerMethod.getName() + " of class " +
+                                producerBean.getDeclaringClass().getName() +
+                                " declares passivating scope @" + bean.getScope().getSimpleName() +
+                                " but has final non-serializable return type " + returnType.getName()
+                );
+                return false;
+            }
+            return true;
+        }
+
+        Field producerField = producerBean.getProducerField();
+        if (producerField != null) {
+            Class<?> fieldType = producerField.getType();
+            if (Modifier.isFinal(fieldType.getModifiers()) &&
+                    !java.io.Serializable.class.isAssignableFrom(fieldType)) {
+                knowledgeBase.addError(
+                        "Producer field " + producerField.getName() + " of class " +
+                                producerBean.getDeclaringClass().getName() +
+                                " declares passivating scope @" + bean.getScope().getSimpleName() +
+                                " but has final non-serializable type " + fieldType.getName()
+                );
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean validateInterceptorsAndDecoratorsPassivation(Bean<?> bean, Collection<Bean<?>> validBeans) {
+        boolean allValid = true;
+        Class<?> beanClass = bean.getBeanClass();
+
+        Set<InterceptorInfo> boundInterceptors = new LinkedHashSet<InterceptorInfo>();
+        Set<Annotation> classBindings = extractInterceptorBindingAnnotations(beanClass.getAnnotations());
+        if (!classBindings.isEmpty()) {
+            boundInterceptors.addAll(knowledgeBase.getInterceptorsByBindings(classBindings));
+        }
+        for (Method method : beanClass.getDeclaredMethods()) {
+            int modifiers = method.getModifiers();
+            if (Modifier.isStatic(modifiers) || Modifier.isPrivate(modifiers)) {
+                continue;
+            }
+            Set<Annotation> effectiveBindings = new HashSet<Annotation>(classBindings);
+            effectiveBindings.addAll(extractInterceptorBindingAnnotations(method.getAnnotations()));
+            if (!effectiveBindings.isEmpty()) {
+                boundInterceptors.addAll(knowledgeBase.getInterceptorsByBindings(effectiveBindings));
+            }
+        }
+
+        for (InterceptorInfo interceptorInfo : boundInterceptors) {
+            Class<?> interceptorClass = interceptorInfo.getInterceptorClass();
+            if (!java.io.Serializable.class.isAssignableFrom(interceptorClass)) {
+                knowledgeBase.addError(
+                        "Bean " + beanClass.getName() + " has passivation-capable scope @" +
+                                bean.getScope().getSimpleName() +
+                                " and bound interceptor " + interceptorClass.getName() +
+                                " which is not Serializable"
+                );
+                allValid = false;
+            }
+            Bean<?> interceptorBean = findBeanByClass(validBeans, interceptorClass);
+            if (interceptorBean != null) {
+                allValid &= validateDependenciesPassivationCapable(interceptorBean, new HashSet<Bean<?>>(), validBeans);
+            }
+            allValid &= validateDeclaredInjectionMembersPassivation(interceptorClass, validBeans, bean);
+        }
+
+        for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
+            if (!decoratesBean(decoratorInfo, bean)) {
+                continue;
+            }
+            Class<?> decoratorClass = decoratorInfo.getDecoratorClass();
+            if (!java.io.Serializable.class.isAssignableFrom(decoratorClass)) {
+                knowledgeBase.addError(
+                        "Bean " + beanClass.getName() + " has passivation-capable scope @" +
+                                bean.getScope().getSimpleName() +
+                                " and matching decorator " + decoratorClass.getName() +
+                                " which is not Serializable"
+                );
+                allValid = false;
+            }
+            Bean<?> decoratorBean = findBeanByClass(validBeans, decoratorClass);
+            if (decoratorBean != null) {
+                allValid &= validateDependenciesPassivationCapable(decoratorBean, new HashSet<Bean<?>>(), validBeans);
+            }
+            allValid &= validateDeclaredInjectionMembersPassivation(decoratorClass, validBeans, bean);
+        }
+
+        return allValid;
+    }
+
+    private boolean decoratesBean(DecoratorInfo decoratorInfo, Bean<?> bean) {
+        for (Type beanType : bean.getTypes()) {
+            if (decoratorInfo.canDecorate(beanType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Bean<?> findBeanByClass(Collection<Bean<?>> validBeans, Class<?> beanClass) {
+        for (Bean<?> candidate : validBeans) {
+            if (candidate != null && beanClass.equals(candidate.getBeanClass())) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private boolean validateDeclaredInjectionMembersPassivation(Class<?> declaringClass,
+                                                                Collection<Bean<?>> validBeans,
+                                                                Bean<?> owningPassivatingBean) {
+        boolean allValid = true;
+
+        for (Field field : declaringClass.getDeclaredFields()) {
+            if (!field.isAnnotationPresent(jakarta.inject.Inject.class) &&
+                    !field.isAnnotationPresent(javax.inject.Inject.class)) {
+                continue;
+            }
+            if (Modifier.isTransient(field.getModifiers())) {
+                continue;
+            }
+            allValid &= validateResolvedDependencyPassivation(
+                    field.getGenericType(),
+                    extractInjectionQualifiers(field.getAnnotations()),
+                    field.getName(),
+                    owningPassivatingBean,
+                    validBeans
+            );
+        }
+
+        for (Constructor<?> constructor : declaringClass.getDeclaredConstructors()) {
+            if (!constructor.isAnnotationPresent(jakarta.inject.Inject.class) &&
+                    !constructor.isAnnotationPresent(javax.inject.Inject.class)) {
+                continue;
+            }
+            for (Parameter parameter : constructor.getParameters()) {
+                if (hasTransientReference(parameter.getAnnotations())) {
+                    continue;
+                }
+                allValid &= validateResolvedDependencyPassivation(
+                        parameter.getParameterizedType(),
+                        extractInjectionQualifiers(parameter.getAnnotations()),
+                        constructor.getName() + "(param)",
+                        owningPassivatingBean,
+                        validBeans
+                );
+            }
+        }
+
+        for (Method method : declaringClass.getDeclaredMethods()) {
+            if (!method.isAnnotationPresent(jakarta.inject.Inject.class) &&
+                    !method.isAnnotationPresent(javax.inject.Inject.class)) {
+                continue;
+            }
+            for (Parameter parameter : method.getParameters()) {
+                if (hasTransientReference(parameter.getAnnotations())) {
+                    continue;
+                }
+                allValid &= validateResolvedDependencyPassivation(
+                        parameter.getParameterizedType(),
+                        extractInjectionQualifiers(parameter.getAnnotations()),
+                        method.getName() + "(param)",
+                        owningPassivatingBean,
+                        validBeans
+                );
+            }
+        }
+
+        return allValid;
+    }
+
+    private boolean validateResolvedDependencyPassivation(Type requiredType,
+                                                          Set<Annotation> qualifiers,
+                                                          String location,
+                                                          Bean<?> owningPassivatingBean,
+                                                          Collection<Bean<?>> validBeans) {
+        if (isInstanceOrProvider(requiredType) || isBuiltInPassivationCapableDependency(requiredType)) {
+            return true;
+        }
+
+        Set<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
+        if (candidates.isEmpty()) {
+            return true;
+        }
+
+        Bean<?> resolvedBean;
+        if (candidates.size() > 1) {
+            Optional<Bean<?>> preferred = resolveByAlternativePrecedence(candidates);
+            if (!preferred.isPresent()) {
+                return true;
+            }
+            resolvedBean = preferred.get();
+        } else {
+            resolvedBean = candidates.iterator().next();
+        }
+
+        Class<? extends Annotation> dependencyScope = resolvedBean.getScope();
+        if (isNormalScope(dependencyScope)) {
+            return true;
+        }
+
+        if (isDependentScope(dependencyScope)) {
+            if (!java.io.Serializable.class.isAssignableFrom(resolvedBean.getBeanClass())) {
+                knowledgeBase.addError(
+                        "Bean " + owningPassivatingBean.getBeanClass().getName() +
+                                " has passivation-capable scope @" + owningPassivatingBean.getScope().getSimpleName() +
+                                " and declares dependency at " + location +
+                                " resolving to @Dependent bean " + resolvedBean.getBeanClass().getName() +
+                                " which is not Serializable");
+                return false;
+            }
+            return true;
+        }
+
+        if (!java.io.Serializable.class.isAssignableFrom(resolvedBean.getBeanClass())) {
+            knowledgeBase.addError(
+                    "Bean " + owningPassivatingBean.getBeanClass().getName() +
+                            " has passivation-capable scope @" + owningPassivatingBean.getScope().getSimpleName() +
+                            " and declares dependency at " + location +
+                            " resolving to non-normal-scoped bean " + resolvedBean.getBeanClass().getName() +
+                            " which is not Serializable");
+            return false;
+        }
+        return true;
+    }
+
+    private Set<Annotation> extractInjectionQualifiers(Annotation[] annotations) {
+        Set<Annotation> qualifiers = new HashSet<Annotation>();
+        if (annotations != null) {
+            for (Annotation annotation : annotations) {
+                if (annotation.annotationType().isAnnotationPresent(Qualifier.class)) {
+                    qualifiers.add(annotation);
+                }
+            }
+        }
+        if (qualifiers.isEmpty()) {
+            qualifiers.add(Default.Literal.INSTANCE);
+        }
+        return qualifiers;
+    }
+
+    private boolean hasTransientReference(Annotation[] annotations) {
+        if (annotations == null) {
+            return false;
+        }
+        for (Annotation annotation : annotations) {
+            String annotationName = annotation.annotationType().getName();
+            if ("jakarta.enterprise.inject.TransientReference".equals(annotationName) ||
+                    "javax.enterprise.inject.TransientReference".equals(annotationName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isPassivationCapableInjectionPointByDeclaration(InjectionPoint injectionPoint) {
+        if (injectionPoint == null) {
+            return false;
+        }
+
+        if (injectionPoint.isTransient()) {
+            return true;
+        }
+
+        if (injectionPoint.getAnnotated() == null) {
+            return false;
+        }
+
+        for (Annotation annotation : injectionPoint.getAnnotated().getAnnotations()) {
+            String annotationName = annotation.annotationType().getName();
+            if ("jakarta.enterprise.inject.TransientReference".equals(annotationName) ||
+                    "javax.enterprise.inject.TransientReference".equals(annotationName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Checks if a scope is a normal scope (uses client proxies).
      * Normal scopes: @ApplicationScoped, @SessionScoped, @ConversationScoped, @RequestScoped
@@ -794,6 +1135,22 @@ public class CDI41InjectionValidator {
      * @return true if the scope is passivation-capable
      */
     private boolean isPassivationCapableScope(Class<? extends Annotation> scopeAnnotation) {
+        if (scopeAnnotation == null) {
+            return false;
+        }
+
+        jakarta.enterprise.context.NormalScope jakartaNormalScope =
+                scopeAnnotation.getAnnotation(jakarta.enterprise.context.NormalScope.class);
+        if (jakartaNormalScope != null) {
+            return jakartaNormalScope.passivating();
+        }
+
+        javax.enterprise.context.NormalScope javaxNormalScope =
+                scopeAnnotation.getAnnotation(javax.enterprise.context.NormalScope.class);
+        if (javaxNormalScope != null) {
+            return javaxNormalScope.passivating();
+        }
+
         // SessionScoped and ConversationScoped are passivation-capable
         String scopeName = scopeAnnotation.getName();
         return scopeName.equals("jakarta.enterprise.context.SessionScoped") ||

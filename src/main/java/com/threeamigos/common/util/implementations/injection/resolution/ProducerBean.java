@@ -6,6 +6,7 @@ import com.threeamigos.common.util.implementations.injection.util.LifecycleMetho
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.context.NormalScope;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.IllegalProductException;
@@ -16,6 +17,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -216,10 +218,12 @@ public class ProducerBean<T> implements Bean<T> {
             if (producerMethod != null) {
                 T produced = invokeProducerMethod(declaringInstance, creationalContext);
                 validateProducerMethodNullProduct(produced);
+                validatePassivationRequirementsForProducedValue(produced);
                 return produced;
             } else if (producerField != null) {
                 T produced = accessProducerField(declaringInstance);
                 validateProducerFieldNullProduct(produced);
+                validatePassivationRequirementsForProducedValue(produced);
                 return produced;
             } else {
                 throw new IllegalStateException("ProducerBean has neither method nor field");
@@ -356,6 +360,96 @@ public class ProducerBean<T> implements Bean<T> {
         return scopeType != null && (
                 Dependent.class.equals(scopeType) ||
                 "javax.enterprise.context.Dependent".equals(scopeType.getName()));
+    }
+
+    private void validatePassivationRequirementsForProducedValue(T produced) {
+        if (produced == null || produced instanceof Serializable) {
+            return;
+        }
+
+        if (isPassivatingScope(scope)) {
+            throw new IllegalProductException(
+                    "Producer " + describeProducerMember() +
+                            " declares passivating scope @" + scope.getSimpleName() +
+                            " but returned non-serializable value of type " + produced.getClass().getName()
+            );
+        }
+
+        if (isDependentScope(scope) && isPassivationCapableDependencyRequiredAtCurrentInjectionPoint()) {
+            throw new IllegalProductException(
+                    "Producer " + describeProducerMember() +
+                            " declares @Dependent scope and returned non-serializable value of type " +
+                            produced.getClass().getName() +
+                            " for an injection point that requires a passivation-capable dependency"
+            );
+        }
+    }
+
+    private String describeProducerMember() {
+        if (producerMethod != null) {
+            return "method " + producerMethod.getName() + " of class " + declaringClass.getName();
+        }
+        if (producerField != null) {
+            return "field " + producerField.getName() + " of class " + declaringClass.getName();
+        }
+        return "member of class " + declaringClass.getName();
+    }
+
+    private boolean isPassivationCapableDependencyRequiredAtCurrentInjectionPoint() {
+        if (!(dependencyResolver instanceof BeanResolver)) {
+            return false;
+        }
+
+        InjectionPoint injectionPoint = ((BeanResolver) dependencyResolver).getCurrentInjectionPoint();
+        if (injectionPoint == null) {
+            return false;
+        }
+        if (injectionPoint.isTransient()) {
+            return false;
+        }
+        if (hasTransientReference(injectionPoint)) {
+            return false;
+        }
+
+        Bean<?> owningBean = injectionPoint.getBean();
+        if (owningBean == null) {
+            return false;
+        }
+
+        return isPassivatingScope(owningBean.getScope());
+    }
+
+    private boolean hasTransientReference(InjectionPoint injectionPoint) {
+        if (injectionPoint.getAnnotated() == null || injectionPoint.getAnnotated().getAnnotations() == null) {
+            return false;
+        }
+        for (Annotation annotation : injectionPoint.getAnnotated().getAnnotations()) {
+            String annotationName = annotation.annotationType().getName();
+            if ("jakarta.enterprise.inject.TransientReference".equals(annotationName) ||
+                    "javax.enterprise.inject.TransientReference".equals(annotationName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isPassivatingScope(Class<? extends Annotation> scopeType) {
+        if (scopeType == null) {
+            return false;
+        }
+        NormalScope normalScope = scopeType.getAnnotation(NormalScope.class);
+        if (normalScope != null) {
+            return normalScope.passivating();
+        }
+        javax.enterprise.context.NormalScope legacy = scopeType.getAnnotation(javax.enterprise.context.NormalScope.class);
+        if (legacy != null) {
+            return legacy.passivating();
+        }
+        String name = scopeType.getName();
+        return "jakarta.enterprise.context.SessionScoped".equals(name) ||
+                "jakarta.enterprise.context.ConversationScoped".equals(name) ||
+                "javax.enterprise.context.SessionScoped".equals(name) ||
+                "javax.enterprise.context.ConversationScoped".equals(name);
     }
 
     /**

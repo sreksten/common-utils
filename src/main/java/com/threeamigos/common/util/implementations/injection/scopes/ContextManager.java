@@ -55,6 +55,7 @@ public class ContextManager {
         conversationContext = new ConversationScopedContext();
         sessionContext = new SessionScopedContext();
         requestContext = new RequestScopedContext();
+        ConversationImpl.setConversationContext(conversationContext);
 
         contexts.put(ConversationScoped.class, conversationContext);
         contexts.put(SessionScoped.class, sessionContext);
@@ -123,6 +124,7 @@ public class ContextManager {
      * @param conversationId the unique identifier for this conversation
      */
     public void beginConversation(String conversationId) {
+        ConversationImpl.setConversationContext(conversationContext);
         conversationContext.beginConversation(conversationId);
     }
 
@@ -130,6 +132,7 @@ public class ContextManager {
      * Ends the current conversation.
      */
     public void endConversation() {
+        ConversationImpl.setConversationContext(conversationContext);
         conversationContext.endConversation();
     }
 
@@ -139,6 +142,7 @@ public class ContextManager {
      * @param conversationId the conversation to end
      */
     public void endConversation(String conversationId) {
+        ConversationImpl.setConversationContext(conversationContext);
         conversationContext.endConversation(conversationId);
     }
 
@@ -193,6 +197,7 @@ public class ContextManager {
      * Activates the request scope for the current thread.
      */
     public void activateRequest() {
+        ConversationImpl.setConversationContext(conversationContext);
         requestContext.activateRequest();
         RequestContextLifecycleListener listener = requestContextLifecycleListener;
         if (listener != null) {
@@ -210,6 +215,8 @@ public class ContextManager {
             listener.onBeforeDestroyed();
         }
         requestContext.deactivateRequest();
+        conversationContext.clearCurrentThread();
+        ConversationImpl.clearCurrentConversation();
         if (wasActive && listener != null) {
             listener.onDestroyed();
         }
@@ -277,14 +284,6 @@ public class ContextManager {
         }
         if (context == null) {
             throw new IllegalArgumentException("Context cannot be null");
-        }
-        if (ApplicationScoped.class.equals(scopeAnnotation)
-                || Dependent.class.equals(scopeAnnotation)
-                || RequestScoped.class.equals(scopeAnnotation)
-                || SessionScoped.class.equals(scopeAnnotation)
-                || ConversationScoped.class.equals(scopeAnnotation)) {
-            throw new IllegalArgumentException(
-                    "Custom contexts cannot be registered for built-in scope @" + scopeAnnotation.getSimpleName());
         }
         contexts.put(scopeAnnotation, context);
     }

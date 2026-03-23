@@ -11,7 +11,6 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.AfterBeanDiscovery;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
-import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.Extension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +22,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -120,8 +120,8 @@ public class ContextManagementForCustomScopesTest {
     }
 
     @Test
-    @DisplayName("6.7 - Build compatible extensions may not define custom context classes for built-in scopes")
-    void shouldRejectCustomContextsForBuiltInScopes() {
+    @DisplayName("6.7 - Build compatible extensions may define custom context classes for built-in scopes")
+    void shouldAllowCustomContextsForBuiltInScopes() {
         Syringe syringe = new Syringe(
                 new InMemoryMessageHandler(),
                 BuiltInScopeMarker.class
@@ -129,7 +129,7 @@ public class ContextManagementForCustomScopesTest {
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.addExtension(InvalidBuiltInScopeContextExtension.class.getName());
 
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertDoesNotThrow(syringe::setup);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
 import jakarta.enterprise.context.spi.Context;
+import jakarta.enterprise.context.spi.AlterableContext;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
@@ -125,6 +126,17 @@ public class CustomContextAdapter implements ScopeContext {
         // Custom contexts don't have a standard destroy() method in the CDI API.
         // Extensions must handle their own cleanup, typically via @Observes BeforeShutdown.
         // This is intentionally a no-op.
+    }
+
+    @Override
+    public void destroy(Contextual<?> contextual) {
+        if (!(wrappedContext instanceof AlterableContext)) {
+            return;
+        }
+        if (!isActive()) {
+            return;
+        }
+        ((AlterableContext) wrappedContext).destroy(contextual);
     }
 
     /**

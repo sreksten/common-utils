@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
 import jakarta.enterprise.context.Conversation;
+import jakarta.enterprise.context.ContextNotActiveException;
 
 import java.io.Serializable;
 import java.util.Map;
@@ -55,8 +56,8 @@ public class ConversationImpl implements Conversation, Serializable {
         return state;
     });
 
-    // Reference to ConversationScopedContext for state synchronization
-    private static ConversationScopedContext conversationContext;
+    // Per-thread reference to ConversationScopedContext for container isolation.
+    private static final ThreadLocal<ConversationScopedContext> conversationContext = new ThreadLocal<>();
 
     /**
      * Sets the conversation context for integration between Conversation bean
@@ -65,7 +66,11 @@ public class ConversationImpl implements Conversation, Serializable {
      * @param context the conversation scoped context
      */
     public static void setConversationContext(ConversationScopedContext context) {
-        conversationContext = context;
+        if (context == null) {
+            conversationContext.remove();
+        } else {
+            conversationContext.set(context);
+        }
     }
 
     /**
@@ -101,6 +106,7 @@ public class ConversationImpl implements Conversation, Serializable {
      */
     @Override
     public void begin() {
+        ensureConversationContextActive();
         ConversationState state = currentConversation.get();
         if (!state.transientFlag) {
             throw new IllegalStateException("Conversation is already long-running");
@@ -110,8 +116,9 @@ public class ConversationImpl implements Conversation, Serializable {
         activeConversations.put(state.id, state);
 
         // Synchronize with ConversationScopedContext
-        if (conversationContext != null) {
-            conversationContext.syncWithConversation(state.id);
+        ConversationScopedContext context = getConversationContext();
+        if (context != null) {
+            context.syncWithConversation(state.id);
         }
     }
 
@@ -127,8 +134,12 @@ public class ConversationImpl implements Conversation, Serializable {
      */
     @Override
     public void begin(String id) {
+        ensureConversationContextActive();
         if (id == null || id.trim().isEmpty()) {
             throw new IllegalArgumentException("Conversation ID cannot be null or empty");
+        }
+        if (activeConversations.containsKey(id)) {
+            throw new IllegalArgumentException("Long-running conversation with id '" + id + "' already exists");
         }
         ConversationState state = currentConversation.get();
         if (!state.transientFlag) {
@@ -140,8 +151,9 @@ public class ConversationImpl implements Conversation, Serializable {
         activeConversations.put(state.id, state);
 
         // Synchronize with ConversationScopedContext
-        if (conversationContext != null) {
-            conversationContext.syncWithConversation(state.id);
+        ConversationScopedContext context = getConversationContext();
+        if (context != null) {
+            context.syncWithConversation(state.id);
         }
     }
 
@@ -159,6 +171,7 @@ public class ConversationImpl implements Conversation, Serializable {
      */
     @Override
     public void end() {
+        ensureConversationContextActive();
         ConversationState state = currentConversation.get();
         if (state.transientFlag) {
             throw new IllegalStateException("Cannot end a transient conversation");
@@ -170,8 +183,9 @@ public class ConversationImpl implements Conversation, Serializable {
         activeConversations.remove(conversationId);
 
         // End conversation in ConversationScopedContext (destroys beans)
-        if (conversationContext != null) {
-            conversationContext.endConversation(conversationId);
+        ConversationScopedContext context = getConversationContext();
+        if (context != null) {
+            context.endConversation(conversationId);
         }
 
         state.transientFlag = true;
@@ -193,7 +207,9 @@ public class ConversationImpl implements Conversation, Serializable {
      */
     @Override
     public String getId() {
-        return currentConversation.get().id;
+        ensureConversationContextActive();
+        ConversationState state = currentConversation.get();
+        return state.transientFlag ? null : state.id;
     }
 
     /**
@@ -206,6 +222,7 @@ public class ConversationImpl implements Conversation, Serializable {
      */
     @Override
     public long getTimeout() {
+        ensureConversationContextActive();
         return currentConversation.get().timeout;
     }
 
@@ -221,6 +238,7 @@ public class ConversationImpl implements Conversation, Serializable {
      */
     @Override
     public void setTimeout(long milliseconds) {
+        ensureConversationContextActive();
         if (milliseconds <= 0) {
             throw new IllegalArgumentException("Timeout must be positive");
         }
@@ -241,7 +259,19 @@ public class ConversationImpl implements Conversation, Serializable {
      */
     @Override
     public boolean isTransient() {
+        ensureConversationContextActive();
         return currentConversation.get().transientFlag;
+    }
+
+    private void ensureConversationContextActive() {
+        ConversationScopedContext context = getConversationContext();
+        if (context == null || !context.isActive()) {
+            throw new ContextNotActiveException("Conversation scope is not active");
+        }
+    }
+
+    private static ConversationScopedContext getConversationContext() {
+        return conversationContext.get();
     }
 
     /**
@@ -259,6 +289,7 @@ public class ConversationImpl implements Conversation, Serializable {
      */
     public static void clearCurrentConversation() {
         currentConversation.remove();
+        conversationContext.remove();
     }
 
     /**

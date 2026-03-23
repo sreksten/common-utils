@@ -22,6 +22,7 @@ import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.spi.*;
 
+import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
@@ -45,7 +46,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Furthermore, a bean may or may not be an alternative.
  * @param <T> type of the bean
  */
-public class BeanImpl<T> implements Bean<T> {
+public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
+    private static final long serialVersionUID = 1L;
 
     /**
      * CDI 4.1 - 2.2 - A bean type defines a client-visible type of the bean. A bean may have multiple bean types.
@@ -104,6 +106,7 @@ public class BeanImpl<T> implements Bean<T> {
      * To be enabled, the Alternative must declare a @Priority or be present in the META-INF/beans.xml file.
      */
     private final boolean alternative;
+    private final String passivationId;
     /**
      * Alternative enabled flag - NONSTANDARD feature. It permits enabling an Alternative programmatically.
      */
@@ -264,8 +267,18 @@ public class BeanImpl<T> implements Bean<T> {
         this.name = "";
         this.scope = null;
         this.alternative = alternative;
+        String packageName = (beanClass != null && beanClass.getPackage() != null)
+                ? beanClass.getPackage().getName()
+                : "unknown";
+        String className = (beanClass != null) ? beanClass.getName() : "unknown";
+        this.passivationId = packageName + ".BeanImpl#" + className + "#" + UUID.randomUUID().toString();
         this.alternativeEnabled = !alternative;
         this.priority = null;
+    }
+
+    @Override
+    public String getId() {
+        return passivationId;
     }
 
     @Override

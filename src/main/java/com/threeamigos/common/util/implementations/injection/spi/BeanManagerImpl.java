@@ -27,6 +27,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.*;
 
+import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Repeatable;
 import java.lang.reflect.Member;
@@ -2477,7 +2478,8 @@ public class BeanManagerImpl implements BeanManager {
      * Simple implementation of CreationalContext.
      * Tracks dependent instances for cleanup.
      */
-    private static class CreationalContextImpl<T> implements CreationalContext<T> {
+    private static class CreationalContextImpl<T> implements CreationalContext<T>, Serializable {
+        private static final long serialVersionUID = 1L;
         private final List<DependentEntry> dependentInstances = new ArrayList<>();
 
         @Override

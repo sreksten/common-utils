@@ -395,7 +395,8 @@ public class ClientProxyGenerator {
             // which check bean.hasInterceptors() and call bean.createInterceptorAwareProxy() when needed.
             //
             // So the contextualInstance we get here is ALREADY interceptor-aware if needed!
-            Object contextualInstance = context.get(bean, null);
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Object contextualInstance = context.get((Bean) bean, (jakarta.enterprise.context.spi.CreationalContext) new SerializableCreationalContext<Object>());
 
             if (contextualInstance == null) {
                 throw new IllegalStateException(
@@ -454,6 +455,24 @@ public class ClientProxyGenerator {
 
             // Return a serializable marker that can recreate the proxy
             return new SerializedProxy(beanClass);
+        }
+    }
+
+    /**
+     * Serializable fallback creational context used when resolving normal-scoped contextual instances
+     * from client proxies. This ensures passivating contexts always receive a serializable context object.
+     */
+    private static final class SerializableCreationalContext<T> implements jakarta.enterprise.context.spi.CreationalContext<T>, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public void push(T incompleteInstance) {
+            // Client proxies do not require push semantics.
+        }
+
+        @Override
+        public void release() {
+            // Nothing to release for proxy fallback creational context.
         }
     }
 
