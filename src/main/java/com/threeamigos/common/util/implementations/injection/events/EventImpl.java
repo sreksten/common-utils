@@ -27,6 +27,7 @@ import jakarta.enterprise.event.ObserverException;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.EventContext;
 import jakarta.enterprise.inject.spi.EventMetadata;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.util.TypeLiteral;
@@ -878,7 +879,19 @@ public class EventImpl<T> implements Event<T> {
             if (observerInfo.isSynthetic()) {
                 // Invoke the synthetic observer's notify() method
                 jakarta.enterprise.inject.spi.ObserverMethod syntheticObserver = observerInfo.getSyntheticObserver();
-                syntheticObserver.notify(event);
+                final Object eventPayload = event;
+                final EventMetadata metadata = new EventMetadataImpl(qualifiers, firingInjectionPoint, eventPayload.getClass());
+                syntheticObserver.notify(new EventContext<Object>() {
+                    @Override
+                    public Object getEvent() {
+                        return eventPayload;
+                    }
+
+                    @Override
+                    public EventMetadata getMetadata() {
+                        return metadata;
+                    }
+                });
                 return;
             }
 

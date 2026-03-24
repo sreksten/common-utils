@@ -353,6 +353,7 @@ public class CDI41BeanValidator {
             // Validate decorator-specific rules before registering
             // Per CDI spec: A decorator must have exactly one @Delegate injection point
             validateDecoratorDelegateInjectionPoints(clazz);
+            validateDecoratorDoesNotDeclareObserverMethods(clazz);
 
             knowledgeBase.addDecorator(clazz);
             // Validate and register decorator metadata
@@ -2817,6 +2818,19 @@ public class CDI41BeanValidator {
             knowledgeBase.addDefinitionError(clazz.getName() +
                     ": Decorator must have exactly one @Delegate injection point (found " + delegateCount + "). " +
                     "Only one @Delegate injection point is allowed per decorator.");
+        }
+    }
+
+    private void validateDecoratorDoesNotDeclareObserverMethods(Class<?> clazz) {
+        for (Method method : clazz.getDeclaredMethods()) {
+            for (Parameter parameter : method.getParameters()) {
+                if (hasObservesAnnotation(parameter) || hasObservesAsyncAnnotation(parameter)) {
+                    knowledgeBase.addDefinitionError(clazz.getName() +
+                            ": decorators may not declare observer methods. Found observer parameter in " +
+                            fmtMethod(method));
+                    return;
+                }
+            }
         }
     }
 
