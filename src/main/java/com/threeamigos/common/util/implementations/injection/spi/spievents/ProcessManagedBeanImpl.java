@@ -91,6 +91,10 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
             bean instanceof Interceptor) {
             throw new DefinitionException("Cannot build invoker for interceptor bean: " + beanClass.getName());
         }
+        if (beanClass.isAnnotationPresent(jakarta.decorator.Decorator.class) ||
+            bean instanceof jakarta.enterprise.inject.spi.Decorator) {
+            throw new DefinitionException("Cannot build invoker for decorator bean: " + beanClass.getName());
+        }
     }
 
     private void validateTargetMethod(Method javaMethod) {
