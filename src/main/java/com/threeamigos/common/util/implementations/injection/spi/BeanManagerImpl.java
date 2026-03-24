@@ -4,6 +4,8 @@ import com.threeamigos.common.util.implementations.injection.scopes.InjectionPoi
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptionFactoryImpl;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.decorators.DecoratorResolver;
 import com.threeamigos.common.util.implementations.injection.resolution.*;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
@@ -98,6 +100,8 @@ public class BeanManagerImpl implements BeanManager {
     private final BeanResolver beanResolver;
     private final ContextManager contextManager;
     private final TypeChecker typeChecker;
+    private final DecoratorResolver decoratorResolver;
+    private final DecoratorAwareProxyGenerator decoratorAwareProxyGenerator;
     private final String beanManagerId;
 
     /**
@@ -114,6 +118,8 @@ public class BeanManagerImpl implements BeanManager {
         this.beanManagerId = UUID.randomUUID().toString();
         this.beanResolver.setOwningBeanManager(this);
         this.typeChecker = new TypeChecker();
+        this.decoratorResolver = new DecoratorResolver(knowledgeBase);
+        this.decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
 
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         if (classLoader == null) {
@@ -202,7 +208,41 @@ public class BeanManagerImpl implements BeanManager {
         Context context = getContext(bean.getScope());
         @SuppressWarnings("unchecked")
         Object instance = context.get((Contextual) bean, ctx);
-        return instance;
+        return maybeDecorateBuiltInInstance(bean, ctx, instance);
+    }
+
+    private Object maybeDecorateBuiltInInstance(Bean<?> bean, CreationalContext<?> ctx, Object instance) {
+        if (instance == null || bean == null) {
+            return instance;
+        }
+
+        // Managed beans already apply decorators during BeanImpl lifecycle.
+        if (bean instanceof BeanImpl<?>) {
+            return instance;
+        }
+        // Producer values are not automatically decorated.
+        if (bean instanceof ProducerBean<?>) {
+            return instance;
+        }
+        // Interceptors/decorators are not decoratable targets.
+        if (bean instanceof jakarta.enterprise.inject.spi.Interceptor || bean instanceof jakarta.enterprise.inject.spi.Decorator) {
+            return instance;
+        }
+        // Built-in BeanManager with @Default must not be decorated.
+        if (BeanManager.class.equals(bean.getBeanClass())
+                && bean.getQualifiers().contains(jakarta.enterprise.inject.Default.Literal.INSTANCE)) {
+            return instance;
+        }
+
+        List<DecoratorInfo> decorators = decoratorResolver.resolve(bean.getTypes(), bean.getQualifiers());
+        if (decorators.isEmpty()) {
+            return instance;
+        }
+
+        CreationalContext<?> creationalContext = ctx != null ? ctx : createCreationalContext(null);
+        return decoratorAwareProxyGenerator
+                .createDecoratorChain(instance, decorators, this, creationalContext)
+                .getOutermostInstance();
     }
 
     /**

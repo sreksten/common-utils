@@ -2,6 +2,8 @@ package com.threeamigos.common.util.implementations.injection.resolution;
 
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.propagation.RegistryContextTokenProvider;
+import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.decorators.DecoratorResolver;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
@@ -20,6 +22,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.Decorator;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.Interceptor;
@@ -64,6 +67,8 @@ public class BeanResolver implements DependencyResolver {
     private TransactionServices transactionServices;
     private EventImpl.ContextTokenProvider contextTokenProvider = new RegistryContextTokenProvider();
     private volatile BeanManagerImpl owningBeanManager;
+    private final DecoratorResolver decoratorResolver;
+    private final DecoratorAwareProxyGenerator decoratorAwareProxyGenerator;
 
     // ThreadLocal to pass injection point context during resolution
     private final ThreadLocal<InjectionPoint> currentInjectionPoint = new ThreadLocal<>();
@@ -77,6 +82,8 @@ public class BeanResolver implements DependencyResolver {
         this.contextManager = Objects.requireNonNull(contextManager, "contextManager cannot be null");
         this.typeChecker = new TypeChecker();
         this.transactionServices = transactionServices == null ? new NoOpTransactionServices() : transactionServices;
+        this.decoratorResolver = new DecoratorResolver(knowledgeBase);
+        this.decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
     }
 
     public void setOwningBeanManager(BeanManagerImpl beanManager) {
@@ -811,8 +818,36 @@ public class BeanResolver implements DependencyResolver {
             // For pseudo-scopes like @Dependent, return the actual instance
             ScopeContext context = contextManager.getContext(scope);
             CreationalContext<T> creationalContext = new CreationalContextImpl<>();
-            return context.get(bean, creationalContext);
+            T instance = context.get(bean, creationalContext);
+            return maybeDecorateResolvedInstance(bean, instance, creationalContext);
         }
+    }
+
+    private <T> T maybeDecorateResolvedInstance(Bean<T> bean, T instance, CreationalContext<T> creationalContext) {
+        if (instance == null || bean == null) {
+            return instance;
+        }
+        if (bean instanceof BeanImpl<?> || bean instanceof ProducerBean<?>) {
+            return instance;
+        }
+        if (bean instanceof Interceptor || bean instanceof Decorator) {
+            return instance;
+        }
+        if (BeanManager.class.equals(bean.getBeanClass())
+                && bean.getQualifiers().contains(jakarta.enterprise.inject.Default.Literal.INSTANCE)) {
+            return instance;
+        }
+
+        List<DecoratorInfo> decorators = decoratorResolver.resolve(bean.getTypes(), bean.getQualifiers());
+        if (decorators.isEmpty() || owningBeanManager == null) {
+            return instance;
+        }
+
+        @SuppressWarnings("unchecked")
+        T decorated = (T) decoratorAwareProxyGenerator
+                .createDecoratorChain(instance, decorators, owningBeanManager, creationalContext)
+                .getOutermostInstance();
+        return decorated;
     }
 
     /**

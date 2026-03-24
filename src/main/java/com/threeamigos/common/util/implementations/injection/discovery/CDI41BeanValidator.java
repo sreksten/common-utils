@@ -139,7 +139,8 @@ public class CDI41BeanValidator {
             return null;
         }
 
-        if (Modifier.isAbstract(clazz.getModifiers())) {
+        boolean isDecorator = hasDecoratorAnnotation(clazz);
+        if (Modifier.isAbstract(clazz.getModifiers()) && !isDecorator) {
             knowledgeBase.addDefinitionError(clazz.getName() + ": bean class must not be abstract");
             // Abstract classes are not managed beans, but abstract producer/disposer methods are still definition errors.
             for (Method method : clazz.getDeclaredMethods()) {
@@ -175,7 +176,6 @@ public class CDI41BeanValidator {
         }
 
         boolean isInterceptor = hasInterceptorAnnotation(clazz);
-        boolean isDecorator = hasDecoratorAnnotation(clazz);
 
         if ((isInterceptor || isDecorator) && hasSpecializesAnnotation(clazz)) {
             throw new NonPortableBehaviourException(clazz.getName() +
@@ -332,6 +332,12 @@ public class CDI41BeanValidator {
             validateAndRegisterDecorator(clazz);
             // Decorators are not managed beans - return null (no bean to register)
             return null;
+        }
+
+        if (hasAnyDelegateAnnotation(clazz)) {
+            knowledgeBase.addDefinitionError(clazz.getName() +
+                    ": bean is not a @Decorator but declares @Delegate injection point(s)");
+            valid = false;
         }
 
         // 7) Check if this is an alternative bean
@@ -2735,8 +2741,11 @@ public class CDI41BeanValidator {
 
         // Check @Inject fields for @Delegate
         for (Field field : clazz.getDeclaredFields()) {
-            if (hasInjectAnnotation(field)) {
-                if (hasDelegateAnnotation(field)) {
+            if (hasDelegateAnnotation(field)) {
+                if (!hasInjectAnnotation(field)) {
+                    knowledgeBase.addDefinitionError(clazz.getName() +
+                            ": @Delegate field " + fmtField(field) + " must be an injected field (@Inject)");
+                } else {
                     delegateCount++;
                 }
             }
@@ -2744,9 +2753,13 @@ public class CDI41BeanValidator {
 
         // Check @Inject method parameters for @Delegate
         for (Method method : clazz.getDeclaredMethods()) {
-            if (hasInjectAnnotation(method)) {
-                for (Parameter param : method.getParameters()) {
-                    if (hasDelegateAnnotation(param)) {
+            for (Parameter param : method.getParameters()) {
+                if (hasDelegateAnnotation(param)) {
+                    if (!hasInjectAnnotation(method)) {
+                        knowledgeBase.addDefinitionError(clazz.getName() +
+                                ": @Delegate parameter in method " + fmtMethod(method) +
+                                " must be declared on an initializer method annotated @Inject");
+                    } else {
                         delegateCount++;
                     }
                 }
@@ -2755,9 +2768,13 @@ public class CDI41BeanValidator {
 
         // Check constructor parameters for @Delegate
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
-            if (hasInjectAnnotation(constructor)) {
-                for (Parameter param : constructor.getParameters()) {
-                    if (hasDelegateAnnotation(param)) {
+            for (Parameter param : constructor.getParameters()) {
+                if (hasDelegateAnnotation(param)) {
+                    if (!hasInjectAnnotation(constructor)) {
+                        knowledgeBase.addDefinitionError(clazz.getName() +
+                                ": @Delegate parameter in constructor " + fmtConstructor(constructor) +
+                                " must be declared on the bean constructor (@Inject)");
+                    } else {
                         delegateCount++;
                     }
                 }
@@ -2790,6 +2807,36 @@ public class CDI41BeanValidator {
                 return true;
             }
         }
+        return false;
+    }
+
+    private boolean hasAnyDelegateAnnotation(Class<?> clazz) {
+        if (clazz == null) {
+            return false;
+        }
+
+        for (Field field : clazz.getDeclaredFields()) {
+            if (hasDelegateAnnotation(field)) {
+                return true;
+            }
+        }
+
+        for (Method method : clazz.getDeclaredMethods()) {
+            for (Parameter parameter : method.getParameters()) {
+                if (hasDelegateAnnotation(parameter)) {
+                    return true;
+                }
+            }
+        }
+
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            for (Parameter parameter : constructor.getParameters()) {
+                if (hasDelegateAnnotation(parameter)) {
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 
@@ -3736,6 +3783,13 @@ public class CDI41BeanValidator {
 
         // Extract decorated types from @Delegate injection point
         Set<Type> decoratedTypes = extractDecoratedTypes(clazz, delegateInjectionPoint);
+        if (decoratedTypes.isEmpty()) {
+            knowledgeBase.addDefinitionError(clazz.getName() +
+                    ": decorator must declare at least one decorated type (interface bean type excluding java.io.Serializable)");
+            return;
+        }
+
+        validateDecoratorDelegateTypeCompatibility(clazz, delegateInjectionPoint, decoratedTypes);
 
         // Validate that decorator implements all abstract methods of decorated types
         validateDecoratorAbstractMethods(clazz, decoratedTypes);
@@ -3759,11 +3813,43 @@ public class CDI41BeanValidator {
             return;
         }
 
+        Set<String> decoratedMethodSignatures = new HashSet<String>();
         for (Type type : decoratedTypes) {
-            if (!(type instanceof Class)) {
-                continue; // Skip non-class types for implementation check
+            Class<?> decoratedClass = rawTypeOf(type);
+            if (decoratedClass == null) {
+                continue;
             }
-            Class<?> decoratedClass = (Class<?>) type;
+            for (Method method : decoratedClass.getMethods()) {
+                if (method.getDeclaringClass().equals(Object.class)) {
+                    continue;
+                }
+                decoratedMethodSignatures.add(methodSignature(method));
+            }
+        }
+
+        for (Method method : getAllMethods(decoratorClass)) {
+            if (!Modifier.isAbstract(method.getModifiers())) {
+                continue;
+            }
+            if (method.getDeclaringClass().equals(Object.class)) {
+                continue;
+            }
+            if (!decoratedMethodSignatures.contains(methodSignature(method))) {
+                knowledgeBase.addDefinitionError(decoratorClass.getName() +
+                        ": abstract method " + fmtMethod(method) +
+                        " is not declared by any decorated type");
+            }
+        }
+
+        if (Modifier.isAbstract(decoratorClass.getModifiers())) {
+            return;
+        }
+
+        for (Type type : decoratedTypes) {
+            Class<?> decoratedClass = rawTypeOf(type);
+            if (decoratedClass == null) {
+                continue;
+            }
 
             for (Method m : decoratedClass.getMethods()) {
                 // Only consider abstract, non-Object methods
@@ -3829,17 +3915,119 @@ public class CDI41BeanValidator {
      * The decorated types are the interfaces/classes that the decorator implements/extends.
      */
     private Set<Type> extractDecoratedTypes(Class<?> clazz, InjectionPoint delegateInjectionPoint) {
+        Set<Type> decoratedTypes = new HashSet<Type>();
+        collectInterfaceDecoratedTypes(clazz, decoratedTypes, new HashSet<Type>());
+        decoratedTypes.removeIf(t -> java.io.Serializable.class.equals(rawTypeOf(t)));
+        return decoratedTypes;
+    }
 
-        // Add all interfaces
-        Set<Type> decoratedTypes = new HashSet<>(Arrays.asList(clazz.getGenericInterfaces()));
-
-        // Add superclass (if not Object)
-        Type superclass = clazz.getGenericSuperclass();
-        if (superclass != null && superclass != Object.class) {
-            decoratedTypes.add(superclass);
+    private void collectInterfaceDecoratedTypes(Class<?> type, Set<Type> decoratedTypes, Set<Type> visited) {
+        if (type == null || type == Object.class) {
+            return;
         }
 
-        return decoratedTypes;
+        for (Type iface : type.getGenericInterfaces()) {
+            collectInterfaceDecoratedTypes(iface, decoratedTypes, visited);
+        }
+
+        collectInterfaceDecoratedTypes(type.getSuperclass(), decoratedTypes, visited);
+    }
+
+    private void collectInterfaceDecoratedTypes(Type type, Set<Type> decoratedTypes, Set<Type> visited) {
+        if (type == null || !visited.add(type)) {
+            return;
+        }
+
+        Class<?> raw = rawTypeOf(type);
+        if (raw == null) {
+            return;
+        }
+
+        if (raw.isInterface()) {
+            decoratedTypes.add(type);
+        }
+
+        for (Type parent : raw.getGenericInterfaces()) {
+            collectInterfaceDecoratedTypes(parent, decoratedTypes, visited);
+        }
+    }
+
+    private void validateDecoratorDelegateTypeCompatibility(
+            Class<?> decoratorClass,
+            InjectionPoint delegateInjectionPoint,
+            Set<Type> decoratedTypes) {
+        Type delegateType = delegateInjectionPoint.getType();
+        if (delegateType == null) {
+            return;
+        }
+
+        for (Type decoratedType : decoratedTypes) {
+            if (!delegateTypeImplementsDecoratedType(delegateType, decoratedType)) {
+                knowledgeBase.addDefinitionError(decoratorClass.getName() +
+                        ": delegate type " + delegateType.getTypeName() +
+                        " does not implement/extend decorated type " + decoratedType.getTypeName() +
+                        " with matching type parameters");
+            }
+        }
+    }
+
+    private boolean delegateTypeImplementsDecoratedType(Type delegateType, Type decoratedType) {
+        Class<?> delegateRaw = rawTypeOf(delegateType);
+        Class<?> decoratedRaw = rawTypeOf(decoratedType);
+        if (delegateRaw == null || decoratedRaw == null) {
+            return false;
+        }
+        if (!decoratedRaw.isAssignableFrom(delegateRaw)) {
+            return false;
+        }
+
+        if (!(decoratedType instanceof ParameterizedType)) {
+            return true;
+        }
+
+        Type matchingInDelegateHierarchy = findTypeInHierarchy(delegateType, decoratedRaw, new HashSet<Type>());
+        if (!(matchingInDelegateHierarchy instanceof ParameterizedType)) {
+            return false;
+        }
+
+        Type[] expectedArgs = ((ParameterizedType) decoratedType).getActualTypeArguments();
+        Type[] actualArgs = ((ParameterizedType) matchingInDelegateHierarchy).getActualTypeArguments();
+        return Arrays.equals(expectedArgs, actualArgs);
+    }
+
+    private Type findTypeInHierarchy(Type source, Class<?> targetRaw, Set<Type> visited) {
+        if (source == null || !visited.add(source)) {
+            return null;
+        }
+
+        Class<?> raw = rawTypeOf(source);
+        if (raw == null) {
+            return null;
+        }
+        if (raw.equals(targetRaw)) {
+            return source;
+        }
+
+        for (Type iface : raw.getGenericInterfaces()) {
+            Type found = findTypeInHierarchy(iface, targetRaw, visited);
+            if (found != null) {
+                return found;
+            }
+        }
+
+        return findTypeInHierarchy(raw.getGenericSuperclass(), targetRaw, visited);
+    }
+
+    private String methodSignature(Method method) {
+        return method.getName() + Arrays.toString(method.getParameterTypes());
+    }
+
+    private Class<?> rawTypeOf(Type type) {
+        try {
+            return RawTypeExtractor.getRawType(type);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
 
