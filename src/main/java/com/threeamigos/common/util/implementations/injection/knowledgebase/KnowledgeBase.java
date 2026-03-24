@@ -92,6 +92,8 @@ public class KnowledgeBase {
 
     // Programmatically enabled alternatives (fully qualified class names)
     private final Set<String> programmaticallyEnabledAlternatives = ConcurrentHashMap.newKeySet();
+    // Final application interceptor order (e.g. from AfterTypeDiscovery / beans.xml)
+    private final Map<String, Integer> applicationInterceptorOrder = new ConcurrentHashMap<String, Integer>();
 
     public KnowledgeBase(MessageHandler messageHandler) {
         this.messageHandler = messageHandler;
@@ -458,7 +460,7 @@ public class KnowledgeBase {
         return interceptorInfos.stream()
                 .filter(info -> supportsInterceptionType(info, interceptionType))
                 .filter(info -> hasMatchingBindings(info, targetBindings))
-                .sorted(Comparator.comparingInt(InterceptorInfo::getPriority))
+                .sorted(this::compareInterceptors)
                 .collect(Collectors.toList());
     }
 
@@ -496,7 +498,7 @@ public class KnowledgeBase {
 
         return interceptorInfos.stream()
                 .filter(info -> supportsInterceptionType(info, interceptionType))
-                .sorted(Comparator.comparingInt(InterceptorInfo::getPriority))
+                .sorted(this::compareInterceptors)
                 .collect(Collectors.toList());
     }
 
@@ -516,8 +518,34 @@ public class KnowledgeBase {
 
         return interceptorInfos.stream()
                 .filter(info -> hasMatchingBindings(info, targetBindings))
-                .sorted(Comparator.comparingInt(InterceptorInfo::getPriority))
+                .sorted(this::compareInterceptors)
                 .collect(Collectors.toList());
+    }
+
+    public void setApplicationInterceptorOrder(List<Class<?>> orderedInterceptors) {
+        applicationInterceptorOrder.clear();
+        if (orderedInterceptors == null || orderedInterceptors.isEmpty()) {
+            return;
+        }
+
+        int index = 0;
+        for (Class<?> interceptorClass : orderedInterceptors) {
+            if (interceptorClass == null) {
+                continue;
+            }
+            String className = interceptorClass.getName();
+            if (!applicationInterceptorOrder.containsKey(className)) {
+                applicationInterceptorOrder.put(className, index++);
+            }
+        }
+    }
+
+    public int getApplicationInterceptorOrder(Class<?> interceptorClass) {
+        if (interceptorClass == null) {
+            return -1;
+        }
+        Integer index = applicationInterceptorOrder.get(interceptorClass.getName());
+        return index != null ? index.intValue() : -1;
     }
 
     /**
@@ -622,6 +650,33 @@ public class KnowledgeBase {
         }
 
         return true; // All interceptor bindings found on target
+    }
+
+    private int compareInterceptors(InterceptorInfo left, InterceptorInfo right) {
+        boolean leftPriority = left.getInterceptorClass().isAnnotationPresent(jakarta.annotation.Priority.class);
+        boolean rightPriority = right.getInterceptorClass().isAnnotationPresent(jakarta.annotation.Priority.class);
+
+        if (leftPriority && rightPriority) {
+            int byPriority = Integer.compare(left.getPriority(), right.getPriority());
+            if (byPriority != 0) {
+                return byPriority;
+            }
+        } else if (leftPriority != rightPriority) {
+            return leftPriority ? -1 : 1;
+        }
+
+        int leftOrder = getApplicationInterceptorOrder(left.getInterceptorClass());
+        int rightOrder = getApplicationInterceptorOrder(right.getInterceptorClass());
+        if (leftOrder >= 0 && rightOrder >= 0) {
+            int byOrder = Integer.compare(leftOrder, rightOrder);
+            if (byOrder != 0) {
+                return byOrder;
+            }
+        } else if (leftOrder >= 0 || rightOrder >= 0) {
+            return leftOrder >= 0 ? -1 : 1;
+        }
+
+        return left.getInterceptorClass().getName().compareTo(right.getInterceptorClass().getName());
     }
 
     /**

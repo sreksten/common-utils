@@ -573,6 +573,7 @@ public class Syringe {
             // - Add/remove/modify annotations
             // - Wrap AnnotatedType to customize metadata
             processAnnotatedTypes();
+            fireAfterTypeDiscovery();
             fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.ENHANCEMENT);
 
             // ============================================================
@@ -1016,6 +1017,58 @@ public class Syringe {
 
         info("Excluded by beans.xml filters: " + excludedCount);
         info("Vetoed types (total): " + knowledgeBase.getVetoedTypes().size());
+    }
+
+    private void fireAfterTypeDiscovery() {
+        info("Firing AfterTypeDiscovery event");
+
+        List<Class<?>> alternatives = new ArrayList<Class<?>>();
+        List<Class<?>> interceptors = new ArrayList<Class<?>>();
+        List<Class<?>> decorators = new ArrayList<Class<?>>();
+
+        for (BeansXml beansXml : knowledgeBase.getBeansXmlConfigurations()) {
+            if (beansXml == null) {
+                continue;
+            }
+
+            if (beansXml.getAlternatives() != null) {
+                for (String className : beansXml.getAlternatives().getClasses()) {
+                    addClassByName(alternatives, className);
+                }
+            }
+
+            if (beansXml.getInterceptors() != null) {
+                for (String className : beansXml.getInterceptors().getClasses()) {
+                    addClassByName(interceptors, className);
+                }
+            }
+
+            if (beansXml.getDecorators() != null) {
+                for (String className : beansXml.getDecorators().getClasses()) {
+                    addClassByName(decorators, className);
+                }
+            }
+        }
+
+        AfterTypeDiscovery event = new AfterTypeDiscoveryImpl(
+                messageHandler, knowledgeBase, beanManager, alternatives, interceptors, decorators);
+        fireEventToExtensions(event);
+
+        knowledgeBase.setApplicationInterceptorOrder(interceptors);
+    }
+
+    private void addClassByName(List<Class<?>> target, String className) {
+        if (className == null || className.trim().isEmpty()) {
+            return;
+        }
+        try {
+            Class<?> loaded = Class.forName(className);
+            if (!target.contains(loaded)) {
+                target.add(loaded);
+            }
+        } catch (ClassNotFoundException ignored) {
+            // Validation phase reports unresolved beans.xml class names.
+        }
     }
 
     // ============================================================
@@ -1762,6 +1815,8 @@ public class Syringe {
 
         // 1.1 Validate beans.xml alternatives declarations (CDI Full modularity rules)
         validateBeansXmlAlternativesConfiguration();
+        // 1.2 Validate beans.xml interceptor declarations
+        validateBeansXmlInterceptorsConfiguration();
 
         // 2. Check definition errors
         if (knowledgeBase.hasErrors()) {
@@ -1814,6 +1869,35 @@ public class Syringe {
             }
             for (String stereotypeName : stereotypes) {
                 validateAlternativeStereotypeEntry(stereotypeName, classLoader);
+            }
+        }
+    }
+
+    private void validateBeansXmlInterceptorsConfiguration() {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (classLoader == null) {
+            classLoader = Syringe.class.getClassLoader();
+        }
+
+        for (BeansXml beansXml : knowledgeBase.getBeansXmlConfigurations()) {
+            if (beansXml == null) {
+                continue;
+            }
+
+            com.threeamigos.common.util.implementations.injection.beansxml.Interceptors interceptors =
+                    beansXml.getInterceptors();
+            if (interceptors == null) {
+                continue;
+            }
+
+            List<String> classes = interceptors.getClasses() != null
+                    ? interceptors.getClasses()
+                    : Collections.<String>emptyList();
+
+            validateNoDuplicateEntries(classes, "beans.xml <interceptors><class>");
+
+            for (String className : classes) {
+                validateInterceptorClassEntry(className, classLoader);
             }
         }
     }
@@ -1889,6 +1973,29 @@ public class Syringe {
             knowledgeBase.addDefinitionError(
                     "beans.xml alternative stereotype '" + stereotypeName + "' is not an @Alternative stereotype");
         }
+    }
+
+    private void validateInterceptorClassEntry(String className, ClassLoader classLoader) {
+        if (className == null || className.trim().isEmpty()) {
+            knowledgeBase.addDefinitionError("beans.xml <interceptors><class> must not be empty");
+            return;
+        }
+
+        Class<?> clazz;
+        try {
+            clazz = Class.forName(className, false, classLoader);
+        } catch (ClassNotFoundException e) {
+            knowledgeBase.addDefinitionError("beans.xml interceptor class not found: " + className);
+            return;
+        }
+
+        if (AnnotationsEnum.hasInterceptorAnnotation(clazz) ||
+                jakarta.enterprise.inject.spi.Interceptor.class.isAssignableFrom(clazz)) {
+            return;
+        }
+
+        knowledgeBase.addDefinitionError(
+                "beans.xml interceptor class '" + className + "' is not an interceptor class");
     }
 
     private boolean hasAlternativeBeanWithBeanClassName(String className) {
