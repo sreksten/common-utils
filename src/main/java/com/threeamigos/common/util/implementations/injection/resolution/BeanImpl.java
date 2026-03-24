@@ -421,11 +421,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 invokeCustomInjectionTargetPostConstructWithRequestContext(instance);
 
                 if (hasInterceptors() && isDependent()) {
-                    instance = createInterceptorAwareProxy(instance);
-                }
-
-                if (hasDecorators()) {
                     instance = createDecoratorChain(instance, creationalContext);
+                    instance = createInterceptorAwareProxy(instance);
+                } else if (hasDecorators()) {
+                    instance = createDecoratorChain(instance, creationalContext);
+                } else if (hasInterceptors()) {
+                    instance = createInterceptorAwareProxy(instance);
                 }
 
                 return instance;
@@ -456,16 +457,14 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             // How to tell if this is a @Dependent bean?
             // - Check if the scope is null (CDI spec: @Dependent beans have no scope annotation)
             // - Or check if the scope is jakarta.enterprise.context.Dependent.class
-            if (hasInterceptors() && isDependent()) {
-                instance = createInterceptorAwareProxy(instance);
-            }
-
-            // 6. PHASE 3 - Wrap with decorators if applicable
-            // IMPORTANT: Decorators apply to ALL beans (not just @Dependent)
-            // Unlike interceptors which are method-level, decorators are bean-level
-            // and wrap the entire bean instance (or interceptor proxy if interceptors exist)
             if (hasDecorators()) {
                 instance = createDecoratorChain(instance, creationalContext);
+            }
+
+            // 6. PHASE 3 - Wrap with interceptor-aware proxy if needed
+            // Interceptors must be outermost around decorators for business method invocations.
+            if (hasInterceptors() && isDependent()) {
+                instance = createInterceptorAwareProxy(instance);
             }
 
             return instance;

@@ -1636,32 +1636,82 @@ public class BeanManagerImpl implements BeanManager {
 
         Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
         List<Decorator<?>> matchingDecorators = new ArrayList<>();
+        Set<Class<?>> seenDecoratorClasses = new HashSet<Class<?>>();
 
         for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
-            // Check if the decorator applies to any of the types
-            boolean typeMatches = false;
-            for (Type decoratedType : decoratorInfo.getDecoratedTypes()) {
-                for (Type requestedType : types) {
-                    if (typeChecker.isAssignable(requestedType, decoratedType)) {
-                        typeMatches = true;
-                        break;
-                    }
-                }
-                if (typeMatches) break;
-            }
-
-            if (!typeMatches) {
+            Decorator<?> decorator = createDecorator(decoratorInfo);
+            if (!isDecoratorEnabled(decorator)) {
                 continue;
             }
-
-            // Check qualifier match (decorators don't use qualifiers, they use delegate injection point)
-            matchingDecorators.add(createDecorator(decoratorInfo));
+            if (!matchesDecoratorTypes(types, decorator.getDecoratedTypes(), decorator.getDelegateType())) {
+                continue;
+            }
+            if (!qualifiersMatch(requiredQualifiers, decorator.getDelegateQualifiers())) {
+                continue;
+            }
+            matchingDecorators.add(decorator);
+            seenDecoratorClasses.add(decorator.getBeanClass());
         }
 
-        // Sort by priority (lower priority value = outer decorator)
-        matchingDecorators.sort(Comparator.comparingInt(this::getPriority));
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (!(bean instanceof Decorator<?>)) {
+                continue;
+            }
+            Decorator<?> decorator = (Decorator<?>) bean;
+            if (!seenDecoratorClasses.add(decorator.getBeanClass())) {
+                continue;
+            }
+            if (!matchesDecoratorTypes(types, decorator.getDecoratedTypes(), decorator.getDelegateType())) {
+                continue;
+            }
+            if (!qualifiersMatch(requiredQualifiers, decorator.getDelegateQualifiers())) {
+                continue;
+            }
+            matchingDecorators.add(decorator);
+        }
+
+        // CDI 4.1: @Priority-enabled decorators are called before beans.xml-enabled decorators.
+        matchingDecorators.sort(
+                Comparator.comparingInt((Decorator<?> d) -> getDecoratorPriority(d) != Integer.MAX_VALUE ? 0 : 1)
+                        .thenComparingInt(this::getDecoratorPriority)
+                        .thenComparingInt(d -> {
+                            int order = knowledgeBase.getDecoratorBeansXmlOrder(d.getBeanClass());
+                            return order >= 0 ? order : Integer.MAX_VALUE;
+                        })
+                        .thenComparing(d -> d.getBeanClass().getName())
+        );
 
         return matchingDecorators;
+    }
+
+    private boolean matchesDecoratorTypes(Set<Type> requestedTypes, Set<Type> decoratedTypes, Type delegateType) {
+        if (decoratedTypes != null) {
+            for (Type decoratedType : decoratedTypes) {
+                for (Type requestedType : requestedTypes) {
+                    if (typeChecker.isAssignable(requestedType, decoratedType)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if (delegateType != null) {
+            for (Type requestedType : requestedTypes) {
+                if (typeChecker.isAssignable(requestedType, delegateType)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isDecoratorEnabled(Decorator<?> decorator) {
+        if (decorator == null) {
+            return false;
+        }
+        int beansXmlOrder = knowledgeBase.getDecoratorBeansXmlOrder(decorator.getBeanClass());
+        return beansXmlOrder >= 0 || getDecoratorPriority(decorator) != Integer.MAX_VALUE;
     }
 
     /**
@@ -2285,6 +2335,17 @@ public class BeanManagerImpl implements BeanManager {
         return jakarta.interceptor.Interceptor.Priority.APPLICATION;
     }
 
+    private int getDecoratorPriority(Decorator<?> decorator) {
+        if (decorator == null) {
+            return Integer.MAX_VALUE;
+        }
+        if (decorator instanceof Prioritized) {
+            return ((Prioritized) decorator).getPriority();
+        }
+        Integer classPriority = extractPriorityFromClass(decorator.getBeanClass());
+        return classPriority != null ? classPriority : Integer.MAX_VALUE;
+    }
+
     private Bean<?> findOriginalProducerBean(Bean<?> syntheticBean) {
         for (ProducerBean<?> producerBean : knowledgeBase.getProducerBeans()) {
             if (!Objects.equals(producerBean.getBeanClass(), syntheticBean.getBeanClass())) {
@@ -2552,12 +2613,80 @@ public class BeanManagerImpl implements BeanManager {
 
     /**
      * Creates a Decorator wrapper from DecoratorInfo.
-     * Not yet fully implemented.
      */
     private <T> Decorator<T> createDecorator(DecoratorInfo info) {
-        // For now, return a basic implementation
-        // Full implementation would need more metadata
-        throw new UnsupportedOperationException("Decorator creation not yet fully implemented");
+        return new Decorator<T>() {
+            @Override
+            public Type getDelegateType() {
+                return info.getDelegateInjectionPoint().getType();
+            }
+
+            @Override
+            public Set<Annotation> getDelegateQualifiers() {
+                return info.getDelegateInjectionPoint().getQualifiers();
+            }
+
+            @Override
+            public Set<Type> getDecoratedTypes() {
+                return info.getDecoratedTypes();
+            }
+
+            @Override
+            public Class<?> getBeanClass() {
+                return info.getDecoratorClass();
+            }
+
+            @Override
+            public Set<InjectionPoint> getInjectionPoints() {
+                return Collections.emptySet();
+            }
+
+            @Override
+            public String getName() {
+                return null;
+            }
+
+            @Override
+            public Set<Annotation> getQualifiers() {
+                return Collections.<Annotation>singleton(jakarta.enterprise.inject.Default.Literal.INSTANCE);
+            }
+
+            @Override
+            public Class<? extends Annotation> getScope() {
+                return Dependent.class;
+            }
+
+            @Override
+            public Set<Class<? extends Annotation>> getStereotypes() {
+                return Collections.emptySet();
+            }
+
+            @Override
+            public Set<Type> getTypes() {
+                return new HashSet<Type>(Arrays.<Type>asList(
+                        info.getDecoratorClass(),
+                        jakarta.enterprise.inject.spi.Decorator.class,
+                        Object.class));
+            }
+
+            @Override
+            public boolean isAlternative() {
+                return false;
+            }
+
+            @Override
+            public T create(CreationalContext<T> creationalContext) {
+                throw new UnsupportedOperationException(
+                        "Decorator metadata cannot create contextual instance for " + info.getDecoratorClass().getName());
+            }
+
+            @Override
+            public void destroy(T instance, CreationalContext<T> creationalContext) {
+                if (creationalContext != null) {
+                    creationalContext.release();
+                }
+            }
+        };
     }
 
     /**

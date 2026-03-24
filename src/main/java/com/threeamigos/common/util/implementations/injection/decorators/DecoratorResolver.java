@@ -2,10 +2,14 @@ package com.threeamigos.common.util.implementations.injection.decorators;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.annotation.Nonnull;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -109,7 +113,7 @@ public class DecoratorResolver {
         }
         return knowledgeBase.getDecoratorInfos().stream()
             .filter(this::isEnabled) // must be enabled via beans.xml or @Priority
-            .filter(decorator -> matchesTypes(decorator, beanTypes))
+            .filter(decorator -> matchesDelegateType(decorator, beanTypes))
             .filter(decorator -> matchesQualifiers(decorator, qualifiers))
             .sorted(decoratorOrderingComparator())
             .collect(Collectors.toList());
@@ -117,17 +121,18 @@ public class DecoratorResolver {
 
     /**
      * Comparator implementing CDI ordering rules:
-     * 1) Decorators listed in beans.xml come first, in listed order across archives.
-     * 2) Remaining decorators are ordered by @Priority (ascending).
+     * 1) Decorators enabled with @Priority come first, ordered by @Priority ascending.
+     * 2) Decorators enabled only via beans.xml come next, in beans.xml declaration order.
      * 3) Tiebreaker: class name for determinism.
      */
     private Comparator<DecoratorInfo> decoratorOrderingComparator() {
         return Comparator
-            .comparingInt((DecoratorInfo d) -> {
+            .comparingInt((DecoratorInfo d) -> d.getPriority() != Integer.MAX_VALUE ? 0 : 1)
+            .thenComparingInt(DecoratorInfo::getPriority)
+            .thenComparingInt(d -> {
                 int order = knowledgeBase.getDecoratorBeansXmlOrder(d.getDecoratorClass());
                 return order >= 0 ? order : Integer.MAX_VALUE;
             })
-            .thenComparingInt(DecoratorInfo::getPriority)
             .thenComparing(di -> di.getDecoratorClass().getName());
     }
 
@@ -156,18 +161,13 @@ public class DecoratorResolver {
      * @param beanTypes the bean's types
      * @return true if the decorator matches any bean type
      */
-    private boolean matchesTypes(DecoratorInfo decorator, Set<Type> beanTypes) {
-        Set<Type> decoratedTypes = decorator.getDecoratedTypes();
-
-        // Check if any decorated type matches any bean type
-        for (Type decoratedType : decoratedTypes) {
-            for (Type beanType : beanTypes) {
-                if (isTypeCompatible(decoratedType, beanType)) {
-                    return true;
-                }
+    private boolean matchesDelegateType(DecoratorInfo decorator, Set<Type> beanTypes) {
+        Type delegateType = decorator.getDelegateInjectionPoint().getType();
+        for (Type beanType : beanTypes) {
+            if (isBeanTypeAssignableToDelegateType(beanType, delegateType)) {
+                return true;
             }
         }
-
         return false;
     }
 
@@ -184,18 +184,137 @@ public class DecoratorResolver {
      * @param beanType the bean's type
      * @return true if the decorator can decorate the bean
      */
-    private boolean isTypeCompatible(Type decoratedType, Type beanType) {
-        // If both are raw classes, use assignability check
-        if (decoratedType instanceof Class && beanType instanceof Class) {
-            Class<?> decoratedClass = (Class<?>) decoratedType;
-            Class<?> beanClass = (Class<?>) beanType;
-
-            // Decorator can decorate if the bean implements/extends the decorated type
-            return decoratedClass.isAssignableFrom(beanClass);
+    private boolean isBeanTypeAssignableToDelegateType(Type beanType, Type delegateType) {
+        if (beanType == null || delegateType == null) {
+            return false;
         }
 
-        // For generic types, use simple equality
-        return decoratedType.equals(beanType);
+        Class<?> beanRaw = safeRawType(beanType);
+        Class<?> delegateRaw = safeRawType(delegateType);
+        if (beanRaw == null || delegateRaw == null || !delegateRaw.equals(beanRaw)) {
+            return false;
+        }
+
+        // Raw bean type assignable to parameterized delegate type only for Object/unbounded type variables.
+        if (beanType instanceof Class && delegateType instanceof ParameterizedType) {
+            for (Type delegateArg : ((ParameterizedType) delegateType).getActualTypeArguments()) {
+                if (!isObjectOrUnboundedTypeVariable(delegateArg)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (beanType instanceof ParameterizedType && delegateType instanceof ParameterizedType) {
+            Type[] beanArgs = ((ParameterizedType) beanType).getActualTypeArguments();
+            Type[] delegateArgs = ((ParameterizedType) delegateType).getActualTypeArguments();
+            if (beanArgs.length != delegateArgs.length) {
+                return false;
+            }
+            for (int i = 0; i < beanArgs.length; i++) {
+                if (!matchesDelegateParameter(beanArgs[i], delegateArgs[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Raw/raw falls back to identical raw types check done above.
+        if (beanType instanceof Class && delegateType instanceof Class) {
+            return true;
+        }
+
+        return beanType.equals(delegateType);
+    }
+
+    private boolean matchesDelegateParameter(Type beanParam, Type delegateParam) {
+        // both actual types
+        if (isActualType(beanParam) && isActualType(delegateParam)) {
+            Class<?> beanRaw = safeRawType(beanParam);
+            Class<?> delegateRaw = safeRawType(delegateParam);
+            if (beanRaw == null || delegateRaw == null || !beanRaw.equals(delegateRaw)) {
+                return false;
+            }
+            if (beanParam instanceof ParameterizedType && delegateParam instanceof ParameterizedType) {
+                return isBeanTypeAssignableToDelegateType(beanParam, delegateParam);
+            }
+            return true;
+        }
+
+        // delegate wildcard + bean actual
+        if (delegateParam instanceof WildcardType && isActualType(beanParam)) {
+            return wildcardMatches((WildcardType) delegateParam, beanParam);
+        }
+
+        // delegate wildcard + bean type variable
+        if (delegateParam instanceof WildcardType && beanParam instanceof TypeVariable<?>) {
+            Type beanUpperBound = firstUpperBound((TypeVariable<?>) beanParam);
+            return wildcardMatches((WildcardType) delegateParam, beanUpperBound);
+        }
+
+        // both type variables
+        if (delegateParam instanceof TypeVariable<?> && beanParam instanceof TypeVariable<?>) {
+            Type delegateUpper = firstUpperBound((TypeVariable<?>) delegateParam);
+            Type beanUpper = firstUpperBound((TypeVariable<?>) beanParam);
+            return isAssignable(beanUpper, delegateUpper);
+        }
+
+        // delegate type variable + bean actual
+        if (delegateParam instanceof TypeVariable<?> && isActualType(beanParam)) {
+            Type delegateUpper = firstUpperBound((TypeVariable<?>) delegateParam);
+            return isAssignable(beanParam, delegateUpper);
+        }
+
+        return false;
+    }
+
+    private boolean wildcardMatches(WildcardType wildcard, Type candidate) {
+        for (Type upper : wildcard.getUpperBounds()) {
+            if (upper != null && !Object.class.equals(upper) && !isAssignable(candidate, upper)) {
+                return false;
+            }
+        }
+        for (Type lower : wildcard.getLowerBounds()) {
+            if (lower != null && !isAssignable(lower, candidate)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isAssignable(Type from, Type to) {
+        Class<?> fromRaw = safeRawType(from);
+        Class<?> toRaw = safeRawType(to);
+        return fromRaw != null && toRaw != null && toRaw.isAssignableFrom(fromRaw);
+    }
+
+    private Type firstUpperBound(TypeVariable<?> variable) {
+        Type[] bounds = variable.getBounds();
+        return bounds.length == 0 ? Object.class : bounds[0];
+    }
+
+    private boolean isActualType(Type type) {
+        return type instanceof Class<?> || type instanceof ParameterizedType;
+    }
+
+    private boolean isObjectOrUnboundedTypeVariable(Type type) {
+        if (Object.class.equals(type)) {
+            return true;
+        }
+        if (type instanceof TypeVariable<?>) {
+            TypeVariable<?> tv = (TypeVariable<?>) type;
+            Type[] bounds = tv.getBounds();
+            return bounds.length == 0 || (bounds.length == 1 && Object.class.equals(bounds[0]));
+        }
+        return false;
+    }
+
+    private Class<?> safeRawType(Type type) {
+        try {
+            return RawTypeExtractor.getRawType(type);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /**

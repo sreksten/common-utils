@@ -16,6 +16,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.PassivationCapable;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.Interceptor;
@@ -116,6 +117,8 @@ public class CDI41InjectionValidator {
         allValid &= validateAlternatives(validBeans);
         // CDI 4.1 §5.3.1: validate ambiguous bean names at initialization.
         allValid &= validateNameResolution(validBeans);
+        // CDI 4.1 §20.3: if a decorator matches a managed bean, the bean class must be proxyable.
+        allValid &= validateDecoratedManagedBeansProxyable(validBeans);
 
         // Enhancement 4: Validate passivation capability for beans in passivating scopes
         allValid &= validatePassivation(validBeans);
@@ -135,6 +138,29 @@ public class CDI41InjectionValidator {
         resolutionStack.remove();
         reportedCircularDependencies.remove();
 
+        return allValid;
+    }
+
+    private boolean validateDecoratedManagedBeansProxyable(Collection<Bean<?>> validBeans) {
+        boolean allValid = true;
+        for (Bean<?> bean : validBeans) {
+            if (!(bean instanceof BeanImpl<?>)) {
+                continue;
+            }
+            if (!hasBoundDecorator(bean)) {
+                continue;
+            }
+
+            String reason = unproxyableReason(bean.getBeanClass());
+            if (reason == null) {
+                continue;
+            }
+
+            knowledgeBase.addDefinitionError(
+                    "Managed bean " + bean.getBeanClass().getName() +
+                            " matches a decorator but is unproxyable: " + reason);
+            allValid = false;
+        }
         return allValid;
     }
 
@@ -1335,7 +1361,7 @@ public class CDI41InjectionValidator {
             return true;
         }
 
-        return hasBoundInterceptor(bean);
+        return hasBoundInterceptor(bean) || hasBoundDecorator(bean);
     }
 
     private boolean hasBoundInterceptor(Bean<?> bean) {
@@ -1374,6 +1400,98 @@ public class CDI41InjectionValidator {
             }
         }
         return bindings;
+    }
+
+    private boolean hasBoundDecorator(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        Class<?> beanClass = bean.getBeanClass();
+        if (beanClass == null || !BeanImpl.class.isInstance(bean)) {
+            return false;
+        }
+
+        Set<Type> beanTypes = bean.getTypes();
+        if (beanTypes == null || beanTypes.isEmpty()) {
+            return false;
+        }
+
+        Set<Annotation> beanQualifiers = bean.getQualifiers() == null
+                ? Collections.<Annotation>emptySet()
+                : bean.getQualifiers();
+
+        for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
+            if (!isDecoratorInfoEnabled(decoratorInfo)) {
+                continue;
+            }
+            if (!decoratorMatchesTypes(decoratorInfo, beanTypes)) {
+                continue;
+            }
+            Set<Annotation> delegateQualifiers = decoratorInfo.getDelegateInjectionPoint().getQualifiers();
+            if (delegateQualifiers != null && !qualifierSubset(delegateQualifiers, beanQualifiers)) {
+                continue;
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean isDecoratorInfoEnabled(DecoratorInfo decoratorInfo) {
+        if (decoratorInfo == null) {
+            return false;
+        }
+        return decoratorInfo.getPriority() != Integer.MAX_VALUE
+                || knowledgeBase.getDecoratorBeansXmlOrder(decoratorInfo.getDecoratorClass()) >= 0;
+    }
+
+    private boolean decoratorMatchesTypes(DecoratorInfo decoratorInfo, Set<Type> beanTypes) {
+        for (Type decoratedType : decoratorInfo.getDecoratedTypes()) {
+            for (Type beanType : beanTypes) {
+                try {
+                    if (typeChecker.isAssignable(decoratedType, beanType)) {
+                        return true;
+                    }
+                } catch (DefinitionException ex) {
+                    // Decorator assignability checks during deployment validation must not fail
+                    // due to unresolved type variables; treat the pair as non-matching.
+                } catch (RuntimeException ex) {
+                    // Defensive fallback to keep decorator matching best-effort and non-fatal.
+                    // The offending type pair is ignored and the validator keeps searching.
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean qualifierSubset(Set<Annotation> required, Set<Annotation> available) {
+        if (required == null || required.isEmpty()) {
+            return true;
+        }
+        for (Annotation requiredQualifier : required) {
+            if (requiredQualifier == null) {
+                continue;
+            }
+            Class<? extends Annotation> requiredType = requiredQualifier.annotationType();
+            if (Any.class.equals(requiredType)) {
+                continue;
+            }
+            boolean found = false;
+            for (Annotation availableQualifier : available) {
+                if (availableQualifier == null) {
+                    continue;
+                }
+                if (requiredType.equals(availableQualifier.annotationType())
+                        && AnnotationComparator.equals(requiredQualifier, availableQualifier)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private List<String> findUnproxyableBeanTypes(Set<Type> beanTypes) {

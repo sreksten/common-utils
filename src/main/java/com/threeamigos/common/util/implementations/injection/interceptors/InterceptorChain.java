@@ -93,8 +93,21 @@ public class InterceptorChain {
     public Object invoke(Object target, Method method, Object[] args) throws Exception {
         // Create target invocation (final step in the chain)
         InvocationContextImpl.TargetInvocation targetInvocation = ctx -> {
-            method.setAccessible(true);
-            return method.invoke(target, ctx.getParameters());
+            Object invocationTarget = target;
+            if (invocationTarget instanceof InterceptorAwareProxyGenerator.InterceptorProxyState) {
+                Object unwrapped = ((InterceptorAwareProxyGenerator.InterceptorProxyState) invocationTarget)
+                        .$$_getTargetInstance();
+                if (unwrapped != null) {
+                    invocationTarget = unwrapped;
+                }
+            }
+
+            Method invocableMethod = method;
+            if (!method.getDeclaringClass().isInstance(invocationTarget)) {
+                invocableMethod = invocationTarget.getClass().getMethod(method.getName(), method.getParameterTypes());
+            }
+            invocableMethod.setAccessible(true);
+            return invocableMethod.invoke(invocationTarget, ctx.getParameters());
         };
 
         // Create invocation context

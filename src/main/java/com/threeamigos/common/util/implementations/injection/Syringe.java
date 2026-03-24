@@ -1817,6 +1817,8 @@ public class Syringe {
         validateBeansXmlAlternativesConfiguration();
         // 1.2 Validate beans.xml interceptor declarations
         validateBeansXmlInterceptorsConfiguration();
+        // 1.3 Validate beans.xml decorator declarations
+        validateBeansXmlDecoratorsConfiguration();
 
         // 2. Check definition errors
         if (knowledgeBase.hasErrors()) {
@@ -1898,6 +1900,35 @@ public class Syringe {
 
             for (String className : classes) {
                 validateInterceptorClassEntry(className, classLoader);
+            }
+        }
+    }
+
+    private void validateBeansXmlDecoratorsConfiguration() {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (classLoader == null) {
+            classLoader = Syringe.class.getClassLoader();
+        }
+
+        for (BeansXml beansXml : knowledgeBase.getBeansXmlConfigurations()) {
+            if (beansXml == null) {
+                continue;
+            }
+
+            com.threeamigos.common.util.implementations.injection.beansxml.Decorators decorators =
+                    beansXml.getDecorators();
+            if (decorators == null) {
+                continue;
+            }
+
+            List<String> classes = decorators.getClasses() != null
+                    ? decorators.getClasses()
+                    : Collections.<String>emptyList();
+
+            validateNoDuplicateEntries(classes, "beans.xml <decorators><class>");
+
+            for (String className : classes) {
+                validateDecoratorClassEntry(className, classLoader);
             }
         }
     }
@@ -1996,6 +2027,29 @@ public class Syringe {
 
         knowledgeBase.addDefinitionError(
                 "beans.xml interceptor class '" + className + "' is not an interceptor class");
+    }
+
+    private void validateDecoratorClassEntry(String className, ClassLoader classLoader) {
+        if (className == null || className.trim().isEmpty()) {
+            knowledgeBase.addDefinitionError("beans.xml <decorators><class> must not be empty");
+            return;
+        }
+
+        Class<?> clazz;
+        try {
+            clazz = Class.forName(className, false, classLoader);
+        } catch (ClassNotFoundException e) {
+            knowledgeBase.addDefinitionError("beans.xml decorator class not found: " + className);
+            return;
+        }
+
+        if (AnnotationsEnum.hasDecoratorAnnotation(clazz) ||
+                jakarta.enterprise.inject.spi.Decorator.class.isAssignableFrom(clazz)) {
+            return;
+        }
+
+        knowledgeBase.addDefinitionError(
+                "beans.xml decorator class '" + className + "' is not a decorator class");
     }
 
     private boolean hasAlternativeBeanWithBeanClassName(String className) {

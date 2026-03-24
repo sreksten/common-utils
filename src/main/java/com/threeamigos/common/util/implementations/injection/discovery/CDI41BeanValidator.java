@@ -176,6 +176,11 @@ public class CDI41BeanValidator {
         }
 
         boolean isInterceptor = hasInterceptorAnnotation(clazz);
+        if (isInterceptor && isDecorator) {
+            knowledgeBase.addDefinitionError(clazz.getName() +
+                    ": bean class may not be annotated with both @Interceptor and @Decorator");
+            return null;
+        }
 
         if ((isInterceptor || isDecorator) && hasSpecializesAnnotation(clazz)) {
             throw new NonPortableBehaviourException(clazz.getName() +
@@ -201,6 +206,10 @@ public class CDI41BeanValidator {
                 if (isInterceptor) {
                     knowledgeBase.addDefinitionError(fmtField(field) +
                             ": interceptor may not declare producer fields");
+                    valid = false;
+                } else if (isDecorator) {
+                    knowledgeBase.addDefinitionError(fmtField(field) +
+                            ": decorator may not declare producer fields");
                     valid = false;
                 } else {
                     valid &= validateProducerField(field);
@@ -243,6 +252,10 @@ public class CDI41BeanValidator {
                     knowledgeBase.addDefinitionError(fmtMethod(method) +
                             ": interceptor may not declare producer methods");
                     valid = false;
+                } else if (isDecorator) {
+                    knowledgeBase.addDefinitionError(fmtMethod(method) +
+                            ": decorator may not declare producer methods");
+                    valid = false;
                 } else {
                     valid &= validateProducerMethod(method);
 
@@ -266,6 +279,10 @@ public class CDI41BeanValidator {
                 if (isInterceptor) {
                     knowledgeBase.addDefinitionError(fmtMethod(method) +
                             ": interceptor may not declare disposer methods");
+                    valid = false;
+                } else if (isDecorator) {
+                    knowledgeBase.addDefinitionError(fmtMethod(method) +
+                            ": decorator may not declare disposer methods");
                     valid = false;
                 } else if (!produces) {
                     valid &= validateDisposerMethod(method);
@@ -318,6 +335,16 @@ public class CDI41BeanValidator {
         }
 
         if (isDecorator) {
+            if (isAlternativeDeclared(clazz)) {
+                throw new NonPortableBehaviourException(clazz.getName() +
+                        ": decorator is declared as @Alternative. Alternative decorators are non-portable.");
+            }
+            String decoratorName = extractBeanName(clazz);
+            if (decoratorName != null && !decoratorName.isEmpty()) {
+                throw new NonPortableBehaviourException(clazz.getName() +
+                        ": decorator declares bean name '" + decoratorName +
+                        "'. Named decorators are non-portable.");
+            }
             if (beanScope != null && !Dependent.class.equals(beanScope)) {
                 throw new NonPortableBehaviourException(clazz.getName() +
                         ": decorator declares scope @" + beanScope.getSimpleName() +
@@ -3962,7 +3989,7 @@ public class CDI41BeanValidator {
         }
 
         for (Type decoratedType : decoratedTypes) {
-            if (!delegateTypeImplementsDecoratedType(delegateType, decoratedType)) {
+            if (!delegateTypeCoversDecoratedType(delegateType, decoratedType)) {
                 knowledgeBase.addDefinitionError(decoratorClass.getName() +
                         ": delegate type " + delegateType.getTypeName() +
                         " does not implement/extend decorated type " + decoratedType.getTypeName() +
@@ -3971,13 +3998,10 @@ public class CDI41BeanValidator {
         }
     }
 
-    private boolean delegateTypeImplementsDecoratedType(Type delegateType, Type decoratedType) {
+    private boolean delegateTypeCoversDecoratedType(Type delegateType, Type decoratedType) {
         Class<?> delegateRaw = rawTypeOf(delegateType);
         Class<?> decoratedRaw = rawTypeOf(decoratedType);
-        if (delegateRaw == null || decoratedRaw == null) {
-            return false;
-        }
-        if (!decoratedRaw.isAssignableFrom(delegateRaw)) {
+        if (delegateRaw == null || decoratedRaw == null || !decoratedRaw.isAssignableFrom(delegateRaw)) {
             return false;
         }
 
@@ -3985,14 +4009,130 @@ public class CDI41BeanValidator {
             return true;
         }
 
-        Type matchingInDelegateHierarchy = findTypeInHierarchy(delegateType, decoratedRaw, new HashSet<Type>());
-        if (!(matchingInDelegateHierarchy instanceof ParameterizedType)) {
+        Type viewOnDecoratedRaw = findTypeInHierarchy(delegateType, decoratedRaw, new HashSet<Type>());
+        if (viewOnDecoratedRaw == null) {
             return false;
         }
 
-        Type[] expectedArgs = ((ParameterizedType) decoratedType).getActualTypeArguments();
-        Type[] actualArgs = ((ParameterizedType) matchingInDelegateHierarchy).getActualTypeArguments();
-        return Arrays.equals(expectedArgs, actualArgs);
+        return isBeanTypeAssignableToDelegateType(decoratedType, viewOnDecoratedRaw);
+    }
+
+    private boolean isBeanTypeAssignableToDelegateType(Type beanType, Type delegateType) {
+        if (beanType == null || delegateType == null) {
+            return false;
+        }
+
+        Class<?> beanRaw = rawTypeOf(beanType);
+        Class<?> delegateRaw = rawTypeOf(delegateType);
+        if (beanRaw == null || delegateRaw == null || !delegateRaw.equals(beanRaw)) {
+            return false;
+        }
+
+        if (beanType instanceof Class && delegateType instanceof ParameterizedType) {
+            for (Type delegateArg : ((ParameterizedType) delegateType).getActualTypeArguments()) {
+                if (!isObjectOrUnboundedTypeVariable(delegateArg)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (beanType instanceof ParameterizedType && delegateType instanceof ParameterizedType) {
+            Type[] beanArgs = ((ParameterizedType) beanType).getActualTypeArguments();
+            Type[] delegateArgs = ((ParameterizedType) delegateType).getActualTypeArguments();
+            if (beanArgs.length != delegateArgs.length) {
+                return false;
+            }
+            for (int i = 0; i < beanArgs.length; i++) {
+                if (!matchesDelegateParameter(beanArgs[i], delegateArgs[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (beanType instanceof Class && delegateType instanceof Class) {
+            return true;
+        }
+
+        return beanType.equals(delegateType);
+    }
+
+    private boolean matchesDelegateParameter(Type beanParam, Type delegateParam) {
+        if (isActualType(beanParam) && isActualType(delegateParam)) {
+            Class<?> beanRaw = rawTypeOf(beanParam);
+            Class<?> delegateRaw = rawTypeOf(delegateParam);
+            if (beanRaw == null || delegateRaw == null || !beanRaw.equals(delegateRaw)) {
+                return false;
+            }
+            if (beanParam instanceof ParameterizedType && delegateParam instanceof ParameterizedType) {
+                return isBeanTypeAssignableToDelegateType(beanParam, delegateParam);
+            }
+            return true;
+        }
+
+        if (delegateParam instanceof WildcardType && isActualType(beanParam)) {
+            return wildcardMatches((WildcardType) delegateParam, beanParam);
+        }
+
+        if (delegateParam instanceof WildcardType && beanParam instanceof TypeVariable<?>) {
+            Type beanUpperBound = firstUpperBound((TypeVariable<?>) beanParam);
+            return wildcardMatches((WildcardType) delegateParam, beanUpperBound);
+        }
+
+        if (delegateParam instanceof TypeVariable<?> && beanParam instanceof TypeVariable<?>) {
+            Type delegateUpper = firstUpperBound((TypeVariable<?>) delegateParam);
+            Type beanUpper = firstUpperBound((TypeVariable<?>) beanParam);
+            return isAssignable(beanUpper, delegateUpper);
+        }
+
+        if (delegateParam instanceof TypeVariable<?> && isActualType(beanParam)) {
+            Type delegateUpper = firstUpperBound((TypeVariable<?>) delegateParam);
+            return isAssignable(beanParam, delegateUpper);
+        }
+
+        return false;
+    }
+
+    private boolean wildcardMatches(WildcardType wildcard, Type candidate) {
+        for (Type upper : wildcard.getUpperBounds()) {
+            if (upper != null && !Object.class.equals(upper) && !isAssignable(candidate, upper)) {
+                return false;
+            }
+        }
+        for (Type lower : wildcard.getLowerBounds()) {
+            if (lower != null && !isAssignable(lower, candidate)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isAssignable(Type from, Type to) {
+        Class<?> fromRaw = rawTypeOf(from);
+        Class<?> toRaw = rawTypeOf(to);
+        return fromRaw != null && toRaw != null && toRaw.isAssignableFrom(fromRaw);
+    }
+
+    private Type firstUpperBound(TypeVariable<?> variable) {
+        Type[] bounds = variable.getBounds();
+        return bounds.length == 0 ? Object.class : bounds[0];
+    }
+
+    private boolean isActualType(Type type) {
+        return type instanceof Class<?> || type instanceof ParameterizedType;
+    }
+
+    private boolean isObjectOrUnboundedTypeVariable(Type type) {
+        if (Object.class.equals(type)) {
+            return true;
+        }
+        if (type instanceof TypeVariable<?>) {
+            TypeVariable<?> tv = (TypeVariable<?>) type;
+            Type[] bounds = tv.getBounds();
+            return bounds.length == 0 || (bounds.length == 1 && Object.class.equals(bounds[0]));
+        }
+        return false;
     }
 
     private Type findTypeInHierarchy(Type source, Class<?> targetRaw, Set<Type> visited) {
