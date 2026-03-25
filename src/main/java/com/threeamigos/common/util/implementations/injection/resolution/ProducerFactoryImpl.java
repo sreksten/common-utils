@@ -2,10 +2,12 @@ package com.threeamigos.common.util.implementations.injection.resolution;
 
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.Disposes;
 import jakarta.enterprise.inject.spi.*;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -121,8 +123,7 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
 
         @Override
         public void dispose(T instance) {
-            // Producer fields don't have disposer methods
-            // Disposal is handled by the scope
+            invokeDisposerIfPresent(instance, field.getJavaMember().getType(), declaringBean, beanManager);
         }
 
         @Override
@@ -174,9 +175,7 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
 
         @Override
         public void dispose(T instance) {
-            // Disposer methods are tracked separately
-            // For now, this is a no-op
-            // Full implementation would find and invoke the disposer method
+            invokeDisposerIfPresent(instance, method.getJavaMember().getReturnType(), declaringBean, beanManager);
         }
 
         @Override
@@ -206,5 +205,98 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
 
             return args;
         }
+    }
+
+    private static <T> void invokeDisposerIfPresent(
+            T instance,
+            Class<?> producedType,
+            Bean<?> declaringBean,
+            BeanManager beanManager
+    ) {
+        if (instance == null || declaringBean == null) {
+            return;
+        }
+
+        Method disposer = findDisposerMethod(declaringBean.getBeanClass(), producedType);
+        if (disposer == null) {
+            return;
+        }
+
+        try {
+            CreationalContext<?> declaringContext = beanManager.createCreationalContext(declaringBean);
+            Object declaringInstance = beanManager.getReference(
+                    declaringBean,
+                    declaringBean.getBeanClass(),
+                    declaringContext
+            );
+
+            Object[] args = resolveDisposerArguments(disposer, instance, declaringBean, beanManager, declaringContext);
+            disposer.setAccessible(true);
+            disposer.invoke(declaringInstance, args);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to dispose produced instance of type " + producedType.getName(), e);
+        }
+    }
+
+    private static Method findDisposerMethod(Class<?> beanClass, Class<?> producedType) {
+        Method exact = null;
+        Method assignable = null;
+
+        Class<?> current = beanClass;
+        while (current != null && current != Object.class) {
+            for (Method method : current.getDeclaredMethods()) {
+                int disposerIndex = findDisposerParameterIndex(method.getParameters());
+                if (disposerIndex < 0) {
+                    continue;
+                }
+
+                Class<?> disposerType = method.getParameterTypes()[disposerIndex];
+                if (disposerType.equals(producedType)) {
+                    exact = method;
+                    break;
+                }
+                if (disposerType.isAssignableFrom(producedType) && assignable == null) {
+                    assignable = method;
+                }
+            }
+            if (exact != null) {
+                break;
+            }
+            current = current.getSuperclass();
+        }
+
+        return exact != null ? exact : assignable;
+    }
+
+    private static int findDisposerParameterIndex(Parameter[] parameters) {
+        for (int i = 0; i < parameters.length; i++) {
+            if (parameters[i].isAnnotationPresent(Disposes.class)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static Object[] resolveDisposerArguments(
+            Method disposerMethod,
+            Object disposedInstance,
+            Bean<?> declaringBean,
+            BeanManager beanManager,
+            CreationalContext<?> creationalContext
+    ) {
+        Parameter[] parameters = disposerMethod.getParameters();
+        Object[] args = new Object[parameters.length];
+
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter parameter = parameters[i];
+            if (parameter.isAnnotationPresent(Disposes.class)) {
+                args[i] = disposedInstance;
+            } else {
+                InjectionPoint ip = new InjectionPointImpl(parameter, declaringBean);
+                args[i] = beanManager.getInjectableReference(ip, creationalContext);
+            }
+        }
+
+        return args;
     }
 }
