@@ -2433,6 +2433,11 @@ public class BeanManagerImpl implements BeanManager {
             }
 
             @Override
+            public Bean<?> getDeclaringBean() {
+                return info.getDeclaringBean();
+            }
+
+            @Override
             public Type getObservedType() {
                 return info.getEventType();
             }
@@ -2465,6 +2470,9 @@ public class BeanManagerImpl implements BeanManager {
                         info.getDeclaringBean().getBeanClass() :
                         info.getObserverMethod().getDeclaringClass();
                     Object instance = beanResolver.resolveDeclaringBeanInstance(declaringClass);
+                    if (!info.getObserverMethod().isAccessible()) {
+                        info.getObserverMethod().setAccessible(true);
+                    }
                     info.getObserverMethod().invoke(instance, event);
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to invoke observer method", e);
