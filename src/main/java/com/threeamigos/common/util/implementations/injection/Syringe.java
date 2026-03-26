@@ -181,6 +181,14 @@ public class Syringe {
      */
     private boolean shutdownStarted = false;
     /**
+     * Whether BeforeBeanDiscovery has already been fired for this container lifecycle.
+     */
+    private boolean beforeBeanDiscoveryFired = false;
+    /**
+     * Whether BeforeShutdown has already been fired for this container lifecycle.
+     */
+    private boolean beforeShutdownFired = false;
+    /**
      * If true, expose CDI Lite behavior for CDI#getBeanManager() where only BeanContainer
      * methods are portable.
      */
@@ -440,6 +448,8 @@ public class Syringe {
             throw new IllegalStateException("Container already initialized");
         }
         shutdownStarted = false;
+        beforeBeanDiscoveryFired = false;
+        beforeShutdownFired = false;
 
         // ============================================================
         // PHASE 1: CONTAINER INITIALIZATION
@@ -452,6 +462,7 @@ public class Syringe {
 
         // Step 1.2: Create BeanManager
         beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
+        beanManager.registerExtensions(extensions);
         buildCompatibleExtensionRunner = new BuildCompatibleExtensionRunner(
             messageHandler, knowledgeBase, beanManager, bceInvokerRegistry);
 
@@ -463,6 +474,7 @@ public class Syringe {
         // - Add new qualifiers, scopes, stereotypes, interceptor bindings
         // - Register additional beans programmatically
         fireBeforeBeanDiscovery();
+        beforeBeanDiscoveryFired = true;
         fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.DISCOVERY);
     }
 
@@ -1759,6 +1771,7 @@ public class Syringe {
      */
     private void fireAfterBeanDiscovery() {
         info("Firing AfterBeanDiscovery event");
+        beanManager.markAfterBeanDiscoveryFired();
         AfterBeanDiscovery event = new AfterBeanDiscoveryImpl(messageHandler, knowledgeBase, beanManager);
 
         // Register programmatically added custom contexts BEFORE firing to extensions
@@ -2121,6 +2134,7 @@ public class Syringe {
      */
     private void fireAfterDeploymentValidation() {
         info("Firing AfterDeploymentValidation event");
+        beanManager.markAfterDeploymentValidationFired();
         AfterDeploymentValidation event = new AfterDeploymentValidationImpl(knowledgeBase);
         fireEventToExtensions(event);
     }
@@ -2136,6 +2150,7 @@ public class Syringe {
      */
     private void fireBeforeShutdown() {
         info("Firing BeforeShutdown event");
+        beforeShutdownFired = true;
         BeforeShutdown event = new BeforeShutdownImpl();
         fireEventToExtensions(event);
     }
@@ -2398,8 +2413,9 @@ public class Syringe {
      * @return the CDI instance
      */
     public jakarta.enterprise.inject.spi.CDI<Object> getCDI() {
-        if (!initialized) {
-            throw new IllegalStateException("Container not initialized. Call setup() first.");
+        if (beanManager == null) {
+            throw new NonPortableBehaviourException(
+                    "CDI.current() access is non-portable before BeforeBeanDiscovery is fired");
         }
         return new com.threeamigos.common.util.implementations.injection.spi.CDIImpl(
                 beanManager,
@@ -2408,7 +2424,7 @@ public class Syringe {
     }
 
     private boolean isCdiPortableAccessWindow() {
-        return initialized && !shutdownStarted;
+        return beforeBeanDiscoveryFired && !beforeShutdownFired;
     }
 
     public KnowledgeBase getKnowledgeBase() {

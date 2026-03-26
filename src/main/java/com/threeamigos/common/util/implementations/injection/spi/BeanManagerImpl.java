@@ -6,6 +6,7 @@ import com.threeamigos.common.util.implementations.injection.interceptors.Interc
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorResolver;
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.resolution.*;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
@@ -14,6 +15,7 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.SimpleAnnotatedType;
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
+import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
@@ -102,7 +104,10 @@ public class BeanManagerImpl implements BeanManager {
     private final TypeChecker typeChecker;
     private final DecoratorResolver decoratorResolver;
     private final DecoratorAwareProxyGenerator decoratorAwareProxyGenerator;
+    private final List<Extension> registeredExtensions;
     private final String beanManagerId;
+    private volatile boolean afterBeanDiscoveryFired;
+    private volatile boolean afterDeploymentValidationFired;
 
     /**
      * Creates a new BeanManager implementation.
@@ -120,6 +125,7 @@ public class BeanManagerImpl implements BeanManager {
         this.typeChecker = new TypeChecker();
         this.decoratorResolver = new DecoratorResolver(knowledgeBase);
         this.decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
+        this.registeredExtensions = new ArrayList<Extension>();
 
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         if (classLoader == null) {
@@ -127,6 +133,14 @@ public class BeanManagerImpl implements BeanManager {
         }
         BEAN_MANAGER_REGISTRY.put(classLoader, this);
         BEAN_MANAGER_ID_REGISTRY.put(beanManagerId, this);
+    }
+
+    public void registerExtensions(Collection<Extension> extensions) {
+        registeredExtensions.clear();
+        if (extensions == null || extensions.isEmpty()) {
+            return;
+        }
+        registeredExtensions.addAll(extensions);
     }
 
     public static BeanManagerImpl getRegisteredBeanManager(ClassLoader classLoader) {
@@ -188,6 +202,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public Object getReference(Bean<?> bean, Type beanType, CreationalContext<?> ctx) {
+        requireAfterDeploymentValidation("getReference(Bean, Type, CreationalContext)");
         if (bean == null) {
             throw new IllegalArgumentException("bean cannot be null");
         }
@@ -305,6 +320,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public Set<Bean<?>> getBeans(Type beanType, Annotation... qualifiers) {
+        requireAfterBeanDiscovery("getBeans(Type, Annotation...)");
         if (beanType == null) {
             throw new IllegalArgumentException("beanType cannot be null");
         }
@@ -393,6 +409,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public Set<Bean<?>> getBeans(String name) {
+        requireAfterBeanDiscovery("getBeans(String)");
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("name cannot be null or empty");
         }
@@ -449,6 +466,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public <X> Bean<? extends X> resolve(Set<Bean<? extends X>> beans) {
+        requireAfterBeanDiscovery("resolve(Set)");
         if (beans == null || beans.isEmpty()) {
             return null;
         }
@@ -827,6 +845,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public <T> Set<ObserverMethod<? super T>> resolveObserverMethods(T event, Annotation... qualifiers) {
+        requireAfterBeanDiscovery("resolveObserverMethods(Object, Annotation...)");
         if (event == null) {
             throw new IllegalArgumentException("event cannot be null");
         }
@@ -906,6 +925,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public List<Interceptor<?>> resolveInterceptors(InterceptionType type, Annotation... interceptorBindings) {
+        requireAfterBeanDiscovery("resolveInterceptors(InterceptionType, Annotation...)");
         if (type == null) {
             throw new IllegalArgumentException("type cannot be null");
         }
@@ -922,6 +942,7 @@ public class BeanManagerImpl implements BeanManager {
         // Convert InterceptorInfo to Interceptor<?> beans
         List<Interceptor<?>> resolved = matchingInfos.stream()
                 .map(this::createInterceptor)
+                .filter(this::isInterceptorEnabled)
                 .collect(Collectors.toList());
 
         // CDI Full extension: include custom Interceptor implementations registered as beans.
@@ -937,6 +958,9 @@ public class BeanManagerImpl implements BeanManager {
             if (seenInterceptorClasses.contains(interceptor.getBeanClass())) {
                 continue;
             }
+            if (!isInterceptorEnabled(interceptor)) {
+                continue;
+            }
             if (!interceptor.intercepts(type)) {
                 continue;
             }
@@ -946,6 +970,36 @@ public class BeanManagerImpl implements BeanManager {
             resolved.add(interceptor);
             seenInterceptorClasses.add(interceptor.getBeanClass());
         }
+
+        resolved.sort((left, right) -> {
+            int leftPriority = getInterceptorPriority(left);
+            int rightPriority = getInterceptorPriority(right);
+
+            boolean leftHasPriority = leftPriority != Integer.MAX_VALUE;
+            boolean rightHasPriority = rightPriority != Integer.MAX_VALUE;
+
+            if (leftHasPriority && rightHasPriority) {
+                int byPriority = Integer.compare(leftPriority, rightPriority);
+                if (byPriority != 0) {
+                    return byPriority;
+                }
+            } else if (leftHasPriority != rightHasPriority) {
+                return leftHasPriority ? -1 : 1;
+            }
+
+            int leftOrder = knowledgeBase.getApplicationInterceptorOrder(left.getBeanClass());
+            int rightOrder = knowledgeBase.getApplicationInterceptorOrder(right.getBeanClass());
+            if (leftOrder >= 0 && rightOrder >= 0) {
+                int byOrder = Integer.compare(leftOrder, rightOrder);
+                if (byOrder != 0) {
+                    return byOrder;
+                }
+            } else if (leftOrder >= 0 || rightOrder >= 0) {
+                return leftOrder >= 0 ? -1 : 1;
+            }
+
+            return left.getBeanClass().getName().compareTo(right.getBeanClass().getName());
+        });
 
         return resolved;
     }
@@ -1275,6 +1329,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public Instance<Object> createInstance() {
+        requireAfterDeploymentValidation("createInstance()");
         // Create an Instance<Object> with @Default specified qualifier
         Set<Annotation> qualifiers = new HashSet<>();
         qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
@@ -1416,6 +1471,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public Object getInjectableReference(InjectionPoint injectionPoint, CreationalContext<?> ctx) {
+        requireAfterDeploymentValidation("getInjectableReference(InjectionPoint, CreationalContext)");
         if (injectionPoint == null) {
             throw new IllegalArgumentException("injectionPoint cannot be null");
         }
@@ -1531,6 +1587,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public Bean<?> getPassivationCapableBean(String id) {
+        requireAfterBeanDiscovery("getPassivationCapableBean(String)");
         if (id == null) {
             throw new IllegalArgumentException("id cannot be null");
         }
@@ -1575,6 +1632,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public void validate(InjectionPoint injectionPoint) {
+        requireAfterBeanDiscovery("validate(InjectionPoint)");
         if (injectionPoint == null) {
             throw new IllegalArgumentException("injectionPoint cannot be null");
         }
@@ -1630,9 +1688,11 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public List<Decorator<?>> resolveDecorators(Set<Type> types, Annotation... qualifiers) {
+        requireAfterBeanDiscovery("resolveDecorators(Set, Annotation...)");
         if (types == null || types.isEmpty()) {
             throw new IllegalArgumentException("types cannot be null or empty");
         }
+        validateRequiredQualifiers(qualifiers);
 
         Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
         List<Decorator<?>> matchingDecorators = new ArrayList<>();
@@ -1712,6 +1772,19 @@ public class BeanManagerImpl implements BeanManager {
         }
         int beansXmlOrder = knowledgeBase.getDecoratorBeansXmlOrder(decorator.getBeanClass());
         return beansXmlOrder >= 0 || getDecoratorPriority(decorator) != Integer.MAX_VALUE;
+    }
+
+    private boolean isInterceptorEnabled(Interceptor<?> interceptor) {
+        if (interceptor == null) {
+            return false;
+        }
+        // Programmatic custom Interceptor beans added by extensions are considered enabled.
+        // Only annotation-based interceptor classes require explicit enablement (@Priority or app order).
+        if (!INTERCEPTOR.isPresent(interceptor.getBeanClass())) {
+            return true;
+        }
+        int applicationOrder = knowledgeBase.getApplicationInterceptorOrder(interceptor.getBeanClass());
+        return applicationOrder >= 0 || getInterceptorPriority(interceptor) != Integer.MAX_VALUE;
     }
 
     /**
@@ -1855,7 +1928,7 @@ public class BeanManagerImpl implements BeanManager {
             return false;
         }
 
-        return qualifier1.equals(qualifier2);
+        return AnnotationComparator.equals(qualifier1, qualifier2);
     }
 
     /**
@@ -1885,7 +1958,7 @@ public class BeanManagerImpl implements BeanManager {
             return false;
         }
 
-        return binding1.equals(binding2);
+        return AnnotationComparator.equals(binding1, binding2);
     }
 
     /**
@@ -1901,7 +1974,7 @@ public class BeanManagerImpl implements BeanManager {
         if (qualifier == null) {
             return 0;
         }
-        return qualifier.hashCode();
+        return AnnotationComparator.hashCode(qualifier);
     }
 
     /**
@@ -1917,7 +1990,7 @@ public class BeanManagerImpl implements BeanManager {
         if (binding == null) {
             return 0;
         }
-        return binding.hashCode();
+        return AnnotationComparator.hashCode(binding);
     }
 
     /**
@@ -1987,6 +2060,34 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("annotatedType cannot be null");
         }
 
+        // CDI 4.1: reject creation if any injection point on the type has a definition/deployment problem.
+        try {
+            for (AnnotatedField<? super T> field : annotatedType.getFields()) {
+                if (INJECT.isPresent(field.getJavaMember())) {
+                    validate(createInjectionPoint(field));
+                }
+            }
+            for (AnnotatedConstructor<T> constructor : annotatedType.getConstructors()) {
+                if (!INJECT.isPresent(constructor.getJavaMember())) {
+                    continue;
+                }
+                for (AnnotatedParameter<? super T> parameter : constructor.getParameters()) {
+                    validate(createInjectionPoint(parameter));
+                }
+            }
+            for (AnnotatedMethod<? super T> method : annotatedType.getMethods()) {
+                if (!INJECT.isPresent(method.getJavaMember())) {
+                    continue;
+                }
+                for (AnnotatedParameter<? super T> parameter : method.getParameters()) {
+                    validate(createInjectionPoint(parameter));
+                }
+            }
+        } catch (jakarta.enterprise.inject.InjectionException e) {
+            throw new IllegalArgumentException("Definition error associated with injection point of type: " +
+                    annotatedType.getJavaClass().getName(), e);
+        }
+
         return new InjectionTargetFactoryImpl<>(annotatedType, this);
     }
 
@@ -2006,6 +2107,12 @@ public class BeanManagerImpl implements BeanManager {
     public <X> ProducerFactory<X> getProducerFactory(AnnotatedField<? super X> field, Bean<X> declaringBean) {
         if (field == null) {
             throw new IllegalArgumentException("field cannot be null");
+        }
+        if (declaringBean == null) {
+            throw new IllegalArgumentException("declaringBean cannot be null");
+        }
+        if (!PRODUCES.isPresent(field.getJavaMember())) {
+            throw new IllegalArgumentException("field is not a producer field: " + field.getJavaMember().getName());
         }
 
         return new ProducerFactoryImpl<>(field, this);
@@ -2028,6 +2135,20 @@ public class BeanManagerImpl implements BeanManager {
         if (method == null) {
             throw new IllegalArgumentException("method cannot be null");
         }
+        if (declaringBean == null) {
+            throw new IllegalArgumentException("declaringBean cannot be null");
+        }
+        if (!PRODUCES.isPresent(method.getJavaMember())) {
+            throw new IllegalArgumentException("method is not a producer method: " + method.getJavaMember().getName());
+        }
+        try {
+            for (AnnotatedParameter<? super X> parameter : method.getParameters()) {
+                validate(createInjectionPoint(parameter));
+            }
+        } catch (jakarta.enterprise.inject.InjectionException e) {
+            throw new IllegalArgumentException("Definition error associated with producer method: " +
+                    method.getJavaMember().getName(), e);
+        }
 
         return new ProducerFactoryImpl<>(method, this);
     }
@@ -2048,6 +2169,7 @@ public class BeanManagerImpl implements BeanManager {
         if (type == null) {
             throw new IllegalArgumentException("type cannot be null");
         }
+        validateDeclaredBeanAttributes(type);
 
         // Extract metadata from AnnotatedType
         String name = extractName(type);
@@ -2075,6 +2197,7 @@ public class BeanManagerImpl implements BeanManager {
         if (member == null) {
             throw new IllegalArgumentException("member cannot be null");
         }
+        validateDeclaredBeanAttributes(member);
 
         // Extract metadata from AnnotatedMember (producer field or method)
         String name = extractName(member);
@@ -2170,9 +2293,14 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("field cannot be null");
         }
 
-        // Create an injection point from the annotated field
-        // Note: We pass null for the Bean since this is a programmatically created injection point
-        return new InjectionPointImpl<>(field.getJavaMember(), null);
+        InjectionPoint injectionPoint = new InjectionPointImpl<>(field.getJavaMember(), null);
+        try {
+            validate(injectionPoint);
+        } catch (jakarta.enterprise.inject.InjectionException e) {
+            throw new IllegalArgumentException("Definition error associated with injection point field: " +
+                    field.getJavaMember().getName(), e);
+        }
+        return injectionPoint;
     }
 
     /**
@@ -2191,9 +2319,14 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("parameter cannot be null");
         }
 
-        // Create an injection point from the annotated parameter
-        // Note: We pass null for the Bean since this is a programmatically created injection point
-        return new InjectionPointImpl<>(parameter.getJavaParameter(), null);
+        InjectionPoint injectionPoint = new InjectionPointImpl<>(parameter.getJavaParameter(), null);
+        try {
+            validate(injectionPoint);
+        } catch (jakarta.enterprise.inject.InjectionException e) {
+            throw new IllegalArgumentException("Definition error associated with injection point parameter: " +
+                    parameter.getJavaParameter().getName(), e);
+        }
+        return injectionPoint;
     }
 
     /**
@@ -2211,9 +2344,12 @@ public class BeanManagerImpl implements BeanManager {
         if (extensionClass == null) {
             throw new IllegalArgumentException("extensionClass cannot be null");
         }
-
-        // Extensions not yet implemented
-        return null;
+        for (Extension extension : registeredExtensions) {
+            if (extensionClass.isInstance(extension)) {
+                return extensionClass.cast(extension);
+            }
+        }
+        throw new IllegalArgumentException("No extension instance available for class: " + extensionClass.getName());
     }
 
     /**
@@ -2235,6 +2371,9 @@ public class BeanManagerImpl implements BeanManager {
         }
         if (clazz == null) {
             throw new IllegalArgumentException("clazz cannot be null");
+        }
+        if (clazz.isInterface() || clazz.isAnnotation() || clazz.isArray() || clazz.isPrimitive()) {
+            throw new NonPortableBehaviourException("Non-portable behavior: InterceptionFactory requires a Java class type, got " + clazz.getName());
         }
 
         // Create InterceptorAwareProxyGenerator for creating proxies
@@ -2343,6 +2482,17 @@ public class BeanManagerImpl implements BeanManager {
             return ((Prioritized) decorator).getPriority();
         }
         Integer classPriority = extractPriorityFromClass(decorator.getBeanClass());
+        return classPriority != null ? classPriority : Integer.MAX_VALUE;
+    }
+
+    private int getInterceptorPriority(Interceptor<?> interceptor) {
+        if (interceptor == null) {
+            return Integer.MAX_VALUE;
+        }
+        if (interceptor instanceof Prioritized) {
+            return ((Prioritized) interceptor).getPriority();
+        }
+        Integer classPriority = extractPriorityFromClass(interceptor.getBeanClass());
         return classPriority != null ? classPriority : Integer.MAX_VALUE;
     }
 
@@ -2882,6 +3032,42 @@ public class BeanManagerImpl implements BeanManager {
         return types;
     }
 
+    private void validateDeclaredBeanAttributes(jakarta.enterprise.inject.spi.Annotated annotated) {
+        int scopeCount = 0;
+        Class<? extends Annotation> firstScope = null;
+        Class<? extends Annotation> secondScope = null;
+
+        for (Annotation annotation : annotated.getAnnotations()) {
+            if (!isScopeAnnotationType(annotation.annotationType())) {
+                continue;
+            }
+            scopeCount++;
+            if (firstScope == null) {
+                firstScope = annotation.annotationType();
+            } else if (secondScope == null && !firstScope.equals(annotation.annotationType())) {
+                secondScope = annotation.annotationType();
+            }
+        }
+
+        if (secondScope != null || scopeCount > 1) {
+            throw new IllegalArgumentException("Definition error: multiple scope annotations declared on " +
+                    describeAnnotatedElement(annotated) + " (" +
+                    (firstScope != null ? firstScope.getName() : "unknown") + ", " +
+                    (secondScope != null ? secondScope.getName() : "unknown") + ")");
+        }
+    }
+
+    private String describeAnnotatedElement(jakarta.enterprise.inject.spi.Annotated annotated) {
+        if (annotated instanceof AnnotatedType) {
+            return ((AnnotatedType<?>) annotated).getJavaClass().getName();
+        }
+        if (annotated instanceof AnnotatedMember) {
+            Member member = ((AnnotatedMember<?>) annotated).getJavaMember();
+            return member.getDeclaringClass().getName() + "#" + member.getName();
+        }
+        return annotated.toString();
+    }
+
     /**
      * Decapitalizes a string following CDI conventions.
      */
@@ -2922,5 +3108,33 @@ public class BeanManagerImpl implements BeanManager {
      */
     public ContextManager getContextManager() {
         return contextManager;
+    }
+
+    /**
+     * Marks that AfterBeanDiscovery was fired.
+     */
+    public void markAfterBeanDiscoveryFired() {
+        this.afterBeanDiscoveryFired = true;
+    }
+
+    /**
+     * Marks that AfterDeploymentValidation was fired.
+     */
+    public void markAfterDeploymentValidationFired() {
+        this.afterDeploymentValidationFired = true;
+    }
+
+    private void requireAfterBeanDiscovery(String operationName) {
+        if (!afterBeanDiscoveryFired) {
+            throw new IllegalStateException(operationName +
+                    " cannot be called before the AfterBeanDiscovery event is fired");
+        }
+    }
+
+    private void requireAfterDeploymentValidation(String operationName) {
+        if (!afterDeploymentValidationFired) {
+            throw new IllegalStateException(operationName +
+                    " cannot be called before the AfterDeploymentValidation event is fired");
+        }
     }
 }

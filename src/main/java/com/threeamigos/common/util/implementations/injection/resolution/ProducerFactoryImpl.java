@@ -7,6 +7,7 @@ import jakarta.enterprise.inject.spi.*;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.util.Collections;
 import java.util.HashSet;
@@ -104,16 +105,15 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
         @Override
         public T produce(CreationalContext<T> ctx) {
             try {
-                // Get declaring bean instance
-                Object declaringInstance = beanManager.getReference(
-                    declaringBean,
-                    declaringBean.getBeanClass(),
-                    ctx
-                );
-
-                // Read field value
                 Field javaField = field.getJavaMember();
                 javaField.setAccessible(true);
+                Object declaringInstance = resolveDeclaringInstance(
+                        javaField.getDeclaringClass(),
+                        declaringBean,
+                        beanManager,
+                        ctx,
+                        Modifier.isStatic(javaField.getModifiers())
+                );
                 return (T) javaField.get(declaringInstance);
 
             } catch (Exception e) {
@@ -153,19 +153,17 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
         @Override
         public T produce(CreationalContext<T> ctx) {
             try {
-                // Get declaring bean instance
-                Object declaringInstance = beanManager.getReference(
-                    declaringBean,
-                    declaringBean.getBeanClass(),
-                    ctx
-                );
-
-                // Resolve method parameters
                 Method javaMethod = method.getJavaMember();
                 javaMethod.setAccessible(true);
+                Object declaringInstance = resolveDeclaringInstance(
+                        javaMethod.getDeclaringClass(),
+                        declaringBean,
+                        beanManager,
+                        ctx,
+                        Modifier.isStatic(javaMethod.getModifiers())
+                );
                 Object[] args = resolveMethodParameters(javaMethod, ctx);
 
-                // Invoke producer method
                 return (T) javaMethod.invoke(declaringInstance, args);
 
             } catch (Exception e) {
@@ -236,6 +234,29 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
         } catch (Exception e) {
             throw new RuntimeException("Failed to dispose produced instance of type " + producedType.getName(), e);
         }
+    }
+
+    private static Object resolveDeclaringInstance(
+            Class<?> declaringClass,
+            Bean<?> declaringBean,
+            BeanManager beanManager,
+            CreationalContext<?> creationalContext,
+            boolean staticMember
+    ) throws Exception {
+        if (staticMember) {
+            return null;
+        }
+        if (declaringBean != null) {
+            return beanManager.getReference(
+                    declaringBean,
+                    declaringBean.getBeanClass(),
+                    creationalContext
+            );
+        }
+
+        java.lang.reflect.Constructor<?> ctor = declaringClass.getDeclaredConstructor();
+        ctor.setAccessible(true);
+        return ctor.newInstance();
     }
 
     private static Method findDisposerMethod(Class<?> beanClass, Class<?> producedType) {

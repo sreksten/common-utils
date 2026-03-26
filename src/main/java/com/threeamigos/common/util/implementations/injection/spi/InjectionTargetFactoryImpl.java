@@ -52,6 +52,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
     private final AnnotatedType<T> annotatedType;
     private final BeanManager beanManager;
     private AnnotatedTypeConfigurator<T> configurator;
+    private boolean injectionTargetCreated;
 
     /**
      * Creates an injection target factory.
@@ -80,6 +81,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
      */
     @Override
     public InjectionTarget<T> createInjectionTarget(Bean<T> bean) {
+        injectionTargetCreated = true;
         // Get the configured type (if configure() was called)
         AnnotatedType<T> finalType = annotatedType;
         if (configurator != null && configurator instanceof AnnotatedTypeConfiguratorImpl) {
@@ -98,6 +100,9 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
      */
     @Override
     public AnnotatedTypeConfigurator<T> configure() {
+        if (injectionTargetCreated) {
+            throw new IllegalStateException("configure() cannot be called after createInjectionTarget()");
+        }
         if (configurator == null) {
             configurator = new AnnotatedTypeConfiguratorImpl<>(annotatedType);
         }

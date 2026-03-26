@@ -71,7 +71,10 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
 
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationType) {
-        return null;
+        if (annotationType == null) {
+            return null;
+        }
+        return javaClass.getAnnotation(annotationType);
     }
 
     @Override

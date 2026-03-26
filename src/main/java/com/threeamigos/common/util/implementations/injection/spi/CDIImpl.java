@@ -51,7 +51,7 @@ public class CDIImpl extends CDI<Object> {
 
     private final BeanManagerImpl beanManager;
     private final BeanManager beanManagerView;
-    private final Instance<Object> rootInstance;
+    private volatile Instance<Object> rootInstance;
     private final BooleanSupplier accessGuard;
 
     /**
@@ -71,9 +71,6 @@ public class CDIImpl extends CDI<Object> {
         this.accessGuard = accessGuard != null ? accessGuard : ALWAYS_ALLOWED;
         this.beanManagerView = cdiLiteMode ? createLiteBeanManagerView(beanManager) : beanManager;
 
-        // Create root Instance<Object> for programmatic lookup
-        // This gives us access to all beans in the container
-        this.rootInstance = beanManager.createInstance();
     }
 
     /**
@@ -109,7 +106,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public <U> Instance<U> select(Class<U> subtype, Annotation... qualifiers) {
         ensurePortableAccessWindow();
-        return rootInstance.select(subtype, qualifiers);
+        return rootInstance().select(subtype, qualifiers);
     }
 
     /**
@@ -123,7 +120,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public <U> Instance<U> select(TypeLiteral<U> subtype, Annotation... qualifiers) {
         ensurePortableAccessWindow();
-        return rootInstance.select(subtype, qualifiers);
+        return rootInstance().select(subtype, qualifiers);
     }
 
     /**
@@ -135,7 +132,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public boolean isAmbiguous() {
         ensurePortableAccessWindow();
-        return rootInstance.isAmbiguous();
+        return rootInstance().isAmbiguous();
     }
 
     /**
@@ -147,7 +144,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public boolean isUnsatisfied() {
         ensurePortableAccessWindow();
-        return rootInstance.isUnsatisfied();
+        return rootInstance().isUnsatisfied();
     }
 
     /**
@@ -159,7 +156,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public boolean isResolvable() {
         ensurePortableAccessWindow();
-        return rootInstance.isResolvable();
+        return rootInstance().isResolvable();
     }
 
     /**
@@ -172,7 +169,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public Object get() {
         ensurePortableAccessWindow();
-        return rootInstance.get();
+        return rootInstance().get();
     }
 
     /**
@@ -183,7 +180,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public Iterator<Object> iterator() {
         ensurePortableAccessWindow();
-        return rootInstance.iterator();
+        return rootInstance().iterator();
     }
 
     /**
@@ -194,7 +191,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public Stream<Object> stream() {
         ensurePortableAccessWindow();
-        return rootInstance.stream();
+        return rootInstance().stream();
     }
 
     /**
@@ -205,7 +202,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public Handle<Object> getHandle() {
         ensurePortableAccessWindow();
-        return rootInstance.getHandle();
+        return rootInstance().getHandle();
     }
 
     /**
@@ -216,7 +213,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public Iterable<? extends Handle<Object>> handles() {
         ensurePortableAccessWindow();
-        return rootInstance.handles();
+        return rootInstance().handles();
     }
 
     /**
@@ -227,7 +224,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public Stream<? extends Handle<Object>> handlesStream() {
         ensurePortableAccessWindow();
-        return rootInstance.handlesStream();
+        return rootInstance().handlesStream();
     }
 
     /**
@@ -238,7 +235,7 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public void destroy(Object instance) {
         ensurePortableAccessWindow();
-        rootInstance.destroy(instance);
+        rootInstance().destroy(instance);
     }
 
     /**
@@ -250,14 +247,28 @@ public class CDIImpl extends CDI<Object> {
     @Override
     public Instance<Object> select(Annotation... qualifiers) {
         ensurePortableAccessWindow();
-        return rootInstance.select(qualifiers);
+        return rootInstance().select(qualifiers);
     }
 
     private void ensurePortableAccessWindow() {
         if (!accessGuard.getAsBoolean()) {
             throw new NonPortableBehaviourException(
-                "CDI methods may only be invoked after initialization is complete and before shutdown starts");
+                "CDI methods may only be invoked after BeforeBeanDiscovery and before BeforeShutdown");
         }
+    }
+
+    private Instance<Object> rootInstance() {
+        Instance<Object> instance = rootInstance;
+        if (instance == null) {
+            synchronized (this) {
+                instance = rootInstance;
+                if (instance == null) {
+                    instance = beanManager.createInstance();
+                    rootInstance = instance;
+                }
+            }
+        }
+        return instance;
     }
 
     private BeanManager createLiteBeanManagerView(final BeanManager delegate) {
