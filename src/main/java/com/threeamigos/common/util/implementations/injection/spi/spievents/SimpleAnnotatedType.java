@@ -7,8 +7,12 @@ import jakarta.enterprise.inject.spi.AnnotatedConstructor;
 import jakarta.enterprise.inject.spi.AnnotatedField;
 import jakarta.enterprise.inject.spi.AnnotatedMethod;
 import jakarta.enterprise.inject.spi.AnnotatedType;
+import jakarta.enterprise.context.NormalScope;
+import jakarta.inject.Scope;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.HashSet;
@@ -74,29 +78,66 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
         if (annotationType == null) {
             return null;
         }
-        return javaClass.getAnnotation(annotationType);
+        for (Annotation annotation : getAnnotations()) {
+            if (annotationType.equals(annotation.annotationType())) {
+                return annotationType.cast(annotation);
+            }
+        }
+        return null;
     }
 
     @Override
     public Set<Annotation> getAnnotations() {
-        return new HashSet<>(java.util.Arrays.asList(javaClass.getAnnotations()));
+        Set<Annotation> annotations = new HashSet<Annotation>();
+        // Always include annotations declared directly on the type.
+        java.util.Collections.addAll(annotations, javaClass.getDeclaredAnnotations());
+
+        // CDI 4.1: only special scope inheritance rules are applied on types.
+        if (!hasDeclaredScope(javaClass)) {
+            Class<?> current = javaClass.getSuperclass();
+            while (current != null && current != Object.class) {
+                if (hasDeclaredScope(current)) {
+                    for (Annotation annotation : current.getDeclaredAnnotations()) {
+                        if (isScopeAnnotation(annotation.annotationType())) {
+                            annotations.add(annotation);
+                        }
+                    }
+                    break;
+                }
+                current = current.getSuperclass();
+            }
+        }
+
+        return annotations;
     }
 
     @Override
     public boolean isAnnotationPresent(Class<? extends Annotation> annotationType) {
-        return javaClass.isAnnotationPresent(annotationType);
+        return getAnnotation(annotationType) != null;
     }
 
     private Set<AnnotatedField<? super T>> buildFields() {
-        return java.util.Arrays.stream(javaClass.getDeclaredFields())
-                .map(f -> new AnnotatedFieldWrapper<T>(f, this))
-                .collect(Collectors.toSet());
+        Set<AnnotatedField<? super T>> result = new HashSet<AnnotatedField<? super T>>();
+        Class<?> current = javaClass;
+        while (current != null && current != Object.class) {
+            for (Field field : current.getDeclaredFields()) {
+                result.add(new AnnotatedFieldWrapper<T>(field, this));
+            }
+            current = current.getSuperclass();
+        }
+        return result;
     }
 
     private Set<AnnotatedMethod<? super T>> buildMethods() {
-        return java.util.Arrays.stream(javaClass.getDeclaredMethods())
-                .map(m -> new AnnotatedMethodWrapper<T>(m, this))
-                .collect(Collectors.toSet());
+        Set<AnnotatedMethod<? super T>> result = new HashSet<AnnotatedMethod<? super T>>();
+        Class<?> current = javaClass;
+        while (current != null && current != Object.class) {
+            for (Method method : current.getDeclaredMethods()) {
+                result.add(new AnnotatedMethodWrapper<T>(method, this));
+            }
+            current = current.getSuperclass();
+        }
+        return result;
     }
 
     private Set<AnnotatedConstructor<T>> buildConstructors() {
@@ -117,5 +158,19 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
         }
         closure.add(Object.class);
         return closure;
+    }
+
+    private boolean hasDeclaredScope(Class<?> type) {
+        for (Annotation annotation : type.getDeclaredAnnotations()) {
+            if (isScopeAnnotation(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isScopeAnnotation(Class<? extends Annotation> annotationType) {
+        return annotationType.isAnnotationPresent(Scope.class) ||
+                annotationType.isAnnotationPresent(NormalScope.class);
     }
 }

@@ -1017,9 +1017,11 @@ public class Syringe {
                     knowledgeBase.vetoType(clazz);
                 }
 
-                // Store AnnotatedType override if modified
+                // Store AnnotatedType override only when extensions replace/configure metadata.
+                // Keeping default BeanManager.createAnnotatedType() output as an override can
+                // unintentionally change baseline annotation inheritance behavior during validation.
                 AnnotatedType<?> finalAnnotatedType = event.getAnnotatedType();
-                if (finalAnnotatedType != null) {
+                if (finalAnnotatedType != null && finalAnnotatedType != annotatedType) {
                     knowledgeBase.setAnnotatedTypeOverride(clazz, finalAnnotatedType);
                 }
             } catch (Exception e) {
