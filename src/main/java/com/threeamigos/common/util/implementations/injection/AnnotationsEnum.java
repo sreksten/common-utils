@@ -373,6 +373,15 @@ public enum AnnotationsEnum {
     VALIDATION(jakarta.enterprise.inject.build.compatible.spi.Validation.class),
 
     /**
+     * Declares that a build compatible extension should be ignored when a given
+     * portable extension is present.
+     * Maps: {@code jakarta.enterprise.inject.build.compatible.spi.SkipIfPortableExtensionPresent}
+     * Since: CDI 4.0
+     */
+    SKIP_IF_PORTABLE_EXTENSION_PRESENT(
+            jakarta.enterprise.inject.build.compatible.spi.SkipIfPortableExtensionPresent.class),
+
+    /**
      * Conditional lookup filter based on a configuration property value.
      * Maps: {@code jakarta.enterprise.inject.LookupIfProperty}
      * Since: CDI 4.0
@@ -759,6 +768,13 @@ public enum AnnotationsEnum {
      */
     public static boolean hasValidationAnnotation(AnnotatedElement element) {
         return VALIDATION.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @SkipIfPortableExtensionPresent annotation (jakarta).
+     */
+    public static boolean hasSkipIfPortableExtensionPresentAnnotation(AnnotatedElement element) {
+        return SKIP_IF_PORTABLE_EXTENSION_PRESENT.isPresent(element);
     }
 
     /**

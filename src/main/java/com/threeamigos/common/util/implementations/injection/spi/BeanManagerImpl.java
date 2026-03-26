@@ -141,6 +141,12 @@ public class BeanManagerImpl implements BeanManager {
             return;
         }
         registeredExtensions.addAll(extensions);
+        for (Extension extension : extensions) {
+            if (extension == null) {
+                continue;
+            }
+            knowledgeBase.addBean(new ExtensionServiceProviderBean<>(extension));
+        }
     }
 
     public static BeanManagerImpl getRegisteredBeanManager(ClassLoader classLoader) {
@@ -2959,6 +2965,98 @@ public class BeanManagerImpl implements BeanManager {
                 );
             }
             scopeContext.destroy(contextual);
+        }
+    }
+
+    private static class ExtensionServiceProviderBean<T extends Extension> implements Bean<T>, PassivationCapable {
+        private final T extension;
+        private final Class<T> beanClass;
+        private final Set<Type> types;
+        private final Set<Annotation> qualifiers;
+        private final Set<Class<? extends Annotation>> stereotypes;
+
+        @SuppressWarnings("unchecked")
+        private ExtensionServiceProviderBean(T extension) {
+            this.extension = extension;
+            this.beanClass = (Class<T>) extension.getClass();
+            this.types = collectTypes(beanClass);
+            this.qualifiers = new HashSet<Annotation>();
+            this.qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
+            this.qualifiers.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
+            this.stereotypes = Collections.emptySet();
+        }
+
+        @Override
+        public Class<?> getBeanClass() {
+            return beanClass;
+        }
+
+        @Override
+        public Set<InjectionPoint> getInjectionPoints() {
+            return Collections.emptySet();
+        }
+
+        @Override
+        public String getName() {
+            return null;
+        }
+
+        @Override
+        public Set<Annotation> getQualifiers() {
+            return Collections.unmodifiableSet(qualifiers);
+        }
+
+        @Override
+        public Class<? extends Annotation> getScope() {
+            return jakarta.enterprise.context.ApplicationScoped.class;
+        }
+
+        @Override
+        public Set<Class<? extends Annotation>> getStereotypes() {
+            return stereotypes;
+        }
+
+        @Override
+        public Set<Type> getTypes() {
+            return Collections.unmodifiableSet(types);
+        }
+
+        @Override
+        public boolean isAlternative() {
+            return false;
+        }
+
+        public boolean isNullable() {
+            return false;
+        }
+
+        @Override
+        public T create(CreationalContext<T> creationalContext) {
+            return extension;
+        }
+
+        @Override
+        public void destroy(T instance, CreationalContext<T> creationalContext) {
+            // Extension lifecycle is container-managed.
+        }
+
+        @Override
+        public String getId() {
+            return "extension:" + beanClass.getName();
+        }
+
+        private static Set<Type> collectTypes(Class<?> clazz) {
+            Set<Type> collected = new HashSet<Type>();
+            Class<?> current = clazz;
+            while (current != null && current != Object.class) {
+                collected.add(current);
+                for (Class<?> iface : current.getInterfaces()) {
+                    collected.add(iface);
+                }
+                current = current.getSuperclass();
+            }
+            collected.add(Object.class);
+            return collected;
         }
     }
 

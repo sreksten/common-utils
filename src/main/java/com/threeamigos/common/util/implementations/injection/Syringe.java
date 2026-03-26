@@ -29,6 +29,7 @@ import com.threeamigos.common.util.implementations.injection.spi.InjectionTarget
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
+import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Priority;
@@ -54,9 +55,12 @@ import jakarta.enterprise.inject.spi.*;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -883,6 +887,10 @@ public class Syringe {
         for (BuildCompatibleExtension extension : serviceLoader) {
             String className = extension.getClass().getName();
             if (loadedBceClassNames.add(className)) {
+                if (shouldSkipBuildCompatibleExtension(extension.getClass())) {
+                    info("Skipped build compatible extension due to @SkipIfPortableExtensionPresent: " + className);
+                    continue;
+                }
                 buildCompatibleExtensions.add(extension);
                 info("Loaded build compatible extension: " + className);
             }
@@ -898,6 +906,10 @@ public class Syringe {
                         " does not implement jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension");
                 } else {
                     if (loadedBceClassNames.add(className)) {
+                        if (shouldSkipBuildCompatibleExtension(extensionClass)) {
+                            info("Skipped build compatible extension due to @SkipIfPortableExtensionPresent: " + className);
+                            continue;
+                        }
                         BuildCompatibleExtension extension =
                             (BuildCompatibleExtension) extensionClass.getDeclaredConstructor().newInstance();
                         buildCompatibleExtensions.add(extension);
@@ -914,6 +926,37 @@ public class Syringe {
         }
 
         info("Loaded " + loadedCount + " build compatible extension(s)");
+    }
+
+    private boolean shouldSkipBuildCompatibleExtension(Class<?> extensionClass) {
+        if (!AnnotationsEnum.hasSkipIfPortableExtensionPresentAnnotation(extensionClass)) {
+            return false;
+        }
+        jakarta.enterprise.inject.build.compatible.spi.SkipIfPortableExtensionPresent skipAnnotation =
+                extensionClass.getAnnotation(jakarta.enterprise.inject.build.compatible.spi.SkipIfPortableExtensionPresent.class);
+        if (skipAnnotation == null) {
+            return false;
+        }
+        Class<? extends Extension> portableExtensionType = skipAnnotation.value();
+        if (portableExtensionType == null) {
+            return false;
+        }
+        for (Extension extension : extensions) {
+            if (portableExtensionType.isInstance(extension)) {
+                return true;
+            }
+        }
+        for (String extensionClassName : extensionClassNames) {
+            try {
+                Class<?> configuredExtensionType = Class.forName(extensionClassName);
+                if (portableExtensionType.isAssignableFrom(configuredExtensionType)) {
+                    return true;
+                }
+            } catch (ClassNotFoundException ignored) {
+                // Definition error is handled in loadExtensions(); skip evaluation remains best-effort.
+            }
+        }
+        return false;
     }
 
     // ============================================================
@@ -1459,6 +1502,13 @@ public class Syringe {
         info("Processing observer methods");
 
         Collection<ObserverMethodInfo> existing = new ArrayList<>(knowledgeBase.getObserverMethodInfos());
+        boolean ephemeralDiscovery = false;
+        if (existing.isEmpty()) {
+            // Fallback discovery so ProcessObserverMethod can still be delivered at lifecycle time
+            // even when runtime observer registration is deferred to deployment validation.
+            existing = discoverObserverMethodsForLifecycleDispatch();
+            ephemeralDiscovery = true;
+        }
         List<ObserverMethodInfo> updated = new ArrayList<>();
 
         for (ObserverMethodInfo info : existing) {
@@ -1494,6 +1544,12 @@ public class Syringe {
             }
         }
 
+        if (ephemeralDiscovery) {
+            // Keep runtime observer registration timing unchanged; this fallback is only
+            // to fire ProcessObserverMethod lifecycle events consistently.
+            return;
+        }
+
         knowledgeBase.getObserverMethodInfos().clear();
         List<ObserverMethodInfo> deduped = new ArrayList<ObserverMethodInfo>();
         Set<String> seen = new HashSet<String>();
@@ -1504,6 +1560,127 @@ public class Syringe {
             }
         }
         knowledgeBase.getObserverMethodInfos().addAll(deduped);
+    }
+
+    private Collection<ObserverMethodInfo> discoverObserverMethodsForLifecycleDispatch() {
+        List<ObserverMethodInfo> out = new ArrayList<ObserverMethodInfo>();
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (!(bean instanceof BeanImpl<?>)) {
+                continue;
+            }
+            Class<?> beanClass = bean.getBeanClass();
+            for (Method method : collectObserverCandidateMethods(beanClass)) {
+                ObserverMethodInfo info = toObserverInfoForLifecycleDispatch(method, bean);
+                if (info != null) {
+                    out.add(info);
+                }
+            }
+        }
+        return out;
+    }
+
+    private List<Method> collectObserverCandidateMethods(Class<?> beanClass) {
+        List<Class<?>> hierarchy = new ArrayList<Class<?>>();
+        Class<?> current = beanClass;
+        while (current != null && !Object.class.equals(current)) {
+            hierarchy.add(0, current);
+            current = current.getSuperclass();
+        }
+
+        Map<String, Method> bySignature = new LinkedHashMap<String, Method>();
+        for (Class<?> type : hierarchy) {
+            for (Method method : type.getDeclaredMethods()) {
+                String signature = observerMethodSignature(method);
+                bySignature.put(signature, method);
+            }
+        }
+        return new ArrayList<Method>(bySignature.values());
+    }
+
+    private String observerMethodSignature(Method method) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(method.getName()).append('(');
+        Class<?>[] parameterTypes = method.getParameterTypes();
+        for (int i = 0; i < parameterTypes.length; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(parameterTypes[i].getName());
+        }
+        sb.append(')');
+        return sb.toString();
+    }
+
+    private ObserverMethodInfo toObserverInfoForLifecycleDispatch(Method method, Bean<?> declaringBean) {
+        int observesCount = 0;
+        int observesAsyncCount = 0;
+        Parameter observedParameter = null;
+
+        for (Parameter parameter : method.getParameters()) {
+            if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
+                observesCount++;
+                observedParameter = parameter;
+            }
+            if (AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
+                observesAsyncCount++;
+                observedParameter = parameter;
+            }
+        }
+
+        if (observesCount == 0 && observesAsyncCount == 0) {
+            return null;
+        }
+        if (observesCount + observesAsyncCount != 1 || observedParameter == null) {
+            return null;
+        }
+
+        boolean async = observesAsyncCount > 0;
+        Type eventType = observedParameter.getParameterizedType();
+        Set<Annotation> qualifiers = extractObserverQualifiers(observedParameter);
+        Reception reception = Reception.ALWAYS;
+        TransactionPhase transactionPhase = TransactionPhase.IN_PROGRESS;
+        int priority = jakarta.interceptor.Interceptor.Priority.APPLICATION + 500;
+
+        if (async) {
+            jakarta.enterprise.event.ObservesAsync observesAsync =
+                    observedParameter.getAnnotation(jakarta.enterprise.event.ObservesAsync.class);
+            if (observesAsync != null) {
+                reception = observesAsync.notifyObserver();
+            }
+        } else {
+            jakarta.enterprise.event.Observes observes =
+                    observedParameter.getAnnotation(jakarta.enterprise.event.Observes.class);
+            if (observes != null) {
+                reception = observes.notifyObserver();
+                transactionPhase = observes.during();
+            }
+            jakarta.annotation.Priority paramPriority = observedParameter.getAnnotation(jakarta.annotation.Priority.class);
+            if (paramPriority != null) {
+                priority = paramPriority.value();
+            } else {
+                jakarta.annotation.Priority methodPriority = method.getAnnotation(jakarta.annotation.Priority.class);
+                if (methodPriority != null) {
+                    priority = methodPriority.value();
+                }
+            }
+        }
+
+        return new ObserverMethodInfo(
+                method, eventType, qualifiers, reception, transactionPhase, async, declaringBean, priority
+        );
+    }
+
+    private Set<Annotation> extractObserverQualifiers(Parameter observedParameter) {
+        Set<Annotation> qualifiers = new HashSet<Annotation>();
+        for (Annotation annotation : observedParameter.getAnnotations()) {
+            if (AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
+                qualifiers.add(annotation);
+            }
+        }
+        if (qualifiers.isEmpty()) {
+            qualifiers.add(new AnyLiteral());
+        }
+        return qualifiers;
     }
 
     private String observerInfoKey(ObserverMethodInfo info) {
@@ -2195,7 +2372,8 @@ public class Syringe {
      * @param <T> the event type
      */
     private <T> void fireEventToExtensions(T event) {
-        Class<?> eventType = event.getClass();
+        Object dispatchEvent = wrapEventForObserverInvocationGuard(event);
+        Class<?> eventType = dispatchEvent.getClass();
         List<ExtensionObserverInvocation> invocations = new ArrayList<>();
 
         // Collect all matching observer methods across all extensions, with priority
@@ -2208,7 +2386,10 @@ public class Syringe {
 
         for (ExtensionObserverInvocation invocation : invocations) {
             try {
-                invocation.invoke(event);
+                if (dispatchEvent instanceof ObserverInvocationControlled) {
+                    ((ObserverInvocationControlled) dispatchEvent).enterObserverInvocation();
+                }
+                invocation.invoke(dispatchEvent);
             } catch (Exception e) {
                 Throwable cause = e;
                 if (e instanceof InvocationTargetException &&
@@ -2224,6 +2405,10 @@ public class Syringe {
                 throw new DefinitionException("Error invoking extension " +
                     invocation.extension.getClass().getName() + " for event " +
                     eventType.getSimpleName(), cause);
+            } finally {
+                if (dispatchEvent instanceof ObserverInvocationControlled) {
+                    ((ObserverInvocationControlled) dispatchEvent).exitObserverInvocation();
+                }
             }
         }
     }
@@ -2238,8 +2423,9 @@ public class Syringe {
                 Parameter parameter = parameters[i];
                 if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
                     Class<?> observedType = parameter.getType();
+                    validateExtensionObserverStaticMethod(method, parameter, observedType);
                     if (observedType.isAssignableFrom(eventType)) {
-                        int priority = resolvePriority(method);
+                        int priority = resolvePriority(method, parameter);
                         sink.add(new ExtensionObserverInvocation(extension, method, i, priority, beanManager,
                                 knowledgeBase, messageHandler));
                     }
@@ -2248,7 +2434,55 @@ public class Syringe {
         }
     }
 
-    private int resolvePriority(Method method) {
+    private void validateExtensionObserverStaticMethod(Method method,
+                                                       Parameter observedParameter,
+                                                       Class<?> observedType) {
+        if (!Modifier.isStatic(method.getModifiers())) {
+            return;
+        }
+
+        boolean lifecycleObservedType = isContainerLifecycleObservedType(observedType);
+        boolean objectObservedWithNoOrAnyQualifier =
+                Object.class.equals(observedType) && hasNoQualifierOrOnlyAnyQualifier(observedParameter);
+
+        if (lifecycleObservedType || objectObservedWithNoOrAnyQualifier) {
+            throw new NonPortableBehaviourException("Static extension observer method " +
+                    method.getDeclaringClass().getName() + "." + method.getName() +
+                    " is non-portable for observed type " + observedType.getName());
+        }
+    }
+
+    private boolean isContainerLifecycleObservedType(Class<?> observedType) {
+        String name = observedType.getName();
+        return name.startsWith("jakarta.enterprise.inject.spi.Process") ||
+                "jakarta.enterprise.inject.spi.BeforeBeanDiscovery".equals(name) ||
+                "jakarta.enterprise.inject.spi.AfterTypeDiscovery".equals(name) ||
+                "jakarta.enterprise.inject.spi.AfterBeanDiscovery".equals(name) ||
+                "jakarta.enterprise.inject.spi.AfterDeploymentValidation".equals(name) ||
+                "jakarta.enterprise.inject.spi.BeforeShutdown".equals(name);
+    }
+
+    private boolean hasNoQualifierOrOnlyAnyQualifier(Parameter observedParameter) {
+        List<Annotation> qualifierAnnotations = new ArrayList<>();
+        for (Annotation annotation : observedParameter.getAnnotations()) {
+            if (AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
+                qualifierAnnotations.add(annotation);
+            }
+        }
+
+        if (qualifierAnnotations.isEmpty()) {
+            return true;
+        }
+
+        return qualifierAnnotations.size() == 1 &&
+                Any.class.equals(qualifierAnnotations.get(0).annotationType());
+    }
+
+    private int resolvePriority(Method method, Parameter observedParameter) {
+        jakarta.annotation.Priority parameterPriority = observedParameter.getAnnotation(jakarta.annotation.Priority.class);
+        if (parameterPriority != null) {
+            return parameterPriority.value();
+        }
         Priority priorityAnn = method.getAnnotation(Priority.class);
         if (priorityAnn != null) {
             return priorityAnn.value();
@@ -2259,6 +2493,112 @@ public class Syringe {
             return legacy.value();
         }
         return Integer.MAX_VALUE;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T wrapEventForObserverInvocationGuard(T event) {
+        if (event == null) {
+            return null;
+        }
+        if (event instanceof ObserverInvocationControlled) {
+            return event;
+        }
+        if (!shouldGuardEventInvocation(event)) {
+            return event;
+        }
+
+        Set<Class<?>> interfaces = new LinkedHashSet<Class<?>>();
+        Class<?> current = event.getClass();
+        while (current != null) {
+            for (Class<?> iface : current.getInterfaces()) {
+                interfaces.add(iface);
+            }
+            current = current.getSuperclass();
+        }
+
+        if (interfaces.isEmpty()) {
+            return event;
+        }
+
+        interfaces.add(ObserverInvocationControlled.class);
+        InvocationGuardHandler handler = new InvocationGuardHandler(event);
+        return (T) Proxy.newProxyInstance(
+                event.getClass().getClassLoader(),
+                interfaces.toArray(new Class<?>[0]),
+                handler);
+    }
+
+    private boolean shouldGuardEventInvocation(Object event) {
+        Set<String> interfaceNames = new HashSet<String>();
+        Class<?> current = event.getClass();
+        while (current != null) {
+            for (Class<?> iface : current.getInterfaces()) {
+                interfaceNames.add(iface.getName());
+            }
+            current = current.getSuperclass();
+        }
+
+        return interfaceNames.contains("jakarta.enterprise.inject.spi.BeforeBeanDiscovery") ||
+                interfaceNames.contains("jakarta.enterprise.inject.spi.AfterTypeDiscovery") ||
+                interfaceNames.contains("jakarta.enterprise.inject.spi.AfterBeanDiscovery") ||
+                interfaceNames.contains("jakarta.enterprise.inject.spi.AfterDeploymentValidation") ||
+                interfaceNames.contains("jakarta.enterprise.inject.spi.BeforeShutdown");
+    }
+
+    private interface ObserverInvocationControlled {
+        void enterObserverInvocation();
+
+        void exitObserverInvocation();
+    }
+
+    private static class InvocationGuardHandler implements InvocationHandler {
+        private final Object delegate;
+        private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
+            @Override
+            protected Boolean initialValue() {
+                return Boolean.FALSE;
+            }
+        };
+
+        InvocationGuardHandler(Object delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            Class<?> declaringClass = method.getDeclaringClass();
+            if (Object.class.equals(declaringClass)) {
+                return method.invoke(delegate, args);
+            }
+            if (ObserverInvocationControlled.class.equals(declaringClass)) {
+                if ("enterObserverInvocation".equals(method.getName())) {
+                    observerInvocationActive.set(Boolean.TRUE);
+                    return null;
+                }
+                if ("exitObserverInvocation".equals(method.getName())) {
+                    observerInvocationActive.set(Boolean.FALSE);
+                    return null;
+                }
+            }
+
+            if (!observerInvocationActive.get()) {
+                if (!isReadOnlyMethod(method)) {
+                    throw new IllegalStateException("Container lifecycle event method " + method.getName() +
+                            " may only be called during observer method invocation");
+                }
+            }
+
+            try {
+                return method.invoke(delegate, args);
+            } catch (InvocationTargetException e) {
+                throw e.getTargetException();
+            }
+        }
+
+        private boolean isReadOnlyMethod(Method method) {
+            String methodName = method.getName();
+            return methodName.startsWith("get") || methodName.startsWith("is");
+        }
     }
 
     /**
@@ -2314,31 +2654,8 @@ public class Syringe {
             if (BeanManager.class.isAssignableFrom(pType)) {
                 return beanManager;
             }
-
-            // Collect qualifier annotations on the parameter
-            List<Annotation> qualifiers = new ArrayList<>();
-            for (Annotation ann : parameter.getAnnotations()) {
-                if (AnnotationsEnum.hasQualifierAnnotation(ann.annotationType())) {
-                    qualifiers.add(ann);
-                }
-            }
-
-            try {
-                Set<Bean<?>> beans = beanManager.getBeans(parameter.getParameterizedType(),
-                        qualifiers.toArray(new java.lang.annotation.Annotation[0]));
-                Bean<?> resolved = beanManager.resolve(beans);
-                if (resolved == null) {
-                    throw new IllegalStateException("No bean resolved for " + parameter.getParameterizedType());
-                }
-                CreationalContext<?> ctx = beanManager.createCreationalContext(resolved);
-                return beanManager.getReference(resolved, parameter.getParameterizedType(), ctx);
-            } catch (Exception e) {
-                String msg = "[Syringe] Extension observer parameter " +
-                        parameter.getName() + " (" + parameter.getType().getName() +
-                        ") could not be injected: " + e.getMessage();
-                knowledgeBase.addDefinitionError(msg);
-                throw new RuntimeException(msg, e);
-            }
+            throw new NonPortableBehaviourException("Injecting " + pType.getName() +
+                    " into extension observer method parameter is non-portable; only BeanManager is supported");
         }
     }
 
