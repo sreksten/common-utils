@@ -440,6 +440,50 @@ public class CDI41BeanValidator {
                 }
             }
         }
+        // Disposer method non-@Disposes parameters are injection points.
+        for (Method method : clazz.getDeclaredMethods()) {
+            boolean disposerMethod = false;
+            for (Parameter p : method.getParameters()) {
+                if (hasDisposesAnnotation(p)) {
+                    disposerMethod = true;
+                    break;
+                }
+            }
+            if (!disposerMethod) {
+                continue;
+            }
+            for (Parameter p : method.getParameters()) {
+                if (hasDisposesAnnotation(p)) {
+                    continue;
+                }
+                InjectionPoint ip = tryCreateInjectionPoint(p, bean);
+                if (ip != null) {
+                    bean.addInjectionPoint(ip);
+                }
+            }
+        }
+        // Observer method non-observer parameters are injection points.
+        for (Method method : clazz.getDeclaredMethods()) {
+            boolean observerMethod = false;
+            for (Parameter p : method.getParameters()) {
+                if (hasObservesAnnotation(p) || hasObservesAsyncAnnotation(p)) {
+                    observerMethod = true;
+                    break;
+                }
+            }
+            if (!observerMethod) {
+                continue;
+            }
+            for (Parameter p : method.getParameters()) {
+                if (hasObservesAnnotation(p) || hasObservesAsyncAnnotation(p)) {
+                    continue;
+                }
+                InjectionPoint ip = tryCreateInjectionPoint(p, bean);
+                if (ip != null) {
+                    bean.addInjectionPoint(ip);
+                }
+            }
+        }
 
         // Always register the bean, even if it has validation errors
         // This allows resolution to detect if an invalid bean is actually needed

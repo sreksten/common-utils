@@ -145,6 +145,10 @@ public class Syringe {
      */
     private final Set<String> extensionClassNames = new HashSet<>();
     /**
+     * Explicitly registered extension instances.
+     */
+    private final Set<Extension> extensionInstances = new HashSet<Extension>();
+    /**
      * Set of build compatible extension class names to be loaded.
      */
     private final Set<String> buildCompatibleExtensionClassNames = new HashSet<>();
@@ -259,6 +263,22 @@ public class Syringe {
         }
         extensionClassNames.add(extensionClassName);
         info("Queued extension: " + extensionClassName);
+    }
+
+    /**
+     * Registers a portable extension instance directly.
+     *
+     * @param extension extension instance
+     */
+    public void addExtension(Extension extension) {
+        if (initialized) {
+            throw new IllegalStateException("Cannot add extensions after container initialization");
+        }
+        if (extension == null) {
+            throw new IllegalArgumentException("extension cannot be null");
+        }
+        extensionInstances.add(extension);
+        info("Queued extension instance: " + extension.getClass().getName());
     }
 
     /**
@@ -437,8 +457,15 @@ public class Syringe {
      */
     public void setup() {
         initialize();
-        discoverBeans();
+        discover();
         start();
+    }
+
+    /**
+     * Performs classpath bean discovery between {@link #initialize()} and {@link #start()}.
+     */
+    public void discover() {
+        discoverBeans();
     }
 
     /**
@@ -546,13 +573,23 @@ public class Syringe {
      * @throws IllegalStateException if the container is already initialized or not yet initialized
      */
     public void addDiscoveredClass(Class<?> clazz) {
+        addDiscoveredClass(clazz, BeanArchiveMode.IMPLICIT);
+    }
+
+    public void addDiscoveredClass(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
         if (initialized) {
             throw new IllegalStateException("Container already initialized");
         }
         if (knowledgeBase == null) {
             throw new IllegalStateException("Container not yet initialized. Call initialize() first.");
         }
-        knowledgeBase.add(clazz, effectiveBeanArchiveMode(BeanArchiveMode.IMPLICIT));
+        if (knowledgeBase.getClasses().contains(clazz)) {
+            throw new NonPortableBehaviourException(
+                    "Non-portable behavior: bean class " + clazz.getName() +
+                            " was already discovered in another bean archive");
+        }
+        BeanArchiveMode mode = beanArchiveMode != null ? beanArchiveMode : BeanArchiveMode.IMPLICIT;
+        knowledgeBase.add(clazz, effectiveBeanArchiveMode(mode));
     }
 
     /**
@@ -841,6 +878,14 @@ public class Syringe {
         info("Loading extensions");
         Set<String> loadedExtensionClassNames = new HashSet<String>();
 
+        for (Extension extension : extensionInstances) {
+            String className = extension.getClass().getName();
+            if (loadedExtensionClassNames.add(className)) {
+                extensions.add(extension);
+                info("Loaded extension instance: " + className);
+            }
+        }
+
         // Load extensions via ServiceLoader (standard CDI discovery)
         ServiceLoader<Extension> serviceLoader = ServiceLoader.load(
                 Extension.class,
@@ -1091,6 +1136,9 @@ public class Syringe {
                     knowledgeBase.vetoType(clazz);
                     continue;
                 }
+                if (!shouldIncludeTypeInDiscoveryForArchiveMode(clazz)) {
+                    continue;
+                }
 
                 // Step 2: Create AnnotatedType for the class using BeanManager
                 AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(clazz);
@@ -1136,6 +1184,60 @@ public class Syringe {
             return true;
         }
         return isPackageOrParentPackageVetoed(clazz.getPackage());
+    }
+
+    private boolean shouldIncludeTypeInDiscoveryForArchiveMode(Class<?> clazz) {
+        BeanArchiveMode mode = knowledgeBase.getBeanArchiveMode(clazz);
+        if (mode == null) {
+            mode = BeanArchiveMode.IMPLICIT;
+        }
+        if (BeanArchiveMode.NONE.equals(mode)) {
+            return false;
+        }
+        if (BeanArchiveMode.EXPLICIT.equals(mode)) {
+            return true;
+        }
+        // IMPLICIT/TRIMMED discovery only includes Java classes with bean defining annotations.
+        if (clazz.isInterface() || clazz.isEnum() || clazz.isAnnotation()) {
+            return false;
+        }
+        return hasBeanDefiningAnnotation(clazz);
+    }
+
+    private boolean hasBeanDefiningAnnotation(Class<?> clazz) {
+        if (clazz == null) {
+            return false;
+        }
+        if (AnnotationsEnum.hasInterceptorAnnotation(clazz) || AnnotationsEnum.hasDecoratorAnnotation(clazz)) {
+            return true;
+        }
+        for (Annotation annotation : clazz.getAnnotations()) {
+            Class<? extends Annotation> type = annotation.annotationType();
+            if (isScopeOrNormalScope(type) || isStereotype(type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isScopeOrNormalScope(Class<? extends Annotation> annotationType) {
+        if (annotationType == null) {
+            return false;
+        }
+        return annotationType.isAnnotationPresent(jakarta.inject.Scope.class)
+                || annotationType.isAnnotationPresent(javax.inject.Scope.class)
+                || annotationType.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class)
+                || annotationType.isAnnotationPresent(javax.enterprise.context.NormalScope.class)
+                || annotationType.equals(jakarta.enterprise.context.Dependent.class)
+                || annotationType.equals(javax.enterprise.context.Dependent.class);
+    }
+
+    private boolean isStereotype(Class<? extends Annotation> annotationType) {
+        if (annotationType == null) {
+            return false;
+        }
+        return annotationType.isAnnotationPresent(jakarta.enterprise.inject.Stereotype.class)
+                || annotationType.isAnnotationPresent(javax.enterprise.inject.Stereotype.class);
     }
 
     private boolean isPackageOrParentPackageVetoed(Package pkg) {

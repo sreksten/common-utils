@@ -46,7 +46,7 @@ public class IfSystemProperty {
      *
      * <p>The condition is true only if System.getProperty(name).equals(value).
      */
-    @XmlAttribute(name = "value", required = true)
+    @XmlAttribute(name = "value")
     private String value;
 
     // ============================================

@@ -133,7 +133,11 @@ public class ExcludeFilter {
             String expectedValue = condition.getValue();
             String actualValue = System.getProperty(propName);
 
-            if (actualValue == null || !actualValue.equals(expectedValue)) {
+            if (actualValue == null) {
+                return false; // Condition not met - exclusion doesn't apply
+            }
+            // <if-system-property name="..."/> is satisfied when the property exists with any value.
+            if (expectedValue != null && !expectedValue.equals(actualValue)) {
                 return false; // Condition not met - exclusion doesn't apply
             }
         }
