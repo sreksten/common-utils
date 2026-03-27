@@ -25,6 +25,7 @@ import java.util.Set;
  * CDI SE container initializer for Syringe.
  */
 public class SyringeSeContainerInitializer extends SeContainerInitializer {
+    public static final String SCAN_IMPLICIT_PROPERTY = "jakarta.enterprise.inject.scan.implicit";
 
     private final Set<Class<?>> beanClasses = new LinkedHashSet<Class<?>>();
     private final List<PackageSpec> packages = new ArrayList<PackageSpec>();
@@ -177,6 +178,7 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
             }
 
             syringe.initialize();
+            syringe.getKnowledgeBase().setImplicitBeanArchiveScanningEnabled(isImplicitScanEnabled());
             if (!discoveryDisabled) {
                 syringe.discover();
             }
@@ -305,6 +307,22 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
         BeansXml beansXml = new BeansXmlParser()
                 .parse(new ByteArrayInputStream(xml.toString().getBytes(StandardCharsets.UTF_8)));
         syringe.getKnowledgeBase().addBeansXml(beansXml);
+    }
+
+    private boolean isImplicitScanEnabled() {
+        String sysValue = System.getProperty(SCAN_IMPLICIT_PROPERTY);
+        if (sysValue != null && Boolean.parseBoolean(sysValue)) {
+            return true;
+        }
+
+        Object mapValue = properties.get(SCAN_IMPLICIT_PROPERTY);
+        if (Boolean.TRUE.equals(mapValue)) {
+            return true;
+        }
+        if (mapValue instanceof String) {
+            return Boolean.parseBoolean((String) mapValue);
+        }
+        return false;
     }
 
     private static class PackageSpec {

@@ -109,6 +109,8 @@ public class KnowledgeBase {
     private volatile boolean afterTypeDiscoveryAlternativesCustomized;
     private volatile boolean afterTypeDiscoveryInterceptorsCustomized;
     private volatile boolean afterTypeDiscoveryDecoratorsCustomized;
+    // Java SE 27.1: implicit bean archive scanning switch
+    private volatile boolean implicitBeanArchiveScanningEnabled = true;
 
     public KnowledgeBase(MessageHandler messageHandler) {
         this.messageHandler = messageHandler;
@@ -141,6 +143,14 @@ public class KnowledgeBase {
 
     public Collection<Class<?>> getClasses() {
         return classes;
+    }
+
+    public boolean isImplicitBeanArchiveScanningEnabled() {
+        return implicitBeanArchiveScanningEnabled;
+    }
+
+    public void setImplicitBeanArchiveScanningEnabled(boolean implicitBeanArchiveScanningEnabled) {
+        this.implicitBeanArchiveScanningEnabled = implicitBeanArchiveScanningEnabled;
     }
 
     public BeanArchiveMode getBeanArchiveMode(Class<?> clazz) {

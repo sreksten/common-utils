@@ -78,7 +78,7 @@ public class BeanArchiveDetector {
      */
     public BeanArchiveMode detectArchiveMode(File jarFile) {
         if (jarFile == null || !jarFile.exists()) {
-            return BeanArchiveMode.IMPLICIT; // Default for non-existent archives
+            return implicitArchiveModeWhenNoBeansXml();
         }
 
         try {
@@ -89,12 +89,12 @@ public class BeanArchiveDetector {
                 } else if (jarFile.isDirectory()) {
                     return detectDirectoryArchiveMode(jarFile);
                 } else {
-                    return BeanArchiveMode.IMPLICIT;
+                    return implicitArchiveModeWhenNoBeansXml();
                 }
             });
         } catch (Exception e) {
-            // If we can't determine, default to IMPLICIT (safest option)
-            return BeanArchiveMode.IMPLICIT;
+            // If we can't determine, default to implicit behavior for this runtime.
+            return implicitArchiveModeWhenNoBeansXml();
         }
     }
 
@@ -114,7 +114,7 @@ public class BeanArchiveDetector {
                 }
                 // No beans.xml found - this is an implicit bean archive
                 // (will only discover classes with bean-defining annotations)
-                return BeanArchiveMode.IMPLICIT;
+                return implicitArchiveModeWhenNoBeansXml();
             }
 
             // beans.xml exists - parse it to determine mode
@@ -143,7 +143,7 @@ public class BeanArchiveDetector {
                 return BeanArchiveMode.NONE;
             }
             // No beans.xml found - this is an implicit bean archive
-            return BeanArchiveMode.IMPLICIT;
+            return implicitArchiveModeWhenNoBeansXml();
         }
 
         // beans.xml exists - parse it to determine mode
@@ -183,7 +183,7 @@ public class BeanArchiveDetector {
      */
     BeanArchiveMode detectArchiveModeFromUrl(URL resourceUrl) {
         if (resourceUrl == null) {
-            return BeanArchiveMode.IMPLICIT;
+            return implicitArchiveModeWhenNoBeansXml();
         }
 
         String protocol = resourceUrl.getProtocol();
@@ -211,7 +211,7 @@ public class BeanArchiveDetector {
             // Fall through to default
         }
 
-        return BeanArchiveMode.IMPLICIT;
+        return implicitArchiveModeWhenNoBeansXml();
     }
 
     /**
@@ -294,6 +294,13 @@ public class BeanArchiveDetector {
                     "CDI Lite does not support bean-discovery-mode=\"all\". This is a deployment problem.");
         }
         return baseMode;
+    }
+
+    private BeanArchiveMode implicitArchiveModeWhenNoBeansXml() {
+        if (knowledgeBase != null && !knowledgeBase.isImplicitBeanArchiveScanningEnabled()) {
+            return BeanArchiveMode.NONE;
+        }
+        return BeanArchiveMode.IMPLICIT;
     }
 
     /**
