@@ -296,10 +296,7 @@ public class ProducerBean<T> implements Bean<T> {
             if (InjectionPoint.class.equals(parameters[i].getType())) {
                 args[i] = resolveProducerInjectionPoint(parameters[i]);
             } else {
-                args[i] = dependencyResolver.resolve(
-                        parameters[i].getParameterizedType(),
-                        parameters[i].getAnnotations()
-                );
+                args[i] = resolveProducerParameter(parameters[i]);
             }
         }
 
@@ -604,6 +601,28 @@ public class ProducerBean<T> implements Bean<T> {
             }
             LifecycleMethodHelper.invokeLifecycleMethod(dependent, PreDestroy.class);
         }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Object resolveProducerParameter(Parameter parameter) {
+        if (dependencyResolver instanceof BeanResolver) {
+            BeanResolver beanResolver = (BeanResolver) dependencyResolver;
+            BeanImpl syntheticDeclaringBean = new BeanImpl((Class) declaringClass, false);
+            beanResolver.setCurrentInjectionPoint(new InjectionPointImpl(parameter, syntheticDeclaringBean));
+            try {
+                return dependencyResolver.resolve(
+                        parameter.getParameterizedType(),
+                        parameter.getAnnotations()
+                );
+            } finally {
+                beanResolver.clearCurrentInjectionPoint();
+            }
+        }
+
+        return dependencyResolver.resolve(
+                parameter.getParameterizedType(),
+                parameter.getAnnotations()
+        );
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

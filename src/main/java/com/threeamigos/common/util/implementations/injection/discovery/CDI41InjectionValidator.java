@@ -20,6 +20,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.PassivationCapable;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.InterceptionFactory;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
@@ -390,7 +391,7 @@ public class CDI41InjectionValidator {
 
     private Optional<Bean<?>> resolveInjectionPointTargetBean(InjectionPoint injectionPoint) {
         Type requiredType = injectionPoint.getType();
-        if (isInstanceOrProvider(requiredType)) {
+        if (isInstanceOrProvider(requiredType) || isInterceptionFactory(requiredType)) {
             return Optional.empty();
         }
 
@@ -1023,7 +1024,8 @@ public class CDI41InjectionValidator {
                                                           String location,
                                                           Bean<?> owningPassivatingBean,
                                                           Collection<Bean<?>> validBeans) {
-        if (isInstanceOrProvider(requiredType) || isBuiltInPassivationCapableDependency(requiredType)) {
+        if (isInstanceOrProvider(requiredType) || isInterceptionFactory(requiredType) ||
+                isBuiltInPassivationCapableDependency(requiredType)) {
             return true;
         }
 
@@ -1226,9 +1228,9 @@ public class CDI41InjectionValidator {
         Type requiredType = injectionPoint.getType();
         Set<Annotation> qualifiers = injectionPoint.getQualifiers();
 
-        // Special handling for Event<T>, Instance<T> and Provider<T>.
+        // Special handling for Event<T>, Instance<T>, Provider<T> and InterceptionFactory<T>.
         // These are built-in programmatic constructs resolved lazily at runtime.
-        if (isEventType(requiredType) || isInstanceOrProvider(requiredType)) {
+        if (isEventType(requiredType) || isInstanceOrProvider(requiredType) || isInterceptionFactory(requiredType)) {
             return true; // Always valid - resolved at runtime
         }
 
@@ -1749,6 +1751,11 @@ public class CDI41InjectionValidator {
     private boolean isInstanceOrProvider(Type type) {
         Class<?> rawType = RawTypeExtractor.getRawType(type);
         return Instance.class.equals(rawType) || Provider.class.equals(rawType);
+    }
+
+    private boolean isInterceptionFactory(Type type) {
+        Class<?> rawType = RawTypeExtractor.getRawType(type);
+        return InterceptionFactory.class.equals(rawType);
     }
 
     // ============================================

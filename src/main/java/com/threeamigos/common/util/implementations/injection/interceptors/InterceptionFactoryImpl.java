@@ -1,12 +1,16 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
+import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.UnproxyableResolutionException;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.*;
 
 /**
@@ -57,6 +61,7 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
     private final AnnotatedTypeConfiguratorImpl<T> configurator;
 
     private boolean ignoreFinalMethods = false;
+    private boolean createInterceptedInstanceCalled = false;
 
     /**
      * Constructs an InterceptionFactory for the specified class.
@@ -160,6 +165,23 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
     public T createInterceptedInstance(T instance) {
         if (instance == null) {
             throw new IllegalArgumentException("instance cannot be null");
+        }
+        if (createInterceptedInstanceCalled) {
+            throw new IllegalStateException("createInterceptedInstance() can only be called once");
+        }
+        createInterceptedInstanceCalled = true;
+
+        if (instance instanceof ClientProxyGenerator.ProxyState ||
+                instance instanceof InterceptorAwareProxyGenerator.InterceptorProxyState) {
+            throw new NonPortableBehaviourException(
+                    "Non-portable behavior: InterceptionFactory.createInterceptedInstance() must not be given an internal container construct");
+        }
+
+        if (!ignoreFinalMethods) {
+            String reason = unproxyableReason(clazz);
+            if (reason != null) {
+                throw new UnproxyableResolutionException("Type " + clazz.getName() + " is not proxyable: " + reason);
+            }
         }
 
         // Get the configured AnnotatedType (with any added annotations)
@@ -332,6 +354,44 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
         }
 
         return false;
+    }
+
+    private String unproxyableReason(Class<?> rawType) {
+        if (rawType == null) {
+            return null;
+        }
+        if (rawType.isPrimitive() || rawType.isArray()) {
+            return "primitive or array type";
+        }
+        int classModifiers = rawType.getModifiers();
+        if (Modifier.isFinal(classModifiers)) {
+            return "final class";
+        }
+        if (rawType.getTypeParameters().length > 0) {
+            return "generic class with type parameters";
+        }
+        if (!hasNonPrivateNoArgConstructor(rawType)) {
+            return "missing non-private no-arg constructor";
+        }
+        for (Class<?> current = rawType; current != null && !Object.class.equals(current); current = current.getSuperclass()) {
+            for (Method method : current.getDeclaredMethods()) {
+                int modifiers = method.getModifiers();
+                if (!Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers) &&
+                        !Modifier.isPrivate(modifiers)) {
+                    return "declares non-static final method " + current.getName() + "#" + method.getName();
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean hasNonPrivateNoArgConstructor(Class<?> rawType) {
+        try {
+            int modifiers = rawType.getDeclaredConstructor().getModifiers();
+            return !Modifier.isPrivate(modifiers);
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
     }
 
     /**

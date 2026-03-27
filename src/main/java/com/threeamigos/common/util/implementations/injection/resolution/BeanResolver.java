@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.resolution;
 
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.propagation.RegistryContextTokenProvider;
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorResolver;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
@@ -21,12 +22,14 @@ import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
+import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.Decorator;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.Interceptor;
+import jakarta.enterprise.inject.spi.InterceptionFactory;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.inject.Named;
@@ -155,6 +158,11 @@ public class BeanResolver implements DependencyResolver {
             ParameterizedType pt = (ParameterizedType) requiredType;
             Class<?> rawType = (Class<?>) pt.getRawType();
 
+            // Built-in InterceptionFactory<T> is only valid for producer method parameters.
+            if (InterceptionFactory.class.equals(rawType)) {
+                return resolveInterceptionFactory(pt, effectiveQualifiers);
+            }
+
             // Check if it's Event<T>
             if (Event.class.isAssignableFrom(rawType)) {
                 Type eventType = pt.getActualTypeArguments()[0];
@@ -207,6 +215,50 @@ public class BeanResolver implements DependencyResolver {
 
         // Get or create an instance from the appropriate scope
         return getInstanceFromScope(bean);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Object resolveInterceptionFactory(ParameterizedType requiredType, Annotation[] qualifiers) {
+        if (!hasDefaultQualifier(qualifiers)) {
+            throw new UnsatisfiedResolutionException(
+                    "InterceptionFactory is only available with @Default qualifier");
+        }
+
+        InjectionPoint ip = currentInjectionPoint.get();
+        if (ip == null || !(ip.getMember() instanceof Method) || !hasProducesAnnotation((Method) ip.getMember())) {
+            throw new DefinitionException(
+                    "Injection point of type InterceptionFactory with @Default must be a producer method parameter");
+        }
+
+        Type[] args = requiredType.getActualTypeArguments();
+        if (args == null || args.length != 1 || !(args[0] instanceof Class)) {
+            throw new NonPortableBehaviourException(
+                    "Non-portable behavior: InterceptionFactory type parameter must be a Java class");
+        }
+
+        Class beanClass = (Class) args[0];
+        if (beanClass.isInterface() || beanClass.isAnnotation() || beanClass.isArray() || beanClass.isPrimitive()) {
+            throw new NonPortableBehaviourException(
+                    "Non-portable behavior: InterceptionFactory type parameter must be a Java class");
+        }
+
+        if (owningBeanManager == null) {
+            throw new IllegalStateException("BeanManager is not available for InterceptionFactory resolution");
+        }
+        CreationalContext context = owningBeanManager.createCreationalContext(null);
+        return owningBeanManager.createInterceptionFactory(context, beanClass);
+    }
+
+    private boolean hasDefaultQualifier(Annotation[] qualifiers) {
+        if (qualifiers == null || qualifiers.length == 0) {
+            return true;
+        }
+        for (Annotation annotation : qualifiers) {
+            if (annotation != null && Default.class.equals(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

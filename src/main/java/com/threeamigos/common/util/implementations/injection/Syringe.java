@@ -9,6 +9,7 @@ import com.threeamigos.common.util.implementations.injection.bce.BceInvokerRegis
 import com.threeamigos.common.util.implementations.injection.builtinbeans.BeanManagerBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ConversationBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.InjectionPointBean;
+import com.threeamigos.common.util.implementations.injection.builtinbeans.InterceptionFactoryBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.RequestContextControllerBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ActivateRequestContextInterceptor;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
@@ -560,6 +561,7 @@ public class Syringe {
     private void registerBuiltInBeans() {
         knowledgeBase.addBean(new BeanManagerBean(beanManager));
         knowledgeBase.addBean(new InjectionPointBean());
+        knowledgeBase.addBean(new InterceptionFactoryBean());
         knowledgeBase.addBean(new ConversationBean());
         knowledgeBase.addBean(new RequestContextControllerBean(contextManager));
         knowledgeBase.add(ActivateRequestContextInterceptor.class, BeanArchiveMode.IMPLICIT);

@@ -26,6 +26,7 @@ import jakarta.inject.Scope;
 import jakarta.enterprise.context.*;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Decorated;
+import jakarta.enterprise.inject.spi.InterceptionFactory;
 import jakarta.enterprise.inject.spi.Decorator;
 import jakarta.enterprise.inject.Stereotype;
 
@@ -1234,6 +1235,9 @@ public class CDI41BeanValidator {
             if (!validateInjectionPointMetadataUsage(p, false)) {
                 valid = false;
             }
+            if (!validateInterceptionFactoryInjectionPointUsage(p, false)) {
+                valid = false;
+            }
         }
 
         if (!hasValidInjectionParameters(constructor.getParameters(), fmtConstructor(constructor))) {
@@ -1283,6 +1287,9 @@ public class CDI41BeanValidator {
         }
 
         if (!validateInjectionPointMetadataUsage(field, false)) {
+            valid = false;
+        }
+        if (!validateInterceptionFactoryInjectionPointUsage(field, false)) {
             valid = false;
         }
 
@@ -1369,6 +1376,9 @@ public class CDI41BeanValidator {
             }
 
             if (!validateInjectionPointMetadataUsage(p, false)) {
+                valid = false;
+            }
+            if (!validateInterceptionFactoryInjectionPointUsage(p, false)) {
                 valid = false;
             }
         }
@@ -1494,9 +1504,72 @@ public class CDI41BeanValidator {
             if (!validateInjectionPointMetadataUsage(p, false)) {
                 valid = false;
             }
+            if (!validateInterceptionFactoryInjectionPointUsage(p, true)) {
+                valid = false;
+            }
         }
 
         return valid;
+    }
+
+    private boolean validateInterceptionFactoryInjectionPointUsage(AnnotatedElement element,
+                                                                   boolean producerMethodParameter) {
+        Type type = null;
+        Annotation[] annotations = null;
+
+        if (element instanceof Field) {
+            Field field = (Field) element;
+            type = field.getGenericType();
+            annotations = field.getAnnotations();
+        } else if (element instanceof Parameter) {
+            Parameter parameter = (Parameter) element;
+            type = parameter.getParameterizedType();
+            annotations = parameter.getAnnotations();
+        }
+
+        if (!isInterceptionFactoryType(type)) {
+            return true;
+        }
+
+        if (!hasDefaultQualifier(annotations)) {
+            return true;
+        }
+
+        if (!producerMethodParameter) {
+            knowledgeBase.addDefinitionError(
+                    describeAnnotatedElement(element) +
+                            ": injection point of type InterceptionFactory with @Default must be a producer method parameter");
+            return false;
+        }
+
+        if (!(type instanceof ParameterizedType)) {
+            throw new NonPortableBehaviourException(
+                    "Non-portable behavior: InterceptionFactory injection point must declare a Java class type parameter");
+        }
+        ParameterizedType parameterizedType = (ParameterizedType) type;
+        Type[] args = parameterizedType.getActualTypeArguments();
+        if (args == null || args.length != 1 || !(args[0] instanceof Class)) {
+            throw new NonPortableBehaviourException(
+                    "Non-portable behavior: InterceptionFactory injection point type parameter must be a Java class");
+        }
+        Class<?> argClass = (Class<?>) args[0];
+        if (argClass.isInterface() || argClass.isAnnotation() || argClass.isArray() || argClass.isPrimitive()) {
+            throw new NonPortableBehaviourException(
+                    "Non-portable behavior: InterceptionFactory injection point type parameter must be a Java class");
+        }
+
+        return true;
+    }
+
+    private boolean isInterceptionFactoryType(Type type) {
+        if (type instanceof Class) {
+            return InterceptionFactory.class.equals(type);
+        }
+        if (type instanceof ParameterizedType) {
+            Type raw = ((ParameterizedType) type).getRawType();
+            return raw instanceof Class && InterceptionFactory.class.equals(raw);
+        }
+        return false;
     }
 
     /**
