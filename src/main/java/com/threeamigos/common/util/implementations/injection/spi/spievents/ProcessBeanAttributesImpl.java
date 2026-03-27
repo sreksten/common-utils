@@ -6,24 +6,42 @@ import com.threeamigos.common.util.implementations.injection.spi.configurators.B
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.BeanAttributes;
-import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.ProcessBeanAttributes;
 import jakarta.enterprise.inject.spi.configurator.BeanAttributesConfigurator;
 
 /**
  * ProcessBeanAttributes event implementation.
  */
-public class ProcessBeanAttributesImpl<T> extends PhaseAware implements ProcessBeanAttributes<T> {
+public class ProcessBeanAttributesImpl<T> extends PhaseAware
+        implements ProcessBeanAttributes<T>, ObserverInvocationLifecycle {
 
     private final Annotated annotated;
     private BeanAttributes<T> beanAttributes;
     private boolean vetoed = false;
     private boolean ignoreFinalMethods = false;
     private final KnowledgeBase knowledgeBase;
+    private BeanAttributesConfiguratorImpl<T> configurator;
+    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
+    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
+    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
 
     public ProcessBeanAttributesImpl(MessageHandler messageHandler, Annotated annotated,
                                      BeanAttributes<T> beanAttributes,
-                                     BeanManager beanManager,
                                      KnowledgeBase knowledgeBase) {
         super(messageHandler);
         checkNotNull(annotated, "Annotated");
@@ -35,41 +53,54 @@ public class ProcessBeanAttributesImpl<T> extends PhaseAware implements ProcessB
 
     @Override
     public Annotated getAnnotated() {
+        assertObserverInvocationActive();
         return annotated;
     }
 
     @Override
     public BeanAttributes<T> getBeanAttributes() {
+        assertObserverInvocationActive();
+        return beanAttributes;
+    }
+
+    public BeanAttributes<T> getBeanAttributesInternal() {
         return beanAttributes;
     }
 
     @Override
     public void setBeanAttributes(BeanAttributes<T> beanAttributes) {
+        assertObserverInvocationActive();
+        if (configureCalledInCurrentInvocation.get()) {
+            throw new IllegalStateException("setBeanAttributes() and configureBeanAttributes() cannot both be used in the same observer invocation");
+        }
         checkNotNull(beanAttributes, "BeanAttributes");
         this.beanAttributes = beanAttributes;
+        setCalledInCurrentInvocation.set(Boolean.TRUE);
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public BeanAttributesConfigurator<T> configureBeanAttributes() {
-        return new BeanAttributesConfiguratorImpl(beanAttributes) {
-            @Override
-            public BeanAttributes<T> complete() {
-                BeanAttributes<T> configured = super.complete();
-                setBeanAttributes(configured);
-                return configured;
-            }
-        };
+        assertObserverInvocationActive();
+        if (setCalledInCurrentInvocation.get()) {
+            throw new IllegalStateException("setBeanAttributes() and configureBeanAttributes() cannot both be used in the same observer invocation");
+        }
+        configureCalledInCurrentInvocation.set(Boolean.TRUE);
+        if (configurator == null) {
+            configurator = new BeanAttributesConfiguratorImpl<T>(beanAttributes);
+        }
+        return configurator;
     }
 
     @Override
     public void veto() {
+        assertObserverInvocationActive();
         info(Phase.PROCESS_BEAN_ATTRIBUTES, "Veto on " + annotated.getBaseType().getClass().getName());
         this.vetoed = true;
     }
 
     @Override
     public void ignoreFinalMethods() {
+        assertObserverInvocationActive();
         info(Phase.PROCESS_BEAN_ATTRIBUTES, "Ignoring final methods on " +
                 annotated.getBaseType().getClass().getName());
         this.ignoreFinalMethods = true;
@@ -77,6 +108,7 @@ public class ProcessBeanAttributesImpl<T> extends PhaseAware implements ProcessB
 
     @Override
     public void addDefinitionError(Throwable t) {
+        assertObserverInvocationActive();
         knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN_ATTRIBUTES, "Definition error from extension", t);
     }
 
@@ -86,5 +118,28 @@ public class ProcessBeanAttributesImpl<T> extends PhaseAware implements ProcessB
 
     public boolean isIgnoreFinalMethods() {
         return ignoreFinalMethods;
+    }
+
+    @Override
+    public void beginObserverInvocation() {
+        observerInvocationActive.set(Boolean.TRUE);
+        setCalledInCurrentInvocation.set(Boolean.FALSE);
+        configureCalledInCurrentInvocation.set(Boolean.FALSE);
+    }
+
+    @Override
+    public void endObserverInvocation() {
+        if (configureCalledInCurrentInvocation.get() && configurator != null) {
+            beanAttributes = configurator.complete();
+        }
+        observerInvocationActive.set(Boolean.FALSE);
+        setCalledInCurrentInvocation.set(Boolean.FALSE);
+        configureCalledInCurrentInvocation.set(Boolean.FALSE);
+    }
+
+    private void assertObserverInvocationActive() {
+        if (!observerInvocationActive.get()) {
+            throw new IllegalStateException("ProcessBeanAttributes methods may only be called during observer method invocation");
+        }
     }
 }

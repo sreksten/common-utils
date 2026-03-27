@@ -9,6 +9,7 @@ import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
 
 import java.lang.annotation.Annotation;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.threeamigos.common.util.implementations.injection.util.AnnotationHelper.toList;
 
@@ -26,10 +27,24 @@ import static com.threeamigos.common.util.implementations.injection.util.Annotat
  *
  * @see jakarta.enterprise.inject.spi.BeforeBeanDiscovery
  */
-public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDiscovery {
+public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDiscovery, ObserverInvocationLifecycle, ExtensionAwareObserverInvocation {
 
     private final KnowledgeBase knowledgeBase;
     private final BeanManager beanManager;
+    private final ThreadLocal<Extension> currentObserverExtension = new ThreadLocal<Extension>();
+    private final ThreadLocal<java.util.List<Runnable>> endOfObserverActions =
+            new ThreadLocal<java.util.List<Runnable>>() {
+                @Override
+                protected java.util.List<Runnable> initialValue() {
+                    return new java.util.ArrayList<Runnable>();
+                }
+            };
+    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
 
     public BeforeBeanDiscoveryImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, BeanManager beanManager) {
         super(messageHandler);
@@ -39,11 +54,12 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
 
     @Override
     public void addAnnotatedType(AnnotatedType<?> type, String id) {
+        assertObserverInvocationActive();
         checkNotNull(type, "AnnotatedType");
         checkNotNull(id, "ID");
         info(Phase.BEFORE_BEAN_DISCOVERY, "Adding annotated type: " + type.getJavaClass().getName() +
                 " with ID: " + id);
-        knowledgeBase.addAnnotatedType(type, id);
+        knowledgeBase.addAnnotatedType(type, id, currentObserverExtension.get());
     }
 
     /**
@@ -57,6 +73,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
      */
     @Override
     public <T> AnnotatedTypeConfigurator<T> addAnnotatedType(Class<T> type, String id) {
+        assertObserverInvocationActive();
         checkNotNull(type, "Class");
         checkNotNull(id, "ID");
 
@@ -66,18 +83,24 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
         // Create an AnnotatedType from the class using BeanManager
         AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(type);
 
-        return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
+        final AtomicBoolean applied = new AtomicBoolean(false);
+        AnnotatedTypeConfiguratorImpl<T> configurator = new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
             @Override
             public AnnotatedType<T> complete() {
                 AnnotatedType<T> configured = super.complete();
-                knowledgeBase.addAnnotatedType(configured, id);
+                if (applied.compareAndSet(false, true)) {
+                    knowledgeBase.addAnnotatedType(configured, id, currentObserverExtension.get());
+                }
                 return configured;
             }
         };
+        registerEndOfObserverAction(() -> configurator.complete());
+        return configurator;
     }
 
     @Override
     public void addQualifier(Class<? extends Annotation> qualifier) {
+        assertObserverInvocationActive();
         checkNotNull(qualifier, "Qualifier");
         info(Phase.BEFORE_BEAN_DISCOVERY, "Adding qualifier: " + qualifier.getSimpleName());
         knowledgeBase.addQualifier(qualifier);
@@ -85,6 +108,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
 
     @Override
     public void addQualifier(AnnotatedType<? extends Annotation> qualifier) {
+        assertObserverInvocationActive();
         checkNotNull(qualifier, "Qualifier");
         info(Phase.BEFORE_BEAN_DISCOVERY, "Adding qualifier from AnnotatedType: " +
                 qualifier.getJavaClass().getSimpleName());
@@ -102,32 +126,39 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
      */
     @Override
     public <T extends Annotation> AnnotatedTypeConfigurator<T> configureQualifier(Class<T> qualifier) {
+        assertObserverInvocationActive();
         checkNotNull(qualifier, "Qualifier");
         info(Phase.BEFORE_BEAN_DISCOVERY, "Configuring qualifier: " + qualifier.getSimpleName());
 
         // Create an AnnotatedType for the qualifier annotation class
         AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(qualifier);
 
-        return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
+        final AtomicBoolean applied = new AtomicBoolean(false);
+        AnnotatedTypeConfiguratorImpl<T> configurator = new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
             @Override
             public AnnotatedType<T> complete() {
                 AnnotatedType<T> configured = super.complete();
-                // After configuration, register this as a qualifier if not already one
-                if (!knowledgeBase.isRegisteredQualifier(qualifier)) {
-                    knowledgeBase.addQualifier(qualifier);
-                    info(Phase.BEFORE_BEAN_DISCOVERY, "Completed qualifier configuration: " +
-                            qualifier.getSimpleName());
-                } else {
-                    info(Phase.BEFORE_BEAN_DISCOVERY, "Qualifier already configured: " +
-                            qualifier.getSimpleName());
+                if (applied.compareAndSet(false, true)) {
+                    // After configuration, register this as a qualifier if not already one
+                    if (!knowledgeBase.isRegisteredQualifier(qualifier)) {
+                        knowledgeBase.addQualifier(qualifier);
+                        info(Phase.BEFORE_BEAN_DISCOVERY, "Completed qualifier configuration: " +
+                                qualifier.getSimpleName());
+                    } else {
+                        info(Phase.BEFORE_BEAN_DISCOVERY, "Qualifier already configured: " +
+                                qualifier.getSimpleName());
+                    }
                 }
                 return configured;
             }
         };
+        registerEndOfObserverAction(() -> configurator.complete());
+        return configurator;
     }
 
     @Override
     public void addScope(Class<? extends Annotation> scopeType, boolean normal, boolean passivating) {
+        assertObserverInvocationActive();
         checkNotNull(scopeType, "Scope type");
         info(Phase.BEFORE_BEAN_DISCOVERY, "Adding scope: " + scopeType.getSimpleName() +
                 " (normal=" + normal + ", passivating=" + passivating + ")");
@@ -136,6 +167,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
 
     @Override
     public void addStereotype(Class<? extends Annotation> stereotype, Annotation... stereotypeDef) {
+        assertObserverInvocationActive();
         checkNotNull(stereotype, "Stereotype");
         info(Phase.BEFORE_BEAN_DISCOVERY, "Adding stereotype: " + stereotype.getSimpleName() +
                 " with meta-annotations: " + toList(stereotypeDef));
@@ -144,6 +176,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
 
     @Override
     public void addInterceptorBinding(AnnotatedType<? extends Annotation> bindingType) {
+        assertObserverInvocationActive();
         checkNotNull(bindingType, "AnnotatedType");
         // Extract meta-annotations from the AnnotatedType
         Annotation[] metaAnnotations = bindingType.getAnnotations().toArray(new Annotation[0]);
@@ -154,6 +187,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
 
     @Override
     public void addInterceptorBinding(Class<? extends Annotation> bindingType, Annotation... bindingTypeDef) {
+        assertObserverInvocationActive();
         checkNotNull(bindingType, "Interceptor binding type");
         info(Phase.BEFORE_BEAN_DISCOVERY, "Adding interceptor binding: " + bindingType.getSimpleName() +
                 " with meta-annotations: " + toList(bindingTypeDef));
@@ -170,31 +204,81 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
      */
     @Override
     public <T extends Annotation> AnnotatedTypeConfigurator<T> configureInterceptorBinding(Class<T> bindingType) {
+        assertObserverInvocationActive();
         checkNotNull(bindingType, "Interceptor binding type");
         info(Phase.BEFORE_BEAN_DISCOVERY, "Configuring interceptor binding: " + bindingType.getSimpleName());
 
         // Create an AnnotatedType for the interceptor binding annotation class
         AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(bindingType);
-        return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
+        final AtomicBoolean applied = new AtomicBoolean(false);
+        AnnotatedTypeConfiguratorImpl<T> configurator = new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
             @Override
             public AnnotatedType<T> complete() {
                 AnnotatedType<T> configured = super.complete();
+                if (applied.compareAndSet(false, true)) {
+                    // Extract any meta-annotations from the configured type
+                    Annotation[] metaAnnotations = configured.getAnnotations().toArray(new Annotation[0]);
 
-                // Extract any meta-annotations from the configured type
-                Annotation[] metaAnnotations = configured.getAnnotations().toArray(new Annotation[0]);
+                    // After configuration, register this as an interceptor binding if not already one
+                    if (!knowledgeBase.isRegisteredInterceptorBinding(bindingType)) {
+                        knowledgeBase.addInterceptorBinding(bindingType, metaAnnotations);
 
-                // After configuration, register this as an interceptor binding if not already one
-                if (!knowledgeBase.isRegisteredInterceptorBinding(bindingType)) {
-                    knowledgeBase.addInterceptorBinding(bindingType, metaAnnotations);
-
-                    info(Phase.BEFORE_BEAN_DISCOVERY, "Completed interceptor binding configuration: " +
-                            bindingType.getSimpleName() + " with meta-annotations: " + toList(metaAnnotations));
-                } else {
-                    info(Phase.BEFORE_BEAN_DISCOVERY, "Interceptor with meta-annotations " +
-                            toList(metaAnnotations) + " already configured");
+                        info(Phase.BEFORE_BEAN_DISCOVERY, "Completed interceptor binding configuration: " +
+                                bindingType.getSimpleName() + " with meta-annotations: " + toList(metaAnnotations));
+                    } else {
+                        info(Phase.BEFORE_BEAN_DISCOVERY, "Interceptor with meta-annotations " +
+                                toList(metaAnnotations) + " already configured");
+                    }
                 }
                 return configured;
             }
         };
+        registerEndOfObserverAction(() -> configurator.complete());
+        return configurator;
+    }
+
+    @Override
+    public void beginObserverInvocation() {
+        observerInvocationActive.set(Boolean.TRUE);
+    }
+
+    @Override
+    public void enterObserverInvocation(Extension extension) {
+        currentObserverExtension.set(extension);
+    }
+
+    @Override
+    public void exitObserverInvocation() {
+        currentObserverExtension.remove();
+    }
+
+    @Override
+    public void endObserverInvocation() {
+        try {
+            java.util.List<Runnable> actions = endOfObserverActions.get();
+            if (actions.isEmpty()) {
+                return;
+            }
+            java.util.List<Runnable> pending = new java.util.ArrayList<Runnable>(actions);
+            actions.clear();
+            for (Runnable action : pending) {
+                action.run();
+            }
+        } finally {
+            observerInvocationActive.set(Boolean.FALSE);
+        }
+    }
+
+    private void registerEndOfObserverAction(Runnable action) {
+        if (action == null) {
+            return;
+        }
+        endOfObserverActions.get().add(action);
+    }
+
+    private void assertObserverInvocationActive() {
+        if (!observerInvocationActive.get()) {
+            throw new IllegalStateException("BeforeBeanDiscovery methods may only be called during observer method invocation");
+        }
     }
 }

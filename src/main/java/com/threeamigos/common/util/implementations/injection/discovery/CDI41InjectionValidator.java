@@ -8,6 +8,7 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Inter
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
+import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
@@ -151,7 +152,7 @@ public class CDI41InjectionValidator {
                 continue;
             }
 
-            String reason = unproxyableReason(bean.getBeanClass());
+            String reason = unproxyableReason(bean.getBeanClass(), bean);
             if (reason == null) {
                 continue;
             }
@@ -298,6 +299,13 @@ public class CDI41InjectionValidator {
 
         if (bean instanceof BeanImpl) {
             Integer priority = ((BeanImpl<?>) bean).getPriority();
+            if (priority != null) {
+                return priority;
+            }
+        }
+
+        if (bean instanceof SyntheticBean) {
+            Integer priority = ((SyntheticBean<?>) bean).getPriority();
             if (priority != null) {
                 return priority;
             }
@@ -551,9 +559,9 @@ public class CDI41InjectionValidator {
                     List<Bean<?>> noPriorityAlternatives = new ArrayList<>();
 
                     for (Bean<?> alt : alternatives) {
-                        Priority priority = alt.getBeanClass().getAnnotation(Priority.class);
-                        if (priority != null) {
-                            priorities.put(alt, priority.value());
+                        int priority = extractPriorityValue(alt);
+                        if (priority != Integer.MIN_VALUE) {
+                            priorities.put(alt, priority);
                         } else {
                             noPriorityAlternatives.add(alt);
                         }
@@ -1069,7 +1077,8 @@ public class CDI41InjectionValidator {
         Set<Annotation> qualifiers = new HashSet<Annotation>();
         if (annotations != null) {
             for (Annotation annotation : annotations) {
-                if (annotation.annotationType().isAnnotationPresent(Qualifier.class)) {
+                if (annotation.annotationType().isAnnotationPresent(Qualifier.class) ||
+                    knowledgeBase.isRegisteredQualifier(annotation.annotationType())) {
                     qualifiers.add(annotation);
                 }
             }
@@ -1207,6 +1216,13 @@ public class CDI41InjectionValidator {
      * @return true if the injection point can be satisfied, false otherwise
      */
     private boolean validateInjectionPoint(InjectionPoint injectionPoint, Bean<?> owningBean) {
+        if (owningBean instanceof SyntheticBean &&
+                injectionPoint != null &&
+                injectionPoint.getMember() == null &&
+                injectionPoint.getAnnotated() == null) {
+            return true;
+        }
+
         Type requiredType = injectionPoint.getType();
         Set<Annotation> qualifiers = injectionPoint.getQualifiers();
 
@@ -1342,7 +1358,7 @@ public class CDI41InjectionValidator {
             return true;
         }
 
-        List<String> unproxyableTypes = findUnproxyableBeanTypes(resolvedBean.getTypes());
+        List<String> unproxyableTypes = findUnproxyableBeanTypes(resolvedBean.getTypes(), resolvedBean);
         if (unproxyableTypes.isEmpty()) {
             return true;
         }
@@ -1395,7 +1411,8 @@ public class CDI41InjectionValidator {
     private Set<Annotation> extractInterceptorBindingAnnotations(Annotation[] annotations) {
         Set<Annotation> bindings = new HashSet<>();
         for (Annotation annotation : annotations) {
-            if (annotation.annotationType().isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class)) {
+            if (annotation.annotationType().isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
+                knowledgeBase.isRegisteredInterceptorBinding(annotation.annotationType())) {
                 bindings.add(annotation);
             }
         }
@@ -1494,11 +1511,11 @@ public class CDI41InjectionValidator {
         return true;
     }
 
-    private List<String> findUnproxyableBeanTypes(Set<Type> beanTypes) {
+    private List<String> findUnproxyableBeanTypes(Set<Type> beanTypes, Bean<?> bean) {
         List<String> unproxyable = new ArrayList<>();
 
         for (Type beanType : beanTypes) {
-            String reason = unproxyableReason(beanType);
+            String reason = unproxyableReason(beanType, bean);
             if (reason != null) {
                 unproxyable.add(beanType.getTypeName() + " (" + reason + ")");
             }
@@ -1507,7 +1524,7 @@ public class CDI41InjectionValidator {
         return unproxyable;
     }
 
-    private String unproxyableReason(Type beanType) {
+    private String unproxyableReason(Type beanType, Bean<?> bean) {
         Class<?> rawType = RawTypeExtractor.getRawType(beanType);
         if (rawType == null) {
             return null;
@@ -1542,7 +1559,7 @@ public class CDI41InjectionValidator {
         }
 
         Method finalBusinessMethod = findNonStaticFinalNonPrivateMethod(rawType);
-        if (finalBusinessMethod != null) {
+        if (finalBusinessMethod != null && !knowledgeBase.shouldIgnoreFinalMethods(bean)) {
             return "has non-static final method with non-private visibility: " + finalBusinessMethod.getName();
         }
 
@@ -1623,6 +1640,11 @@ public class CDI41InjectionValidator {
     }
 
     private int getAlternativePriority(Bean<?> bean) {
+        Integer applicationOrderPriority = getAfterTypeDiscoveryAlternativePriority(bean);
+        if (applicationOrderPriority != null) {
+            return applicationOrderPriority;
+        }
+
         if (bean instanceof ProducerBean) {
             ProducerBean<?> producerBean = (ProducerBean<?>) bean;
             Integer memberPriority = extractPriorityFromProducerMember(producerBean);
@@ -1648,12 +1670,34 @@ public class CDI41InjectionValidator {
             }
         }
 
+        if (bean instanceof SyntheticBean) {
+            Integer syntheticPriority = ((SyntheticBean<?>) bean).getPriority();
+            if (syntheticPriority != null) {
+                return syntheticPriority;
+            }
+        }
+
         Integer classPriority = extractPriorityFromClass(bean.getBeanClass());
         if (classPriority != null) {
             return classPriority;
         }
 
         return jakarta.interceptor.Interceptor.Priority.APPLICATION;
+    }
+
+    private Integer getAfterTypeDiscoveryAlternativePriority(Bean<?> bean) {
+        if (bean == null || !knowledgeBase.hasAfterTypeDiscoveryAlternativesCustomized()) {
+            return null;
+        }
+        Class<?> beanClass = bean.getBeanClass();
+        if (beanClass == null) {
+            return null;
+        }
+        int applicationOrder = knowledgeBase.getApplicationAlternativeOrder(beanClass);
+        if (applicationOrder < 0) {
+            return null;
+        }
+        return Integer.MAX_VALUE - applicationOrder;
     }
 
     private Integer extractPriorityFromProducerMember(ProducerBean<?> producerBean) {
@@ -1923,7 +1967,8 @@ public class CDI41InjectionValidator {
      * @return true if it's a qualifier
      */
     private boolean isQualifier(Annotation annotation) {
-        return hasQualifierAnnotation(annotation.annotationType());
+        return hasQualifierAnnotation(annotation.annotationType()) ||
+                knowledgeBase.isRegisteredQualifier(annotation.annotationType());
     }
 
     /**
@@ -2055,6 +2100,7 @@ public class CDI41InjectionValidator {
         }
 
         boolean allValid = true;
+        boolean registerObserverInfos = knowledgeBase.getObserverMethodInfos().isEmpty();
         Set<Bean<?>> specializationFiltered = applySpecializationFiltering(new HashSet<Bean<?>>(validBeans));
 
         for (Bean<?> bean : specializationFiltered) {
@@ -2067,7 +2113,7 @@ public class CDI41InjectionValidator {
 
             // Scan all methods for @Observes and @ObservesAsync
             for (java.lang.reflect.Method method : collectObserverCandidateMethods(beanClass)) {
-                boolean valid = validateObserverMethod(method, bean);
+                boolean valid = validateObserverMethod(method, bean, registerObserverInfos);
                 allValid &= valid;
             }
         }
@@ -2083,7 +2129,8 @@ public class CDI41InjectionValidator {
      * @param declaringBean the bean that declares this method
      * @return true if valid
      */
-    private boolean validateObserverMethod(java.lang.reflect.Method method, Bean<?> declaringBean) {
+    private boolean validateObserverMethod(java.lang.reflect.Method method, Bean<?> declaringBean,
+                                           boolean registerObserverInfo) {
         // Count @Observes and @ObservesAsync parameters
         int observesCount = 0;
         int observesAsyncCount = 0;
@@ -2189,19 +2236,20 @@ public class CDI41InjectionValidator {
             }
         }
 
-        // Create and register observer method info
-        ObserverMethodInfo observerMethodInfo = new ObserverMethodInfo(
-            method,
-            eventType,
-            qualifiers,
-            reception,
-            transactionPhase,
-            async,
-            declaringBean,
-            priority
-        );
-
-        knowledgeBase.addObserverMethodInfo(observerMethodInfo);
+        if (registerObserverInfo) {
+            // Create and register observer method info
+            ObserverMethodInfo observerMethodInfo = new ObserverMethodInfo(
+                method,
+                eventType,
+                qualifiers,
+                reception,
+                transactionPhase,
+                async,
+                declaringBean,
+                priority
+            );
+            knowledgeBase.addObserverMethodInfo(observerMethodInfo);
+        }
         return true;
     }
 
@@ -2212,7 +2260,8 @@ public class CDI41InjectionValidator {
     private Set<Annotation> extractQualifiers(java.lang.reflect.Parameter parameter) {
         Set<Annotation> qualifiers = new HashSet<>();
         for (Annotation annotation : parameter.getAnnotations()) {
-            if (annotation.annotationType().isAnnotationPresent(Qualifier.class)) {
+            if (annotation.annotationType().isAnnotationPresent(Qualifier.class) ||
+                knowledgeBase.isRegisteredQualifier(annotation.annotationType())) {
                 qualifiers.add(annotation);
             }
         }

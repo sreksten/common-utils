@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.spi.*;
@@ -19,11 +18,24 @@ import jakarta.enterprise.inject.spi.*;
  * @param <T> the bean class type
  * @see jakarta.enterprise.inject.spi.ProcessBean
  */
-public class ProcessBeanImpl<T> extends PhaseAware implements ProcessBean<T> {
+public class ProcessBeanImpl<T> extends PhaseAware
+        implements ProcessBean<T>, ObserverInvocationLifecycle {
 
     protected final Bean<T> bean;
     private final Annotated annotated;
     protected final KnowledgeBase knowledgeBase;
+    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
+    private final ThreadLocal<Boolean> lifecycleManaged = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
 
     public ProcessBeanImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<T> bean, Annotated annotated) {
         super(messageHandler);
@@ -34,17 +46,38 @@ public class ProcessBeanImpl<T> extends PhaseAware implements ProcessBean<T> {
 
     @Override
     public Annotated getAnnotated() {
+        assertObserverInvocationActive();
         return annotated;
     }
 
     @Override
     public Bean<T> getBean() {
+        assertObserverInvocationActive();
         return bean;
     }
 
     @Override
     public void addDefinitionError(Throwable t) {
+        assertObserverInvocationActive();
         knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN, "Definition error for " +
                 bean.getBeanClass().getName(), t);
+    }
+
+    @Override
+    public void beginObserverInvocation() {
+        lifecycleManaged.set(Boolean.TRUE);
+        observerInvocationActive.set(Boolean.TRUE);
+    }
+
+    @Override
+    public void endObserverInvocation() {
+        observerInvocationActive.set(Boolean.FALSE);
+    }
+
+    protected void assertObserverInvocationActive() {
+        if (lifecycleManaged.get() && !observerInvocationActive.get()) {
+            throw new IllegalStateException(
+                    "ProcessBean methods may only be called during observer method invocation");
+        }
     }
 }

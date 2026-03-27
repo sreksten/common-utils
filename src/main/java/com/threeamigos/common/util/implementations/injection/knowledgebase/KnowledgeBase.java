@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
@@ -14,6 +15,7 @@ import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Stereotype;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.inject.spi.InterceptionType;
 
 import java.lang.annotation.Annotation;
@@ -79,9 +81,14 @@ public class KnowledgeBase {
     // Programmatically registered annotated types (via BeforeBeanDiscovery.addAnnotatedType)
     // Maps ID -> AnnotatedType for synthetic types added by extensions
     private final Map<String, jakarta.enterprise.inject.spi.AnnotatedType<?>> registeredAnnotatedTypes = new ConcurrentHashMap<>();
+    // Tracks the extension source for synthetic annotated types.
+    private final Map<String, Extension> registeredAnnotatedTypeSources = new ConcurrentHashMap<>();
 
     // Programmatically registered synthetic observer methods (via AfterBeanDiscovery.addObserverMethod)
     private final Collection<jakarta.enterprise.inject.spi.ObserverMethod<?>> syntheticObserverMethods = new ConcurrentLinkedQueue<>();
+    // Beans marked by ProcessBeanAttributes.ignoreFinalMethods()
+    private final Set<Bean<?>> ignoreFinalMethodsBeans =
+            Collections.newSetFromMap(new IdentityHashMap<Bean<?>, Boolean>());
 
     // beans.xml configurations from all scanned archives
     // Collection is used instead of merging because each archive may have different configurations
@@ -94,6 +101,14 @@ public class KnowledgeBase {
     private final Set<String> programmaticallyEnabledAlternatives = ConcurrentHashMap.newKeySet();
     // Final application interceptor order (e.g. from AfterTypeDiscovery / beans.xml)
     private final Map<String, Integer> applicationInterceptorOrder = new ConcurrentHashMap<String, Integer>();
+    // Final application alternative order (e.g. from AfterTypeDiscovery)
+    private final Map<String, Integer> applicationAlternativeOrder = new ConcurrentHashMap<String, Integer>();
+    // Final application decorator order (e.g. from AfterTypeDiscovery)
+    private final Map<String, Integer> applicationDecoratorOrder = new ConcurrentHashMap<String, Integer>();
+    // True when AfterTypeDiscovery observers changed the corresponding list from its initial value.
+    private volatile boolean afterTypeDiscoveryAlternativesCustomized;
+    private volatile boolean afterTypeDiscoveryInterceptorsCustomized;
+    private volatile boolean afterTypeDiscoveryDecoratorsCustomized;
 
     public KnowledgeBase(MessageHandler messageHandler) {
         this.messageHandler = messageHandler;
@@ -156,6 +171,16 @@ public class KnowledgeBase {
 
     public Collection<Bean<?>> getBeans() {
         return beans;
+    }
+
+    public void markIgnoreFinalMethods(Bean<?> bean) {
+        if (bean != null) {
+            ignoreFinalMethodsBeans.add(bean);
+        }
+    }
+
+    public boolean shouldIgnoreFinalMethods(Bean<?> bean) {
+        return bean != null && ignoreFinalMethodsBeans.contains(bean);
     }
 
     public <T> void addConstructor(Class<T> clazz, Constructor<T> constructor) {
@@ -395,6 +420,27 @@ public class KnowledgeBase {
         return orderMap.getOrDefault(decoratorClass.getName(), -1);
     }
 
+    public int getInterceptorBeansXmlOrder(Class<?> interceptorClass) {
+        if (interceptorClass == null || beansXmlConfigurations.isEmpty()) {
+            return -1;
+        }
+
+        Map<String, Integer> orderMap = new LinkedHashMap<>();
+        int counter = 0;
+        for (BeansXml beansXml : beansXmlConfigurations) {
+            if (beansXml.getInterceptors() == null || beansXml.getInterceptors().isEmpty()) {
+                continue;
+            }
+            for (String className : beansXml.getInterceptors().getClasses()) {
+                if (!orderMap.containsKey(className)) {
+                    orderMap.put(className, counter++);
+                }
+            }
+        }
+
+        return orderMap.getOrDefault(interceptorClass.getName(), -1);
+    }
+
     /**
      * Adds fully validated observer method metadata to the knowledge base.
      * This should be called after validating the observer method.
@@ -458,6 +504,7 @@ public class KnowledgeBase {
         }
 
         return interceptorInfos.stream()
+                .filter(this::isInterceptorEnabledForResolution)
                 .filter(info -> supportsInterceptionType(info, interceptionType))
                 .filter(info -> hasMatchingBindings(info, targetBindings))
                 .sorted(this::compareInterceptors)
@@ -497,6 +544,7 @@ public class KnowledgeBase {
             InterceptionType interceptionType) {
 
         return interceptorInfos.stream()
+                .filter(this::isInterceptorEnabledForResolution)
                 .filter(info -> supportsInterceptionType(info, interceptionType))
                 .sorted(this::compareInterceptors)
                 .collect(Collectors.toList());
@@ -517,9 +565,20 @@ public class KnowledgeBase {
         }
 
         return interceptorInfos.stream()
+                .filter(this::isInterceptorEnabledForResolution)
                 .filter(info -> hasMatchingBindings(info, targetBindings))
                 .sorted(this::compareInterceptors)
                 .collect(Collectors.toList());
+    }
+
+    private boolean isInterceptorEnabledForResolution(InterceptorInfo info) {
+        if (info == null) {
+            return false;
+        }
+        if (!hasAfterTypeDiscoveryInterceptorsCustomized()) {
+            return true;
+        }
+        return getApplicationInterceptorOrder(info.getInterceptorClass()) >= 0;
     }
 
     public void setApplicationInterceptorOrder(List<Class<?>> orderedInterceptors) {
@@ -546,6 +605,94 @@ public class KnowledgeBase {
         }
         Integer index = applicationInterceptorOrder.get(interceptorClass.getName());
         return index != null ? index.intValue() : -1;
+    }
+
+    public void setApplicationAlternativeOrder(List<Class<?>> orderedAlternatives) {
+        applicationAlternativeOrder.clear();
+        if (orderedAlternatives == null || orderedAlternatives.isEmpty()) {
+            return;
+        }
+
+        int index = 0;
+        for (Class<?> alternativeClass : orderedAlternatives) {
+            if (alternativeClass == null) {
+                continue;
+            }
+            String className = alternativeClass.getName();
+            if (!applicationAlternativeOrder.containsKey(className)) {
+                applicationAlternativeOrder.put(className, index++);
+            }
+        }
+    }
+
+    public int getApplicationAlternativeOrder(Class<?> alternativeClass) {
+        if (alternativeClass == null) {
+            return -1;
+        }
+        Integer index = applicationAlternativeOrder.get(alternativeClass.getName());
+        return index != null ? index.intValue() : -1;
+    }
+
+    public boolean hasApplicationAlternativeSelection() {
+        return !applicationAlternativeOrder.isEmpty();
+    }
+
+    public void setApplicationDecoratorOrder(List<Class<?>> orderedDecorators) {
+        applicationDecoratorOrder.clear();
+        if (orderedDecorators == null || orderedDecorators.isEmpty()) {
+            return;
+        }
+
+        int index = 0;
+        for (Class<?> decoratorClass : orderedDecorators) {
+            if (decoratorClass == null) {
+                continue;
+            }
+            String className = decoratorClass.getName();
+            if (!applicationDecoratorOrder.containsKey(className)) {
+                applicationDecoratorOrder.put(className, index++);
+            }
+        }
+    }
+
+    public int getApplicationDecoratorOrder(Class<?> decoratorClass) {
+        if (decoratorClass == null) {
+            return -1;
+        }
+        Integer index = applicationDecoratorOrder.get(decoratorClass.getName());
+        return index != null ? index.intValue() : -1;
+    }
+
+    public boolean hasApplicationDecoratorSelection() {
+        return !applicationDecoratorOrder.isEmpty();
+    }
+
+    public boolean hasApplicationInterceptorSelection() {
+        return !applicationInterceptorOrder.isEmpty();
+    }
+
+    public void setAfterTypeDiscoveryAlternativesCustomized(boolean customized) {
+        this.afterTypeDiscoveryAlternativesCustomized = customized;
+    }
+
+    public boolean hasAfterTypeDiscoveryAlternativesCustomized() {
+        return afterTypeDiscoveryAlternativesCustomized;
+    }
+
+    public void setAfterTypeDiscoveryInterceptorsCustomized(boolean customized) {
+        this.afterTypeDiscoveryInterceptorsCustomized = customized;
+    }
+
+    public boolean hasAfterTypeDiscoveryInterceptorsCustomized() {
+        return afterTypeDiscoveryInterceptorsCustomized;
+    }
+
+    public void setAfterTypeDiscoveryDecoratorsCustomized(boolean customized) {
+        this.afterTypeDiscoveryDecoratorsCustomized = customized;
+    }
+
+    public boolean hasAfterTypeDiscoveryDecoratorsCustomized() {
+        return afterTypeDiscoveryDecoratorsCustomized;
     }
 
     /**
@@ -676,6 +823,17 @@ public class KnowledgeBase {
             return leftOrder >= 0 ? -1 : 1;
         }
 
+        int leftBeansXmlOrder = getInterceptorBeansXmlOrder(left.getInterceptorClass());
+        int rightBeansXmlOrder = getInterceptorBeansXmlOrder(right.getInterceptorClass());
+        if (leftBeansXmlOrder >= 0 && rightBeansXmlOrder >= 0) {
+            int byBeansXmlOrder = Integer.compare(leftBeansXmlOrder, rightBeansXmlOrder);
+            if (byBeansXmlOrder != 0) {
+                return byBeansXmlOrder;
+            }
+        } else if (leftBeansXmlOrder >= 0 || rightBeansXmlOrder >= 0) {
+            return leftBeansXmlOrder >= 0 ? -1 : 1;
+        }
+
         return left.getInterceptorClass().getName().compareTo(right.getInterceptorClass().getName());
     }
 
@@ -804,6 +962,7 @@ public class KnowledgeBase {
         }
 
         registeredStereotypes.put(stereotype, definitions);
+        AnnotationsEnum.registerDynamicStereotype(stereotype);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered stereotype: " + stereotype.getSimpleName() +
                           " with meta-annotation(s) " + AnnotationHelper.toList(stereotypeDef));
@@ -852,6 +1011,7 @@ public class KnowledgeBase {
         }
 
         registeredQualifiers.add(qualifier);
+        AnnotationsEnum.registerDynamicQualifier(qualifier);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered qualifier: " + qualifier.getSimpleName());
     }
@@ -892,6 +1052,7 @@ public class KnowledgeBase {
 
         ScopeMetadata metadata = new ScopeMetadata(scopeType, normal, passivating);
         registeredScopes.put(scopeType, metadata);
+        AnnotationsEnum.registerDynamicScope(scopeType);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered scope: " + scopeType.getSimpleName() +
                           " (normal=" + normal + ", passivating=" + passivating + ")");
@@ -946,6 +1107,7 @@ public class KnowledgeBase {
         }
 
         registeredInterceptorBindings.put(bindingType, definitions);
+        AnnotationsEnum.registerDynamicInterceptorBinding(bindingType);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered interceptor binding: " + bindingType.getSimpleName() +
                           " with  meta-annotation(s) " + AnnotationHelper.toList(definitions));
@@ -990,6 +1152,10 @@ public class KnowledgeBase {
      * @param id the unique identifier for this registration
      */
     public void addAnnotatedType(jakarta.enterprise.inject.spi.AnnotatedType<?> type, String id) {
+        addAnnotatedType(type, id, null);
+    }
+
+    public void addAnnotatedType(jakarta.enterprise.inject.spi.AnnotatedType<?> type, String id, Extension source) {
         if (type == null) {
             throw new IllegalArgumentException("Annotated type cannot be null");
         }
@@ -1002,6 +1168,9 @@ public class KnowledgeBase {
         }
 
         registeredAnnotatedTypes.put(id, type);
+        if (source != null) {
+            registeredAnnotatedTypeSources.put(id, source);
+        }
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered annotated type: " + type.getJavaClass().getName() +
                           " with ID: " + id);
@@ -1024,6 +1193,13 @@ public class KnowledgeBase {
      */
     public Map<String, jakarta.enterprise.inject.spi.AnnotatedType<?>> getRegisteredAnnotatedTypes() {
         return Collections.unmodifiableMap(registeredAnnotatedTypes);
+    }
+
+    public Extension getRegisteredAnnotatedTypeSource(String id) {
+        if (id == null) {
+            return null;
+        }
+        return registeredAnnotatedTypeSources.get(id);
     }
 
     /**

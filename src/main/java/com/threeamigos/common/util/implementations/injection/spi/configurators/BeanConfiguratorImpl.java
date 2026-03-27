@@ -1,10 +1,12 @@
 package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.configurator.BeanConfigurator;
@@ -296,16 +298,9 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
 
     @Override
     public <U extends T> BeanConfigurator<U> produceWith(Function<jakarta.enterprise.inject.Instance<Object>, U> callback) {
-        // Convert Instance-based callback to CreationalContext-based
         @SuppressWarnings("unchecked")
         BeanConfiguratorImpl<U> configurator = (BeanConfiguratorImpl<U>) this;
-        configurator.createCallback = ctx -> {
-            // For now, we don't have Instance available in this context
-            // Extensions should use createWith() instead
-            throw new UnsupportedOperationException(
-                "produceWith() not yet supported. Use createWith(Function<CreationalContext<T>, T>) instead"
-            );
-        };
+        configurator.createCallback = ctx -> callback.apply(resolveInstanceProvider());
         return configurator;
     }
 
@@ -317,15 +312,20 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
 
     @Override
     public BeanConfigurator<T> disposeWith(BiConsumer<T, jakarta.enterprise.inject.Instance<Object>> callback) {
-        // Convert Instance-based callback to CreationalContext-based
-        this.destroyCallback = (instance, ctx) -> {
-            // For now, we don't have Instance available in this context
-            // Extensions should use destroyWith() instead
-            throw new UnsupportedOperationException(
-                "disposeWith() not yet supported. Use destroyWith(BiConsumer<T, CreationalContext<T>>) instead"
-            );
-        };
+        this.destroyCallback = (instance, ctx) -> callback.accept(instance, resolveInstanceProvider());
         return this;
+    }
+
+    private jakarta.enterprise.inject.Instance<Object> resolveInstanceProvider() {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (classLoader == null) {
+            classLoader = BeanConfiguratorImpl.class.getClassLoader();
+        }
+        BeanManagerImpl beanManager = BeanManagerImpl.getRegisteredBeanManager(classLoader);
+        if (beanManager == null) {
+            throw new IllegalStateException("No active BeanManager available for produceWith/disposeWith callback");
+        }
+        return beanManager.createInstance();
     }
 
     @Override
@@ -348,6 +348,17 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
 
             // Always add Object
             types.add(Object.class);
+
+            // Infer scope from annotations on AnnotatedType; defaults remain @Dependent.
+            for (Annotation annotation : type.getJavaClass().getAnnotations()) {
+                Class<? extends Annotation> annotationType = annotation.annotationType();
+                if (annotationType.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
+                        annotationType.isAnnotationPresent(jakarta.inject.Scope.class) ||
+                        Dependent.class.equals(annotationType)) {
+                    this.scope = annotationType;
+                    break;
+                }
+            }
         }
         @SuppressWarnings("unchecked")
         BeanConfigurator<U> result = (BeanConfigurator<U>) this;
@@ -399,8 +410,9 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
         }
 
         if (qualifiers.isEmpty()) {
-            // Add @Default qualifier if none specified
+            // Add default qualifiers when none are explicitly specified.
             qualifiers.add(new Default.Literal());
+            qualifiers.add(Any.Literal.INSTANCE);
         }
 
         // Build the synthetic bean
@@ -410,6 +422,7 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
             qualifiers,
             scope,
             name,
+            id,
             stereotypes,
             alternative,
             priority,

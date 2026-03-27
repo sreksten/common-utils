@@ -27,11 +27,24 @@ import jakarta.enterprise.inject.spi.*;
  * @param <T> the bean type
  * @see jakarta.enterprise.inject.spi.ProcessSyntheticBean
  */
-public class ProcessSyntheticBeanImpl<T> extends PhaseAware implements ProcessSyntheticBean<T> {
+public class ProcessSyntheticBeanImpl<T> extends PhaseAware
+        implements ProcessSyntheticBean<T>, ObserverInvocationLifecycle {
 
     private final Bean<T> bean;
     private final Extension source;
     private final KnowledgeBase knowledgeBase;
+    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
+    private final ThreadLocal<Boolean> lifecycleManaged = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
 
     /**
      * Constructor for ProcessSyntheticBean event.
@@ -49,11 +62,13 @@ public class ProcessSyntheticBeanImpl<T> extends PhaseAware implements ProcessSy
 
     @Override
     public Bean<T> getBean() {
+        assertObserverInvocationActive();
         return bean;
     }
 
     @Override
     public Annotated getAnnotated() {
+        assertObserverInvocationActive();
         // Synthetic beans don't have an Annotated representation since they
         // weren't discovered via reflection
         return null;
@@ -66,8 +81,27 @@ public class ProcessSyntheticBeanImpl<T> extends PhaseAware implements ProcessSy
 
     @Override
     public void addDefinitionError(Throwable t) {
+        assertObserverInvocationActive();
         knowledgeBase.addDefinitionError(Phase.PROCESS_SYNTHETIC_BEAN, "Definition error for " +
                          bean.getBeanClass().getName(), t);
+    }
+
+    @Override
+    public void beginObserverInvocation() {
+        lifecycleManaged.set(Boolean.TRUE);
+        observerInvocationActive.set(Boolean.TRUE);
+    }
+
+    @Override
+    public void endObserverInvocation() {
+        observerInvocationActive.set(Boolean.FALSE);
+    }
+
+    private void assertObserverInvocationActive() {
+        if (lifecycleManaged.get() && !observerInvocationActive.get()) {
+            throw new IllegalStateException(
+                    "ProcessSyntheticBean methods may only be called during observer method invocation");
+        }
     }
 
     @Override

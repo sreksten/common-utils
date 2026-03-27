@@ -14,6 +14,8 @@ import com.threeamigos.common.util.implementations.injection.builtinbeans.Activa
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.discovery.*;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
@@ -29,6 +31,7 @@ import com.threeamigos.common.util.implementations.injection.spi.InjectionTarget
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
+import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -47,6 +50,7 @@ import jakarta.enterprise.event.Shutdown;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
+import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.IllegalProductException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
@@ -205,6 +209,8 @@ public class Syringe {
      * Map key: scope annotation class, Map value: context implementation
      */
     private final Map<Class<? extends Annotation>, Context> customContextsToRegister = new HashMap<>();
+    private final Set<String> processedSyntheticAnnotatedTypeIds = new HashSet<String>();
+    private final Set<Class<?>> syntheticAnnotatedTypeClasses = new HashSet<Class<?>>();
 
     public Syringe() {
         this.messageHandler = new ConsoleMessageHandler();
@@ -454,6 +460,8 @@ public class Syringe {
         shutdownStarted = false;
         beforeBeanDiscoveryFired = false;
         beforeShutdownFired = false;
+        processedSyntheticAnnotatedTypeIds.clear();
+        syntheticAnnotatedTypeClasses.clear();
 
         // ============================================================
         // PHASE 1: CONTAINER INITIALIZATION
@@ -589,8 +597,8 @@ public class Syringe {
             // - Add/remove/modify annotations
             // - Wrap AnnotatedType to customize metadata
             processAnnotatedTypes();
-            fireAfterTypeDiscovery();
             fireBuildCompatibleExtensionPhase(BuildCompatibleExtensionSupport.SupportedPhase.ENHANCEMENT);
+            fireAfterTypeDiscovery();
 
             // ============================================================
             // PHASE 3: BEAN PROCESSING
@@ -792,9 +800,6 @@ public class Syringe {
 
         info("Shutting down container");
 
-        // Fire BeforeShutdown event
-        fireBeforeShutdown();
-
         // CDI 4.1 9.6.2: fire Shutdown during container shutdown and not later than
         // @BeforeDestroyed(ApplicationScoped.class).
         Set<Annotation> shutdownQualifiers = new HashSet<Annotation>();
@@ -805,6 +810,9 @@ public class Syringe {
 
         // Destroy all beans (call @PreDestroy methods)
         destroyAllBeans();
+
+        // Fire BeforeShutdown as the final lifecycle event after contexts are destroyed.
+        fireBeforeShutdown();
 
         // Clear state
         extensions.clear();
@@ -999,13 +1007,43 @@ public class Syringe {
 
         for (Map.Entry<String, AnnotatedType<?>> entry : registeredTypes.entrySet()) {
             String id = entry.getKey();
+            if (processedSyntheticAnnotatedTypeIds.contains(id)) {
+                continue;
+            }
             AnnotatedType<?> annotatedType = entry.getValue();
             Class<?> clazz = annotatedType.getJavaClass();
 
             info("Processing registered AnnotatedType: " + clazz.getName() + " (ID: " + id + ")");
 
-            // Add the class to KnowledgeBase so it will be processed as a bean candidate
+            if (shouldSkipProcessAnnotatedTypeEvent(clazz)) {
+                knowledgeBase.vetoType(clazz);
+                processedSyntheticAnnotatedTypeIds.add(id);
+                continue;
+            }
+
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            ProcessSyntheticAnnotatedTypeImpl<?> event = new ProcessSyntheticAnnotatedTypeImpl(
+                    messageHandler,
+                    annotatedType,
+                    knowledgeBase.getRegisteredAnnotatedTypeSource(id));
+            fireEventToExtensions(event);
+
+            if (event.isVetoed()) {
+                knowledgeBase.vetoType(clazz);
+                processedSyntheticAnnotatedTypeIds.add(id);
+                continue;
+            }
+
+            AnnotatedType<?> finalAnnotatedType = event.getAnnotatedTypeInternal();
+            if (finalAnnotatedType == null) {
+                finalAnnotatedType = annotatedType;
+            }
+
+            // Add the class to KnowledgeBase so it will be processed as a bean candidate.
             knowledgeBase.add(clazz, effectiveBeanArchiveMode(BeanArchiveMode.IMPLICIT));
+            syntheticAnnotatedTypeClasses.add(clazz);
+            knowledgeBase.setAnnotatedTypeOverride(clazz, finalAnnotatedType);
+            processedSyntheticAnnotatedTypeIds.add(id);
         }
 
         info("Total classes after registered types: " + knowledgeBase.getClasses().size());
@@ -1038,10 +1076,17 @@ public class Syringe {
         int excludedCount = 0;
         for (Class<?> clazz : new ArrayList<>(knowledgeBase.getClasses())) {
             try {
+                if (syntheticAnnotatedTypeClasses.contains(clazz)) {
+                    continue;
+                }
                 // Step 1: Check if a class is excluded by beans.xml scan filters
                 if (excludeFilter.isExcluded(clazz.getName())) {
                     knowledgeBase.vetoType(clazz);
                     excludedCount++;
+                    continue;
+                }
+                if (shouldSkipProcessAnnotatedTypeEvent(clazz)) {
+                    knowledgeBase.vetoType(clazz);
                     continue;
                 }
 
@@ -1063,12 +1108,14 @@ public class Syringe {
                 // Store AnnotatedType override only when extensions replace/configure metadata.
                 // Keeping default BeanManager.createAnnotatedType() output as an override can
                 // unintentionally change baseline annotation inheritance behavior during validation.
-                AnnotatedType<?> finalAnnotatedType = event.getAnnotatedType();
+                AnnotatedType<?> finalAnnotatedType = event.getAnnotatedTypeInternal();
                 if (finalAnnotatedType != null && finalAnnotatedType != annotatedType) {
                     knowledgeBase.setAnnotatedTypeOverride(clazz, finalAnnotatedType);
                 }
+            } catch (DefinitionException e) {
+                throw e;
             } catch (Exception e) {
-                log("Error processing annotated type: " + clazz.getName(), e);
+                throw new DefinitionException("Error processing annotated type: " + clazz.getName(), e);
             }
         }
 
@@ -1076,42 +1123,126 @@ public class Syringe {
         info("Vetoed types (total): " + knowledgeBase.getVetoedTypes().size());
     }
 
+    private boolean shouldSkipProcessAnnotatedTypeEvent(Class<?> clazz) {
+        if (clazz == null) {
+            return true;
+        }
+        if (clazz.isAnnotation()) {
+            return true;
+        }
+        if (AnnotationsEnum.hasVetoedAnnotation(clazz)) {
+            return true;
+        }
+        return isPackageOrParentPackageVetoed(clazz.getPackage());
+    }
+
+    private boolean isPackageOrParentPackageVetoed(Package pkg) {
+        if (pkg == null) {
+            return false;
+        }
+        if (AnnotationsEnum.hasVetoedAnnotation(pkg)) {
+            return true;
+        }
+        String packageName = pkg.getName();
+        while (packageName.contains(".")) {
+            packageName = packageName.substring(0, packageName.lastIndexOf('.'));
+            try {
+                Class<?> packageInfo = Class.forName(packageName + ".package-info");
+                Package parent = packageInfo.getPackage();
+                if (parent != null && AnnotationsEnum.hasVetoedAnnotation(parent)) {
+                    return true;
+                }
+            } catch (ClassNotFoundException ignored) {
+                // No package-info, continue with next parent package.
+            }
+        }
+        return false;
+    }
+
     private void fireAfterTypeDiscovery() {
         info("Firing AfterTypeDiscovery event");
 
-        List<Class<?>> alternatives = new ArrayList<Class<?>>();
-        List<Class<?>> interceptors = new ArrayList<Class<?>>();
-        List<Class<?>> decorators = new ArrayList<Class<?>>();
-
-        for (BeansXml beansXml : knowledgeBase.getBeansXmlConfigurations()) {
-            if (beansXml == null) {
-                continue;
-            }
-
-            if (beansXml.getAlternatives() != null) {
-                for (String className : beansXml.getAlternatives().getClasses()) {
-                    addClassByName(alternatives, className);
-                }
-            }
-
-            if (beansXml.getInterceptors() != null) {
-                for (String className : beansXml.getInterceptors().getClasses()) {
-                    addClassByName(interceptors, className);
-                }
-            }
-
-            if (beansXml.getDecorators() != null) {
-                for (String className : beansXml.getDecorators().getClasses()) {
-                    addClassByName(decorators, className);
-                }
-            }
-        }
+        List<Class<?>> alternatives = collectPriorityEnabledAlternatives();
+        List<Class<?>> interceptors = collectPriorityEnabledInterceptors();
+        List<Class<?>> decorators = collectPriorityEnabledDecorators();
+        List<Class<?>> initialAlternatives = new ArrayList<Class<?>>(alternatives);
+        List<Class<?>> initialInterceptors = new ArrayList<Class<?>>(interceptors);
+        List<Class<?>> initialDecorators = new ArrayList<Class<?>>(decorators);
 
         AfterTypeDiscovery event = new AfterTypeDiscoveryImpl(
                 messageHandler, knowledgeBase, beanManager, alternatives, interceptors, decorators);
         fireEventToExtensions(event);
+        processRegisteredAnnotatedTypes();
 
+        knowledgeBase.setApplicationAlternativeOrder(alternatives);
         knowledgeBase.setApplicationInterceptorOrder(interceptors);
+        knowledgeBase.setApplicationDecoratorOrder(decorators);
+        knowledgeBase.setAfterTypeDiscoveryAlternativesCustomized(!initialAlternatives.equals(alternatives));
+        knowledgeBase.setAfterTypeDiscoveryInterceptorsCustomized(!initialInterceptors.equals(interceptors));
+        knowledgeBase.setAfterTypeDiscoveryDecoratorsCustomized(!initialDecorators.equals(decorators));
+    }
+
+    private List<Class<?>> collectPriorityEnabledAlternatives() {
+        List<Class<?>> enabled = new ArrayList<Class<?>>();
+        for (Class<?> candidate : knowledgeBase.getClasses()) {
+            if (!candidate.isAnnotationPresent(Alternative.class)) {
+                continue;
+            }
+            Priority priority = candidate.getAnnotation(Priority.class);
+            if (priority == null) {
+                continue;
+            }
+            if (!enabled.contains(candidate)) {
+                enabled.add(candidate);
+            }
+        }
+        enabled.sort(Comparator
+                .comparingInt((Class<?> clazz) -> clazz.getAnnotation(Priority.class).value())
+                .thenComparing(Class::getName));
+        return enabled;
+    }
+
+    private List<Class<?>> collectPriorityEnabledInterceptors() {
+        List<Class<?>> enabled = new ArrayList<Class<?>>();
+        for (Class<?> candidate : knowledgeBase.getClasses()) {
+            if (!candidate.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) {
+                continue;
+            }
+            if (ActivateRequestContextInterceptor.class.equals(candidate)) {
+                continue;
+            }
+            Priority priority = candidate.getAnnotation(Priority.class);
+            if (priority == null) {
+                continue;
+            }
+            if (!enabled.contains(candidate)) {
+                enabled.add(candidate);
+            }
+        }
+        enabled.sort(Comparator
+                .comparingInt((Class<?> clazz) -> clazz.getAnnotation(Priority.class).value())
+                .thenComparing(Class::getName));
+        return enabled;
+    }
+
+    private List<Class<?>> collectPriorityEnabledDecorators() {
+        List<Class<?>> enabled = new ArrayList<Class<?>>();
+        for (Class<?> candidate : knowledgeBase.getClasses()) {
+            if (!candidate.isAnnotationPresent(jakarta.decorator.Decorator.class)) {
+                continue;
+            }
+            Priority priority = candidate.getAnnotation(Priority.class);
+            if (priority == null) {
+                continue;
+            }
+            if (!enabled.contains(candidate)) {
+                enabled.add(candidate);
+            }
+        }
+        enabled.sort(Comparator
+                .comparingInt((Class<?> clazz) -> clazz.getAnnotation(Priority.class).value())
+                .thenComparing(Class::getName));
+        return enabled;
     }
 
     private void addClassByName(List<Class<?>> target, String className) {
@@ -1181,21 +1312,59 @@ public class Syringe {
 
         for (Bean<?> bean : knowledgeBase.getBeans()) {
             try {
-                Set<InjectionPoint> injectionPoints = bean.getInjectionPoints();
-
-                for (InjectionPoint ip : injectionPoints) {
-                    ProcessInjectionPointImpl<?, ?> event =
-                            new ProcessInjectionPointImpl<>(messageHandler, ip, knowledgeBase);
-
-                    fireEventToExtensions(event);
-
-                    InjectionPoint updated = event.getInjectionPoint();
-                    if (updated != ip) {
-                        updateInjectionPoint(bean, ip, updated);
-                    }
-                }
+                processInjectionPointsForBean(bean, bean.getInjectionPoints());
+            } catch (DefinitionException e) {
+                throw e;
             } catch (Exception e) {
-                log("Error processing injection points for bean " + bean.getBeanClass().getName(), e);
+                throw new DefinitionException("Error processing injection points for bean " +
+                        bean.getBeanClass().getName(), e);
+            }
+        }
+
+        processInterceptorAndDecoratorInjectionPoints();
+    }
+
+    private void processInjectionPointsForBean(Bean<?> bean, Set<InjectionPoint> injectionPoints) {
+        List<InjectionPoint> snapshot = new ArrayList<InjectionPoint>(injectionPoints);
+        for (InjectionPoint ip : snapshot) {
+            ProcessInjectionPointImpl<?, ?> event =
+                    new ProcessInjectionPointImpl<>(messageHandler, ip, knowledgeBase);
+
+            fireEventToExtensions(event);
+
+            if (bean != null) {
+                InjectionPoint updated = event.getInjectionPointInternal();
+                if (updated != ip) {
+                    updateInjectionPoint(bean, ip, updated);
+                }
+            }
+        }
+    }
+
+    private void processInterceptorAndDecoratorInjectionPoints() {
+        Set<Class<?>> lifecycleTypes = new LinkedHashSet<Class<?>>();
+        for (InterceptorInfo interceptorInfo : knowledgeBase.getInterceptorInfos()) {
+            if (interceptorInfo != null && interceptorInfo.getInterceptorClass() != null) {
+                lifecycleTypes.add(interceptorInfo.getInterceptorClass());
+            }
+        }
+        for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
+            if (decoratorInfo != null && decoratorInfo.getDecoratorClass() != null) {
+                lifecycleTypes.add(decoratorInfo.getDecoratorClass());
+            }
+        }
+
+        for (Class<?> lifecycleType : lifecycleTypes) {
+            try {
+                AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(lifecycleType);
+                InjectionTargetFactory<?> factory = new InjectionTargetFactoryImpl<>(annotatedType, beanManager);
+                InjectionTarget<?> injectionTarget = factory.createInjectionTarget(null);
+                processInjectionPointsForBean(null, injectionTarget.getInjectionPoints());
+            } catch (DefinitionException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new DefinitionException("Error processing injection points for lifecycle type " +
+                        lifecycleType.getName(), e);
             }
         }
     }
@@ -1228,11 +1397,47 @@ public class Syringe {
 
                     fireEventToExtensions(event);
 
-                    InjectionTarget<?> finalTarget = event.getInjectionTarget();
+                    InjectionTarget<?> finalTarget = event.getInjectionTargetInternal();
                     managedBean.setCustomInjectionTarget((InjectionTarget) finalTarget);
+                } catch (DefinitionException e) {
+                    throw e;
                 } catch (Exception e) {
-                    log("Error processing injection target for " + beanClass.getName(), e);
+                    throw new DefinitionException("Error processing injection target for " +
+                            beanClass.getName(), e);
                 }
+            }
+        }
+
+        processInterceptorAndDecoratorInjectionTargets();
+    }
+
+    private void processInterceptorAndDecoratorInjectionTargets() {
+        Set<Class<?>> lifecycleTypes = new LinkedHashSet<Class<?>>();
+        for (InterceptorInfo interceptorInfo : knowledgeBase.getInterceptorInfos()) {
+            if (interceptorInfo != null && interceptorInfo.getInterceptorClass() != null) {
+                lifecycleTypes.add(interceptorInfo.getInterceptorClass());
+            }
+        }
+        for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
+            if (decoratorInfo != null && decoratorInfo.getDecoratorClass() != null) {
+                lifecycleTypes.add(decoratorInfo.getDecoratorClass());
+            }
+        }
+
+        for (Class<?> lifecycleType : lifecycleTypes) {
+            try {
+                AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(lifecycleType);
+                InjectionTargetFactory<?> factory = new InjectionTargetFactoryImpl<>(annotatedType, beanManager);
+                InjectionTarget<?> injectionTarget = factory.createInjectionTarget(null);
+                @SuppressWarnings({"rawtypes", "unchecked"})
+                ProcessInjectionTargetImpl<?> event = new ProcessInjectionTargetImpl(
+                        messageHandler, knowledgeBase, (AnnotatedType) annotatedType, (InjectionTarget) injectionTarget);
+                fireEventToExtensions(event);
+            } catch (DefinitionException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new DefinitionException("Error processing injection target for lifecycle type " +
+                        lifecycleType.getName(), e);
             }
         }
     }
@@ -1246,15 +1451,22 @@ public class Syringe {
         info("Processing bean attributes");
 
         List<Bean<?>> vetoed = new ArrayList<>();
+        Set<Class<?>> processedBeanClasses = new HashSet<Class<?>>();
 
         for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (!isProcessBeanAttributesCandidate(bean)) {
+                continue;
+            }
+            if (bean.getBeanClass() != null) {
+                processedBeanClasses.add(bean.getBeanClass());
+            }
             try {
                 BeanAttributes<?> attrs = new BeanAttributesImpl<>(bean.getName(), bean.getQualifiers(),
                     bean.getScope(), bean.getStereotypes(), bean.getTypes(), bean.isAlternative());
 
-                Annotated annotated = new SimpleAnnotatedType<>(bean.getBeanClass());
+                Annotated annotated = resolveProcessBeanAttributesAnnotated(bean);
                 ProcessBeanAttributesImpl<?> event =
-                    new ProcessBeanAttributesImpl<>(messageHandler, annotated, attrs, beanManager, knowledgeBase);
+                    new ProcessBeanAttributesImpl<>(messageHandler, annotated, attrs, knowledgeBase);
 
                 fireEventToExtensions(event);
 
@@ -1266,21 +1478,92 @@ public class Syringe {
                 if (event.isIgnoreFinalMethods()) {
                     knowledgeBase.addWarning("ProcessBeanAttributes ignoreFinalMethods requested for " +
                                              bean.getBeanClass().getName());
+                    knowledgeBase.markIgnoreFinalMethods(bean);
                 }
 
-                BeanAttributes<?> finalAttrs = event.getBeanAttributes();
+                BeanAttributes<?> finalAttrs = event.getBeanAttributesInternal();
                 applyBeanAttributes(bean, finalAttrs);
 
+            } catch (DefinitionException e) {
+                throw e;
             } catch (Exception e) {
-                log("Error processing bean attributes for bean " + bean.getBeanClass().getName(), e);
+                throw new DefinitionException("Error processing bean attributes for bean " +
+                        bean.getBeanClass().getName(), e);
             }
         }
+
+        processInterceptorAndDecoratorBeanAttributes(processedBeanClasses);
 
         // Remove vetoed beans
         if (!vetoed.isEmpty()) {
             knowledgeBase.getBeans().removeAll(vetoed);
             info("Vetoed " + vetoed.size() + " bean(s) via ProcessBeanAttributes");
         }
+    }
+
+    private void processInterceptorAndDecoratorBeanAttributes(Set<Class<?>> processedBeanClasses) {
+        Set<Class<?>> lifecycleTypes = new LinkedHashSet<Class<?>>();
+        for (InterceptorInfo interceptorInfo : knowledgeBase.getInterceptorInfos()) {
+            if (interceptorInfo != null && interceptorInfo.getInterceptorClass() != null) {
+                lifecycleTypes.add(interceptorInfo.getInterceptorClass());
+            }
+        }
+        for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
+            if (decoratorInfo != null && decoratorInfo.getDecoratorClass() != null) {
+                lifecycleTypes.add(decoratorInfo.getDecoratorClass());
+            }
+        }
+
+        for (Class<?> lifecycleType : lifecycleTypes) {
+            if (lifecycleType == null || processedBeanClasses.contains(lifecycleType)) {
+                continue;
+            }
+            try {
+                AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(lifecycleType);
+                BeanAttributes<?> attrs = beanManager.createBeanAttributes((AnnotatedType) annotatedType);
+                ProcessBeanAttributesImpl<?> event =
+                        new ProcessBeanAttributesImpl<>(messageHandler, annotatedType, attrs, knowledgeBase);
+                fireEventToExtensions(event);
+            } catch (DefinitionException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new DefinitionException("Error processing bean attributes for lifecycle type " +
+                        lifecycleType.getName(), e);
+            }
+        }
+    }
+
+    private boolean isProcessBeanAttributesCandidate(Bean<?> bean) {
+        return bean instanceof BeanImpl<?> || bean instanceof ProducerBean<?>;
+    }
+
+    private Annotated resolveProcessBeanAttributesAnnotated(Bean<?> bean) {
+        if (bean instanceof ProducerBean<?>) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Class<?> declaringClass = producerBean.getDeclaringClass();
+            AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(declaringClass);
+            if (producerBean.isMethod()) {
+                Method producerMethod = producerBean.getProducerMethod();
+                AnnotatedMethod<?> annotatedMethod = findAnnotatedMethod(annotatedType, producerMethod);
+                return annotatedMethod != null ? annotatedMethod : annotatedType;
+            }
+            if (producerBean.isField()) {
+                Field producerField = producerBean.getProducerField();
+                AnnotatedField<?> annotatedField = findAnnotatedField(annotatedType, producerField);
+                return annotatedField != null ? annotatedField : annotatedType;
+            }
+            return annotatedType;
+        }
+
+        if (bean instanceof BeanImpl<?>) {
+            BeanImpl<?> managedBean = (BeanImpl<?>) bean;
+            AnnotatedType<?> annotatedType = knowledgeBase.getAnnotatedTypeOverride(managedBean.getBeanClass());
+            if (annotatedType != null) {
+                return annotatedType;
+            }
+        }
+
+        return new SimpleAnnotatedType<>(bean.getBeanClass());
     }
 
     /**
@@ -1295,6 +1578,7 @@ public class Syringe {
         Collection<Bean<?>> allBeans = knowledgeBase.getBeans();
         info("Found " + allBeans.size() + " total bean(s)");
 
+        Set<Class<?>> processedBeanClasses = new HashSet<Class<?>>();
         int managedCount = 0;
         int producerMethodCount = 0;
         int producerFieldCount = 0;
@@ -1302,6 +1586,9 @@ public class Syringe {
 
         for (Bean<?> bean : allBeans) {
             try {
+                if (bean.getBeanClass() != null) {
+                    processedBeanClasses.add(bean.getBeanClass());
+                }
                 // Determine the bean type and fire an appropriate event
                 if (bean instanceof SyntheticBean) {
                     // Synthetic bean - registered via AfterBeanDiscovery.addBean()
@@ -1339,13 +1626,55 @@ public class Syringe {
                     // These don't get ProcessBean events
                     info("Skipping built-in bean: " + bean.getBeanClass().getSimpleName());
                 }
+            } catch (DefinitionException e) {
+                throw e;
             } catch (Exception e) {
-                log("Error processing bean " + bean.getBeanClass().getName(), e);
+                throw new DefinitionException("Error processing bean " + bean.getBeanClass().getName(), e);
             }
         }
 
+        managedCount += processInterceptorAndDecoratorBeans(processedBeanClasses);
+
         info("Processed: " + managedCount + " managed, " + producerMethodCount + " producer methods, " +
                 producerFieldCount + " producer fields, " + syntheticCount + " synthetic");
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private int processInterceptorAndDecoratorBeans(Set<Class<?>> processedBeanClasses) {
+        int managedCount = 0;
+        Set<Class<?>> lifecycleTypes = new LinkedHashSet<Class<?>>();
+        for (InterceptorInfo interceptorInfo : knowledgeBase.getInterceptorInfos()) {
+            if (interceptorInfo != null && interceptorInfo.getInterceptorClass() != null) {
+                lifecycleTypes.add(interceptorInfo.getInterceptorClass());
+            }
+        }
+        for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
+            if (decoratorInfo != null && decoratorInfo.getDecoratorClass() != null) {
+                lifecycleTypes.add(decoratorInfo.getDecoratorClass());
+            }
+        }
+
+        for (Class<?> lifecycleType : lifecycleTypes) {
+            if (lifecycleType == null || processedBeanClasses.contains(lifecycleType)) {
+                continue;
+            }
+            try {
+                AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(lifecycleType);
+                BeanAttributes<?> attrs = beanManager.createBeanAttributes((AnnotatedType) annotatedType);
+                BeanImpl<?> syntheticManagedBean = new BeanImpl(lifecycleType, attrs.isAlternative());
+                applyBeanAttributes(syntheticManagedBean, attrs);
+                ProcessManagedBeanImpl<?> event = new ProcessManagedBeanImpl(
+                        messageHandler, knowledgeBase, syntheticManagedBean, (AnnotatedType) annotatedType, beanManager);
+                fireEventToExtensions(event);
+                managedCount++;
+            } catch (DefinitionException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new DefinitionException(
+                        "Error processing interceptor/decorator bean " + lifecycleType.getName(), e);
+            }
+        }
+        return managedCount;
     }
 
     /**
@@ -1417,8 +1746,10 @@ public class Syringe {
                         replaceProducerBean(producerBean, finalProducer);
                     }
                 }
+            } catch (DefinitionException e) {
+                throw e;
             } catch (Exception e) {
-                log("Error processing producer", e);
+                throw new DefinitionException("Error processing producer", e);
             }
         }
     }
@@ -1502,12 +1833,10 @@ public class Syringe {
         info("Processing observer methods");
 
         Collection<ObserverMethodInfo> existing = new ArrayList<>(knowledgeBase.getObserverMethodInfos());
-        boolean ephemeralDiscovery = false;
         if (existing.isEmpty()) {
             // Fallback discovery so ProcessObserverMethod can still be delivered at lifecycle time
             // even when runtime observer registration is deferred to deployment validation.
             existing = discoverObserverMethodsForLifecycleDispatch();
-            ephemeralDiscovery = true;
         }
         List<ObserverMethodInfo> updated = new ArrayList<>();
 
@@ -1527,27 +1856,39 @@ public class Syringe {
                             contextManager);
                 }
 
-                ProcessObserverMethodImpl<?, ?> event =
-                        new ProcessObserverMethodImpl(messageHandler, knowledgeBase, observer, annotatedMethod);
-
-                fireEventToExtensions(event);
-
-                if (event.isVetoed()) {
-                    continue; // remove this observer
+                if (info.isSynthetic()) {
+                    ProcessSyntheticObserverMethodImpl<?, ?> event =
+                            new ProcessSyntheticObserverMethodImpl(messageHandler, knowledgeBase, observer, null);
+                    fireEventToExtensions(event);
+                    if (event.isVetoed()) {
+                        continue; // remove this observer
+                    }
+                    ObserverMethod<?> finalObserver = event.getFinalObserverMethod();
+                    if (finalObserver == observer) {
+                        updated.add(info);
+                    } else {
+                        updated.add(toObserverMethodInfo(finalObserver, info.getDeclaringBean()));
+                    }
+                } else {
+                    ProcessObserverMethodImpl<?, ?> event =
+                            new ProcessObserverMethodImpl(messageHandler, knowledgeBase, observer, annotatedMethod);
+                    fireEventToExtensions(event);
+                    if (event.isVetoed()) {
+                        continue; // remove this observer
+                    }
+                    ObserverMethod<?> finalObserver = event.getFinalObserverMethod();
+                    if (finalObserver == observer) {
+                        updated.add(info);
+                    } else {
+                        updated.add(toObserverMethodInfo(finalObserver, info.getDeclaringBean()));
+                    }
                 }
 
-                ObserverMethod<?> finalObserver = event.getObserverMethod();
-                updated.add(toObserverMethodInfo(finalObserver, info.getDeclaringBean()));
-
+            } catch (DefinitionException e) {
+                throw e;
             } catch (Exception e) {
-                log("Error processing observer method", e);
+                throw new DefinitionException("Error processing observer method", e);
             }
-        }
-
-        if (ephemeralDiscovery) {
-            // Keep runtime observer registration timing unchanged; this fallback is only
-            // to fire ProcessObserverMethod lifecycle events consistently.
-            return;
         }
 
         knowledgeBase.getObserverMethodInfos().clear();
@@ -1564,10 +1905,7 @@ public class Syringe {
 
     private Collection<ObserverMethodInfo> discoverObserverMethodsForLifecycleDispatch() {
         List<ObserverMethodInfo> out = new ArrayList<ObserverMethodInfo>();
-        for (Bean<?> bean : knowledgeBase.getBeans()) {
-            if (!(bean instanceof BeanImpl<?>)) {
-                continue;
-            }
+        for (Bean<?> bean : filterObserverDeclaringBeansForLifecycleDispatch()) {
             Class<?> beanClass = bean.getBeanClass();
             for (Method method : collectObserverCandidateMethods(beanClass)) {
                 ObserverMethodInfo info = toObserverInfoForLifecycleDispatch(method, bean);
@@ -1575,6 +1913,85 @@ public class Syringe {
                     out.add(info);
                 }
             }
+        }
+        return out;
+    }
+
+    private Set<Bean<?>> filterObserverDeclaringBeansForLifecycleDispatch() {
+        Set<Class<?>> discoveredClasses = new HashSet<Class<?>>(knowledgeBase.getClasses());
+        Set<Bean<?>> candidates = new LinkedHashSet<Bean<?>>();
+
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (!(bean instanceof BeanImpl<?>)) {
+                continue;
+            }
+            Class<?> beanClass = bean.getBeanClass();
+            if (beanClass == null || !discoveredClasses.contains(beanClass)) {
+                continue;
+            }
+            if (beanClass.getName().startsWith(Syringe.class.getName() + "$")) {
+                continue;
+            }
+            if (!isBeanEnabledForObserverLifecycle(bean)) {
+                continue;
+            }
+            candidates.add(bean);
+        }
+
+        return applyObserverSpecializationFiltering(candidates);
+    }
+
+    private boolean isBeanEnabledForObserverLifecycle(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        if (!bean.isAlternative()) {
+            return true;
+        }
+        if (bean instanceof BeanImpl<?>) {
+            return ((BeanImpl<?>) bean).isAlternativeEnabled();
+        }
+        return true;
+    }
+
+    private Set<Bean<?>> applyObserverSpecializationFiltering(Set<Bean<?>> candidates) {
+        if (candidates == null || candidates.size() < 2) {
+            return candidates;
+        }
+
+        Set<Class<?>> specializedSuperclasses = new HashSet<Class<?>>();
+        for (Bean<?> candidate : candidates) {
+            Class<?> beanClass = candidate.getBeanClass();
+            if (beanClass != null && AnnotationsEnum.hasSpecializesAnnotation(beanClass)) {
+                specializedSuperclasses.addAll(collectSpecializedSuperclasses(beanClass));
+            }
+        }
+
+        if (specializedSuperclasses.isEmpty()) {
+            return candidates;
+        }
+
+        Set<Bean<?>> filtered = new LinkedHashSet<Bean<?>>();
+        for (Bean<?> candidate : candidates) {
+            if (!specializedSuperclasses.contains(candidate.getBeanClass())) {
+                filtered.add(candidate);
+            }
+        }
+        return filtered;
+    }
+
+    private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
+        Set<Class<?>> out = new HashSet<Class<?>>();
+        if (beanClass == null || !AnnotationsEnum.hasSpecializesAnnotation(beanClass)) {
+            return out;
+        }
+        Class<?> current = beanClass.getSuperclass();
+        while (current != null && !Object.class.equals(current)) {
+            out.add(current);
+            if (!AnnotationsEnum.hasSpecializesAnnotation(current)) {
+                break;
+            }
+            current = current.getSuperclass();
         }
         return out;
     }
@@ -1635,7 +2052,11 @@ public class Syringe {
         }
 
         boolean async = observesAsyncCount > 0;
-        Type eventType = observedParameter.getParameterizedType();
+        Type eventType = GenericTypeResolver.resolve(
+                observedParameter.getParameterizedType(),
+                declaringBean.getBeanClass(),
+                method.getDeclaringClass()
+        );
         Set<Annotation> qualifiers = extractObserverQualifiers(observedParameter);
         Reception reception = Reception.ALWAYS;
         TransactionPhase transactionPhase = TransactionPhase.IN_PROGRESS;
@@ -1757,6 +2178,7 @@ public class Syringe {
                         sb.getQualifiers(),
                         sb.getScope(),
                         sb.getName(),
+                        sb.getId(),
                         sb.getStereotypes(),
                         sb.isAlternative(),
                         priority,
@@ -1951,20 +2373,29 @@ public class Syringe {
     private void fireAfterBeanDiscovery() {
         info("Firing AfterBeanDiscovery event");
         beanManager.markAfterBeanDiscoveryFired();
-        AfterBeanDiscovery event = new AfterBeanDiscoveryImpl(messageHandler, knowledgeBase, beanManager);
+        AfterBeanDiscovery event = new AfterBeanDiscoveryImpl(messageHandler, knowledgeBase, beanManager, this::fireEventToExtensions);
 
         // Register programmatically added custom contexts BEFORE firing to extensions
         // This allows extensions to see and potentially modify these contexts
         if (!customContextsToRegister.isEmpty()) {
             info("Registering " + customContextsToRegister.size() + " programmatically added custom contexts");
 
-            for (Map.Entry<Class<? extends Annotation>, Context> entry : customContextsToRegister.entrySet()) {
-                try {
-                    event.addContext(entry.getValue());
-                    info("Registered custom context for @" +entry.getKey().getSimpleName());
-                } catch (Exception e) {
-                    log("Failed to register custom context for @" + entry.getKey().getSimpleName(), e);
-                    throw new DeploymentException("Failed to register custom context for @" + entry.getKey().getSimpleName(), e);
+            try {
+                if (event instanceof ObserverInvocationLifecycle) {
+                    ((ObserverInvocationLifecycle) event).beginObserverInvocation();
+                }
+                for (Map.Entry<Class<? extends Annotation>, Context> entry : customContextsToRegister.entrySet()) {
+                    try {
+                        event.addContext(entry.getValue());
+                        info("Registered custom context for @" +entry.getKey().getSimpleName());
+                    } catch (Exception e) {
+                        log("Failed to register custom context for @" + entry.getKey().getSimpleName(), e);
+                        throw new DeploymentException("Failed to register custom context for @" + entry.getKey().getSimpleName(), e);
+                    }
+                }
+            } finally {
+                if (event instanceof ObserverInvocationLifecycle) {
+                    ((ObserverInvocationLifecycle) event).endObserverInvocation();
                 }
             }
         }
@@ -2314,8 +2745,13 @@ public class Syringe {
     private void fireAfterDeploymentValidation() {
         info("Firing AfterDeploymentValidation event");
         beanManager.markAfterDeploymentValidationFired();
+        int deploymentProblemsBefore = knowledgeBase.getErrors().size();
         AfterDeploymentValidation event = new AfterDeploymentValidationImpl(knowledgeBase);
         fireEventToExtensions(event);
+        int deploymentProblemsAfter = knowledgeBase.getErrors().size();
+        if (deploymentProblemsAfter > deploymentProblemsBefore) {
+            throw new DeploymentException("Deployment validation failed due to AfterDeploymentValidation problems.");
+        }
     }
 
     // ============================================================
@@ -2372,8 +2808,9 @@ public class Syringe {
      * @param <T> the event type
      */
     private <T> void fireEventToExtensions(T event) {
-        Object dispatchEvent = wrapEventForObserverInvocationGuard(event);
-        Class<?> eventType = dispatchEvent.getClass();
+        Class<?> eventType = event != null ? event.getClass() : Object.class;
+        boolean afterDeploymentValidationEvent = isAfterDeploymentValidationLifecycleEvent(eventType);
+        boolean beforeShutdownEvent = isBeforeShutdownLifecycleEvent(eventType);
         List<ExtensionObserverInvocation> invocations = new ArrayList<>();
 
         // Collect all matching observer methods across all extensions, with priority
@@ -2385,11 +2822,18 @@ public class Syringe {
         invocations.sort(Comparator.comparingInt(inv -> inv.priority));
 
         for (ExtensionObserverInvocation invocation : invocations) {
+            boolean lifecycleInvocationStarted = false;
+            boolean extensionAwareInvocationStarted = false;
             try {
-                if (dispatchEvent instanceof ObserverInvocationControlled) {
-                    ((ObserverInvocationControlled) dispatchEvent).enterObserverInvocation();
+                if (event instanceof ObserverInvocationLifecycle) {
+                    ((ObserverInvocationLifecycle) event).beginObserverInvocation();
+                    lifecycleInvocationStarted = true;
                 }
-                invocation.invoke(dispatchEvent);
+                if (event instanceof ExtensionAwareObserverInvocation) {
+                    ((ExtensionAwareObserverInvocation) event).enterObserverInvocation(invocation.extension);
+                    extensionAwareInvocationStarted = true;
+                }
+                invocation.invoke(event);
             } catch (Exception e) {
                 Throwable cause = e;
                 if (e instanceof InvocationTargetException &&
@@ -2399,6 +2843,28 @@ public class Syringe {
                 if (cause instanceof DefinitionException) {
                     throw (DefinitionException) cause;
                 }
+                if (cause instanceof NonPortableBehaviourException) {
+                    throw (NonPortableBehaviourException) cause;
+                }
+                if (isDefinitionErrorLifecycleEvent(eventType)) {
+                    throw new DefinitionException("Error invoking extension " +
+                            invocation.extension.getClass().getName() + " for event " +
+                            eventType.getSimpleName(), cause);
+                }
+                if (afterDeploymentValidationEvent) {
+                    String causeMessage = cause.getMessage();
+                    if (causeMessage == null || causeMessage.isEmpty()) {
+                        causeMessage = cause.getClass().getName();
+                    }
+                    knowledgeBase.addError("[AfterDeploymentValidation] Observer exception from extension " +
+                            invocation.extension.getClass().getName() + ": " + causeMessage);
+                    continue;
+                }
+                if (beforeShutdownEvent) {
+                    log("Ignoring BeforeShutdown observer exception from extension " +
+                            invocation.extension.getClass().getName(), cause instanceof Exception ? (Exception) cause : null);
+                    continue;
+                }
                 if (cause instanceof RuntimeException) {
                     throw (RuntimeException) cause;
                 }
@@ -2406,11 +2872,64 @@ public class Syringe {
                     invocation.extension.getClass().getName() + " for event " +
                     eventType.getSimpleName(), cause);
             } finally {
-                if (dispatchEvent instanceof ObserverInvocationControlled) {
-                    ((ObserverInvocationControlled) dispatchEvent).exitObserverInvocation();
+                if (extensionAwareInvocationStarted && event instanceof ExtensionAwareObserverInvocation) {
+                    ((ExtensionAwareObserverInvocation) event).exitObserverInvocation();
+                }
+                if (lifecycleInvocationStarted && event instanceof ObserverInvocationLifecycle) {
+                    ((ObserverInvocationLifecycle) event).endObserverInvocation();
                 }
             }
         }
+    }
+
+    private boolean isDefinitionErrorLifecycleEvent(Class<?> eventType) {
+        if (eventType == null) {
+            return false;
+        }
+        Set<String> typeNames = new HashSet<String>();
+        Class<?> current = eventType;
+        while (current != null) {
+            typeNames.add(current.getName());
+            for (Class<?> iface : current.getInterfaces()) {
+                typeNames.add(iface.getName());
+            }
+            current = current.getSuperclass();
+        }
+        return typeNames.contains("jakarta.enterprise.inject.spi.BeforeBeanDiscovery") ||
+                typeNames.contains("jakarta.enterprise.inject.spi.AfterTypeDiscovery") ||
+                typeNames.contains("jakarta.enterprise.inject.spi.AfterBeanDiscovery");
+    }
+
+    private boolean isAfterDeploymentValidationLifecycleEvent(Class<?> eventType) {
+        if (eventType == null) {
+            return false;
+        }
+        Set<String> typeNames = new HashSet<String>();
+        Class<?> current = eventType;
+        while (current != null) {
+            typeNames.add(current.getName());
+            for (Class<?> iface : current.getInterfaces()) {
+                typeNames.add(iface.getName());
+            }
+            current = current.getSuperclass();
+        }
+        return typeNames.contains("jakarta.enterprise.inject.spi.AfterDeploymentValidation");
+    }
+
+    private boolean isBeforeShutdownLifecycleEvent(Class<?> eventType) {
+        if (eventType == null) {
+            return false;
+        }
+        Set<String> typeNames = new HashSet<String>();
+        Class<?> current = eventType;
+        while (current != null) {
+            typeNames.add(current.getName());
+            for (Class<?> iface : current.getInterfaces()) {
+                typeNames.add(iface.getName());
+            }
+            current = current.getSuperclass();
+        }
+        return typeNames.contains("jakarta.enterprise.inject.spi.BeforeShutdown");
     }
 
     private void collectExtensionObserverMethods(Extension extension,
@@ -2418,6 +2937,19 @@ public class Syringe {
                                                  List<ExtensionObserverInvocation> sink) {
         for (Method method : extension.getClass().getMethods()) {
             Parameter[] parameters = method.getParameters();
+            int observesParameterIndex = -1;
+
+            for (int i = 0; i < parameters.length; i++) {
+                Parameter parameter = parameters[i];
+                if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
+                    observesParameterIndex = i;
+                    break;
+                }
+            }
+
+            if (observesParameterIndex >= 0) {
+                validateWithAnnotationsUsage(method, observesParameterIndex, parameters);
+            }
 
             for (int i = 0; i < parameters.length; i++) {
                 Parameter parameter = parameters[i];
@@ -2426,12 +2958,65 @@ public class Syringe {
                     validateExtensionObserverStaticMethod(method, parameter, observedType);
                     if (observedType.isAssignableFrom(eventType)) {
                         int priority = resolvePriority(method, parameter);
+                        Set<Class<? extends Annotation>> withAnnotationsFilter =
+                                resolveWithAnnotationsFilter(parameter);
+                        if (withAnnotationsFilter != null &&
+                                !ProcessAnnotatedType.class.isAssignableFrom(observedType)) {
+                            throw new DefinitionException("@WithAnnotations is only valid on ProcessAnnotatedType observer parameters: " +
+                                    method.getDeclaringClass().getName() + "." + method.getName());
+                        }
                         sink.add(new ExtensionObserverInvocation(extension, method, i, priority, beanManager,
-                                knowledgeBase, messageHandler));
+                                knowledgeBase, messageHandler, withAnnotationsFilter));
                     }
                 }
             }
         }
+    }
+
+    private void validateWithAnnotationsUsage(Method method,
+                                              int observesParameterIndex,
+                                              Parameter[] parameters) {
+        for (int i = 0; i < parameters.length; i++) {
+            if (i == observesParameterIndex) {
+                continue;
+            }
+            if (resolveWithAnnotationsFilter(parameters[i]) != null) {
+                throw new DefinitionException("@WithAnnotations may only be declared on the @Observes event parameter: " +
+                        method.getDeclaringClass().getName() + "." + method.getName());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Set<Class<? extends Annotation>> resolveWithAnnotationsFilter(Parameter parameter) {
+        if (!AnnotationsEnum.hasWithAnnotationsAnnotation(parameter)) {
+            return null;
+        }
+        Annotation[] annotations = parameter.getAnnotations();
+        for (Annotation annotation : annotations) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (!AnnotationsEnum.WITH_ANNOTATIONS.matches(annotationType)) {
+                continue;
+            }
+            try {
+                Method valueMethod = annotationType.getMethod("value");
+                Object value = valueMethod.invoke(annotation);
+                if (!(value instanceof Class[])) {
+                    return Collections.emptySet();
+                }
+                Class<?>[] rawValues = (Class<?>[]) value;
+                Set<Class<? extends Annotation>> filter = new LinkedHashSet<Class<? extends Annotation>>();
+                for (Class<?> rawValue : rawValues) {
+                    if (rawValue != null && Annotation.class.isAssignableFrom(rawValue)) {
+                        filter.add((Class<? extends Annotation>) rawValue);
+                    }
+                }
+                return filter;
+            } catch (Exception e) {
+                throw new DefinitionException("Unable to read @WithAnnotations value on parameter " + parameter, e);
+            }
+        }
+        return null;
     }
 
     private void validateExtensionObserverStaticMethod(Method method,
@@ -2573,19 +3158,23 @@ public class Syringe {
             if (ObserverInvocationControlled.class.equals(declaringClass)) {
                 if ("enterObserverInvocation".equals(method.getName())) {
                     observerInvocationActive.set(Boolean.TRUE);
+                    if (delegate instanceof ObserverInvocationLifecycle) {
+                        ((ObserverInvocationLifecycle) delegate).beginObserverInvocation();
+                    }
                     return null;
                 }
                 if ("exitObserverInvocation".equals(method.getName())) {
+                    if (delegate instanceof ObserverInvocationLifecycle) {
+                        ((ObserverInvocationLifecycle) delegate).endObserverInvocation();
+                    }
                     observerInvocationActive.set(Boolean.FALSE);
                     return null;
                 }
             }
 
             if (!observerInvocationActive.get()) {
-                if (!isReadOnlyMethod(method)) {
-                    throw new IllegalStateException("Container lifecycle event method " + method.getName() +
-                            " may only be called during observer method invocation");
-                }
+                throw new IllegalStateException("Container lifecycle event method " + method.getName() +
+                        " may only be called during observer method invocation");
             }
 
             try {
@@ -2595,10 +3184,6 @@ public class Syringe {
             }
         }
 
-        private boolean isReadOnlyMethod(Method method) {
-            String methodName = method.getName();
-            return methodName.startsWith("get") || methodName.startsWith("is");
-        }
     }
 
     /**
@@ -2613,6 +3198,7 @@ public class Syringe {
         private final BeanManager beanManager;
         private final KnowledgeBase knowledgeBase;
         private final MessageHandler messageHandler;
+        private final Set<Class<? extends Annotation>> withAnnotationsFilter;
 
         ExtensionObserverInvocation(Extension extension,
                                     Method method,
@@ -2620,7 +3206,8 @@ public class Syringe {
                                     int priority,
                                     BeanManager beanManager,
                                     KnowledgeBase knowledgeBase,
-                                    MessageHandler messageHandler) {
+                                    MessageHandler messageHandler,
+                                    Set<Class<? extends Annotation>> withAnnotationsFilter) {
             this.extension = extension;
             this.method = method;
             this.observesIndex = observesIndex;
@@ -2628,9 +3215,13 @@ public class Syringe {
             this.beanManager = beanManager;
             this.knowledgeBase = knowledgeBase;
             this.messageHandler = messageHandler;
+            this.withAnnotationsFilter = withAnnotationsFilter;
         }
 
         void invoke(Object event) throws Exception {
+            if (!matchesWithAnnotationsFilter(event)) {
+                return;
+            }
             java.lang.reflect.Parameter[] parameters = method.getParameters();
             Object[] args = new Object[parameters.length];
             args[observesIndex] = event;
@@ -2647,6 +3238,67 @@ public class Syringe {
                     extension.getClass().getSimpleName() + "." + method.getName() +
                     "(@Observes " + event.getClass().getSimpleName() +
                     ", priority=" + priority + ")");
+        }
+
+        private boolean matchesWithAnnotationsFilter(Object event) {
+            if (withAnnotationsFilter == null) {
+                return true;
+            }
+            if (!(event instanceof ProcessAnnotatedType<?>)) {
+                return true;
+            }
+            AnnotatedType<?> annotatedType = ((ProcessAnnotatedType<?>) event).getAnnotatedType();
+            if (annotatedType == null) {
+                return false;
+            }
+            return hasAnyConfiguredAnnotation(annotatedType);
+        }
+
+        private boolean hasAnyConfiguredAnnotation(AnnotatedType<?> annotatedType) {
+            if (matchesAnyAnnotation(annotatedType.getAnnotations())) {
+                return true;
+            }
+            for (AnnotatedField<?> field : annotatedType.getFields()) {
+                if (matchesAnyAnnotation(field.getAnnotations())) {
+                    return true;
+                }
+            }
+            for (AnnotatedMethod<?> method : annotatedType.getMethods()) {
+                if (matchesAnyAnnotation(method.getAnnotations())) {
+                    return true;
+                }
+                for (AnnotatedParameter<?> parameter : method.getParameters()) {
+                    if (matchesAnyAnnotation(parameter.getAnnotations())) {
+                        return true;
+                    }
+                }
+            }
+            for (AnnotatedConstructor<?> constructor : annotatedType.getConstructors()) {
+                if (matchesAnyAnnotation(constructor.getAnnotations())) {
+                    return true;
+                }
+                for (AnnotatedParameter<?> parameter : constructor.getParameters()) {
+                    if (matchesAnyAnnotation(parameter.getAnnotations())) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private boolean matchesAnyAnnotation(Set<Annotation> annotations) {
+            for (Annotation annotation : annotations) {
+                Class<? extends Annotation> presentType = annotation.annotationType();
+                if (withAnnotationsFilter.contains(presentType)) {
+                    return true;
+                }
+                for (Class<? extends Annotation> filter : withAnnotationsFilter) {
+                    if (presentType.isAnnotationPresent(filter)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         private Object resolveExtensionParameter(java.lang.reflect.Parameter parameter) {

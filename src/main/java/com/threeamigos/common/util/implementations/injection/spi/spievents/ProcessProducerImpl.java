@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.ProducerConfiguratorImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -25,12 +24,38 @@ import jakarta.enterprise.inject.spi.configurator.ProducerConfigurator;
  * @param <X> the return type of the producer method/field
  * @see jakarta.enterprise.inject.spi.ProcessProducer
  */
-public class ProcessProducerImpl<T, X> extends PhaseAware implements ProcessProducer<T, X> {
+public class ProcessProducerImpl<T, X> extends PhaseAware
+        implements ProcessProducer<T, X>, ObserverInvocationLifecycle {
 
     private final KnowledgeBase knowledgeBase;
     private final Phase phase;
     private final AnnotatedMember<T> annotatedMember;
     private Producer<X> producer;
+    private ProducerConfiguratorImpl<X> configurator;
+    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
+    private final ThreadLocal<Boolean> lifecycleManaged = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
+    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
+    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
 
     public ProcessProducerImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Phase phase,
                                AnnotatedMember<T> annotatedMember, Producer<X> producer) {
@@ -45,37 +70,47 @@ public class ProcessProducerImpl<T, X> extends PhaseAware implements ProcessProd
 
     @Override
     public AnnotatedMember<T> getAnnotatedMember() {
+        assertObserverInvocationActive();
         return annotatedMember;
     }
 
     @Override
     public Producer<X> getProducer() {
+        assertObserverInvocationActive();
         return producer;
     }
 
     @Override
     public void setProducer(Producer<X> producer) {
+        assertObserverInvocationActive();
+        if (configureCalledInCurrentInvocation.get()) {
+            throw new IllegalStateException(
+                    "setProducer() and configureProducer() cannot both be used in the same observer invocation");
+        }
         checkNotNull(producer, "Producer");
         info(phase, "Changing Producer for " + annotatedMember.getJavaMember().getName());
         this.producer = producer;
+        setCalledInCurrentInvocation.set(Boolean.TRUE);
     }
 
     @Override
     public ProducerConfigurator<X> configureProducer() {
+        assertObserverInvocationActive();
+        if (setCalledInCurrentInvocation.get()) {
+            throw new IllegalStateException(
+                    "setProducer() and configureProducer() cannot both be used in the same observer invocation");
+        }
+        configureCalledInCurrentInvocation.set(Boolean.TRUE);
         info(phase, "Configuring Producer for " + annotatedMember.getJavaMember().getName());
-        return new ProducerConfiguratorImpl<X>(producer) {
-            @Override
-            public Producer<X> complete() {
-                // When configuration completes, update the producer and return it
-                Producer<X> configuredProducer = super.complete();
-                setProducer(configuredProducer);
-                return configuredProducer;
-            }
-        };
+        if (configurator == null) {
+            configurator = new ProducerConfiguratorImpl<X>(producer);
+        }
+        return configurator;
     }
 
     @Override
     public void addDefinitionError(Throwable t) {
+        assertObserverInvocationActive();
         knowledgeBase.addDefinitionError(phase, "Definition error for " + annotatedMember.getJavaMember().getName(), t);
     }
 
@@ -84,5 +119,32 @@ public class ProcessProducerImpl<T, X> extends PhaseAware implements ProcessProd
      */
     public Producer<X> getFinalProducer() {
         return producer;
+    }
+
+    @Override
+    public void beginObserverInvocation() {
+        lifecycleManaged.set(Boolean.TRUE);
+        observerInvocationActive.set(Boolean.TRUE);
+        setCalledInCurrentInvocation.set(Boolean.FALSE);
+        configureCalledInCurrentInvocation.set(Boolean.FALSE);
+        configurator = null;
+    }
+
+    @Override
+    public void endObserverInvocation() {
+        if (configureCalledInCurrentInvocation.get() && configurator != null) {
+            producer = configurator.complete();
+        }
+        observerInvocationActive.set(Boolean.FALSE);
+        setCalledInCurrentInvocation.set(Boolean.FALSE);
+        configureCalledInCurrentInvocation.set(Boolean.FALSE);
+        configurator = null;
+    }
+
+    protected void assertObserverInvocationActive() {
+        if (lifecycleManaged.get() && !observerInvocationActive.get()) {
+            throw new IllegalStateException(
+                    "ProcessProducer methods may only be called during observer method invocation");
+        }
     }
 }

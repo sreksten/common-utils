@@ -68,6 +68,7 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
 
     @Override
     public void addDefinitionError(Throwable t) {
+        assertObserverInvocationActive();
         knowledgeBase.addDefinitionError(Phase.PROCESS_MANAGED_BEAN, "Definition error for " +
                 bean.getBeanClass().getName(), t);
     }

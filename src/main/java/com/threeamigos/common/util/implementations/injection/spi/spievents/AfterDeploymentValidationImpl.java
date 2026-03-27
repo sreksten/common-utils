@@ -1,9 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import jakarta.enterprise.inject.spi.AfterDeploymentValidation;
-import jakarta.enterprise.inject.spi.BeanManager;
 
 /**
  * AfterDeploymentValidation event implementation.
@@ -19,9 +17,15 @@ import jakarta.enterprise.inject.spi.BeanManager;
  *
  * @see jakarta.enterprise.inject.spi.AfterDeploymentValidation
  */
-public class AfterDeploymentValidationImpl implements AfterDeploymentValidation {
+public class AfterDeploymentValidationImpl implements AfterDeploymentValidation, ObserverInvocationLifecycle {
 
     private final KnowledgeBase knowledgeBase;
+    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
 
     public AfterDeploymentValidationImpl(KnowledgeBase knowledgeBase) {
         this.knowledgeBase = knowledgeBase;
@@ -29,6 +33,31 @@ public class AfterDeploymentValidationImpl implements AfterDeploymentValidation 
 
     @Override
     public void addDeploymentProblem(Throwable t) {
-        knowledgeBase.addError(Phase.AFTER_DEPLOYMENT_VALIDATION, "Deployment problem from extension: ", t);
+        assertObserverInvocationActive();
+        if (t == null) {
+            knowledgeBase.addError("[AfterDeploymentValidation] Deployment problem from extension");
+            return;
+        }
+        String message = t.getMessage();
+        if (message == null || message.isEmpty()) {
+            message = t.getClass().getName();
+        }
+        knowledgeBase.addError("[AfterDeploymentValidation] Deployment problem from extension: " + message);
+    }
+
+    @Override
+    public void beginObserverInvocation() {
+        observerInvocationActive.set(Boolean.TRUE);
+    }
+
+    @Override
+    public void endObserverInvocation() {
+        observerInvocationActive.set(Boolean.FALSE);
+    }
+
+    private void assertObserverInvocationActive() {
+        if (!observerInvocationActive.get()) {
+            throw new IllegalStateException("AfterDeploymentValidation methods may only be called during observer method invocation");
+        }
     }
 }

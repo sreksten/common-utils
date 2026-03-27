@@ -907,7 +907,7 @@ public class CDI41BeanValidator {
         Set<Class<? extends Annotation>> visited = new HashSet<>();
         for (Annotation annotation : annotationsOf(clazz)) {
             Class<? extends Annotation> at = annotation.annotationType();
-            if (hasMetaAnnotation(at, Stereotype.class)) {
+            if (isStereotypeAnnotationType(at)) {
                 String stereotypeName = extractNameFromStereotype(at, clazz, visited);
                 if (stereotypeName != null) {
                     return stereotypeName;
@@ -942,6 +942,20 @@ public class CDI41BeanValidator {
             return null;
         }
 
+        if (knowledgeBase.isRegisteredStereotype(stereotypeAnnotation)) {
+            Set<Annotation> definition = knowledgeBase.getStereotypeDefinition(stereotypeAnnotation);
+            if (definition != null) {
+                for (Annotation meta : definition) {
+                    if (meta == null) {
+                        continue;
+                    }
+                    if (Named.class.equals(meta.annotationType())) {
+                        return defaultedBeanName(readNamedValue(meta), beanClass);
+                    }
+                }
+            }
+        }
+
         Named named = stereotypeAnnotation.getAnnotation(Named.class);
         if (named != null) {
             return defaultedBeanName(named.value(), beanClass);
@@ -949,7 +963,7 @@ public class CDI41BeanValidator {
 
         for (Annotation meta : stereotypeAnnotation.getAnnotations()) {
             Class<? extends Annotation> metaType = meta.annotationType();
-            if (hasMetaAnnotation(metaType, Stereotype.class)) {
+            if (isStereotypeAnnotationType(metaType)) {
                 String nested = extractNameFromStereotype(metaType, beanClass, visited);
                 if (nested != null) {
                     return nested;
@@ -965,8 +979,11 @@ public class CDI41BeanValidator {
 
         // Then, inherit qualifiers from stereotypes
         for (Annotation a : annotationsOf(clazz)) {
-            if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
+            if (isStereotypeAnnotationType(a.annotationType())) {
                 result.addAll(extractQualifiersFromStereotype(a.annotationType()));
+            }
+            if (isQualifierAnnotationType(a.annotationType())) {
+                result.add(a);
             }
         }
 
@@ -992,7 +1009,7 @@ public class CDI41BeanValidator {
         // 3) No class scope -> resolve from stereotypes (must be consistent).
         Class<? extends Annotation> inheritedScope = null;
         for (Annotation a : annotationsOf(clazz)) {
-            if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
+            if (isStereotypeAnnotationType(a.annotationType())) {
                 Class<? extends Annotation> stereotypeScope = extractScopeFromStereotype(a.annotationType());
                 if (stereotypeScope == null) {
                     continue;
@@ -1047,7 +1064,7 @@ public class CDI41BeanValidator {
         Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
         for (Annotation a : annotationsOf(clazz)) {
             Class<? extends Annotation> at = a.annotationType();
-            if (hasMetaAnnotation(at, Stereotype.class)) {
+            if (isStereotypeAnnotationType(at)) {
                 stereotypes.add(at);
             }
         }
@@ -1068,6 +1085,21 @@ public class CDI41BeanValidator {
      * @return the scope annotation class, or null if no scope is defined
      */
     private Class<? extends Annotation> extractScopeFromStereotype(Class<? extends Annotation> stereotypeClass) {
+        if (knowledgeBase.isRegisteredStereotype(stereotypeClass)) {
+            Set<Annotation> definition = knowledgeBase.getStereotypeDefinition(stereotypeClass);
+            if (definition != null) {
+                for (Annotation annotation : definition) {
+                    if (annotation == null) {
+                        continue;
+                    }
+                    Class<? extends Annotation> annotationType = annotation.annotationType();
+                    if (isScopeAnnotationType(annotationType)) {
+                        return annotationType;
+                    }
+                }
+            }
+        }
+
         // First check if stereotype directly has a scope annotation
         for (Annotation a : stereotypeClass.getAnnotations()) {
             Class<? extends Annotation> at = a.annotationType();
@@ -1078,7 +1110,7 @@ public class CDI41BeanValidator {
 
         // Then check nested stereotypes (stereotype can be annotated with another stereotype)
         for (Annotation a : stereotypeClass.getAnnotations()) {
-            if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
+            if (isStereotypeAnnotationType(a.annotationType())) {
                 Class<? extends Annotation> nestedScope = extractScopeFromStereotype(a.annotationType());
                 if (nestedScope != null) {
                     return nestedScope;
@@ -1104,9 +1136,24 @@ public class CDI41BeanValidator {
                 .filter(annotation -> !Named.class.equals(annotation.annotationType()))
                 .collect(Collectors.toSet());
 
+        if (knowledgeBase.isRegisteredStereotype(stereotypeClass)) {
+            Set<Annotation> definition = knowledgeBase.getStereotypeDefinition(stereotypeClass);
+            if (definition != null) {
+                for (Annotation annotation : definition) {
+                    if (annotation == null) {
+                        continue;
+                    }
+                    Class<? extends Annotation> annotationType = annotation.annotationType();
+                    if (isQualifierAnnotationType(annotationType) && !Named.class.equals(annotationType)) {
+                        qualifiers.add(annotation);
+                    }
+                }
+            }
+        }
+
         // Recursively collect from nested stereotypes
         for (Annotation a : stereotypeClass.getAnnotations()) {
-            if (hasMetaAnnotation(a.annotationType(), Stereotype.class)) {
+            if (isStereotypeAnnotationType(a.annotationType())) {
                 qualifiers.addAll(extractQualifiersFromStereotype(a.annotationType()));
             }
         }
@@ -1974,7 +2021,7 @@ public class CDI41BeanValidator {
         Set<Class<? extends Annotation>> visited = new HashSet<>();
         for (Annotation annotation : annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (hasMetaAnnotation(annotationType, Stereotype.class) &&
+            if (isStereotypeAnnotationType(annotationType) &&
                 stereotypeDeclaresAlternative(annotationType, visited)) {
                 return true;
             }
@@ -1995,7 +2042,7 @@ public class CDI41BeanValidator {
 
         for (Annotation meta : stereotypeType.getAnnotations()) {
             Class<? extends Annotation> metaType = meta.annotationType();
-            if (hasMetaAnnotation(metaType, Stereotype.class) &&
+            if (isStereotypeAnnotationType(metaType) &&
                 stereotypeDeclaresAlternative(metaType, visited)) {
                 return true;
             }
@@ -2045,6 +2092,15 @@ public class CDI41BeanValidator {
             return false;
         }
 
+        if (knowledgeBase.hasAfterTypeDiscoveryAlternativesCustomized()) {
+            if (knowledgeBase.getApplicationAlternativeOrder(clazz) >= 0) {
+                return true;
+            }
+            if (extractEffectivePriority(clazz) != null) {
+                return false;
+            }
+        }
+
         if (extractEffectivePriority(clazz) != null) {
             return true;
         }
@@ -2059,7 +2115,7 @@ public class CDI41BeanValidator {
 
         for (Annotation annotation : annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (hasMetaAnnotation(annotationType, Stereotype.class)) {
+            if (isStereotypeAnnotationType(annotationType)) {
                 if (knowledgeBase.isAlternativeEnabledProgrammatically(annotationType.getName()) ||
                     knowledgeBase.isAlternativeEnabledInBeansXml(annotationType.getName())) {
                     return true;
@@ -2301,6 +2357,7 @@ public class CDI41BeanValidator {
         // CDI scopes are meta-annotated with @Scope or @NormalScope
         return hasMetaAnnotation(at, Scope.class)
                 || hasMetaAnnotation(at, NormalScope.class)
+                || knowledgeBase.isRegisteredScope(at)
                 // plus common built-ins
                 || at.equals(Dependent.class)
                 || at.equals(ApplicationScoped.class)
@@ -2380,7 +2437,7 @@ public class CDI41BeanValidator {
     }
 
     private boolean isQualifierAnnotationType(Class<? extends Annotation> at) {
-        return hasMetaAnnotation(at, Qualifier.class);
+        return hasMetaAnnotation(at, Qualifier.class) || knowledgeBase.isRegisteredQualifier(at);
     }
 
     /**
@@ -2663,7 +2720,7 @@ public class CDI41BeanValidator {
         }
 
         // "all stereotype annotations"
-        return hasMetaAnnotation(annotationType, Stereotype.class);
+        return isStereotypeAnnotationType(annotationType);
     }
 
     /**
@@ -3004,7 +3061,13 @@ public class CDI41BeanValidator {
      * Extracts qualifiers from an annotated element.
      */
     private Set<Annotation> extractQualifiers(AnnotatedElement element) {
-        return QualifiersHelper.extractBeanQualifiers(element.getAnnotations());
+        Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(element.getAnnotations());
+        for (Annotation annotation : element.getAnnotations()) {
+            if (isQualifierAnnotationType(annotation.annotationType())) {
+                qualifiers.add(annotation);
+            }
+        }
+        return QualifiersHelper.normalizeBeanQualifiers(qualifiers);
     }
 
     /**
@@ -3014,7 +3077,7 @@ public class CDI41BeanValidator {
         Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
         for (Annotation annotation : element.getAnnotations()) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (hasMetaAnnotation(annotationType, Stereotype.class)) {
+            if (isStereotypeAnnotationType(annotationType)) {
                 stereotypes.add(annotationType);
             }
         }
@@ -3051,7 +3114,7 @@ public class CDI41BeanValidator {
         Class<? extends Annotation> inheritedScope = null;
         for (Annotation ann : element.getAnnotations()) {
             Class<? extends Annotation> annotationType = ann.annotationType();
-            if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+            if (!isStereotypeAnnotationType(annotationType)) {
                 continue;
             }
 
@@ -3724,7 +3787,13 @@ public class CDI41BeanValidator {
      * Checks if an annotation type is an interceptor binding.
      */
     private boolean isInterceptorBinding(Class<? extends Annotation> annotationType) {
-        return annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class);
+        return annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
+                knowledgeBase.isRegisteredInterceptorBinding(annotationType);
+    }
+
+    private boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
+        return hasMetaAnnotation(annotationType, Stereotype.class) ||
+                knowledgeBase.isRegisteredStereotype(annotationType);
     }
 
     /**

@@ -5,6 +5,7 @@ import java.lang.reflect.AnnotatedElement;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Enumeration of JSR-330 (Dependency Injection) and CDI annotations used by the container.
@@ -331,6 +332,16 @@ public enum AnnotationsEnum {
     OBSERVES_ASYNC(jakarta.enterprise.event.ObservesAsync.class),
 
     /**
+     * Restricts ProcessAnnotatedType observer delivery to types containing
+     * at least one of the specified annotations.
+     * Maps: {@code javax.enterprise.inject.spi.WithAnnotations},
+     * {@code jakarta.enterprise.inject.spi.WithAnnotations}
+     * Since: CDI 1.1
+     */
+    WITH_ANNOTATIONS(javax.enterprise.inject.spi.WithAnnotations.class,
+            jakarta.enterprise.inject.spi.WithAnnotations.class),
+
+    /**
      * Interceptor binding that activates request context for a method invocation.
      * Maps: {@code jakarta.enterprise.context.control.ActivateRequestContext}
      * Since: CDI 2.0
@@ -398,6 +409,14 @@ public enum AnnotationsEnum {
     // ==================== Implementation ====================
 
     private final Set<Class<? extends Annotation>> annotations;
+    private static final Set<Class<? extends Annotation>> DYNAMIC_QUALIFIERS =
+            Collections.newSetFromMap(new ConcurrentHashMap<Class<? extends Annotation>, Boolean>());
+    private static final Set<Class<? extends Annotation>> DYNAMIC_SCOPES =
+            Collections.newSetFromMap(new ConcurrentHashMap<Class<? extends Annotation>, Boolean>());
+    private static final Set<Class<? extends Annotation>> DYNAMIC_STEREOTYPES =
+            Collections.newSetFromMap(new ConcurrentHashMap<Class<? extends Annotation>, Boolean>());
+    private static final Set<Class<? extends Annotation>> DYNAMIC_INTERCEPTOR_BINDINGS =
+            Collections.newSetFromMap(new ConcurrentHashMap<Class<? extends Annotation>, Boolean>());
 
     @SafeVarargs
     AnnotationsEnum(Class<? extends Annotation>... annotationClasses) {
@@ -491,14 +510,14 @@ public enum AnnotationsEnum {
      * Checks if the element has a @Qualifier annotation (javax or jakarta).
      */
     public static boolean hasQualifierAnnotation(AnnotatedElement element) {
-        return QUALIFIER.isPresent(element);
+        return QUALIFIER.isPresent(element) || matchesDynamicAnnotation(element, DYNAMIC_QUALIFIERS);
     }
 
     /**
      * Checks if the element has a @Scope annotation (javax or jakarta).
      */
     public static boolean hasScopeAnnotation(AnnotatedElement element) {
-        return SCOPE.isPresent(element);
+        return SCOPE.isPresent(element) || matchesDynamicAnnotation(element, DYNAMIC_SCOPES);
     }
 
     /**
@@ -585,7 +604,7 @@ public enum AnnotationsEnum {
      * Checks if the element has a @Stereotype annotation (javax or jakarta).
      */
     public static boolean hasStereotypeAnnotation(AnnotatedElement element) {
-        return STEREOTYPE.isPresent(element);
+        return STEREOTYPE.isPresent(element) || matchesDynamicAnnotation(element, DYNAMIC_STEREOTYPES);
     }
 
     /**
@@ -648,7 +667,7 @@ public enum AnnotationsEnum {
      * Checks if the element has an @InterceptorBinding annotation (javax or jakarta).
      */
     public static boolean hasInterceptorBindingAnnotation(AnnotatedElement element) {
-        return INTERCEPTOR_BINDING.isPresent(element);
+        return INTERCEPTOR_BINDING.isPresent(element) || matchesDynamicAnnotation(element, DYNAMIC_INTERCEPTOR_BINDINGS);
     }
 
     /**
@@ -726,6 +745,13 @@ public enum AnnotationsEnum {
      */
     public static boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
         return OBSERVES_ASYNC.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @WithAnnotations annotation (javax or jakarta).
+     */
+    public static boolean hasWithAnnotationsAnnotation(AnnotatedElement element) {
+        return WITH_ANNOTATIONS.isPresent(element);
     }
 
     /**
@@ -810,5 +836,39 @@ public enum AnnotationsEnum {
             }
         }
         return null;
+    }
+
+    public static void registerDynamicQualifier(Class<? extends Annotation> qualifierType) {
+        registerDynamicAnnotation(qualifierType, DYNAMIC_QUALIFIERS);
+    }
+
+    public static void registerDynamicScope(Class<? extends Annotation> scopeType) {
+        registerDynamicAnnotation(scopeType, DYNAMIC_SCOPES);
+    }
+
+    public static void registerDynamicStereotype(Class<? extends Annotation> stereotypeType) {
+        registerDynamicAnnotation(stereotypeType, DYNAMIC_STEREOTYPES);
+    }
+
+    public static void registerDynamicInterceptorBinding(Class<? extends Annotation> bindingType) {
+        registerDynamicAnnotation(bindingType, DYNAMIC_INTERCEPTOR_BINDINGS);
+    }
+
+    private static void registerDynamicAnnotation(Class<? extends Annotation> annotationType,
+                                                  Set<Class<? extends Annotation>> sink) {
+        if (annotationType == null || sink == null) {
+            return;
+        }
+        sink.add(annotationType);
+    }
+
+    private static boolean matchesDynamicAnnotation(AnnotatedElement element,
+                                                    Set<Class<? extends Annotation>> dynamicSet) {
+        if (!(element instanceof Class)) {
+            return false;
+        }
+        @SuppressWarnings("unchecked")
+        Class<? extends Annotation> annotationType = (Class<? extends Annotation>) element;
+        return dynamicSet.contains(annotationType);
     }
 }

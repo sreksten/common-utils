@@ -55,11 +55,13 @@ public class ProcessProducerFieldImpl<T, X> extends ProcessProducerImpl<T, X>
 
     @Override
     public Bean<X> getBean() {
+        assertObserverInvocationActive();
         return bean;
     }
 
     @Override
     public Annotated getAnnotated() {
+        assertObserverInvocationActive();
         return annotatedField;
     }
 

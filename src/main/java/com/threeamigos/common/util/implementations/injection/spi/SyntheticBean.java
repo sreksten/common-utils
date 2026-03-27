@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.spi.PassivationCapable;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import java.lang.annotation.Annotation;
@@ -17,7 +18,7 @@ import java.util.function.Function;
  * @param <T> the bean type
  * @author CDI Container
  */
-public class SyntheticBean<T> implements Bean<T> {
+public class SyntheticBean<T> implements Bean<T>, PassivationCapable {
 
     // Bean attributes
     private final Class<?> beanClass;
@@ -25,6 +26,7 @@ public class SyntheticBean<T> implements Bean<T> {
     private final Set<Annotation> qualifiers;
     private final Class<? extends Annotation> scope;
     private final String name;
+    private final String id;
     private final Set<Class<? extends Annotation>> stereotypes;
     private final boolean alternative;
     private final Integer priority;
@@ -46,6 +48,7 @@ public class SyntheticBean<T> implements Bean<T> {
             Set<Annotation> qualifiers,
             Class<? extends Annotation> scope,
             String name,
+            String id,
             Set<Class<? extends Annotation>> stereotypes,
             boolean alternative,
             Integer priority,
@@ -58,6 +61,7 @@ public class SyntheticBean<T> implements Bean<T> {
         this.qualifiers = Collections.unmodifiableSet(new HashSet<>(qualifiers));
         this.scope = scope;
         this.name = name;
+        this.id = id;
         this.stereotypes = Collections.unmodifiableSet(new HashSet<>(stereotypes));
         this.alternative = alternative;
         this.priority = priority;
@@ -89,6 +93,11 @@ public class SyntheticBean<T> implements Bean<T> {
     @Override
     public String getName() {
         return name;
+    }
+
+    @Override
+    public String getId() {
+        return id;
     }
 
     @Override

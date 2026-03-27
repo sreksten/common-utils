@@ -1,36 +1,30 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.ObserverMethodConfiguratorImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import jakarta.enterprise.inject.spi.*;
+import jakarta.enterprise.inject.spi.AnnotatedMethod;
+import jakarta.enterprise.inject.spi.Extension;
+import jakarta.enterprise.inject.spi.ObserverMethod;
+import jakarta.enterprise.inject.spi.ProcessSyntheticObserverMethod;
 import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
 
 /**
- * ProcessObserverMethod event implementation.
- * 
- * <p>Fired for each observer method discovered in managed beans.
- * Extensions can observe this event to:
- * <ul>
- *   <li>Inspect observer method metadata</li>
- *   <li>Replace the observer method via {@link #configureObserverMethod()}</li>
- *   <li>Veto the observer method via {@link #veto()}</li>
- * </ul>
+ * ProcessSyntheticObserverMethod event implementation.
  *
- * @param <T> the event type being observed
- * @param <X> the bean class containing the observer method
- * @see jakarta.enterprise.inject.spi.ProcessObserverMethod
+ * @param <T> observed event type
+ * @param <X> declaring bean class
  */
-public class ProcessObserverMethodImpl<T, X> extends PhaseAware
-        implements ProcessObserverMethod<T, X>, ObserverInvocationLifecycle {
+public class ProcessSyntheticObserverMethodImpl<T, X> extends PhaseAware
+        implements ProcessSyntheticObserverMethod<T, X>, ObserverInvocationLifecycle {
 
-    private final AnnotatedMethod<X> annotatedMethod;
     private final KnowledgeBase knowledgeBase;
+    private final Extension source;
     private ObserverMethod<T> observerMethod;
     private ObserverMethodConfiguratorImpl<T> configurator;
-    private boolean vetoed = false;
+    private boolean vetoed;
     private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
         @Override
         protected Boolean initialValue() {
@@ -56,18 +50,21 @@ public class ProcessObserverMethodImpl<T, X> extends PhaseAware
         }
     };
 
-    public ProcessObserverMethodImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase,
-                                     ObserverMethod<T> observerMethod, AnnotatedMethod<X> annotatedMethod) {
+    public ProcessSyntheticObserverMethodImpl(MessageHandler messageHandler,
+                                              KnowledgeBase knowledgeBase,
+                                              ObserverMethod<T> observerMethod,
+                                              Extension source) {
         super(messageHandler);
         this.knowledgeBase = knowledgeBase;
         this.observerMethod = observerMethod;
-        this.annotatedMethod = annotatedMethod;
+        this.source = source;
     }
 
     @Override
     public AnnotatedMethod<X> getAnnotatedMethod() {
         assertObserverInvocationActive();
-        return annotatedMethod;
+        throw new NonPortableBehaviourException(
+                "ProcessSyntheticObserverMethod.getAnnotatedMethod() is non-portable and must not be used");
     }
 
     @Override
@@ -79,31 +76,8 @@ public class ProcessObserverMethodImpl<T, X> extends PhaseAware
     @Override
     public void addDefinitionError(Throwable t) {
         assertObserverInvocationActive();
-        knowledgeBase.addDefinitionError(Phase.PROCESS_OBSERVER_METHOD, "Definition error for " +
-                annotatedMethod.getJavaMember().getName(), t);
-    }
-
-    @Override
-    public ObserverMethodConfigurator<T> configureObserverMethod() {
-        assertObserverInvocationActive();
-        if (setCalledInCurrentInvocation.get()) {
-            throw new IllegalStateException(
-                    "setObserverMethod() and configureObserverMethod() cannot both be used in the same observer invocation");
-        }
-        configureCalledInCurrentInvocation.set(Boolean.TRUE);
-        info(Phase.PROCESS_OBSERVER_METHOD, "Creating ObserverMethodConfigurator");
-        if (configurator == null) {
-            configurator = new ObserverMethodConfiguratorImpl<T>(null);
-            configurator.read(observerMethod);
-        }
-        return configurator;
-    }
-
-    @Override
-    public void veto() {
-        assertObserverInvocationActive();
-        info(Phase.PROCESS_OBSERVER_METHOD, "Veto on " + annotatedMethod.getJavaMember().getName());
-        this.vetoed = true;
+        knowledgeBase.addDefinitionError(Phase.PROCESS_OBSERVER_METHOD,
+                "Definition error for synthetic observer " + observerMethod.getClass().getName(), t);
     }
 
     @Override
@@ -114,10 +88,35 @@ public class ProcessObserverMethodImpl<T, X> extends PhaseAware
                     "setObserverMethod() and configureObserverMethod() cannot both be used in the same observer invocation");
         }
         checkNotNull(observerMethod, "ObserverMethod");
-        info(Phase.PROCESS_OBSERVER_METHOD, "Changing observer method for " +
-                annotatedMethod.getJavaMember().getName());
         this.observerMethod = observerMethod;
         setCalledInCurrentInvocation.set(Boolean.TRUE);
+    }
+
+    @Override
+    public ObserverMethodConfigurator<T> configureObserverMethod() {
+        assertObserverInvocationActive();
+        if (setCalledInCurrentInvocation.get()) {
+            throw new IllegalStateException(
+                    "setObserverMethod() and configureObserverMethod() cannot both be used in the same observer invocation");
+        }
+        configureCalledInCurrentInvocation.set(Boolean.TRUE);
+        if (configurator == null) {
+            configurator = new ObserverMethodConfiguratorImpl<T>(null);
+            configurator.read(observerMethod);
+        }
+        return configurator;
+    }
+
+    @Override
+    public void veto() {
+        assertObserverInvocationActive();
+        this.vetoed = true;
+    }
+
+    @Override
+    public Extension getSource() {
+        assertObserverInvocationActive();
+        return source;
     }
 
     public boolean isVetoed() {
@@ -154,7 +153,7 @@ public class ProcessObserverMethodImpl<T, X> extends PhaseAware
     protected void assertObserverInvocationActive() {
         if (lifecycleManaged.get() && !observerInvocationActive.get()) {
             throw new IllegalStateException(
-                    "ProcessObserverMethod methods may only be called during observer method invocation");
+                    "ProcessSyntheticObserverMethod methods may only be called during observer method invocation");
         }
     }
 }

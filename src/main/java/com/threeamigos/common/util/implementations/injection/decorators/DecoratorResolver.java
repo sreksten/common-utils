@@ -130,6 +130,10 @@ public class DecoratorResolver {
             .comparingInt((DecoratorInfo d) -> d.getPriority() != Integer.MAX_VALUE ? 0 : 1)
             .thenComparingInt(DecoratorInfo::getPriority)
             .thenComparingInt(d -> {
+                int appOrder = knowledgeBase.getApplicationDecoratorOrder(d.getDecoratorClass());
+                if (appOrder >= 0) {
+                    return appOrder;
+                }
                 int order = knowledgeBase.getDecoratorBeansXmlOrder(d.getDecoratorClass());
                 return order >= 0 ? order : Integer.MAX_VALUE;
             })
@@ -140,6 +144,9 @@ public class DecoratorResolver {
      * A decorator is enabled if it is listed in any beans.xml OR has @Priority.
      */
     private boolean isEnabled(DecoratorInfo decorator) {
+        if (knowledgeBase.hasAfterTypeDiscoveryDecoratorsCustomized()) {
+            return knowledgeBase.getApplicationDecoratorOrder(decorator.getDecoratorClass()) >= 0;
+        }
         int beansXmlOrder = knowledgeBase.getDecoratorBeansXmlOrder(decorator.getDecoratorClass());
         return beansXmlOrder >= 0 || decorator.getPriority() != Integer.MAX_VALUE;
     }

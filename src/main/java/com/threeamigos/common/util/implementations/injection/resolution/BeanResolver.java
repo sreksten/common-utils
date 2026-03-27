@@ -9,6 +9,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.ContextManag
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
@@ -526,6 +527,11 @@ public class BeanResolver implements DependencyResolver {
     }
 
     private int getAlternativePriority(Bean<?> bean) {
+        Integer applicationOrderPriority = getAfterTypeDiscoveryAlternativePriority(bean);
+        if (applicationOrderPriority != null) {
+            return applicationOrderPriority;
+        }
+
         if (bean instanceof ProducerBean) {
             ProducerBean<?> producerBean = (ProducerBean<?>) bean;
             Integer memberPriority = extractPriorityFromProducerMember(producerBean);
@@ -551,12 +557,34 @@ public class BeanResolver implements DependencyResolver {
             }
         }
 
+        if (bean instanceof SyntheticBean) {
+            Integer syntheticPriority = ((SyntheticBean<?>) bean).getPriority();
+            if (syntheticPriority != null) {
+                return syntheticPriority;
+            }
+        }
+
         Integer classPriority = extractPriorityFromClass(bean.getBeanClass());
         if (classPriority != null) {
             return classPriority;
         }
 
         return jakarta.interceptor.Interceptor.Priority.APPLICATION;
+    }
+
+    private Integer getAfterTypeDiscoveryAlternativePriority(Bean<?> bean) {
+        if (bean == null || !knowledgeBase.hasAfterTypeDiscoveryAlternativesCustomized()) {
+            return null;
+        }
+        Class<?> beanClass = bean.getBeanClass();
+        if (beanClass == null) {
+            return null;
+        }
+        int applicationOrder = knowledgeBase.getApplicationAlternativeOrder(beanClass);
+        if (applicationOrder < 0) {
+            return null;
+        }
+        return Integer.MAX_VALUE - applicationOrder;
     }
 
     private Integer extractPriorityFromProducerMember(ProducerBean<?> producerBean) {

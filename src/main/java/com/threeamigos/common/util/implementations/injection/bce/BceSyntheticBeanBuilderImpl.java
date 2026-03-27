@@ -5,11 +5,13 @@ import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.build.compatible.spi.InvokerInfo;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanDisposer;
+import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.types.Type;
@@ -347,6 +349,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         Set<Annotation> beanQualifiers = new LinkedHashSet<Annotation>(qualifiers);
         if (beanQualifiers.isEmpty()) {
             beanQualifiers.add(Default.Literal.INSTANCE);
+            beanQualifiers.add(Any.Literal.INSTANCE);
         }
 
         SyntheticBean<T> bean = new SyntheticBean<T>(
@@ -355,12 +358,13 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
             beanQualifiers,
             scope,
             name,
+            null,
             stereotypes,
             alternative,
             priority,
             createCallback,
             destroyCallback,
-            Collections.emptySet()
+            Collections.<InjectionPoint>emptySet()
         );
         knowledgeBase.addBean(bean);
     }

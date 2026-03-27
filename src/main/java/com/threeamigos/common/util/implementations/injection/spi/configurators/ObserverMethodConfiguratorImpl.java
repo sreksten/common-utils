@@ -1,13 +1,17 @@
 package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.ObservesAsync;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.spi.EventContext;
+import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.enterprise.inject.spi.ObserverMethod;
 import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
 import java.util.HashSet;
 import java.util.Set;
@@ -56,12 +60,28 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
         if (method == null) {
             throw new IllegalArgumentException("Method cannot be null");
         }
-        // Read metadata from the Method
         this.beanClass = method.getDeclaringClass();
-        this.observedType = method.getGenericParameterTypes().length > 0
-            ? method.getGenericParameterTypes()[0]
-            : Object.class;
-        // Note: qualifiers, reception, transactionPhase would need to be read from annotations
+        this.qualifiers.clear();
+        this.reception = Reception.ALWAYS;
+        this.transactionPhase = TransactionPhase.IN_PROGRESS;
+        this.async = false;
+
+        Parameter[] parameters = method.getParameters();
+        Type[] genericTypes = method.getGenericParameterTypes();
+        boolean foundObserverParameter = false;
+
+        for (int i = 0; i < parameters.length; i++) {
+            Type parameterType = i < genericTypes.length ? genericTypes[i] : parameters[i].getParameterizedType();
+            if (readObserverParameterMetadata(parameterType, parameters[i].getAnnotations())) {
+                foundObserverParameter = true;
+                break;
+            }
+        }
+
+        if (!foundObserverParameter) {
+            throw new IllegalArgumentException("Method " + method + " does not declare an @Observes/@ObservesAsync parameter");
+        }
+
         return this;
     }
 
@@ -70,12 +90,26 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
         if (method == null) {
             throw new IllegalArgumentException("AnnotatedMethod cannot be null");
         }
-        // Read metadata from AnnotatedMethod
         this.beanClass = method.getDeclaringType().getJavaClass();
-        if (!method.getParameters().isEmpty()) {
-            this.observedType = method.getParameters().get(0).getBaseType();
+        this.qualifiers.clear();
+        this.reception = Reception.ALWAYS;
+        this.transactionPhase = TransactionPhase.IN_PROGRESS;
+        this.async = false;
+
+        boolean foundObserverParameter = false;
+        for (AnnotatedParameter<?> parameter : method.getParameters()) {
+            if (readObserverParameterMetadata(parameter.getBaseType(),
+                    parameter.getAnnotations().toArray(new Annotation[0]))) {
+                foundObserverParameter = true;
+                break;
+            }
         }
-        // Note: qualifiers, reception, transactionPhase would need to be read from annotations
+
+        if (!foundObserverParameter) {
+            throw new IllegalArgumentException("AnnotatedMethod " + method.getJavaMember() +
+                    " does not declare an @Observes/@ObservesAsync parameter");
+        }
+
         return this;
     }
 
@@ -94,6 +128,57 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
         this.priority = observerMethod.getPriority();
         this.async = observerMethod.isAsync();
         return this;
+    }
+
+    private boolean readObserverParameterMetadata(Type parameterType, Annotation[] annotations) {
+        if (annotations == null) {
+            return false;
+        }
+
+        boolean observerParameter = false;
+        Reception resolvedReception = this.reception;
+        TransactionPhase resolvedTransactionPhase = this.transactionPhase;
+        boolean resolvedAsync = this.async;
+        Set<Annotation> resolvedQualifiers = new HashSet<Annotation>();
+
+        for (Annotation annotation : annotations) {
+            if (annotation == null) {
+                continue;
+            }
+
+            if (annotation instanceof Observes) {
+                Observes observes = (Observes) annotation;
+                resolvedReception = observes.notifyObserver();
+                resolvedTransactionPhase = observes.during();
+                resolvedAsync = false;
+                observerParameter = true;
+                continue;
+            }
+
+            if (annotation instanceof ObservesAsync) {
+                ObservesAsync observesAsync = (ObservesAsync) annotation;
+                resolvedReception = observesAsync.notifyObserver();
+                resolvedTransactionPhase = TransactionPhase.IN_PROGRESS;
+                resolvedAsync = true;
+                observerParameter = true;
+                continue;
+            }
+
+            if (annotation.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)) {
+                resolvedQualifiers.add(annotation);
+            }
+        }
+
+        if (observerParameter) {
+            this.observedType = parameterType;
+            this.reception = resolvedReception;
+            this.transactionPhase = resolvedTransactionPhase;
+            this.async = resolvedAsync;
+            this.qualifiers.clear();
+            this.qualifiers.addAll(resolvedQualifiers);
+        }
+
+        return observerParameter;
     }
 
     @Override

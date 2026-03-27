@@ -621,6 +621,9 @@ public class BeanManagerImpl implements BeanManager {
         if (!bean.isAlternative()) {
             return true;
         }
+        if (bean instanceof SyntheticBean) {
+            return ((SyntheticBean<?>) bean).getPriority() != null || isAlternativeSelectedByClassOrStereotype(bean);
+        }
         if (bean instanceof BeanImpl) {
             return ((BeanImpl<?>) bean).isAlternativeEnabled();
         }
@@ -2424,6 +2427,11 @@ public class BeanManagerImpl implements BeanManager {
      * Returns APPLICATION priority if not specified.
      */
     private int getPriority(Object obj) {
+        Integer applicationOrderPriority = getAfterTypeDiscoveryAlternativePriority(obj);
+        if (applicationOrderPriority != null) {
+            return applicationOrderPriority.intValue();
+        }
+
         Class<?> clazz = obj instanceof Bean ? ((Bean<?>) obj).getBeanClass() : obj.getClass();
 
         if (obj instanceof SyntheticProducerBeanImpl) {
@@ -2472,12 +2480,37 @@ public class BeanManagerImpl implements BeanManager {
             }
         }
 
+        if (obj instanceof SyntheticBean) {
+            Integer syntheticPriority = ((SyntheticBean<?>) obj).getPriority();
+            if (syntheticPriority != null) {
+                return syntheticPriority;
+            }
+        }
+
         Integer classPriority = extractPriorityFromClass(clazz);
         if (classPriority != null) {
             return classPriority;
         }
 
         return jakarta.interceptor.Interceptor.Priority.APPLICATION;
+    }
+
+    private Integer getAfterTypeDiscoveryAlternativePriority(Object obj) {
+        if (!knowledgeBase.hasAfterTypeDiscoveryAlternativesCustomized()) {
+            return null;
+        }
+        if (!(obj instanceof Bean)) {
+            return null;
+        }
+        Class<?> beanClass = ((Bean<?>) obj).getBeanClass();
+        if (beanClass == null) {
+            return null;
+        }
+        int applicationOrder = knowledgeBase.getApplicationAlternativeOrder(beanClass);
+        if (applicationOrder < 0) {
+            return null;
+        }
+        return Integer.valueOf(Integer.MAX_VALUE - applicationOrder);
     }
 
     private int getDecoratorPriority(Decorator<?> decorator) {

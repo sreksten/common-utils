@@ -14,7 +14,11 @@ import jakarta.enterprise.inject.spi.configurator.BeanConfigurator;
 import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
  * AfterBeanDiscovery event implementation.
@@ -29,27 +33,43 @@ import java.util.List;
  *
  * @see jakarta.enterprise.inject.spi.AfterBeanDiscovery
  */
-public class AfterBeanDiscoveryImpl extends PhaseAware implements AfterBeanDiscovery {
+public class AfterBeanDiscoveryImpl extends PhaseAware
+        implements AfterBeanDiscovery, ObserverInvocationLifecycle, ExtensionAwareObserverInvocation {
 
     private final KnowledgeBase knowledgeBase;
     private final BeanManager beanManager;
+    private final Consumer<Object> eventDispatcher;
+    private final ThreadLocal<Extension> currentObserverExtension = new ThreadLocal<Extension>();
+    private final ThreadLocal<List<Runnable>> endOfObserverActions = ThreadLocal.withInitial(ArrayList::new);
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public AfterBeanDiscoveryImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, BeanManager beanManager) {
+        this(messageHandler, knowledgeBase, beanManager, null);
+    }
+
+    public AfterBeanDiscoveryImpl(MessageHandler messageHandler,
+                                  KnowledgeBase knowledgeBase,
+                                  BeanManager beanManager,
+                                  Consumer<Object> eventDispatcher) {
         super(messageHandler);
         this.knowledgeBase = knowledgeBase;
         this.beanManager = beanManager;
+        this.eventDispatcher = eventDispatcher;
     }
 
     @Override
     public void addDefinitionError(Throwable t) {
+        assertObserverInvocationActive();
         knowledgeBase.addDefinitionError(Phase.AFTER_BEAN_DISCOVERY, "Definition error from extension", t);
     }
 
     @Override
     public void addBean(Bean<?> bean) {
+        assertObserverInvocationActive();
         checkNotNull(bean, "Bean");
         info(Phase.AFTER_BEAN_DISCOVERY, "Registering synthetic bean: " + bean.getBeanClass().getSimpleName() +
                 " with types: " + bean.getTypes());
+        fireProcessSyntheticBean(bean);
         knowledgeBase.addBean(bean);
     }
 
@@ -62,8 +82,16 @@ public class AfterBeanDiscoveryImpl extends PhaseAware implements AfterBeanDisco
      */
     @Override
     public <T> BeanConfigurator<T> addBean() {
+        assertObserverInvocationActive();
         info(Phase.AFTER_BEAN_DISCOVERY, "Creating BeanConfigurator for synthetic bean");
-        return new BeanConfiguratorImpl<>(messageHandler, knowledgeBase);
+        final BeanConfiguratorImpl<T> configurator = new BeanConfiguratorImpl<T>(messageHandler, knowledgeBase);
+        final AtomicBoolean applied = new AtomicBoolean(false);
+        registerEndOfObserverAction(() -> {
+            if (applied.compareAndSet(false, true)) {
+                configurator.complete();
+            }
+        });
+        return configurator;
     }
 
     /**
@@ -75,23 +103,41 @@ public class AfterBeanDiscoveryImpl extends PhaseAware implements AfterBeanDisco
      */
     @Override
     public <T> ObserverMethodConfigurator<T> addObserverMethod() {
+        assertObserverInvocationActive();
         info(Phase.AFTER_BEAN_DISCOVERY, "Creating ObserverMethodConfigurator for synthetic observer");
-        return new ObserverMethodConfiguratorImpl<T>(knowledgeBase) {
+        final AtomicBoolean applied = new AtomicBoolean(false);
+        final ObserverMethodConfiguratorImpl<T> configurator = new ObserverMethodConfiguratorImpl<T>(knowledgeBase) {
             @Override
             public ObserverMethod<T> complete() {
                 ObserverMethod<T> observer = super.complete();
-                addObserverMethod(observer);
+                if (applied.compareAndSet(false, true)) {
+                    addObserverMethod(observer);
+                }
                 return observer;
             }
         };
+        registerEndOfObserverAction(() -> configurator.complete());
+        return configurator;
     }
 
     @Override
     public void addObserverMethod(ObserverMethod<?> observerMethod) {
+        assertObserverInvocationActive();
         checkNotNull(observerMethod, "ObserverMethod");
+        if (!hasNotifyOverride(observerMethod)) {
+            knowledgeBase.addDefinitionError(Phase.AFTER_BEAN_DISCOVERY,
+                    "ObserverMethod " + observerMethod.getClass().getName() +
+                            " must override notify(T) or notify(EventContext<T>)", null);
+            return;
+        }
         info(Phase.AFTER_BEAN_DISCOVERY, "Registering synthetic observer method: observedType=" +
                 observerMethod.getObservedType() + ", async=" + observerMethod.isAsync());
-        knowledgeBase.addSyntheticObserverMethod(observerMethod);
+        ProcessSyntheticObserverMethodImpl<?, ?> event = fireProcessSyntheticObserverMethod(observerMethod);
+        if (event != null && event.isVetoed()) {
+            return;
+        }
+        ObserverMethod<?> finalObserver = event != null ? event.getFinalObserverMethod() : observerMethod;
+        knowledgeBase.addSyntheticObserverMethod(finalObserver);
     }
 
     /**
@@ -135,6 +181,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware implements AfterBeanDisco
      */
     @Override
     public void addContext(Context context) {
+        assertObserverInvocationActive();
         checkNotNull(context, "Context");
         info(Phase.AFTER_BEAN_DISCOVERY, "Registering custom context: " + context.getClass().getName() +
                 " for scope @" + context.getScope().getSimpleName());
@@ -156,11 +203,27 @@ public class AfterBeanDiscoveryImpl extends PhaseAware implements AfterBeanDisco
     @Override
     @SuppressWarnings("unchecked")
     public <T> List<AnnotatedType<T>> getAnnotatedTypes(Class<T> type) {
+        assertObserverInvocationActive();
         checkNotNull(type, "Class");
         info(Phase.AFTER_BEAN_DISCOVERY, "Getting annotated types for: " + type.getName());
-        List<AnnotatedType<T>> result = new ArrayList<>();
+        List<AnnotatedType<T>> result = new ArrayList<AnnotatedType<T>>();
+        Set<String> seen = new HashSet<String>();
         for (AnnotatedType<?> annotatedType : knowledgeBase.getRegisteredAnnotatedTypes().values()) {
             if (annotatedType.getJavaClass().equals(type)) {
+                result.add((AnnotatedType<T>)annotatedType);
+                seen.add("registered:" + System.identityHashCode(annotatedType));
+            }
+        }
+        for (Class<?> discoveredClass : knowledgeBase.getClasses()) {
+            if (!type.equals(discoveredClass)) {
+                continue;
+            }
+            AnnotatedType<?> annotatedType = knowledgeBase.getAnnotatedTypeOverride(discoveredClass);
+            if (annotatedType == null) {
+                annotatedType = beanManager.createAnnotatedType(discoveredClass);
+            }
+            String key = "discovered:" + discoveredClass.getName() + ":" + System.identityHashCode(annotatedType);
+            if (seen.add(key)) {
                 result.add((AnnotatedType<T>) annotatedType);
             }
         }
@@ -171,8 +234,12 @@ public class AfterBeanDiscoveryImpl extends PhaseAware implements AfterBeanDisco
     @Override
     @SuppressWarnings("unchecked")
     public <T> AnnotatedType<T> getAnnotatedType(Class<T> type, String id) {
+        assertObserverInvocationActive();
         checkNotNull(type, "Class");
-        checkNotNull(id, "ID");
+        if (id == null) {
+            List<AnnotatedType<T>> candidates = getAnnotatedTypes(type);
+            return candidates.isEmpty() ? null : candidates.get(0);
+        }
 
         info(Phase.AFTER_BEAN_DISCOVERY, "Getting annotated type: " + type.getName() + " with ID: " + id);
 
@@ -190,5 +257,91 @@ public class AfterBeanDiscoveryImpl extends PhaseAware implements AfterBeanDisco
 
         info(Phase.AFTER_BEAN_DISCOVERY, "No annotated type found with ID: " + id);
         return null;
+    }
+
+    @Override
+    public void beginObserverInvocation() {
+        observerInvocationActive.set(Boolean.TRUE);
+    }
+
+    @Override
+    public void endObserverInvocation() {
+        try {
+            List<Runnable> actions = endOfObserverActions.get();
+            if (actions.isEmpty()) {
+                return;
+            }
+            List<Runnable> pending = new ArrayList<Runnable>(actions);
+            actions.clear();
+            for (Runnable action : pending) {
+                action.run();
+            }
+        } finally {
+            observerInvocationActive.set(Boolean.FALSE);
+        }
+    }
+
+    @Override
+    public void enterObserverInvocation(Extension extension) {
+        currentObserverExtension.set(extension);
+    }
+
+    @Override
+    public void exitObserverInvocation() {
+        currentObserverExtension.remove();
+    }
+
+    private void registerEndOfObserverAction(Runnable action) {
+        if (action == null) {
+            return;
+        }
+        endOfObserverActions.get().add(action);
+    }
+
+    private void assertObserverInvocationActive() {
+        if (!observerInvocationActive.get()) {
+            throw new IllegalStateException("AfterBeanDiscovery methods may only be called during observer method invocation");
+        }
+    }
+
+    private void fireProcessSyntheticBean(Bean<?> bean) {
+        if (eventDispatcher == null || bean == null) {
+            return;
+        }
+        ProcessSyntheticBeanImpl<?> event = new ProcessSyntheticBeanImpl<>(
+                messageHandler, knowledgeBase, bean, currentObserverExtension.get());
+        eventDispatcher.accept(event);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private ProcessSyntheticObserverMethodImpl<?, ?> fireProcessSyntheticObserverMethod(ObserverMethod<?> observerMethod) {
+        if (eventDispatcher == null || observerMethod == null) {
+            return null;
+        }
+        ProcessSyntheticObserverMethodImpl event =
+                new ProcessSyntheticObserverMethodImpl(
+                        messageHandler, knowledgeBase, observerMethod, currentObserverExtension.get());
+        eventDispatcher.accept(event);
+        return event;
+    }
+
+    private boolean hasNotifyOverride(ObserverMethod<?> observerMethod) {
+        Class<?> observerClass = observerMethod.getClass();
+        try {
+            java.lang.reflect.Method notifyWithEventContext =
+                    observerClass.getMethod("notify", jakarta.enterprise.inject.spi.EventContext.class);
+            if (!ObserverMethod.class.equals(notifyWithEventContext.getDeclaringClass())) {
+                return true;
+            }
+        } catch (NoSuchMethodException ignored) {
+            // Fall through.
+        }
+
+        try {
+            java.lang.reflect.Method notifyWithPayload = observerClass.getMethod("notify", Object.class);
+            return !ObserverMethod.class.equals(notifyWithPayload.getDeclaringClass());
+        } catch (NoSuchMethodException ignored) {
+            return false;
+        }
     }
 }

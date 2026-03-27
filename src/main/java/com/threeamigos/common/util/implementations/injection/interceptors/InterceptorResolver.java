@@ -236,7 +236,8 @@ public class InterceptorResolver {
         // Check both jakarta and javax namespaces for backward compatibility
         return AnnotationsEnum.hasActivateRequestContextAnnotation(annotationType) ||
                annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
-               annotationType.isAnnotationPresent(javax.interceptor.InterceptorBinding.class);
+               annotationType.isAnnotationPresent(javax.interceptor.InterceptorBinding.class) ||
+               knowledgeBase.isRegisteredInterceptorBinding(annotationType);
     }
 
     /**

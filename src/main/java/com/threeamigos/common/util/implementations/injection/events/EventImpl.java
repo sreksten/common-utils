@@ -755,6 +755,10 @@ public class EventImpl<T> implements Event<T> {
 
         // Find matching reflection-based observers (from @Observes/@ObservesAsync methods)
         for (ObserverMethodInfo observerInfo : knowledgeBase.getObserverMethodInfos()) {
+            if (!isObserverDispatchCandidate(observerInfo, async)) {
+                continue;
+            }
+
             // Match async/sync mode
             if (observerInfo.isAsync() != async) {
                 continue;
@@ -804,6 +808,106 @@ public class EventImpl<T> implements Event<T> {
             }
         }
         return deduped;
+    }
+
+    private boolean isObserverDispatchCandidate(ObserverMethodInfo observerInfo, boolean async) {
+        if (observerInfo == null) {
+            return false;
+        }
+        if (observerInfo.isSynthetic()) {
+            return true;
+        }
+        if (!isDeclaringBeanEnabledForObserver(observerInfo.getDeclaringBean())) {
+            return false;
+        }
+
+        Method observerMethod = observerInfo.getObserverMethod();
+        if (observerMethod == null) {
+            return false;
+        }
+        return hasExactlyOneObservedParameterForMode(observerMethod, async);
+    }
+
+    private boolean hasExactlyOneObservedParameterForMode(Method method, boolean asyncMode) {
+        int observesCount = 0;
+        int observesAsyncCount = 0;
+        for (Parameter parameter : method.getParameters()) {
+            if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
+                observesCount++;
+            }
+            if (AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
+                observesAsyncCount++;
+            }
+        }
+
+        int total = observesCount + observesAsyncCount;
+        if (total != 1) {
+            return false;
+        }
+        return asyncMode ? observesAsyncCount == 1 : observesCount == 1;
+    }
+
+    private boolean isDeclaringBeanEnabledForObserver(Bean<?> declaringBean) {
+        if (declaringBean == null) {
+            return true;
+        }
+        if (!isBeanEnabledForObserverDispatch(declaringBean)) {
+            return false;
+        }
+        return !isSpecializedOutForObserverDispatch(declaringBean);
+    }
+
+    private boolean isBeanEnabledForObserverDispatch(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        if (!bean.isAlternative()) {
+            return true;
+        }
+        if (bean instanceof BeanImpl<?>) {
+            return ((BeanImpl<?>) bean).isAlternativeEnabled();
+        }
+        return true;
+    }
+
+    private boolean isSpecializedOutForObserverDispatch(Bean<?> bean) {
+        Class<?> beanClass = bean.getBeanClass();
+        if (beanClass == null) {
+            return false;
+        }
+
+        for (Bean<?> candidate : knowledgeBase.getBeans()) {
+            if (candidate == null || candidate == bean) {
+                continue;
+            }
+            if (!isBeanEnabledForObserverDispatch(candidate)) {
+                continue;
+            }
+            Class<?> candidateClass = candidate.getBeanClass();
+            if (candidateClass == null || !AnnotationsEnum.hasSpecializesAnnotation(candidateClass)) {
+                continue;
+            }
+            if (collectSpecializedSuperclasses(candidateClass).contains(beanClass)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
+        Set<Class<?>> out = new HashSet<Class<?>>();
+        if (beanClass == null || !AnnotationsEnum.hasSpecializesAnnotation(beanClass)) {
+            return out;
+        }
+        Class<?> current = beanClass.getSuperclass();
+        while (current != null && !Object.class.equals(current)) {
+            out.add(current);
+            if (!AnnotationsEnum.hasSpecializesAnnotation(current)) {
+                break;
+            }
+            current = current.getSuperclass();
+        }
+        return out;
     }
 
     private String observerDedupKey(ObserverMethodInfo observerInfo) {
