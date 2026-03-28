@@ -353,9 +353,7 @@ public class ProducerBean<T> implements Bean<T> {
     }
 
     private boolean isDependentScope(Class<? extends Annotation> scopeType) {
-        return scopeType != null && (
-                Dependent.class.equals(scopeType) ||
-                "javax.enterprise.context.Dependent".equals(scopeType.getName()));
+        return hasDependentAnnotation(scopeType);
     }
 
     private void validatePassivationRequirementsForProducedValue(T produced) {
@@ -420,9 +418,7 @@ public class ProducerBean<T> implements Bean<T> {
             return false;
         }
         for (Annotation annotation : injectionPoint.getAnnotated().getAnnotations()) {
-            String annotationName = annotation.annotationType().getName();
-            if ("jakarta.enterprise.inject.TransientReference".equals(annotationName) ||
-                    "javax.enterprise.inject.TransientReference".equals(annotationName)) {
+            if (hasTransientReferenceAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
@@ -518,15 +514,7 @@ public class ProducerBean<T> implements Bean<T> {
         if (type == null) {
             return false;
         }
-        if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDependentAnnotation(type)) {
-            return true;
-        }
-        for (Annotation annotation : type.getAnnotations()) {
-            if ("javax.enterprise.context.Dependent".equals(annotation.annotationType().getName())) {
-                return true;
-            }
-        }
-        return false;
+        return hasDependentAnnotation(type);
     }
 
     private void destroyDependentInvocationParameters(Parameter[] parameters, Object[] args, boolean skipDisposesParameter)
@@ -552,16 +540,7 @@ public class ProducerBean<T> implements Bean<T> {
         if (parameterType == null) {
             return false;
         }
-        if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDependentAnnotation(parameterType)) {
-            return true;
-        }
-        for (Annotation annotation : parameterType.getAnnotations()) {
-            String annotationName = annotation.annotationType().getName();
-            if ("javax.enterprise.context.Dependent".equals(annotationName)) {
-                return true;
-            }
-        }
-        return false;
+        return hasDependentAnnotation(parameterType);
     }
 
     private void trackDependentProducerParametersForProducedInstance(

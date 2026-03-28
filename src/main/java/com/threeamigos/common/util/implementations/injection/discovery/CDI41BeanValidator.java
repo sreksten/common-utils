@@ -2468,6 +2468,10 @@ public class CDI41BeanValidator {
     }
 
     private boolean isScopeAnnotationType(Class<? extends Annotation> at) {
+        // Scope meta-annotations themselves are not bean scope types.
+        if (SCOPE.matches(at) || NORMAL_SCOPE.matches(at)) {
+            return false;
+        }
         // CDI scopes are meta-annotated with @Scope or @NormalScope
         return hasScopeAnnotation(at)
                 || hasNormalScopeAnnotation(at)
@@ -2823,8 +2827,9 @@ public class CDI41BeanValidator {
             return true;
         }
 
-        // "all other normal scope types" and pseudo scopes (e.g. @Singleton)
-        if (hasNormalScopeAnnotation(annotationType) || hasScopeAnnotation(annotationType)) {
+        // "all other normal scope types"
+        // Pseudo-scopes (except @Dependent) are NOT bean-defining annotations.
+        if (hasNormalScopeAnnotation(annotationType)) {
             return true;
         }
 
@@ -3014,8 +3019,7 @@ public class CDI41BeanValidator {
      */
     private boolean hasDelegateAnnotation(java.lang.reflect.AnnotatedElement element) {
         for (Annotation ann : element.getAnnotations()) {
-            String name = ann.annotationType().getName();
-            if (name.equals("jakarta.decorator.Delegate") || name.equals("javax.decorator.Delegate")) {
+            if (AnnotationsEnum.hasDelegateAnnotation(ann.annotationType())) {
                 return true;
             }
         }

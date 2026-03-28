@@ -1552,8 +1552,7 @@ public class BeanManagerImpl implements BeanManager {
                 }
 
                 Class<? extends Annotation> owningScope = owningBean.getScope();
-                if (owningScope != null && !Dependent.class.equals(owningScope) &&
-                        !"javax.enterprise.context.Dependent".equals(owningScope.getName())) {
+                if (owningScope != null && !hasDependentAnnotation(owningScope)) {
                     throw new jakarta.enterprise.inject.spi.DefinitionException(
                             "Bean " + owningBean.getBeanClass().getName() +
                                     " declares scope @" + owningScope.getSimpleName() +

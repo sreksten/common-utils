@@ -1134,12 +1134,6 @@ public class EventImpl<T> implements Event<T> {
             LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PreDestroy.class);
             return;
         }
-        for (Annotation annotation : declaringClass.getAnnotations()) {
-            if ("javax.enterprise.context.Dependent".equals(annotation.annotationType().getName())) {
-                LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PreDestroy.class);
-                return;
-            }
-        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -1163,11 +1157,6 @@ public class EventImpl<T> implements Event<T> {
         }
         if (AnnotationsEnum.hasDependentAnnotation(parameterType)) {
             return true;
-        }
-        for (Annotation annotation : parameterType.getAnnotations()) {
-            if ("javax.enterprise.context.Dependent".equals(annotation.annotationType().getName())) {
-                return true;
-            }
         }
         return false;
     }

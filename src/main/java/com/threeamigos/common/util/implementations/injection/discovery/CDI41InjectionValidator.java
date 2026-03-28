@@ -1097,9 +1097,7 @@ public class CDI41InjectionValidator {
             return false;
         }
         for (Annotation annotation : annotations) {
-            String annotationName = annotation.annotationType().getName();
-            if ("jakarta.enterprise.inject.TransientReference".equals(annotationName) ||
-                    "javax.enterprise.inject.TransientReference".equals(annotationName)) {
+            if (hasTransientReferenceAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
@@ -1120,9 +1118,7 @@ public class CDI41InjectionValidator {
         }
 
         for (Annotation annotation : injectionPoint.getAnnotated().getAnnotations()) {
-            String annotationName = annotation.annotationType().getName();
-            if ("jakarta.enterprise.inject.TransientReference".equals(annotationName) ||
-                    "javax.enterprise.inject.TransientReference".equals(annotationName)) {
+            if (hasTransientReferenceAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
@@ -1158,9 +1154,7 @@ public class CDI41InjectionValidator {
      * @return true if it's @Dependent
      */
     private boolean isDependentScope(Class<? extends Annotation> scopeAnnotation) {
-        String scopeName = scopeAnnotation.getName();
-        return scopeName.equals("jakarta.enterprise.context.Dependent") ||
-               scopeName.equals("javax.enterprise.context.Dependent");
+        return hasDependentAnnotation(scopeAnnotation);
     }
 
     /**
@@ -2226,16 +2220,12 @@ public class CDI41InjectionValidator {
         // CDI 4.1: @Dependent beans may not declare conditional observer methods (IF_EXISTS).
         if (reception == jakarta.enterprise.event.Reception.IF_EXISTS) {
             Class<? extends Annotation> scope = declaringBean.getScope();
-            if (scope != null) {
-                String scopeName = scope.getName();
-                if ("jakarta.enterprise.context.Dependent".equals(scopeName) ||
-                    "javax.enterprise.context.Dependent".equals(scopeName)) {
-                    knowledgeBase.addDefinitionError(
-                        "Observer method " + method.getName() + " in " + declaringBean.getBeanClass().getName() +
-                        " declares notifyObserver=IF_EXISTS but bean scope is @Dependent"
-                    );
-                    return false;
-                }
+            if (hasDependentAnnotation(scope)) {
+                knowledgeBase.addDefinitionError(
+                    "Observer method " + method.getName() + " in " + declaringBean.getBeanClass().getName() +
+                    " declares notifyObserver=IF_EXISTS but bean scope is @Dependent"
+                );
+                return false;
             }
         }
 

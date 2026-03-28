@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
@@ -20,6 +21,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDelegateAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasNamedAnnotation;
 
 /**
  * Implementation of CDI InjectionPoint SPI.
@@ -142,8 +146,7 @@ public class InjectionPointImpl<T> implements InjectionPoint {
     }
 
     private boolean isNamedQualifierType(Class<? extends Annotation> annotationType) {
-        return annotationType.getName().equals("jakarta.inject.Named") ||
-                annotationType.getName().equals("javax.inject.Named");
+        return hasNamedAnnotation(annotationType);
     }
 
     private String readNamedValue(Annotation namedQualifier) {
@@ -203,9 +206,7 @@ public class InjectionPointImpl<T> implements InjectionPoint {
      */
     private boolean checkForDelegateAnnotation(Annotation[] annotations) {
         for (Annotation ann : annotations) {
-            // Check both jakarta and javax namespaces for backward compatibility
-            if (ann.annotationType().getName().equals("jakarta.decorator.Delegate") ||
-                ann.annotationType().getName().equals("javax.decorator.Delegate")) {
+            if (hasDelegateAnnotation(ann.annotationType())) {
                 return true;
             }
         }
