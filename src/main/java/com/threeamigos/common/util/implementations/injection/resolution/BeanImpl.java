@@ -504,7 +504,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         }
 
         // Check if the scope is explicitly @Dependent
-        return scope.equals(Dependent.class);
+        return AnnotationsEnum.hasDependentAnnotation(scope);
     }
 
     @Override

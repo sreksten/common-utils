@@ -322,7 +322,7 @@ public class CDI41BeanValidator {
                         ": interceptor declares bean name '" + interceptorName +
                         "'. Named interceptors are non-portable.");
             }
-            if (beanScope != null && !Dependent.class.equals(beanScope)) {
+            if (beanScope != null && !hasDependentAnnotation(beanScope)) {
                 throw new NonPortableBehaviourException(clazz.getName() +
                         ": interceptor declares scope @" + beanScope.getSimpleName() +
                         ". Interceptors with any scope other than @Dependent are non-portable.");
@@ -345,7 +345,7 @@ public class CDI41BeanValidator {
                         ": decorator declares bean name '" + decoratorName +
                         "'. Named decorators are non-portable.");
             }
-            if (beanScope != null && !Dependent.class.equals(beanScope)) {
+            if (beanScope != null && !hasDependentAnnotation(beanScope)) {
                 throw new NonPortableBehaviourException(clazz.getName() +
                         ": decorator declares scope @" + beanScope.getSimpleName() +
                         ". Decorators with any scope other than @Dependent are non-portable.");
@@ -2089,8 +2089,7 @@ public class CDI41BeanValidator {
     private boolean declaresNonDependentScope(Class<?> clazz) {
         for (Annotation annotation : annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (annotationType.equals(Dependent.class) ||
-                    "javax.enterprise.context.Dependent".equals(annotationType.getName())) {
+            if (hasDependentAnnotation(annotationType)) {
                 continue;
             }
             if (hasScopeAnnotation(annotationType) || hasNormalScopeAnnotation(annotationType)) {
@@ -2307,9 +2306,7 @@ public class CDI41BeanValidator {
             return;
         }
 
-        if (scopeAnnotation == null ||
-                Dependent.class.equals(scopeAnnotation) ||
-                "javax.enterprise.context.Dependent".equals(scopeAnnotation.getName())) {
+        if (scopeAnnotation == null || hasDependentAnnotation(scopeAnnotation)) {
             return;
         }
 
@@ -2643,9 +2640,7 @@ public class CDI41BeanValidator {
         }
 
         Class<? extends Annotation> scope = extractScope(method);
-        if (scope == null ||
-                Dependent.class.equals(scope) ||
-                "javax.enterprise.context.Dependent".equals(scope.getName())) {
+        if (scope == null || hasDependentAnnotation(scope)) {
             return;
         }
 
@@ -2668,9 +2663,7 @@ public class CDI41BeanValidator {
         }
 
         Class<? extends Annotation> scope = extractScope(field);
-        if (scope == null ||
-                Dependent.class.equals(scope) ||
-                "javax.enterprise.context.Dependent".equals(scope.getName())) {
+        if (scope == null || hasDependentAnnotation(scope)) {
             return;
         }
 

@@ -1190,8 +1190,8 @@ public class EventImpl<T> implements Event<T> {
         }
         Class<? extends Annotation> scope = declaringBean.getScope();
         // Dependent/Application are always safe
-        if (scope == jakarta.enterprise.context.Dependent.class ||
-            scope == jakarta.enterprise.context.ApplicationScoped.class) {
+        if (AnnotationsEnum.hasDependentAnnotation(scope) ||
+            AnnotationsEnum.hasApplicationScopedAnnotation(scope)) {
             return ContextActivation.NOOP;
         }
 

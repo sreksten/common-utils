@@ -17,6 +17,8 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+
 /**
  * Implementation of BeanConfigurator for building synthetic beans programmatically.
  *
@@ -353,9 +355,9 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
             // Infer scope from annotations on AnnotatedType; defaults remain @Dependent.
             for (Annotation annotation : type.getJavaClass().getAnnotations()) {
                 Class<? extends Annotation> annotationType = annotation.annotationType();
-                if (AnnotationsEnum.hasNormalScopeAnnotation(annotationType) ||
-                        AnnotationsEnum.hasScopeAnnotation(annotationType) ||
-                        Dependent.class.equals(annotationType)) {
+                if (hasNormalScopeAnnotation(annotationType) ||
+                        hasScopeAnnotation(annotationType) ||
+                        hasDependentAnnotation(annotationType)) {
                     this.scope = annotationType;
                     break;
                 }
