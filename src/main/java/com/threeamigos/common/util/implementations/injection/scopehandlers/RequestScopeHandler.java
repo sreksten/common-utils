@@ -7,6 +7,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
+
 @Deprecated
 public class RequestScopeHandler implements ScopeHandler {
     private final ThreadLocal<Map<Class<?>, Object>> requestBeans = new ThreadLocal<>();
@@ -29,7 +31,7 @@ public class RequestScopeHandler implements ScopeHandler {
             for (Object bean : beans.values()) {
                 try {
                     // Call @PreDestroy on each bean
-                    LifecycleMethodHelper.invokeLifecycleMethod(bean, PreDestroy.class);
+                    LifecycleMethodHelper.invokeLifecycleMethod(bean, PRE_DESTROY);
                 } catch (Exception e) {
                     // Log error
                 }

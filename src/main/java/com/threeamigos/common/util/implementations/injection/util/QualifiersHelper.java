@@ -1,7 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.util;
 
-import jakarta.inject.Named;
-
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -9,7 +7,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasQualifierAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 
 /**
  * Shared qualifier utilities used across resolution components.
@@ -76,8 +74,7 @@ public final class QualifiersHelper {
 
         boolean hasNonNamedNonAnyQualifier = qualifiers.stream()
                 .map(Annotation::annotationType)
-                .anyMatch(type -> !type.equals(Named.class) &&
-                        !type.equals(jakarta.enterprise.inject.Any.class));
+                .anyMatch(type -> !hasNamedAnnotation(type) && !hasAnyAnnotation(type));
 
         if (!hasNonNamedNonAnyQualifier) {
             qualifiers.add(new DefaultLiteral());
@@ -145,8 +142,8 @@ public final class QualifiersHelper {
      */
     public static boolean qualifiersMatch(Set<Annotation> requiredQualifiers, Set<Annotation> availableQualifiers) {
         // Special case: @Named requires an exact match
-        Annotation requiredNamed = findAnnotation(requiredQualifiers, Named.class);
-        Annotation availableNamed = findAnnotation(availableQualifiers, Named.class);
+        Annotation requiredNamed = findNamedAnnotation(requiredQualifiers);
+        Annotation availableNamed = findNamedAnnotation(availableQualifiers);
 
         if (requiredNamed != null) {
             if (availableNamed == null) {
@@ -158,7 +155,7 @@ public final class QualifiersHelper {
         }
 
         for (Annotation required : requiredQualifiers) {
-            if (required.annotationType().equals(jakarta.enterprise.inject.Any.class)) {
+            if (hasAnyAnnotation(required.annotationType())) {
                 continue;
             }
             if (isDefaultQualifier(required)) {
@@ -169,7 +166,7 @@ public final class QualifiersHelper {
                 }
                 continue;
             }
-            if (required instanceof Named) {
+            if (hasNamedAnnotation(required.annotationType())) {
                 continue;
             }
             boolean found = false;
@@ -192,12 +189,10 @@ public final class QualifiersHelper {
         }
         for (Annotation qualifier : qualifiers) {
             Class<? extends Annotation> type = qualifier.annotationType();
-            if (type.equals(jakarta.enterprise.inject.Any.class) ||
-                type.getName().equals("javax.enterprise.inject.Any")) {
+            if (hasAnyAnnotation(type)) {
                 continue;
             }
-            if (type.equals(jakarta.inject.Named.class) ||
-                type.getName().equals("javax.inject.Named")) {
+            if (hasNamedAnnotation(type)) {
                 continue;
             }
             if (isDefaultQualifier(qualifier)) {
@@ -212,9 +207,19 @@ public final class QualifiersHelper {
         if (annotation == null) {
             return false;
         }
-        Class<? extends Annotation> type = annotation.annotationType();
-        return type.equals(jakarta.enterprise.inject.Default.class) ||
-                type.getName().equals("javax.enterprise.inject.Default");
+        return hasDefaultAnnotation(annotation.annotationType());
+    }
+
+    private static Annotation findNamedAnnotation(Set<Annotation> annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        for (Annotation ann : annotations) {
+            if (hasNamedAnnotation(ann.annotationType())) {
+                return ann;
+            }
+        }
+        return null;
     }
 
     public static boolean qualifiersEqual(Annotation q1, Annotation q2) {

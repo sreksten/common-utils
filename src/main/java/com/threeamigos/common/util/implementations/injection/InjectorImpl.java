@@ -1057,7 +1057,7 @@ public class InjectorImpl implements Injector {
      * @see LifecycleMethodHelper#invokeLifecycleMethod(Object, Class)
      */
     private void invokePostConstruct(Object instance) throws InvocationTargetException, IllegalAccessException {
-        LifecycleMethodHelper.invokeLifecycleMethod(instance, PostConstruct.class);
+        LifecycleMethodHelper.invokeLifecycleMethod(instance, POST_CONSTRUCT);
     }
 
     /**
@@ -1087,7 +1087,7 @@ public class InjectorImpl implements Injector {
      * @see #shutdown()
      */
    private void invokePreDestroy(Object instance) throws InvocationTargetException, IllegalAccessException {
-       LifecycleMethodHelper.invokeLifecycleMethod(instance, PreDestroy.class);
+       LifecycleMethodHelper.invokeLifecycleMethod(instance, PRE_DESTROY);
     }
 
     /**

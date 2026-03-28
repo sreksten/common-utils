@@ -1031,7 +1031,7 @@ public class BeanResolver implements DependencyResolver {
             @Override
             public void invokePreDestroy(T instance) throws InvocationTargetException, IllegalAccessException {
                 // Invoke @PreDestroy via LifecycleMethodHelper
-                LifecycleMethodHelper.invokeLifecycleMethod(instance, jakarta.annotation.PreDestroy.class);
+                LifecycleMethodHelper.invokeLifecycleMethod(instance, PRE_DESTROY);
             }
         };
 

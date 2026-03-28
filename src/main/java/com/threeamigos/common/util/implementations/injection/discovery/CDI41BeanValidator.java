@@ -722,8 +722,7 @@ public class CDI41BeanValidator {
     }
 
     private boolean isNamedQualifierType(Class<? extends Annotation> annotationType) {
-        return Named.class.equals(annotationType) ||
-                "javax.inject.Named".equals(annotationType.getName());
+        return hasNamedAnnotation(annotationType);
     }
 
     private void collectStereotypeScopes(Class<? extends Annotation> stereotypeType,
@@ -940,7 +939,7 @@ public class CDI41BeanValidator {
     private String extractBeanName(Class<?> clazz) {
         // CDI: direct @Named without value defaults to simple name with first character lower-cased.
         for (Annotation annotation : annotationsOf(clazz)) {
-            if (annotation.annotationType().equals(Named.class)) {
+            if (hasNamedAnnotation(annotation.annotationType())) {
                 return defaultedBeanName(readNamedValue(annotation), clazz);
             }
         }
@@ -991,7 +990,7 @@ public class CDI41BeanValidator {
                     if (meta == null) {
                         continue;
                     }
-                    if (Named.class.equals(meta.annotationType())) {
+                    if (hasNamedAnnotation(meta.annotationType())) {
                         return defaultedBeanName(readNamedValue(meta), beanClass);
                     }
                 }
@@ -1175,7 +1174,7 @@ public class CDI41BeanValidator {
         Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(stereotypeClass.getAnnotations())
                 .stream()
                 // CDI 4.1 §2.8.1.3: @Named declared by stereotype does not become a bean qualifier.
-                .filter(annotation -> !Named.class.equals(annotation.annotationType()))
+                .filter(annotation -> !hasNamedAnnotation(annotation.annotationType()))
                 .collect(Collectors.toSet());
 
         if (knowledgeBase.isRegisteredStereotype(stereotypeClass)) {
@@ -1186,7 +1185,7 @@ public class CDI41BeanValidator {
                         continue;
                     }
                     Class<? extends Annotation> annotationType = annotation.annotationType();
-                    if (isQualifierAnnotationType(annotationType) && !Named.class.equals(annotationType)) {
+                    if (isQualifierAnnotationType(annotationType) && !hasNamedAnnotation(annotationType)) {
                         qualifiers.add(annotation);
                     }
                 }
@@ -2090,7 +2089,7 @@ public class CDI41BeanValidator {
             if (hasDependentAnnotation(annotationType)) {
                 continue;
             }
-            if (hasScopeAnnotation(annotationType) || hasNormalScopeAnnotation(annotationType)) {
+            if (isScopeAnnotationType(annotationType)) {
                 return true;
             }
         }
@@ -2422,7 +2421,7 @@ public class CDI41BeanValidator {
 
     private boolean declaresBeanNameExplicitly(Class<?> clazz) {
         for (Annotation annotation : declaredAnnotationsOf(clazz)) {
-            if (annotation.annotationType().equals(Named.class)) {
+            if (hasNamedAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
@@ -2472,11 +2471,11 @@ public class CDI41BeanValidator {
                 || hasNormalScopeAnnotation(at)
                 || knowledgeBase.isRegisteredScope(at)
                 // plus common built-ins
-                || at.equals(Dependent.class)
-                || at.equals(ApplicationScoped.class)
-                || at.equals(RequestScoped.class)
-                || at.equals(SessionScoped.class)
-                || at.equals(ConversationScoped.class);
+                || DEPENDENT.matches(at)
+                || APPLICATION_SCOPED.matches(at)
+                || REQUEST_SCOPED.matches(at)
+                || SESSION_SCOPED.matches(at)
+                || CONVERSATION_SCOPED.matches(at);
     }
 
     private void validateQualifiers(Annotation[] annotations, String location) {
@@ -2812,9 +2811,9 @@ public class CDI41BeanValidator {
 
     private boolean isBeanDefiningAnnotationType(Class<? extends Annotation> annotationType) {
         // Explicitly listed built-ins
-        if (annotationType.equals(Dependent.class)
-                || annotationType.equals(ApplicationScoped.class)
-                || annotationType.equals(RequestScoped.class)) {
+        if (DEPENDENT.matches(annotationType)
+                || APPLICATION_SCOPED.matches(annotationType)
+                || REQUEST_SCOPED.matches(annotationType)) {
             return true;
         }
 
@@ -3200,10 +3199,7 @@ public class CDI41BeanValidator {
         List<Class<? extends Annotation>> directScopes = new ArrayList<>();
         for (Annotation ann : element.getAnnotations()) {
             Class<? extends Annotation> annotationType = ann.annotationType();
-            if (hasMetaAnnotation(annotationType, javax.inject.Scope.class) ||
-                hasMetaAnnotation(annotationType, jakarta.inject.Scope.class) ||
-                hasMetaAnnotation(annotationType, javax.enterprise.context.NormalScope.class) ||
-                hasMetaAnnotation(annotationType, jakarta.enterprise.context.NormalScope.class)) {
+            if (isScopeAnnotationType(annotationType)) {
                 directScopes.add(annotationType);
             }
         }

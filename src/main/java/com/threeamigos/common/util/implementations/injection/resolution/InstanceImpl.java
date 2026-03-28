@@ -16,6 +16,8 @@ import java.io.Serializable;
 import java.util.*;
 import java.util.function.Function;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
+
 /**
  * Generic wrapper implementing CDI {@link Instance} interface for lazy and programmatic
  * bean resolution. This class provides a reusable implementation that can work with
@@ -487,7 +489,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
             @Override
             public void invokePreDestroy(T instance) throws InvocationTargetException, IllegalAccessException {
-                LifecycleMethodHelper.invokeLifecycleMethod(instance, jakarta.annotation.PreDestroy.class);
+                LifecycleMethodHelper.invokeLifecycleMethod(instance, PRE_DESTROY);
             }
         };
 

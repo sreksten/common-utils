@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasSpecializesAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 
 /**
  * CDI 4.1 Event implementation for firing synchronous and asynchronous events.
@@ -1086,7 +1086,7 @@ public class EventImpl<T> implements Event<T> {
             if (!isDependentParameter(parameter)) {
                 continue;
             }
-            LifecycleMethodHelper.invokeLifecycleMethod(arg, PreDestroy.class);
+            LifecycleMethodHelper.invokeLifecycleMethod(arg, PRE_DESTROY);
         }
     }
 
@@ -1131,7 +1131,7 @@ public class EventImpl<T> implements Event<T> {
 
         Class<?> declaringClass = method.getDeclaringClass();
         if (AnnotationsEnum.hasDependentAnnotation(declaringClass)) {
-            LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PreDestroy.class);
+            LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PRE_DESTROY);
             return;
         }
     }
@@ -1223,7 +1223,7 @@ public class EventImpl<T> implements Event<T> {
             return null;
         }
 
-        if (scope == ConversationScoped.class && snapshot.conversationId != null) {
+        if (hasConversationScopedAnnotation(scope) && snapshot.conversationId != null) {
             ScopeContext ctx = contextManager.getContext(ConversationScoped.class);
             if (ctx instanceof ConversationScopedContext) {
                 ((ConversationScopedContext) ctx).beginConversation(snapshot.conversationId);
@@ -1231,7 +1231,7 @@ public class EventImpl<T> implements Event<T> {
             }
         }
 
-        if (scope == SessionScoped.class && snapshot.sessionId != null) {
+        if (hasSessionScopedAnnotation(scope) && snapshot.sessionId != null) {
             ScopeContext ctx = contextManager.getContext(SessionScoped.class);
             if (ctx instanceof SessionScopedContext && snapshot.sessionData != null) {
                 ((SessionScopedContext) ctx).activateSession(snapshot.sessionId, snapshot.sessionData);

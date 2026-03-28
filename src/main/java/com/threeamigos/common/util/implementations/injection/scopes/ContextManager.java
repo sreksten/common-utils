@@ -12,6 +12,9 @@ import java.lang.annotation.Annotation;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.APPLICATION_SCOPED;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.DEPENDENT;
+
 /**
  * Manages all scoped contexts for the CDI container.
  * Maps scope annotations to their corresponding context implementations.
@@ -104,7 +107,7 @@ public class ContextManager {
         }
 
         for (Map.Entry<Class<? extends Annotation>, ScopeContext> entry : contexts.entrySet()) {
-            if (ApplicationScoped.class.equals(entry.getKey())) {
+            if (APPLICATION_SCOPED.matches(entry.getKey())) {
                 continue;
             }
             try {
@@ -241,7 +244,7 @@ public class ContextManager {
      */
     public boolean isNormalScope(Class<? extends Annotation> scopeAnnotation) {
         // Dependent is a pseudo-scope, not a normal scope
-        if (scopeAnnotation == Dependent.class) {
+        if (DEPENDENT.matches(scopeAnnotation)) {
             return false;
         }
 

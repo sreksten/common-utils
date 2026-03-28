@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.util;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -16,6 +18,21 @@ public class LifecycleMethodHelper {
         for (Class<?> clazz : hierarchy) {
             for (Method method : clazz.getDeclaredMethods()) {
                 if (method.isAnnotationPresent(annotation)) {
+                    method.setAccessible(true);
+                    method.invoke(instance);
+                }
+            }
+        }
+    }
+
+    public static void invokeLifecycleMethod(Object instance, AnnotationsEnum annotation) throws InvocationTargetException, IllegalAccessException {
+        // Collect all classes in the hierarchy, from parent to child
+        List<Class<?>> hierarchy = buildHierarchy(instance);
+
+        // Invoke lifecycle methods from parent to child
+        for (Class<?> clazz : hierarchy) {
+            for (Method method : clazz.getDeclaredMethods()) {
+                if (annotation != null && annotation.isPresent(method)) {
                     method.setAccessible(true);
                     method.invoke(instance);
                 }

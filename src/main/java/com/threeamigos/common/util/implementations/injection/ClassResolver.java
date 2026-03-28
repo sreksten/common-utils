@@ -8,14 +8,10 @@ import com.threeamigos.common.util.implementations.injection.resolution.TypeChec
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-import jakarta.inject.Named;
-
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.Instance;
-import jakarta.enterprise.inject.Default;
-import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.ResolutionException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
@@ -216,7 +212,7 @@ class ClassResolver {
         // If we have a concrete class and the qualifier is Default, return that class.
         boolean isDefault = qualifiers == null ||
                 qualifiers.isEmpty() ||
-                qualifiers.stream().anyMatch(q -> q.annotationType().equals(Default.class) || q instanceof DefaultLiteral);
+                qualifiers.stream().anyMatch(q -> hasDefaultAnnotation(q.annotationType()) || q instanceof DefaultLiteral);
 
         if (isDefault && (isNotInterfaceOrAbstract(rawType) || rawType.isArray())) {
             return (Class<? extends T>)rawType;
@@ -366,17 +362,15 @@ class ClassResolver {
     private boolean isQualifierAnnotation(Annotation annotation) {
         Class<? extends Annotation> at = annotation.annotationType();
         return hasQualifierAnnotation(at)
-                || at.equals(Named.class);
+                || hasNamedAnnotation(at);
     }
 
     private boolean isDefaultQualifier(Annotation annotation) {
-        return annotation instanceof Default
-                || annotation.annotationType().equals(Default.class);
+        return annotation != null && hasDefaultAnnotation(annotation.annotationType());
     }
 
     private boolean isAnyQualifier(Annotation annotation) {
-        return annotation instanceof Any
-                || annotation.annotationType().equals(Any.class);
+        return annotation != null && hasAnyAnnotation(annotation.annotationType());
     }
 
     private boolean isAlternativeAnnotationPresent(Class<?> clazz) {

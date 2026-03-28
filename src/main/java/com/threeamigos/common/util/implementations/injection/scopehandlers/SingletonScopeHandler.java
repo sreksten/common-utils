@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
+
 @Deprecated
 public class SingletonScopeHandler implements ScopeHandler {
 
@@ -34,7 +36,7 @@ public class SingletonScopeHandler implements ScopeHandler {
         // Call @PreDestroy on all singletons
         for (Object instance : instances.values()) {
             try {
-                LifecycleMethodHelper.invokeLifecycleMethod(instance, PreDestroy.class);
+                LifecycleMethodHelper.invokeLifecycleMethod(instance, PRE_DESTROY);
             } catch (Exception e) {
                 // Log but continue destroying others
             }

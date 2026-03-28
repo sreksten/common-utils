@@ -1936,7 +1936,7 @@ public class CDI41InjectionValidator {
         // All required qualifiers must be present in provided
         for (Annotation reqQualifier : required) {
             // @Any is implicit and should not constrain matching when other qualifiers are present
-            if (reqQualifier.annotationType().equals(Any.class)) {
+            if (hasAnyAnnotation(reqQualifier.annotationType())) {
                 continue;
             }
             if (isQualifier(reqQualifier) && !hasMatchingQualifier(reqQualifier, provided)) {
@@ -1999,7 +1999,7 @@ public class CDI41InjectionValidator {
      */
     private boolean hasDefault(Set<Annotation> qualifiers) {
         return qualifiers.stream()
-            .anyMatch(q -> q.annotationType().equals(Default.class));
+            .anyMatch(q -> hasDefaultAnnotation(q.annotationType()));
     }
 
     /**
@@ -2011,8 +2011,8 @@ public class CDI41InjectionValidator {
     private boolean hasOnlyDefault(Set<Annotation> qualifiers) {
         return qualifiers.stream()
             .filter(this::isQualifier)
-            .allMatch(q -> q.annotationType().equals(Default.class) ||
-                          q.annotationType().equals(Any.class));
+            .allMatch(q -> hasDefaultAnnotation(q.annotationType()) ||
+                          hasAnyAnnotation(q.annotationType()));
     }
 
     /**
@@ -2025,7 +2025,7 @@ public class CDI41InjectionValidator {
                 continue;
             }
             hasAtLeastOneQualifier = true;
-            if (!qualifier.annotationType().equals(Any.class)) {
+            if (!hasAnyAnnotation(qualifier.annotationType())) {
                 return false;
             }
         }
@@ -2040,7 +2040,7 @@ public class CDI41InjectionValidator {
      */
     private boolean hasAny(Set<Annotation> qualifiers) {
         return qualifiers.stream()
-            .anyMatch(q -> q.annotationType().equals(Any.class));
+            .anyMatch(q -> hasAnyAnnotation(q.annotationType()));
     }
 
     /**
@@ -2070,10 +2070,8 @@ public class CDI41InjectionValidator {
 
     private Set<Annotation> qualifierKey(Set<Annotation> qualifiers) {
         return qualifiers.stream()
-                .filter(q -> !q.annotationType().equals(javax.enterprise.inject.Any.class)
-                        && !q.annotationType().equals(javax.enterprise.inject.Default.class)
-                        && !q.annotationType().equals(jakarta.enterprise.inject.Any.class)
-                        && !q.annotationType().equals(jakarta.enterprise.inject.Default.class))
+                .filter(q -> !hasAnyAnnotation(q.annotationType())
+                        && !hasDefaultAnnotation(q.annotationType()))
                 .collect(Collectors.toSet());
     }
 

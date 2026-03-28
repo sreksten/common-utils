@@ -507,7 +507,7 @@ public class ProducerBean<T> implements Bean<T> {
         if (!isDependentDeclaringClass(declaringInstance.getClass())) {
             return;
         }
-        LifecycleMethodHelper.invokeLifecycleMethod(declaringInstance, PreDestroy.class);
+        LifecycleMethodHelper.invokeLifecycleMethod(declaringInstance, PRE_DESTROY);
     }
 
     private boolean isDependentDeclaringClass(Class<?> type) {
@@ -531,7 +531,7 @@ public class ProducerBean<T> implements Bean<T> {
             if (!isDependentParameter(parameter)) {
                 continue;
             }
-            LifecycleMethodHelper.invokeLifecycleMethod(arg, PreDestroy.class);
+            LifecycleMethodHelper.invokeLifecycleMethod(arg, PRE_DESTROY);
         }
     }
 
@@ -574,7 +574,7 @@ public class ProducerBean<T> implements Bean<T> {
             if (dependent == null) {
                 continue;
             }
-            LifecycleMethodHelper.invokeLifecycleMethod(dependent, PreDestroy.class);
+            LifecycleMethodHelper.invokeLifecycleMethod(dependent, PRE_DESTROY);
         }
     }
 

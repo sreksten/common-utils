@@ -1415,7 +1415,7 @@ public class BeanManagerImpl implements BeanManager {
 
             @Override
             public void invokePreDestroy(Object instance) throws java.lang.reflect.InvocationTargetException, IllegalAccessException {
-                LifecycleMethodHelper.invokeLifecycleMethod(instance, jakarta.annotation.PreDestroy.class);
+                LifecycleMethodHelper.invokeLifecycleMethod(instance, PRE_DESTROY);
             }
         };
 
@@ -1591,7 +1591,7 @@ public class BeanManagerImpl implements BeanManager {
                         "No bean found for injection point: " + injectionPoint);
             }
 
-            if (bean.getScope() == Dependent.class && ctx instanceof CreationalContextImpl) {
+            if (DEPENDENT.matches(bean.getScope()) && ctx instanceof CreationalContextImpl) {
                 @SuppressWarnings("unchecked")
                 Bean<Object> dependentBean = (Bean<Object>) bean;
                 CreationalContext<Object> childContext = createCreationalContext(dependentBean);
@@ -2457,7 +2457,7 @@ public class BeanManagerImpl implements BeanManager {
         // All observer qualifiers must be present in event qualifiers
         for (Annotation observerQual : observerQualifiers) {
             // @Any matches everything
-            if (observerQual.annotationType().equals(jakarta.enterprise.inject.Any.class)) {
+            if (hasAnyAnnotation(observerQual.annotationType())) {
                 continue;
             }
 

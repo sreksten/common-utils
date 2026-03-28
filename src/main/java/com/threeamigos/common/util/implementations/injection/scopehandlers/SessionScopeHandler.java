@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
+
 @Deprecated
 public class SessionScopeHandler implements ScopeHandler {
     private final Map<String, Map<Class<?>, Object>> sessionBeans = new ConcurrentHashMap<>();
@@ -37,7 +39,7 @@ public class SessionScopeHandler implements ScopeHandler {
             if (beans != null) {
                 beans.values().forEach(bean -> {
                     try {
-                        LifecycleMethodHelper.invokeLifecycleMethod(bean, PreDestroy.class);
+                        LifecycleMethodHelper.invokeLifecycleMethod(bean, PRE_DESTROY);
                     } catch (Exception e) {
                         // Log error but continue destroying others
                     }
