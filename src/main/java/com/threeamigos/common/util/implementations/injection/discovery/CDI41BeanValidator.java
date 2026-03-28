@@ -2551,7 +2551,7 @@ public class CDI41BeanValidator {
     }
 
     private boolean isQualifierAnnotationType(Class<? extends Annotation> at) {
-        return hasMetaAnnotation(at, Qualifier.class) || knowledgeBase.isRegisteredQualifier(at);
+        return hasQualifierAnnotation(at) || knowledgeBase.isRegisteredQualifier(at);
     }
 
     /**

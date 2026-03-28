@@ -68,6 +68,8 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+
 /**
  * Syringe - CDI 4.1 compliant container implementation.
  *
@@ -204,6 +206,7 @@ public class Syringe {
      */
     private boolean cdiLiteMode = false;
     private boolean cdiFullLegacyInterceptionEnabled = false;
+    private boolean legacyCdi10NewEnabled = false;
 
     /**
      * Custom contexts to register programmatically before container initialization.
@@ -318,6 +321,22 @@ public class Syringe {
             throw new IllegalStateException("Cannot change CDI interception mode after container initialization");
         }
         this.cdiFullLegacyInterceptionEnabled = enabled;
+    }
+
+    /**
+     * Enables legacy CDI 1.0 {@code @javax.enterprise.inject.New} compatibility.
+     *
+     * <p>When disabled (default), {@code @New} injection points remain unsatisfied.
+     * When enabled, {@code @New} resolves to a dependent-style contextual instance of the
+     * selected bean class.
+     *
+     * @param enabled true to enable legacy {@code @New} compatibility
+     */
+    public void enableLegacyCdi10New(boolean enabled) {
+        if (initialized) {
+            throw new IllegalStateException("Cannot change legacy @New mode after container initialization");
+        }
+        this.legacyCdi10NewEnabled = enabled;
     }
 
     /**
@@ -499,6 +518,7 @@ public class Syringe {
 
         // Step 1.2: Create BeanManager
         beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
+        beanManager.setLegacyCdi10NewEnabled(legacyCdi10NewEnabled);
         beanManager.registerExtensions(extensions);
         buildCompatibleExtensionRunner = new BuildCompatibleExtensionRunner(
             messageHandler, knowledgeBase, beanManager, bceInvokerRegistry);
@@ -981,11 +1001,11 @@ public class Syringe {
     }
 
     private boolean shouldSkipBuildCompatibleExtension(Class<?> extensionClass) {
-        if (!AnnotationsEnum.hasSkipIfPortableExtensionPresentAnnotation(extensionClass)) {
+        if (!hasSkipIfPortableExtensionPresentAnnotation(extensionClass)) {
             return false;
         }
         jakarta.enterprise.inject.build.compatible.spi.SkipIfPortableExtensionPresent skipAnnotation =
-                AnnotationsEnum.getSkipIfPortableExtensionPresentAnnotation(extensionClass);
+                getSkipIfPortableExtensionPresentAnnotation(extensionClass);
         if (skipAnnotation == null) {
             return false;
         }
@@ -1177,7 +1197,7 @@ public class Syringe {
         if (clazz.isAnnotation()) {
             return true;
         }
-        if (AnnotationsEnum.hasVetoedAnnotation(clazz)) {
+        if (hasVetoedAnnotation(clazz)) {
             return true;
         }
         return isPackageOrParentPackageVetoed(clazz.getPackage());
@@ -1205,7 +1225,7 @@ public class Syringe {
         if (clazz == null) {
             return false;
         }
-        if (AnnotationsEnum.hasInterceptorAnnotation(clazz) || AnnotationsEnum.hasDecoratorAnnotation(clazz)) {
+        if (hasInterceptorAnnotation(clazz) || hasDecoratorAnnotation(clazz)) {
             return true;
         }
         for (Annotation annotation : clazz.getAnnotations()) {
@@ -1221,23 +1241,23 @@ public class Syringe {
         if (annotationType == null) {
             return false;
         }
-        return AnnotationsEnum.hasScopeAnnotation(annotationType)
-                || AnnotationsEnum.hasNormalScopeAnnotation(annotationType)
-                || AnnotationsEnum.hasDependentAnnotation(annotationType);
+        return hasScopeAnnotation(annotationType)
+                || hasNormalScopeAnnotation(annotationType)
+                || hasDependentAnnotation(annotationType);
     }
 
     private boolean isStereotype(Class<? extends Annotation> annotationType) {
         if (annotationType == null) {
             return false;
         }
-        return AnnotationsEnum.hasStereotypeAnnotation(annotationType);
+        return hasStereotypeAnnotation(annotationType);
     }
 
     private boolean isPackageOrParentPackageVetoed(Package pkg) {
         if (pkg == null) {
             return false;
         }
-        if (AnnotationsEnum.hasVetoedAnnotation(pkg)) {
+        if (hasVetoedAnnotation(pkg)) {
             return true;
         }
         String packageName = pkg.getName();
@@ -1246,7 +1266,7 @@ public class Syringe {
             try {
                 Class<?> packageInfo = Class.forName(packageName + ".package-info");
                 Package parent = packageInfo.getPackage();
-                if (parent != null && AnnotationsEnum.hasVetoedAnnotation(parent)) {
+                if (hasVetoedAnnotation(parent)) {
                     return true;
                 }
             } catch (ClassNotFoundException ignored) {
@@ -1262,9 +1282,9 @@ public class Syringe {
         List<Class<?>> alternatives = collectPriorityEnabledAlternatives();
         List<Class<?>> interceptors = collectPriorityEnabledInterceptors();
         List<Class<?>> decorators = collectPriorityEnabledDecorators();
-        List<Class<?>> initialAlternatives = new ArrayList<Class<?>>(alternatives);
-        List<Class<?>> initialInterceptors = new ArrayList<Class<?>>(interceptors);
-        List<Class<?>> initialDecorators = new ArrayList<Class<?>>(decorators);
+        List<Class<?>> initialAlternatives = new ArrayList<>(alternatives);
+        List<Class<?>> initialInterceptors = new ArrayList<>(interceptors);
+        List<Class<?>> initialDecorators = new ArrayList<>(decorators);
 
         AfterTypeDiscovery event = new AfterTypeDiscoveryImpl(
                 messageHandler, knowledgeBase, beanManager, alternatives, interceptors, decorators);
@@ -1282,10 +1302,10 @@ public class Syringe {
     private List<Class<?>> collectPriorityEnabledAlternatives() {
         List<Class<?>> enabled = new ArrayList<Class<?>>();
         for (Class<?> candidate : knowledgeBase.getClasses()) {
-            if (!AnnotationsEnum.hasAlternativeAnnotation(candidate)) {
+            if (!hasAlternativeAnnotation(candidate)) {
                 continue;
             }
-            Integer priority = AnnotationsEnum.getPriorityValue(candidate);
+            Integer priority = getPriorityValue(candidate);
             if (priority == null) {
                 continue;
             }
@@ -1294,7 +1314,7 @@ public class Syringe {
             }
         }
         enabled.sort(Comparator
-                .comparingInt((Class<?> clazz) -> AnnotationsEnum.getPriorityValue(clazz))
+                .comparingInt((Class<?> clazz) -> getPriorityValue(clazz))
                 .thenComparing(Class::getName));
         return enabled;
     }
@@ -1302,13 +1322,13 @@ public class Syringe {
     private List<Class<?>> collectPriorityEnabledInterceptors() {
         List<Class<?>> enabled = new ArrayList<Class<?>>();
         for (Class<?> candidate : knowledgeBase.getClasses()) {
-            if (!AnnotationsEnum.hasInterceptorAnnotation(candidate)) {
+            if (!hasInterceptorAnnotation(candidate)) {
                 continue;
             }
             if (ActivateRequestContextInterceptor.class.equals(candidate)) {
                 continue;
             }
-            Integer priority = AnnotationsEnum.getPriorityValue(candidate);
+            Integer priority = getPriorityValue(candidate);
             if (priority == null) {
                 continue;
             }
@@ -1317,18 +1337,18 @@ public class Syringe {
             }
         }
         enabled.sort(Comparator
-                .comparingInt((Class<?> clazz) -> AnnotationsEnum.getPriorityValue(clazz))
+                .comparingInt((Class<?> clazz) -> getPriorityValue(clazz))
                 .thenComparing(Class::getName));
         return enabled;
     }
 
     private List<Class<?>> collectPriorityEnabledDecorators() {
-        List<Class<?>> enabled = new ArrayList<Class<?>>();
+        List<Class<?>> enabled = new ArrayList<>();
         for (Class<?> candidate : knowledgeBase.getClasses()) {
-            if (!AnnotationsEnum.hasDecoratorAnnotation(candidate)) {
+            if (!hasDecoratorAnnotation(candidate)) {
                 continue;
             }
-            Integer priority = AnnotationsEnum.getPriorityValue(candidate);
+            Integer priority = getPriorityValue(candidate);
             if (priority == null) {
                 continue;
             }
@@ -1337,7 +1357,7 @@ public class Syringe {
             }
         }
         enabled.sort(Comparator
-                .comparingInt((Class<?> clazz) -> AnnotationsEnum.getPriorityValue(clazz))
+                .comparingInt((Class<?> clazz) -> getPriorityValue(clazz))
                 .thenComparing(Class::getName));
         return enabled;
     }
@@ -1422,7 +1442,7 @@ public class Syringe {
     }
 
     private void processInjectionPointsForBean(Bean<?> bean, Set<InjectionPoint> injectionPoints) {
-        List<InjectionPoint> snapshot = new ArrayList<InjectionPoint>(injectionPoints);
+        List<InjectionPoint> snapshot = new ArrayList<>(injectionPoints);
         for (InjectionPoint ip : snapshot) {
             ProcessInjectionPointImpl<?, ?> event =
                     new ProcessInjectionPointImpl<>(messageHandler, ip, knowledgeBase);
@@ -1439,7 +1459,7 @@ public class Syringe {
     }
 
     private void processInterceptorAndDecoratorInjectionPoints() {
-        Set<Class<?>> lifecycleTypes = new LinkedHashSet<Class<?>>();
+        Set<Class<?>> lifecycleTypes = new LinkedHashSet<>();
         for (InterceptorInfo interceptorInfo : knowledgeBase.getInterceptorInfos()) {
             if (interceptorInfo != null && interceptorInfo.getInterceptorClass() != null) {
                 lifecycleTypes.add(interceptorInfo.getInterceptorClass());
@@ -2059,7 +2079,7 @@ public class Syringe {
         Set<Class<?>> specializedSuperclasses = new HashSet<Class<?>>();
         for (Bean<?> candidate : candidates) {
             Class<?> beanClass = candidate.getBeanClass();
-            if (beanClass != null && AnnotationsEnum.hasSpecializesAnnotation(beanClass)) {
+            if (hasSpecializesAnnotation(beanClass)) {
                 specializedSuperclasses.addAll(collectSpecializedSuperclasses(beanClass));
             }
         }
@@ -2079,13 +2099,13 @@ public class Syringe {
 
     private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
         Set<Class<?>> out = new HashSet<Class<?>>();
-        if (beanClass == null || !AnnotationsEnum.hasSpecializesAnnotation(beanClass)) {
+        if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
             return out;
         }
         Class<?> current = beanClass.getSuperclass();
         while (current != null && !Object.class.equals(current)) {
             out.add(current);
-            if (!AnnotationsEnum.hasSpecializesAnnotation(current)) {
+            if (!hasSpecializesAnnotation(current)) {
                 break;
             }
             current = current.getSuperclass();
@@ -2131,11 +2151,11 @@ public class Syringe {
         Parameter observedParameter = null;
 
         for (Parameter parameter : method.getParameters()) {
-            if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
+            if (hasObservesAnnotation(parameter)) {
                 observesCount++;
                 observedParameter = parameter;
             }
-            if (AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
+            if (hasObservesAsyncAnnotation(parameter)) {
                 observesAsyncCount++;
                 observedParameter = parameter;
             }
@@ -2160,23 +2180,21 @@ public class Syringe {
         int priority = jakarta.interceptor.Interceptor.Priority.APPLICATION + 500;
 
         if (async) {
-            jakarta.enterprise.event.ObservesAsync observesAsync =
-                    AnnotationsEnum.getObservesAsyncAnnotation(observedParameter);
+            jakarta.enterprise.event.ObservesAsync observesAsync = getObservesAsyncAnnotation(observedParameter);
             if (observesAsync != null) {
                 reception = observesAsync.notifyObserver();
             }
         } else {
-            jakarta.enterprise.event.Observes observes =
-                    AnnotationsEnum.getObservesAnnotation(observedParameter);
+            jakarta.enterprise.event.Observes observes = getObservesAnnotation(observedParameter);
             if (observes != null) {
                 reception = observes.notifyObserver();
                 transactionPhase = observes.during();
             }
-            Integer paramPriority = AnnotationsEnum.getPriorityValue(observedParameter);
+            Integer paramPriority = getPriorityValue(observedParameter);
             if (paramPriority != null) {
                 priority = paramPriority;
             } else {
-                Integer methodPriority = AnnotationsEnum.getPriorityValue(method);
+                Integer methodPriority = getPriorityValue(method);
                 if (methodPriority != null) {
                     priority = methodPriority;
                 }
@@ -2191,7 +2209,7 @@ public class Syringe {
     private Set<Annotation> extractObserverQualifiers(Parameter observedParameter) {
         Set<Annotation> qualifiers = new HashSet<Annotation>();
         for (Annotation annotation : observedParameter.getAnnotations()) {
-            if (AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
+            if (hasQualifierAnnotation(annotation.annotationType())) {
                 qualifiers.add(annotation);
             }
         }
@@ -2423,7 +2441,7 @@ public class Syringe {
                 Object[] args = new Object[params.length];
                 for (int i = 0; i < params.length; i++) {
                     java.lang.reflect.Parameter p = params[i];
-                    if (AnnotationsEnum.hasObservesAnnotation(p) || AnnotationsEnum.hasObservesAsyncAnnotation(p)) {
+                    if (hasObservesAnnotation(p) || hasObservesAsyncAnnotation(p)) {
                         args[i] = event;
                     } else {
                         args[i] = beanResolver.resolve(p.getParameterizedType(), p.getAnnotations());
@@ -2530,7 +2548,8 @@ public class Syringe {
         }
 
         // 1. Check for unsatisfied/ambiguous dependencies
-        CDI41InjectionValidator injectionValidator = new CDI41InjectionValidator(knowledgeBase);
+        CDI41InjectionValidator injectionValidator =
+                new CDI41InjectionValidator(knowledgeBase, legacyCdi10NewEnabled);
         injectionValidator.validateAllInjectionPoints();
 
         // 1.1 Validate beans.xml alternatives declarations (CDI Full modularity rules)
@@ -2719,7 +2738,7 @@ public class Syringe {
 
         @SuppressWarnings("unchecked")
         Class<? extends Annotation> annotationType = (Class<? extends Annotation>) loaded;
-        if (!AnnotationsEnum.hasStereotypeAnnotation(annotationType) ||
+        if (!hasStereotypeAnnotation(annotationType) ||
                 !declaresAlternativeViaStereotype(annotationType, new HashSet<Class<? extends Annotation>>())) {
             knowledgeBase.addDefinitionError(
                     "beans.xml alternative stereotype '" + stereotypeName + "' is not an @Alternative stereotype");
@@ -2740,7 +2759,7 @@ public class Syringe {
             return;
         }
 
-        if (AnnotationsEnum.hasInterceptorAnnotation(clazz) ||
+        if (hasInterceptorAnnotation(clazz) ||
                 jakarta.enterprise.inject.spi.Interceptor.class.isAssignableFrom(clazz)) {
             return;
         }
@@ -2763,7 +2782,7 @@ public class Syringe {
             return;
         }
 
-        if (AnnotationsEnum.hasDecoratorAnnotation(clazz) ||
+        if (hasDecoratorAnnotation(clazz) ||
                 jakarta.enterprise.inject.spi.Decorator.class.isAssignableFrom(clazz)) {
             return;
         }
@@ -2786,12 +2805,12 @@ public class Syringe {
 
     private boolean declaresAlternativeProducerMember(Class<?> clazz) {
         for (Method method : clazz.getDeclaredMethods()) {
-            if (AnnotationsEnum.hasProducesAnnotation(method) && isAlternativeDeclaration(method)) {
+            if (hasProducesAnnotation(method) && isAlternativeDeclaration(method)) {
                 return true;
             }
         }
         for (Field field : clazz.getDeclaredFields()) {
-            if (AnnotationsEnum.hasProducesAnnotation(field) && isAlternativeDeclaration(field)) {
+            if (hasProducesAnnotation(field) && isAlternativeDeclaration(field)) {
                 return true;
             }
         }
@@ -2802,12 +2821,12 @@ public class Syringe {
         if (element == null) {
             return false;
         }
-        if (AnnotationsEnum.hasAlternativeAnnotation(element)) {
+        if (hasAlternativeAnnotation(element)) {
             return true;
         }
         for (Annotation annotation : element.getAnnotations()) {
             Class<? extends Annotation> type = annotation.annotationType();
-            if (AnnotationsEnum.hasStereotypeAnnotation(type) &&
+            if (hasStereotypeAnnotation(type) &&
                     declaresAlternativeViaStereotype(type, new HashSet<Class<? extends Annotation>>())) {
                 return true;
             }
@@ -2820,12 +2839,12 @@ public class Syringe {
         if (stereotypeType == null || !visited.add(stereotypeType)) {
             return false;
         }
-        if (AnnotationsEnum.hasAlternativeAnnotation(stereotypeType)) {
+        if (hasAlternativeAnnotation(stereotypeType)) {
             return true;
         }
         for (Annotation meta : stereotypeType.getAnnotations()) {
             Class<? extends Annotation> metaType = meta.annotationType();
-            if (AnnotationsEnum.hasStereotypeAnnotation(metaType) &&
+            if (hasStereotypeAnnotation(metaType) &&
                     declaresAlternativeViaStereotype(metaType, visited)) {
                 return true;
             }
@@ -3038,7 +3057,7 @@ public class Syringe {
 
             for (int i = 0; i < parameters.length; i++) {
                 Parameter parameter = parameters[i];
-                if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
+                if (hasObservesAnnotation(parameter)) {
                     observesParameterIndex = i;
                     break;
                 }
@@ -3050,7 +3069,7 @@ public class Syringe {
 
             for (int i = 0; i < parameters.length; i++) {
                 Parameter parameter = parameters[i];
-                if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
+                if (hasObservesAnnotation(parameter)) {
                     Class<?> observedType = parameter.getType();
                     validateExtensionObserverStaticMethod(method, parameter, observedType);
                     if (observedType.isAssignableFrom(eventType)) {
@@ -3086,13 +3105,13 @@ public class Syringe {
 
     @SuppressWarnings("unchecked")
     private Set<Class<? extends Annotation>> resolveWithAnnotationsFilter(Parameter parameter) {
-        if (!AnnotationsEnum.hasWithAnnotationsAnnotation(parameter)) {
+        if (!hasWithAnnotationsAnnotation(parameter)) {
             return null;
         }
         Annotation[] annotations = parameter.getAnnotations();
         for (Annotation annotation : annotations) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (!AnnotationsEnum.WITH_ANNOTATIONS.matches(annotationType)) {
+            if (!WITH_ANNOTATIONS.matches(annotationType)) {
                 continue;
             }
             try {
@@ -3147,7 +3166,7 @@ public class Syringe {
     private boolean hasNoQualifierOrOnlyAnyQualifier(Parameter observedParameter) {
         List<Annotation> qualifierAnnotations = new ArrayList<>();
         for (Annotation annotation : observedParameter.getAnnotations()) {
-            if (AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
+            if (hasQualifierAnnotation(annotation.annotationType())) {
                 qualifierAnnotations.add(annotation);
             }
         }
@@ -3161,11 +3180,11 @@ public class Syringe {
     }
 
     private int resolvePriority(Method method, Parameter observedParameter) {
-        Integer parameterPriority = AnnotationsEnum.getPriorityValue(observedParameter);
+        Integer parameterPriority = getPriorityValue(observedParameter);
         if (parameterPriority != null) {
             return parameterPriority;
         }
-        Integer methodPriority = AnnotationsEnum.getPriorityValue(method);
+        Integer methodPriority = getPriorityValue(method);
         if (methodPriority != null) {
             return methodPriority;
         }

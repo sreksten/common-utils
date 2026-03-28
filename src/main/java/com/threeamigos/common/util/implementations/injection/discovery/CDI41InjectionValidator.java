@@ -6,12 +6,14 @@ import com.threeamigos.common.util.implementations.injection.events.ObserverMeth
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
+import com.threeamigos.common.util.implementations.injection.resolution.LegacyNewBeanAdapter;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
+import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Any;
@@ -70,6 +72,7 @@ public class CDI41InjectionValidator {
 
     private final KnowledgeBase knowledgeBase;
     private final TypeChecker typeChecker;
+    private final boolean legacyCdi10NewEnabled;
 
     /**
      * Tracks beans currently being resolved to detect circular dependencies.
@@ -84,8 +87,13 @@ public class CDI41InjectionValidator {
             ThreadLocal.withInitial(HashSet::new);
 
     public CDI41InjectionValidator(KnowledgeBase knowledgeBase) {
+        this(knowledgeBase, false);
+    }
+
+    public CDI41InjectionValidator(KnowledgeBase knowledgeBase, boolean legacyCdi10NewEnabled) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.typeChecker = new TypeChecker();
+        this.legacyCdi10NewEnabled = legacyCdi10NewEnabled;
     }
 
     /**
@@ -1778,6 +1786,15 @@ public class CDI41InjectionValidator {
      * @return set of matching beans (may include producer-backed beans)
      */
     private Set<Bean<?>> findMatchingBeans(Type requiredType, Set<Annotation> qualifiers) {
+        LegacyNewQualifierHelper.LegacyNewSelection legacyNewSelection =
+                LegacyNewQualifierHelper.extractSelection(requiredType, qualifiers.toArray(new Annotation[0]));
+        if (legacyNewSelection != null) {
+            if (!legacyCdi10NewEnabled) {
+                return Collections.emptySet();
+            }
+            return findLegacyNewBeans(requiredType, legacyNewSelection);
+        }
+
         Set<Bean<?>> matches = new HashSet<>();
 
         // Get all valid beans (exclude beans with validation errors)
@@ -1805,6 +1822,28 @@ public class CDI41InjectionValidator {
         // and registered as beans in KnowledgeBase, so they're included in
         // the validBeans collection above. No special handling is needed here.
 
+        return applySpecializationFiltering(matches);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Set<Bean<?>> findLegacyNewBeans(
+            Type requiredType,
+            LegacyNewQualifierHelper.LegacyNewSelection selection) {
+        Set<Bean<?>> matches = new HashSet<>();
+        Class<?> targetClass = selection.getTargetClass();
+
+        for (Bean<?> bean : knowledgeBase.getValidBeans()) {
+            if (!isBeanEnabledForResolution(bean)) {
+                continue;
+            }
+            if (!targetClass.equals(bean.getBeanClass())) {
+                continue;
+            }
+            if (!isTypeCompatible(requiredType, bean.getTypes())) {
+                continue;
+            }
+            matches.add(new LegacyNewBeanAdapter(bean));
+        }
         return applySpecializationFiltering(matches);
     }
 

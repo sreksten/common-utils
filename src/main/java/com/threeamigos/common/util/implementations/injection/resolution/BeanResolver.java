@@ -13,6 +13,7 @@ import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
+import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
@@ -72,6 +73,7 @@ public class BeanResolver implements DependencyResolver {
     private volatile BeanManagerImpl owningBeanManager;
     private final DecoratorResolver decoratorResolver;
     private final DecoratorAwareProxyGenerator decoratorAwareProxyGenerator;
+    private volatile boolean legacyCdi10NewEnabled;
 
     // ThreadLocal to pass injection point context during resolution
     private final ThreadLocal<InjectionPoint> currentInjectionPoint = new ThreadLocal<>();
@@ -91,6 +93,10 @@ public class BeanResolver implements DependencyResolver {
 
     public void setOwningBeanManager(BeanManagerImpl beanManager) {
         this.owningBeanManager = beanManager;
+    }
+
+    public void setLegacyCdi10NewEnabled(boolean enabled) {
+        this.legacyCdi10NewEnabled = enabled;
     }
 
     @Override
@@ -278,6 +284,15 @@ public class BeanResolver implements DependencyResolver {
      * Finds all beans matching the required type and qualifiers.
      */
     private Collection<Bean<?>> findMatchingBeans(Type requiredType, Annotation[] qualifiers) {
+        LegacyNewQualifierHelper.LegacyNewSelection legacyNewSelection =
+                LegacyNewQualifierHelper.extractSelection(requiredType, qualifiers);
+        if (legacyNewSelection != null) {
+            if (!legacyCdi10NewEnabled) {
+                return Collections.emptyList();
+            }
+            return findLegacyNewBeans(requiredType, legacyNewSelection);
+        }
+
         List<Bean<?>> matches = new ArrayList<>();
 
         // Extract qualifier annotations (ignore non-qualifiers)
@@ -325,6 +340,53 @@ public class BeanResolver implements DependencyResolver {
                 }
                 matches.add(bean);
             }
+        }
+
+        return applySpecializationFiltering(matches);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private Collection<Bean<?>> findLegacyNewBeans(
+            Type requiredType,
+            LegacyNewQualifierHelper.LegacyNewSelection selection) {
+        List<Bean<?>> matches = new ArrayList<>();
+        Class<?> targetClass = selection.getTargetClass();
+
+        for (Bean<?> bean : knowledgeBase.getValidBeans()) {
+            if (!isBeanEnabledForResolution(bean)) {
+                continue;
+            }
+            if (bean instanceof BeanImpl && ((BeanImpl<?>) bean).hasValidationErrors()) {
+                continue;
+            }
+            if (bean instanceof ProducerBean && ((ProducerBean<?>) bean).hasValidationErrors()) {
+                continue;
+            }
+            if (bean instanceof BeanImpl && ((BeanImpl<?>) bean).isVetoed()) {
+                continue;
+            }
+            if (bean instanceof ProducerBean && ((ProducerBean<?>) bean).isVetoed()) {
+                continue;
+            }
+            if (!targetClass.equals(bean.getBeanClass())) {
+                continue;
+            }
+
+            boolean typeMatches = false;
+            for (Type beanType : bean.getTypes()) {
+                if (typeChecker.isAssignable(requiredType, beanType)) {
+                    typeMatches = true;
+                    break;
+                }
+            }
+            if (!typeMatches) {
+                continue;
+            }
+            if (!isBeanClassAccessibleFromCurrentInjectionPoint(bean)) {
+                continue;
+            }
+
+            matches.add(new LegacyNewBeanAdapter(bean));
         }
 
         return applySpecializationFiltering(matches);

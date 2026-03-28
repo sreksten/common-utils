@@ -8,6 +8,7 @@ import com.threeamigos.common.util.implementations.injection.decorators.Decorato
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorResolver;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.resolution.*;
+import com.threeamigos.common.util.implementations.injection.resolution.LegacyNewBeanAdapter;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
@@ -16,6 +17,7 @@ import com.threeamigos.common.util.implementations.injection.events.ObserverMeth
 import com.threeamigos.common.util.implementations.injection.spi.spievents.SimpleAnnotatedType;
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
@@ -104,6 +106,7 @@ public class BeanManagerImpl implements BeanManager {
     private final DecoratorAwareProxyGenerator decoratorAwareProxyGenerator;
     private final List<Extension> registeredExtensions;
     private final String beanManagerId;
+    private volatile boolean legacyCdi10NewEnabled;
     private volatile boolean afterBeanDiscoveryFired;
     private volatile boolean afterDeploymentValidationFired;
 
@@ -124,6 +127,7 @@ public class BeanManagerImpl implements BeanManager {
         this.decoratorResolver = new DecoratorResolver(knowledgeBase);
         this.decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
         this.registeredExtensions = new ArrayList<>();
+        this.legacyCdi10NewEnabled = false;
 
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         if (classLoader == null) {
@@ -131,6 +135,11 @@ public class BeanManagerImpl implements BeanManager {
         }
         BEAN_MANAGER_REGISTRY.put(classLoader, this);
         BEAN_MANAGER_ID_REGISTRY.put(beanManagerId, this);
+    }
+
+    public void setLegacyCdi10NewEnabled(boolean enabled) {
+        this.legacyCdi10NewEnabled = enabled;
+        this.beanResolver.setLegacyCdi10NewEnabled(enabled);
     }
 
     public void registerExtensions(Collection<Extension> extensions) {
@@ -333,6 +342,15 @@ public class BeanManagerImpl implements BeanManager {
         }
         validateRequiredQualifiers(qualifiers);
 
+        LegacyNewQualifierHelper.LegacyNewSelection legacyNewSelection =
+                LegacyNewQualifierHelper.extractSelection(beanType, qualifiers);
+        if (legacyNewSelection != null) {
+            if (!legacyCdi10NewEnabled) {
+                return Collections.emptySet();
+            }
+            return resolveLegacyNewBeans(beanType, legacyNewSelection);
+        }
+
         Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
         Set<Bean<?>> matchingBeans = new HashSet<>();
 
@@ -361,6 +379,42 @@ public class BeanManagerImpl implements BeanManager {
                 }
                 matchingBeans.add(bean);
             }
+        }
+
+        return applySpecializationFiltering(matchingBeans);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Set<Bean<?>> resolveLegacyNewBeans(
+            Type beanType,
+            LegacyNewQualifierHelper.LegacyNewSelection selection) {
+        Set<Bean<?>> matchingBeans = new HashSet<>();
+        Class<?> targetClass = selection.getTargetClass();
+
+        for (Bean<?> bean : knowledgeBase.getValidBeans()) {
+            if (!isBeanEnabledForResolution(bean)) {
+                continue;
+            }
+            if (!targetClass.equals(bean.getBeanClass())) {
+                continue;
+            }
+
+            boolean typeMatches = false;
+            for (Type type : bean.getTypes()) {
+                if (typeChecker.isAssignable(beanType, type)) {
+                    typeMatches = true;
+                    break;
+                }
+            }
+
+            if (!typeMatches) {
+                continue;
+            }
+
+            if (!isBeanAccessibleFromCurrentInjectionPoint(bean)) {
+                continue;
+            }
+            matchingBeans.add(new LegacyNewBeanAdapter(bean));
         }
 
         return applySpecializationFiltering(matchingBeans);
