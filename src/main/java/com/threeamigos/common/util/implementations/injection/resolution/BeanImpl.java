@@ -272,7 +272,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 ? beanClass.getPackage().getName()
                 : "unknown";
         String className = (beanClass != null) ? beanClass.getName() : "unknown";
-        this.passivationId = packageName + ".BeanImpl#" + className + "#" + UUID.randomUUID().toString();
+        this.passivationId = packageName + ".BeanImpl#" + className + "#" + UUID.randomUUID();
         this.alternativeEnabled = !alternative;
         this.priority = null;
     }
@@ -858,12 +858,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
         try {
             if (postConstructInterceptorChain != null) {
-                invokeLifecycleChainWithCustomTarget(instance, postConstructInterceptorChain, new Runnable() {
-                    @Override
-                    public void run() {
-                        customInjectionTarget.postConstruct(instance);
-                    }
-                });
+                invokeLifecycleChainWithCustomTarget(instance, postConstructInterceptorChain,
+                        (Runnable) () -> customInjectionTarget.postConstruct(instance));
             } else {
                 customInjectionTarget.postConstruct(instance);
             }
@@ -877,12 +873,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     private void invokeCustomInjectionTargetPreDestroyWithInterceptors(T instance) throws Exception {
         ensureLifecycleInterceptorChainsInitialized();
         if (preDestroyInterceptorChain != null) {
-            invokeLifecycleChainWithCustomTarget(instance, preDestroyInterceptorChain, new Runnable() {
-                @Override
-                public void run() {
-                    customInjectionTarget.preDestroy(instance);
-                }
-            });
+            invokeLifecycleChainWithCustomTarget(instance, preDestroyInterceptorChain,
+                    (Runnable) () -> customInjectionTarget.preDestroy(instance));
             return;
         }
         customInjectionTarget.preDestroy(instance);
@@ -1350,13 +1342,13 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
         // Iterate through non-private, non-static methods in the bean class hierarchy.
         // Prefer the subclass declaration when a method is overridden.
-        java.util.List<Class<?>> hierarchy = new java.util.ArrayList<Class<?>>();
+        java.util.List<Class<?>> hierarchy = new java.util.ArrayList<>();
         Class<?> current = beanClass;
         while (current != null && current != Object.class) {
             hierarchy.add(current);
             current = current.getSuperclass();
         }
-        java.util.Set<String> seenSignatures = new java.util.HashSet<String>();
+        java.util.Set<String> seenSignatures = new java.util.HashSet<>();
         for (Class<?> type : hierarchy) {
             for (Method method : type.getDeclaredMethods()) {
                 if (Object.class.equals(method.getDeclaringClass())) {
@@ -1697,12 +1689,9 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             InterceptorChain lifecycleChain,
             Runnable targetCallback) throws Exception {
 
-        InvocationContextImpl.TargetInvocation targetInvocation = new InvocationContextImpl.TargetInvocation() {
-            @Override
-            public Object invoke(jakarta.interceptor.InvocationContext context) {
-                targetCallback.run();
-                return null;
-            }
+        InvocationContextImpl.TargetInvocation targetInvocation = context -> {
+            targetCallback.run();
+            return null;
         };
 
         InvocationContextImpl invocationContext = new InvocationContextImpl(
@@ -1760,19 +1749,19 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             return targetInstance;
         }
 
-        Map<Method, InterceptorChain> effectiveChains = new HashMap<Method, InterceptorChain>();
+        Map<Method, InterceptorChain> effectiveChains = new HashMap<>();
         if (hasMethodChains) {
             effectiveChains.putAll(methodInterceptorChains);
         }
 
         if (targetClassAroundInvokeMethod != null) {
-            List<Class<?>> hierarchy = new ArrayList<Class<?>>();
+            List<Class<?>> hierarchy = new ArrayList<>();
             Class<?> current = beanClass;
             while (current != null && current != Object.class) {
                 hierarchy.add(current);
                 current = current.getSuperclass();
             }
-            Set<String> seenSignatures = new HashSet<String>();
+            Set<String> seenSignatures = new HashSet<>();
             for (Class<?> type : hierarchy) {
                 for (Method method : type.getDeclaredMethods()) {
                     if (Modifier.isPrivate(method.getModifiers()) || Modifier.isStatic(method.getModifiers())) {
@@ -1804,7 +1793,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         Class<?> current = type;
         while (current != null && current != Object.class) {
             for (Method method : current.getDeclaredMethods()) {
-                if (method.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+                if (AnnotationsEnum.hasAroundInvokeAnnotation(method)) {
                     if (Modifier.isStatic(method.getModifiers())) {
                         continue;
                     }
@@ -1821,7 +1810,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     }
 
     private List<Class<?>> extractLegacyInterceptorClasses(Annotation[] annotations) {
-        if (annotations == null || annotations.length == 0) {
+        if (annotations == null) {
             return Collections.emptyList();
         }
         for (Annotation annotation : annotations) {
@@ -1836,7 +1825,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 Object raw = valueMethod.invoke(annotation);
                 if (raw instanceof Class[]) {
                     Class<?>[] classes = (Class<?>[]) raw;
-                    return Arrays.<Class<?>>asList(classes);
+                    return Arrays.asList(classes);
                 }
             } catch (Exception ignored) {
                 return Collections.emptyList();
@@ -1867,7 +1856,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         Class<?> current = interceptorClass;
         while (current != null && current != Object.class) {
             for (Method method : current.getDeclaredMethods()) {
-                if (method.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+                if (AnnotationsEnum.hasAroundInvokeAnnotation(method)) {
                     if (Modifier.isStatic(method.getModifiers())) {
                         continue;
                     }

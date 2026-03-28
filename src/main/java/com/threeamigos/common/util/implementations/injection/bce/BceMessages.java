@@ -113,7 +113,7 @@ final class BceMessages implements Messages {
                 return observer.observerMethod().name();
             }
         } catch (RuntimeException ignored) {
-            // Some observer kinds (e.g. synthetic) may not expose a java method.
+            // Some observer kinds (e.g., synthetic) may not expose a java method.
         }
         if (observer.declaringClass() != null) {
             return observer.declaringClass().name();

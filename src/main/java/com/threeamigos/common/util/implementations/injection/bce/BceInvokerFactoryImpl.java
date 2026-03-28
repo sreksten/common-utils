@@ -45,8 +45,8 @@ final class BceInvokerFactoryImpl implements InvokerFactory {
         }
 
         AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(beanClass);
-        ProcessManagedBeanImpl<?> event = new ProcessManagedBeanImpl<Object>(
-            messageHandler, knowledgeBase, (Bean<Object>) managedBean, (AnnotatedType<Object>) annotatedType, beanManager);
+        ProcessManagedBeanImpl<?> event = new ProcessManagedBeanImpl<>(
+                messageHandler, knowledgeBase, (Bean<Object>) managedBean, (AnnotatedType<Object>) annotatedType, beanManager);
         AnnotatedMethodWrapper wrapper = new AnnotatedMethodWrapper(javaMethod, annotatedType);
         final InvokerBuilder<Invoker<Object, ?>> runtimeBuilder =
             (InvokerBuilder<Invoker<Object, ?>>) event.createInvoker(wrapper);

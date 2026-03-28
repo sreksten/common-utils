@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
+import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.build.compatible.spi.Types;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.types.ArrayType;
@@ -67,8 +68,7 @@ final class BceTypes implements Types {
         if (dimensions < 1) {
             throw new IllegalArgumentException("Array dimensions must be >= 1");
         }
-        Class<?> componentClass = BceMetadata.unwrapType(componentType);
-        Class<?> arrayClass = componentClass;
+        Class<?> arrayClass = BceMetadata.unwrapType(componentType);
         for (int i = 0; i < dimensions; i++) {
             arrayClass = java.lang.reflect.Array.newInstance(arrayClass, 0).getClass();
         }
@@ -176,17 +176,17 @@ final class BceTypes implements Types {
         }
 
         @Override
-        public java.lang.reflect.Type[] getActualTypeArguments() {
+        public @Nonnull java.lang.reflect.Type[] getActualTypeArguments() {
             return actualTypeArguments.clone();
         }
 
         @Override
-        public java.lang.reflect.Type getRawType() {
+        public @Nonnull java.lang.reflect.Type getRawType() {
             return rawType;
         }
 
         @Override
-        public java.lang.reflect.Type getOwnerType() {
+        public @Nonnull java.lang.reflect.Type getOwnerType() {
             return ownerType;
         }
     }
@@ -201,12 +201,12 @@ final class BceTypes implements Types {
         }
 
         @Override
-        public java.lang.reflect.Type[] getUpperBounds() {
+        public @Nonnull java.lang.reflect.Type[] getUpperBounds() {
             return upperBounds.clone();
         }
 
         @Override
-        public java.lang.reflect.Type[] getLowerBounds() {
+        public @Nonnull java.lang.reflect.Type[] getLowerBounds() {
             return lowerBounds.clone();
         }
     }
@@ -219,7 +219,7 @@ final class BceTypes implements Types {
         }
 
         @Override
-        public java.lang.reflect.Type getGenericComponentType() {
+        public @Nonnull java.lang.reflect.Type getGenericComponentType() {
             return componentType;
         }
     }

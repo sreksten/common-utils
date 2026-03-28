@@ -187,7 +187,7 @@ public class DecoratorResolver {
      *   <li>Otherwise, use simple equality (for generic types)</li>
      * </ul>
      *
-     * @param decoratedType the type that the decorator decorates
+     * @param delegateType the type that the decorator decorates
      * @param beanType the bean's type
      * @return true if the decorator can decorate the bean
      */
@@ -198,7 +198,7 @@ public class DecoratorResolver {
 
         Class<?> beanRaw = safeRawType(beanType);
         Class<?> delegateRaw = safeRawType(delegateType);
-        if (beanRaw == null || delegateRaw == null || !delegateRaw.equals(beanRaw)) {
+        if (delegateRaw == null || !delegateRaw.equals(beanRaw)) {
             return false;
         }
 
@@ -239,7 +239,7 @@ public class DecoratorResolver {
         if (isActualType(beanParam) && isActualType(delegateParam)) {
             Class<?> beanRaw = safeRawType(beanParam);
             Class<?> delegateRaw = safeRawType(delegateParam);
-            if (beanRaw == null || delegateRaw == null || !beanRaw.equals(delegateRaw)) {
+            if (beanRaw == null || !beanRaw.equals(delegateRaw)) {
                 return false;
             }
             if (beanParam instanceof ParameterizedType && delegateParam instanceof ParameterizedType) {
@@ -277,12 +277,12 @@ public class DecoratorResolver {
 
     private boolean wildcardMatches(WildcardType wildcard, Type candidate) {
         for (Type upper : wildcard.getUpperBounds()) {
-            if (upper != null && !Object.class.equals(upper) && !isAssignable(candidate, upper)) {
+            if (!Object.class.equals(upper) && !isAssignable(candidate, upper)) {
                 return false;
             }
         }
         for (Type lower : wildcard.getLowerBounds()) {
-            if (lower != null && !isAssignable(lower, candidate)) {
+            if (!isAssignable(lower, candidate)) {
                 return false;
             }
         }

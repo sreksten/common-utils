@@ -9,6 +9,7 @@ import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
 
 import java.lang.annotation.Annotation;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.threeamigos.common.util.implementations.injection.util.AnnotationHelper.toList;
@@ -31,20 +32,10 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
 
     private final KnowledgeBase knowledgeBase;
     private final BeanManager beanManager;
-    private final ThreadLocal<Extension> currentObserverExtension = new ThreadLocal<Extension>();
+    private final ThreadLocal<Extension> currentObserverExtension = new ThreadLocal<>();
     private final ThreadLocal<java.util.List<Runnable>> endOfObserverActions =
-            new ThreadLocal<java.util.List<Runnable>>() {
-                @Override
-                protected java.util.List<Runnable> initialValue() {
-                    return new java.util.ArrayList<Runnable>();
-                }
-            };
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+            ThreadLocal.withInitial(ArrayList::new);
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public BeforeBeanDiscoveryImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, BeanManager beanManager) {
         super(messageHandler);
@@ -83,8 +74,15 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
         // Create an AnnotatedType from the class using BeanManager
         AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(type);
 
+        AnnotatedTypeConfiguratorImpl<T> configurator = getAnnotatedTypeConfigurator(id, annotatedType);
+        registerEndOfObserverAction(configurator::complete);
+        return configurator;
+    }
+
+    @Nonnull
+    private <T> AnnotatedTypeConfiguratorImpl<T> getAnnotatedTypeConfigurator(String id, AnnotatedType<T> annotatedType) {
         final AtomicBoolean applied = new AtomicBoolean(false);
-        AnnotatedTypeConfiguratorImpl<T> configurator = new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
+        return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
             @Override
             public AnnotatedType<T> complete() {
                 AnnotatedType<T> configured = super.complete();
@@ -94,8 +92,6 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
                 return configured;
             }
         };
-        registerEndOfObserverAction(() -> configurator.complete());
-        return configurator;
     }
 
     @Override
@@ -152,7 +148,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
                 return configured;
             }
         };
-        registerEndOfObserverAction(() -> configurator.complete());
+        registerEndOfObserverAction(configurator::complete);
         return configurator;
     }
 
@@ -233,7 +229,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
                 return configured;
             }
         };
-        registerEndOfObserverAction(() -> configurator.complete());
+        registerEndOfObserverAction(configurator::complete);
         return configurator;
     }
 
@@ -259,7 +255,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
             if (actions.isEmpty()) {
                 return;
             }
-            java.util.List<Runnable> pending = new java.util.ArrayList<Runnable>(actions);
+            java.util.List<Runnable> pending = new java.util.ArrayList<>(actions);
             actions.clear();
             for (Runnable action : pending) {
                 action.run();

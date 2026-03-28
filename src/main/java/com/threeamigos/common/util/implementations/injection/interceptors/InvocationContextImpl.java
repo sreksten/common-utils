@@ -190,7 +190,7 @@ public class InvocationContextImpl implements InvocationContext {
             throw new IllegalArgumentException("parameters cannot be null");
         }
 
-        // Validate parameter count matches method/constructor signature
+        // Validate that parameter count matches method or constructor signature
         int expectedCount = getExpectedParameterCount();
         if (params.length != expectedCount) {
             throw new IllegalArgumentException(
@@ -220,7 +220,7 @@ public class InvocationContextImpl implements InvocationContext {
      * <p><b>Execution Flow:</b>
      * <pre>
      * Client → Interceptor1.proceed() → Interceptor2.proceed() → Target Method
-     *          ← return              ← return              ← return result
+     *          ← return ← return ← return result
      * </pre>
      *
      * @return the result of the next interceptor or target method invocation

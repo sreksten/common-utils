@@ -180,9 +180,9 @@ public class InterceptorResolver {
      * type hides farther ancestors. Interface annotations are not inherited.
      */
     private Set<Annotation> extractInterceptorBindingsFromHierarchy(Class<?> type) {
-        java.util.Map<Class<? extends Annotation>, Annotation> bindingsByType = new java.util.LinkedHashMap<Class<? extends Annotation>, Annotation>();
+        java.util.Map<Class<? extends Annotation>, Annotation> bindingsByType = new java.util.LinkedHashMap<>();
         if (type == null) {
-            return new HashSet<Annotation>();
+            return new HashSet<>();
         }
 
         // 1) Direct class-level interceptor bindings (including inherited Java @Inherited ones)
@@ -206,7 +206,7 @@ public class InterceptorResolver {
             }
         }
 
-        return new HashSet<Annotation>(bindingsByType.values());
+        return new HashSet<>(bindingsByType.values());
     }
 
     /**
@@ -235,8 +235,7 @@ public class InterceptorResolver {
     private boolean isInterceptorBinding(Class<? extends Annotation> annotationType) {
         // Check both jakarta and javax namespaces for backward compatibility
         return AnnotationsEnum.hasActivateRequestContextAnnotation(annotationType) ||
-               annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
-               annotationType.isAnnotationPresent(javax.interceptor.InterceptorBinding.class) ||
+               AnnotationsEnum.hasInterceptorBindingAnnotation(annotationType) ||
                knowledgeBase.isRegisteredInterceptorBinding(annotationType);
     }
 

@@ -3,9 +3,16 @@ package com.threeamigos.common.util.implementations.injection.bce;
 import jakarta.enterprise.inject.build.compatible.spi.InvokerInfo;
 import jakarta.enterprise.inject.build.compatible.spi.Parameters;
 import jakarta.enterprise.invoke.Invoker;
+import jakarta.enterprise.lang.model.AnnotationInfo;
+import jakarta.enterprise.lang.model.types.Type;
+import jakarta.enterprise.lang.model.declarations.ClassInfo;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Array;
 import java.util.HashMap;
 import java.util.Map;
+
+import static com.threeamigos.common.util.implementations.injection.spi.SPIUtils.isAnnotation;
 
 /**
  * Parameters implementation that materializes InvokerInfo tokens into runtime Invokers.
@@ -16,7 +23,7 @@ public class BceParameters implements Parameters {
     private final BceInvokerRegistry invokerRegistry;
 
     public BceParameters(Map<String, Object> values, BceInvokerRegistry invokerRegistry) {
-        this.values = values != null ? new HashMap<String, Object>(values) : new HashMap<String, Object>();
+        this.values = values != null ? new HashMap<>(values) : new HashMap<>();
         this.invokerRegistry = invokerRegistry;
     }
 
@@ -54,38 +61,36 @@ public class BceParameters implements Parameters {
                 invokers[i] = materializeInvoker(infos[i]);
             }
             converted = invokers;
-        } else if (raw instanceof jakarta.enterprise.lang.model.declarations.ClassInfo) {
-            converted = BceMetadata.unwrapClassInfo((jakarta.enterprise.lang.model.declarations.ClassInfo) raw);
-        } else if (raw instanceof jakarta.enterprise.lang.model.declarations.ClassInfo[]) {
-            jakarta.enterprise.lang.model.declarations.ClassInfo[] infos =
-                (jakarta.enterprise.lang.model.declarations.ClassInfo[]) raw;
+        } else if (raw instanceof ClassInfo) {
+            converted = BceMetadata.unwrapClassInfo((ClassInfo) raw);
+        } else if (raw instanceof ClassInfo[]) {
+            ClassInfo[] infos = (ClassInfo[]) raw;
             Class<?>[] classes = new Class<?>[infos.length];
             for (int i = 0; i < infos.length; i++) {
                 classes[i] = infos[i] != null ? BceMetadata.unwrapClassInfo(infos[i]) : null;
             }
             converted = classes;
-        } else if (raw instanceof jakarta.enterprise.lang.model.AnnotationInfo) {
-            converted = BceMetadata.unwrapAnnotationInfo((jakarta.enterprise.lang.model.AnnotationInfo) raw);
-        } else if (raw instanceof jakarta.enterprise.lang.model.AnnotationInfo[]) {
-            jakarta.enterprise.lang.model.AnnotationInfo[] infos =
-                (jakarta.enterprise.lang.model.AnnotationInfo[]) raw;
-            java.lang.annotation.Annotation[] annotations = new java.lang.annotation.Annotation[infos.length];
+        } else if (raw instanceof AnnotationInfo) {
+            converted = BceMetadata.unwrapAnnotationInfo((AnnotationInfo) raw);
+        } else if (raw instanceof AnnotationInfo[]) {
+            AnnotationInfo[] infos = (AnnotationInfo[]) raw;
+            Annotation[] annotations = new Annotation[infos.length];
             for (int i = 0; i < infos.length; i++) {
                 annotations[i] = infos[i] != null ? BceMetadata.unwrapAnnotationInfo(infos[i]) : null;
             }
             converted = annotations;
-        } else if (raw instanceof jakarta.enterprise.lang.model.types.Type) {
-            converted = BceMetadata.unwrapType((jakarta.enterprise.lang.model.types.Type) raw);
+        } else if (raw instanceof Type) {
+            converted = BceMetadata.unwrapType((Type) raw);
         }
 
         if (converted != null && !type.isInstance(converted)) {
-            if (converted instanceof java.lang.annotation.Annotation[] &&
+            if (converted instanceof Annotation[] &&
                 type.isArray() &&
-                java.lang.annotation.Annotation.class.isAssignableFrom(type.getComponentType())) {
-                java.lang.annotation.Annotation[] source = (java.lang.annotation.Annotation[]) converted;
-                Object typedArray = java.lang.reflect.Array.newInstance(type.getComponentType(), source.length);
+                isAnnotation(type.getComponentType())) {
+                Annotation[] source = (Annotation[]) converted;
+                Object typedArray = Array.newInstance(type.getComponentType(), source.length);
                 for (int i = 0; i < source.length; i++) {
-                    java.lang.reflect.Array.set(typedArray, i, source[i]);
+                    Array.set(typedArray, i, source[i]);
                 }
                 converted = typedArray;
             }

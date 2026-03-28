@@ -40,7 +40,7 @@ final class BceAnnotationBuilderFactory implements AnnotationBuilderFactory {
 
     private static class AnnotationBuilderHandler implements InvocationHandler {
         private final Class<? extends Annotation> annotationType;
-        private final Map<String, Object> members = new LinkedHashMap<String, Object>();
+        private final Map<String, Object> members = new LinkedHashMap<>();
 
         private AnnotationBuilderHandler(Class<? extends Annotation> annotationType) {
             this.annotationType = annotationType;
@@ -53,8 +53,7 @@ final class BceAnnotationBuilderFactory implements AnnotationBuilderFactory {
                 return BceMetadata.annotationInfo(buildAnnotationProxy());
             }
             if ("member".equals(methodName) && args != null && args.length == 2) {
-                String memberName = (String) args[0];
-                members.put(memberName, normalizeValue(args[1]));
+                members.put((String) args[0], normalizeValue(args[1]));
                 return proxy;
             }
             if ("value".equals(methodName) && args != null && args.length >= 1) {
@@ -76,14 +75,13 @@ final class BceAnnotationBuilderFactory implements AnnotationBuilderFactory {
                 members.put("value", normalizeValue(value));
                 return proxy;
             }
-            if ("toString".equals(methodName)) {
-                return "AnnotationBuilder(" + annotationType.getName() + ")";
-            }
-            if ("hashCode".equals(methodName)) {
-                return members.hashCode();
-            }
-            if ("equals".equals(methodName)) {
-                return proxy == args[0];
+            switch (methodName) {
+                case "toString":
+                    return "AnnotationBuilder(" + annotationType.getName() + ")";
+                case "hashCode":
+                    return members.hashCode();
+                case "equals":
+                    return proxy == args[0];
             }
             return proxy;
         }
@@ -131,17 +129,15 @@ final class BceAnnotationBuilderFactory implements AnnotationBuilderFactory {
                 new Class<?>[]{annotationType},
                 (proxy, method, args) -> {
                     String methodName = method.getName();
-                    if ("annotationType".equals(methodName)) {
-                        return annotationType;
-                    }
-                    if ("toString".equals(methodName)) {
-                        return "@" + annotationType.getName() + members;
-                    }
-                    if ("hashCode".equals(methodName)) {
-                        return members.hashCode();
-                    }
-                    if ("equals".equals(methodName)) {
-                        return proxy == args[0];
+                    switch (methodName) {
+                        case "annotationType":
+                            return annotationType;
+                        case "toString":
+                            return "@" + annotationType.getName() + members;
+                        case "hashCode":
+                            return members.hashCode();
+                        case "equals":
+                            return proxy == args[0];
                     }
                     if (members.containsKey(methodName)) {
                         return members.get(methodName);

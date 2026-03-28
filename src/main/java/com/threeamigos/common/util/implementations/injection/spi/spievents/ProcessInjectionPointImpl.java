@@ -4,7 +4,6 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.InjectionPointConfiguratorImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.ProcessInjectionPoint;
 import jakarta.enterprise.inject.spi.configurator.InjectionPointConfigurator;
@@ -17,24 +16,9 @@ public class ProcessInjectionPointImpl<T, X> extends PhaseAware implements Proce
     private InjectionPoint injectionPoint;
     private final KnowledgeBase knowledgeBase;
     private InjectionPointConfiguratorImpl configurator;
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProcessInjectionPointImpl(MessageHandler messageHandler, InjectionPoint injectionPoint,
                                      KnowledgeBase knowledgeBase) {

@@ -5,18 +5,18 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.spi.AfterTypeDiscovery;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
-import jakarta.enterprise.inject.Alternative;
-import jakarta.interceptor.Interceptor;
-import jakarta.decorator.Decorator;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 
 /**
  * Basic AfterTypeDiscovery event implementation.
@@ -24,26 +24,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class AfterTypeDiscoveryImpl extends PhaseAware implements AfterTypeDiscovery, ObserverInvocationLifecycle, ExtensionAwareObserverInvocation {
 
-    private final MessageHandler messageHandler;
     private final KnowledgeBase knowledgeBase;
     private final BeanManager beanManager;
     private final List<Class<?>> alternatives;
     private final List<Class<?>> interceptors;
     private final List<Class<?>> decorators;
-    private final ThreadLocal<Extension> currentObserverExtension = new ThreadLocal<Extension>();
+    private final ThreadLocal<Extension> currentObserverExtension = new ThreadLocal<>();
     private final ThreadLocal<java.util.List<Runnable>> endOfObserverActions =
-            new ThreadLocal<java.util.List<Runnable>>() {
-                @Override
-                protected java.util.List<Runnable> initialValue() {
-                    return new java.util.ArrayList<Runnable>();
-                }
-            };
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+            ThreadLocal.withInitial(ArrayList::new);
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public AfterTypeDiscoveryImpl(MessageHandler messageHandler,
                                   KnowledgeBase knowledgeBase,
@@ -52,12 +41,11 @@ public class AfterTypeDiscoveryImpl extends PhaseAware implements AfterTypeDisco
                                   List<Class<?>> interceptors,
                                   List<Class<?>> decorators) {
         super(messageHandler);
-        this.messageHandler = messageHandler;
         this.knowledgeBase = knowledgeBase;
         this.beanManager = beanManager;
-        this.alternatives = alternatives != null ? alternatives : new ArrayList<Class<?>>();
-        this.interceptors = interceptors != null ? interceptors : new ArrayList<Class<?>>();
-        this.decorators = decorators != null ? decorators : new ArrayList<Class<?>>();
+        this.alternatives = alternatives != null ? alternatives : new ArrayList<>();
+        this.interceptors = interceptors != null ? interceptors : new ArrayList<>();
+        this.decorators = decorators != null ? decorators : new ArrayList<>();
     }
 
     @Override
@@ -105,8 +93,15 @@ public class AfterTypeDiscoveryImpl extends PhaseAware implements AfterTypeDisco
         info(Phase.PROCESS_ANNOTATED_TYPE, "Creating AnnotatedTypeConfigurator for: " + clazz.getName() + " with ID: " + id);
 
         final AnnotatedType<T> annotatedType = beanManager.createAnnotatedType(clazz);
+        final AnnotatedTypeConfiguratorImpl<T> configurator = getAnnotatedTypeConfigurator(id, annotatedType);
+        registerEndOfObserverAction(configurator::complete);
+        return configurator;
+    }
+
+    @Nonnull
+    private <T> AnnotatedTypeConfiguratorImpl<T> getAnnotatedTypeConfigurator(String id, AnnotatedType<T> annotatedType) {
         final AtomicBoolean applied = new AtomicBoolean(false);
-        final AnnotatedTypeConfiguratorImpl<T> configurator = new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
+        return new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
             @Override
             public AnnotatedType<T> complete() {
                 AnnotatedType<T> configured = super.complete();
@@ -117,8 +112,6 @@ public class AfterTypeDiscoveryImpl extends PhaseAware implements AfterTypeDisco
                 return configured;
             }
         };
-        registerEndOfObserverAction(() -> configurator.complete());
-        return configurator;
     }
 
     @Override
@@ -139,12 +132,12 @@ public class AfterTypeDiscoveryImpl extends PhaseAware implements AfterTypeDisco
     @Override
     public void endObserverInvocation() {
         try {
-            java.util.List<Runnable> actions = endOfObserverActions.get();
+            List<Runnable> actions = endOfObserverActions.get();
             if (actions.isEmpty()) {
                 return;
             }
 
-            java.util.List<Runnable> pending = new java.util.ArrayList<Runnable>(actions);
+            List<Runnable> pending = new ArrayList<>(actions);
             actions.clear();
             for (Runnable action : pending) {
                 action.run();
@@ -165,9 +158,9 @@ public class AfterTypeDiscoveryImpl extends PhaseAware implements AfterTypeDisco
         if (clazz == null) {
             return;
         }
-        if (clazz.isAnnotationPresent(Alternative.class) ||
-            clazz.isAnnotationPresent(Interceptor.class) ||
-            clazz.isAnnotationPresent(Decorator.class)) {
+        if (hasAlternativeAnnotation(clazz) ||
+            hasInterceptorAnnotation(clazz) ||
+            hasDecoratorAnnotation(clazz)) {
             throw new NonPortableBehaviourException(
                     "Adding alternative/interceptor/decorator via AfterTypeDiscovery.addAnnotatedType is non-portable: " +
                             clazz.getName());

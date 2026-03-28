@@ -31,17 +31,6 @@ public class ProcessProducerFieldImpl<T, X> extends ProcessProducerImpl<T, X>
     private final AnnotatedParameter<T> disposerParameter;
 
     /**
-     * Constructor for a producer field without a disposer.
-     */
-    public ProcessProducerFieldImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<X> bean,
-                                    AnnotatedField<T> annotatedField, Producer<X> producer) {
-        super(messageHandler, knowledgeBase, Phase.PROCESS_PRODUCER_FIELD, annotatedField, producer);
-        this.bean = bean;
-        this.annotatedField = annotatedField;
-        this.disposerParameter = null;
-    }
-
-    /**
      * Constructor for a producer field with a disposer.
      */
     public ProcessProducerFieldImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<X> bean,

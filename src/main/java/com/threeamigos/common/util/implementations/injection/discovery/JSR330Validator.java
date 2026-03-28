@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.inject.spi.DefinitionException;
@@ -254,7 +255,7 @@ public class JSR330Validator {
 
     Constructor<?> findConstructor(Class<?> clazz) {
         List<Constructor<?>> constructors = Arrays.stream(clazz.getDeclaredConstructors())
-                .filter(c -> hasInjectAnnotation(c))
+                .filter(AnnotationsEnum::hasInjectAnnotation)
                 .collect(Collectors.toList());
         if (constructors.size() > 1) {
             knowledgeBase.addInjectionError(clazz.getName() + ": more than one constructor annotated with @Inject");
@@ -349,7 +350,7 @@ public class JSR330Validator {
                     return;
                 }
             } catch (NoSuchMethodException e) {
-                // Method not declared in this superclass, continue to next level
+                // Method isn't declared in this superclass, continue to next level
             }
 
             // Move up the hierarchy

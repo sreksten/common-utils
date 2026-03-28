@@ -3,8 +3,6 @@ package com.threeamigos.common.util.implementations.injection.decorators;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import jakarta.annotation.Nonnull;
 
-import java.util.Objects;
-
 /**
  * Represents a single decorator in the chain with its metadata and instance.
  */

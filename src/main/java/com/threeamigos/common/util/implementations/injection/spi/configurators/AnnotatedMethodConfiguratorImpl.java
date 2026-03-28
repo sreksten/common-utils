@@ -73,11 +73,11 @@ public class AnnotatedMethodConfiguratorImpl<T> implements AnnotatedMethodConfig
     @Override
     public java.util.stream.Stream<AnnotatedParameterConfigurator<T>> filterParams(Predicate<AnnotatedParameter<T>> predicate) {
         if (predicate == null) {
-            return parameterConfigurators.stream().map(c -> (AnnotatedParameterConfigurator<T>) c);
+            return parameterConfigurators.stream().map(c -> c);
         }
         return parameterConfigurators.stream()
                 .filter(configurator -> predicate.test(configurator.getAnnotated()))
-                .map(c -> (AnnotatedParameterConfigurator<T>) c);
+                .map(c -> c);
     }
 
     /**

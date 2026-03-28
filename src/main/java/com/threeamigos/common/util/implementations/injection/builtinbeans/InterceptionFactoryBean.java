@@ -47,7 +47,7 @@ public class InterceptionFactoryBean implements Bean<InterceptionFactory<?>> {
 
     @Override
     public Set<Type> getTypes() {
-        Set<Type> types = new HashSet<Type>();
+        Set<Type> types = new HashSet<>();
         types.add(InterceptionFactory.class);
         types.add(Object.class);
         return types;
@@ -55,7 +55,7 @@ public class InterceptionFactoryBean implements Bean<InterceptionFactory<?>> {
 
     @Override
     public Set<Annotation> getQualifiers() {
-        Set<Annotation> qualifiers = new HashSet<Annotation>();
+        Set<Annotation> qualifiers = new HashSet<>();
         qualifiers.add(Default.Literal.INSTANCE);
         qualifiers.add(Any.Literal.INSTANCE);
         return qualifiers;

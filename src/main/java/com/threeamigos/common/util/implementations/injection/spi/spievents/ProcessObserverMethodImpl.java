@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.ObserverMethodConfiguratorImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -31,30 +30,10 @@ public class ProcessObserverMethodImpl<T, X> extends PhaseAware
     private ObserverMethod<T> observerMethod;
     private ObserverMethodConfiguratorImpl<T> configurator;
     private boolean vetoed = false;
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> lifecycleManaged = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> lifecycleManaged = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProcessObserverMethodImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase,
                                      ObserverMethod<T> observerMethod, AnnotatedMethod<X> annotatedMethod) {
@@ -93,7 +72,7 @@ public class ProcessObserverMethodImpl<T, X> extends PhaseAware
         configureCalledInCurrentInvocation.set(Boolean.TRUE);
         info(Phase.PROCESS_OBSERVER_METHOD, "Creating ObserverMethodConfigurator");
         if (configurator == null) {
-            configurator = new ObserverMethodConfiguratorImpl<T>(null);
+            configurator = new ObserverMethodConfiguratorImpl<>(null);
             configurator.read(observerMethod);
         }
         return configurator;

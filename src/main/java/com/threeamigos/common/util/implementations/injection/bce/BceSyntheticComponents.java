@@ -18,9 +18,9 @@ public class BceSyntheticComponents implements SyntheticComponents {
     private final KnowledgeBase knowledgeBase;
     private final BeanManagerImpl beanManager;
     private final BceInvokerRegistry invokerRegistry;
-    private final List<BceSyntheticBeanBuilderImpl<?>> beanBuilders = new ArrayList<BceSyntheticBeanBuilderImpl<?>>();
+    private final List<BceSyntheticBeanBuilderImpl<?>> beanBuilders = new ArrayList<>();
     private final List<BceSyntheticObserverBuilderImpl<?>> observerBuilders =
-        new ArrayList<BceSyntheticObserverBuilderImpl<?>>();
+            new ArrayList<>();
 
     public BceSyntheticComponents(KnowledgeBase knowledgeBase,
                                   BeanManagerImpl beanManager,
@@ -33,7 +33,7 @@ public class BceSyntheticComponents implements SyntheticComponents {
     @Override
     public <T> SyntheticBeanBuilder<T> addBean(Class<T> type) {
         BceSyntheticBeanBuilderImpl<T> builder =
-            new BceSyntheticBeanBuilderImpl<T>(knowledgeBase, beanManager, invokerRegistry, type);
+                new BceSyntheticBeanBuilderImpl<>(knowledgeBase, beanManager, invokerRegistry, type);
         beanBuilders.add(builder);
         return builder;
     }
@@ -41,7 +41,7 @@ public class BceSyntheticComponents implements SyntheticComponents {
     @Override
     public <T> SyntheticObserverBuilder<T> addObserver(Class<T> type) {
         BceSyntheticObserverBuilderImpl<T> builder =
-            new BceSyntheticObserverBuilderImpl<T>(knowledgeBase, invokerRegistry, type);
+                new BceSyntheticObserverBuilderImpl<>(knowledgeBase, invokerRegistry, type);
         observerBuilders.add(builder);
         return builder;
     }
@@ -51,7 +51,7 @@ public class BceSyntheticComponents implements SyntheticComponents {
     public <T> SyntheticObserverBuilder<T> addObserver(Type type) {
         Class<?> runtimeType = BceMetadata.unwrapType(type);
         BceSyntheticObserverBuilderImpl<T> builder =
-            new BceSyntheticObserverBuilderImpl<T>(knowledgeBase, invokerRegistry, (Class<T>) runtimeType);
+                new BceSyntheticObserverBuilderImpl<>(knowledgeBase, invokerRegistry, (Class<T>) runtimeType);
         observerBuilders.add(builder);
         return builder;
     }

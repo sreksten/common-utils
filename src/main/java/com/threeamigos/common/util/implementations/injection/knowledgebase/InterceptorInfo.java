@@ -34,7 +34,7 @@ public class InterceptorInfo {
      * Creates interceptor metadata.
      *
      * @param interceptorClass the interceptor class annotated with @Interceptor
-     * @param interceptorBindings the interceptor binding annotations found on this interceptor
+     * @param interceptorBindings the interceptor-binding annotations found on this interceptor
      * @param priority the priority value (from @Priority), defaults to Integer.MAX_VALUE if not specified
      * @param aroundInvokeMethod the @AroundInvoke method, or null if not present
      * @param aroundConstructMethod the @AroundConstruct method, or null if not present

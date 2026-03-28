@@ -54,9 +54,8 @@ final class BceEnhancementModels {
     }
 
     private abstract static class AnnotationMutatorSupport {
-        protected final List<AnnotationInfo> addedAnnotations = new ArrayList<AnnotationInfo>();
-        protected final List<Predicate<AnnotationInfo>> removedAnnotationPredicates =
-            new ArrayList<Predicate<AnnotationInfo>>();
+        protected final List<AnnotationInfo> addedAnnotations = new ArrayList<>();
+        protected final List<Predicate<AnnotationInfo>> removedAnnotationPredicates = new ArrayList<>();
         protected boolean removeAllAnnotationsRequested = false;
 
         protected void addAnnotationInternal(Class<? extends Annotation> annotationType) {
@@ -91,20 +90,24 @@ final class BceEnhancementModels {
         }
 
         protected List<AnnotationInfo> effectiveAnnotations(Collection<AnnotationInfo> base) {
-            List<AnnotationInfo> out = new ArrayList<AnnotationInfo>();
+            List<AnnotationInfo> out = new ArrayList<>();
             if (!removeAllAnnotationsRequested && base != null) {
                 for (AnnotationInfo annotationInfo : base) {
-                    if (!matchesAnyRemovalPredicate(annotationInfo)) {
+                    if (doesNotMatchAnyRemovalPredicate(annotationInfo)) {
                         out.add(annotationInfo);
                     }
                 }
             }
             for (AnnotationInfo added : addedAnnotations) {
-                if (!matchesAnyRemovalPredicate(added)) {
+                if (doesNotMatchAnyRemovalPredicate(added)) {
                     out.add(added);
                 }
             }
             return out;
+        }
+
+        private boolean doesNotMatchAnyRemovalPredicate(AnnotationInfo annotationInfo) {
+            return !matchesAnyRemovalPredicate(annotationInfo);
         }
 
         private boolean matchesAnyRemovalPredicate(AnnotationInfo annotationInfo) {
@@ -191,9 +194,9 @@ final class BceEnhancementModels {
         }
 
         private Collection<MethodConfig> buildConstructors(Class<?> targetClass) {
-            List<MethodConfig> out = new ArrayList<MethodConfig>();
+            List<MethodConfig> out = new ArrayList<>();
             java.lang.reflect.Constructor<?>[] declaredConstructors = targetClass.getDeclaredConstructors();
-            List<java.lang.reflect.Constructor<?>> sorted = new ArrayList<java.lang.reflect.Constructor<?>>();
+            List<java.lang.reflect.Constructor<?>> sorted = new ArrayList<>();
             Collections.addAll(sorted, declaredConstructors);
             sorted.sort(Comparator.comparingInt(java.lang.reflect.Constructor::getParameterCount));
             for (java.lang.reflect.Constructor<?> constructor : sorted) {
@@ -203,9 +206,9 @@ final class BceEnhancementModels {
         }
 
         private Collection<MethodConfig> buildMethods(Class<?> targetClass) {
-            List<MethodConfig> out = new ArrayList<MethodConfig>();
+            List<MethodConfig> out = new ArrayList<>();
             Method[] declaredMethods = targetClass.getDeclaredMethods();
-            List<Method> sorted = new ArrayList<Method>();
+            List<Method> sorted = new ArrayList<>();
             Collections.addAll(sorted, declaredMethods);
             sorted.sort(Comparator.comparing(Method::getName).thenComparingInt(Method::getParameterCount));
             for (Method method : sorted) {
@@ -226,9 +229,9 @@ final class BceEnhancementModels {
         }
 
         private Collection<FieldConfig> buildFields(Class<?> targetClass) {
-            List<FieldConfig> out = new ArrayList<FieldConfig>();
+            List<FieldConfig> out = new ArrayList<>();
             Field[] declaredFields = targetClass.getDeclaredFields();
-            List<Field> sorted = new ArrayList<Field>();
+            List<Field> sorted = new ArrayList<>();
             Collections.addAll(sorted, declaredFields);
             sorted.sort(Comparator.comparing(Field::getName));
             for (Field field : sorted) {
@@ -255,20 +258,20 @@ final class BceEnhancementModels {
 
         private SimpleMethodConfig(Method method) {
             this.info = BceMetadata.methodInfo(method);
-            List<ParameterConfig> out = new ArrayList<ParameterConfig>();
+            List<ParameterConfig> out = new ArrayList<>();
             List<ParameterInfo> parameterInfos = info.parameters();
-            for (int i = 0; i < parameterInfos.size(); i++) {
-                out.add(new SimpleParameterConfig(parameterInfos.get(i)));
+            for (ParameterInfo parameterInfo : parameterInfos) {
+                out.add(new SimpleParameterConfig(parameterInfo));
             }
             this.parameters = Collections.unmodifiableList(out);
         }
 
         private SimpleMethodConfig(java.lang.reflect.Constructor<?> constructor) {
             this.info = BceMetadata.methodInfo(constructor);
-            List<ParameterConfig> out = new ArrayList<ParameterConfig>();
+            List<ParameterConfig> out = new ArrayList<>();
             List<ParameterInfo> parameterInfos = info.parameters();
-            for (int i = 0; i < parameterInfos.size(); i++) {
-                out.add(new SimpleParameterConfig(parameterInfos.get(i)));
+            for (ParameterInfo parameterInfo : parameterInfos) {
+                out.add(new SimpleParameterConfig(parameterInfo));
             }
             this.parameters = Collections.unmodifiableList(out);
         }
@@ -314,7 +317,7 @@ final class BceEnhancementModels {
         }
 
         private List<ParameterInfo> parameterInfos() {
-            List<ParameterInfo> out = new ArrayList<ParameterInfo>();
+            List<ParameterInfo> out = new ArrayList<>();
             for (ParameterConfig parameterConfig : parameters) {
                 out.add(parameterConfig.info());
             }
@@ -414,8 +417,8 @@ final class BceEnhancementModels {
 
         private AnnotationAwareDeclaration(DeclarationInfo delegate, Collection<AnnotationInfo> annotations) {
             this.delegate = Objects.requireNonNull(delegate, "delegate");
-            this.annotations = Collections.unmodifiableCollection(new ArrayList<AnnotationInfo>(
-                annotations != null ? annotations : Collections.<AnnotationInfo>emptyList()));
+            this.annotations = Collections.unmodifiableCollection(new ArrayList<>(
+                    annotations != null ? annotations : Collections.emptyList()));
         }
 
         @Override
@@ -448,7 +451,7 @@ final class BceEnhancementModels {
 
         @Override
         public <T extends Annotation> Collection<AnnotationInfo> repeatableAnnotation(Class<T> annotationType) {
-            List<AnnotationInfo> out = new ArrayList<AnnotationInfo>();
+            List<AnnotationInfo> out = new ArrayList<>();
             if (annotationType == null) {
                 return out;
             }
@@ -464,7 +467,7 @@ final class BceEnhancementModels {
 
         @Override
         public Collection<AnnotationInfo> annotations(Predicate<AnnotationInfo> predicate) {
-            List<AnnotationInfo> out = new ArrayList<AnnotationInfo>();
+            List<AnnotationInfo> out = new ArrayList<>();
             if (predicate == null) {
                 out.addAll(annotations);
                 return Collections.unmodifiableList(out);
@@ -506,7 +509,7 @@ final class BceEnhancementModels {
             if (valueMember.kind() != AnnotationMember.Kind.ARRAY) {
                 return Collections.emptyList();
             }
-            List<AnnotationInfo> out = new ArrayList<AnnotationInfo>();
+            List<AnnotationInfo> out = new ArrayList<>();
             for (AnnotationMember item : valueMember.asArray()) {
                 if (item.kind() == AnnotationMember.Kind.NESTED_ANNOTATION) {
                     AnnotationInfo nested = item.asNestedAnnotation();
@@ -631,7 +634,7 @@ final class BceEnhancementModels {
 
         @Override
         public Map<String, AnnotationMember> members() {
-            return Collections.unmodifiableMap(new LinkedHashMap<String, AnnotationMember>());
+            return Collections.unmodifiableMap(new LinkedHashMap<>());
         }
     }
 }

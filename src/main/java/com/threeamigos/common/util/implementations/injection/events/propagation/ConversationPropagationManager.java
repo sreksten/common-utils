@@ -47,7 +47,7 @@ public class ConversationPropagationManager {
     }
 
     /**
-     * Writes the current conversation id to the carrier, if the conversation is long-running.
+     * Writes the current conversation id to the carrier if the conversation is long-running.
      *
      * @param carrier transport carrier
      */
@@ -70,7 +70,7 @@ public class ConversationPropagationManager {
     }
 
     /**
-     * Cleans up thread-local state and optionally ends the conversation.
+     * Cleans up the thread-local state and optionally ends the conversation.
      *
      * @param carrier transport carrier
      */

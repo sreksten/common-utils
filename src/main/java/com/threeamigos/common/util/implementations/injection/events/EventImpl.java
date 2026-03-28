@@ -16,8 +16,8 @@ import com.threeamigos.common.util.implementations.injection.util.QualifiersHelp
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionSynchronizationCallbacks;
+import jakarta.annotation.Nonnull;
 import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
@@ -26,14 +26,10 @@ import jakarta.enterprise.event.NotificationOptions;
 import jakarta.enterprise.event.ObserverException;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
-import jakarta.enterprise.inject.spi.Bean;
-import jakarta.enterprise.inject.spi.EventContext;
-import jakarta.enterprise.inject.spi.EventMetadata;
-import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
-import java.lang.annotation.Repeatable;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -48,12 +44,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasSpecializesAnnotation;
 
 /**
  * CDI 4.1 Event implementation for firing synchronous and asynchronous events.
@@ -111,7 +108,7 @@ public class EventImpl<T> implements Event<T> {
         private final AtomicInteger counter = new AtomicInteger(1);
 
         @Override
-        public Thread newThread(Runnable runnable) {
+        public Thread newThread(@Nonnull Runnable runnable) {
             Thread thread = new Thread(runnable, "syringe-event-async-" + counter.getAndIncrement());
             thread.setDaemon(true);
             return thread;
@@ -124,7 +121,7 @@ public class EventImpl<T> implements Event<T> {
      * @param eventType the type of events to fire
      * @param qualifiers the qualifiers for event filtering
      * @param knowledgeBase the knowledge base containing registered observers
-     * @param beanResolver the resolver for obtaining observer bean instances
+     * @param beanResolver the resolver for getting observer bean instances
      * @param contextManager the context manager for checking bean existence in scopes
      */
     public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
@@ -206,7 +203,7 @@ public class EventImpl<T> implements Event<T> {
      *
      * <p>Per CDI 4.1 specification, synchronous observers are invoked in the calling thread
      * during the fire() method execution. Transaction phase handling is currently limited to
-     * IN_PROGRESS phase.
+     *  the IN_PROGRESS phase.
      *
      * @param event the event payload to fire (must not be null)
      * @throws IllegalArgumentException if the event is null
@@ -250,7 +247,7 @@ public class EventImpl<T> implements Event<T> {
                             continue;
                         }
                     } catch (IllegalArgumentException e) {
-                        // Scope not registered - skip this observer
+                        // Scope isn't registered - skip this observer
                         continue;
                     }
                 }
@@ -344,7 +341,7 @@ public class EventImpl<T> implements Event<T> {
      * @param <U> the subtype of T
      * @param event the event payload to fire (must not be null)
      * @return CompletionStage that completes when all async observers finish
-     * @throws IllegalArgumentException if event is null
+     * @throws IllegalArgumentException if the event is null
      */
     @Override
     public <U extends T> CompletionStage<U> fireAsync(U event) {
@@ -393,7 +390,8 @@ public class EventImpl<T> implements Event<T> {
         }
 
         // Create an async task
-        CompletableFuture<U> future = CompletableFuture.supplyAsync(() -> {
+
+        return CompletableFuture.supplyAsync(() -> {
             ScopeContext requestScopeContext = contextManager.getContext(RequestScoped.class);
             boolean activatedRequestContext = false;
             if (!requestScopeContext.isActive() && requestScopeContext instanceof RequestScopedContext) {
@@ -420,7 +418,7 @@ public class EventImpl<T> implements Event<T> {
                                     continue;
                                 }
                             } catch (IllegalArgumentException e) {
-                                // Scope not registered - skip this observer
+                                // Scope isn't registered - skip this observer
                                 continue;
                             }
                         }
@@ -456,15 +454,13 @@ public class EventImpl<T> implements Event<T> {
             }
             return event;
         }, executor);
-
-        return future;
     }
 
     /**
      * Creates a refined Event instance with additional qualifiers for more specific observer selection.
      *
      * <p>This method allows dynamic narrowing of the observer set at runtime by adding qualifiers.
-     * The new Event instance will only notify observers that match ALL qualifiers (original + new).
+     * The new Event instance will only notify observers that match ALL qualifiers (original and new).
      *
      * <p>Example:
      * <pre>{@code
@@ -532,7 +528,7 @@ public class EventImpl<T> implements Event<T> {
         }
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
-        return (Event<U>) new EventImpl<U>(subtype, newQualifiers, knowledgeBase, beanResolver, contextManager,
+        return new EventImpl<>(subtype, newQualifiers, knowledgeBase, beanResolver, contextManager,
                 transactionServices, tokenProvider, firingInjectionPoint, allowStartupEventDispatch);
     }
 
@@ -572,7 +568,7 @@ public class EventImpl<T> implements Event<T> {
         }
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
-        return (Event<U>) new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager,
+        return new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager,
                 transactionServices, tokenProvider, firingInjectionPoint, allowStartupEventDispatch);
     }
 
@@ -608,7 +604,7 @@ public class EventImpl<T> implements Event<T> {
     }
 
     private boolean isRepeatableQualifier(Class<? extends Annotation> qualifierType) {
-        return qualifierType.isAnnotationPresent(Repeatable.class);
+        return AnnotationsEnum.hasRepeatableAnnotation(qualifierType);
     }
 
     private void validateEventObject(Object event) {
@@ -654,7 +650,7 @@ public class EventImpl<T> implements Event<T> {
         }
     }
 
-    private static final Set<String> CONTAINER_LIFECYCLE_EVENT_TYPES = new HashSet<String>(Arrays.asList(
+    private static final Set<String> CONTAINER_LIFECYCLE_EVENT_TYPES = new HashSet<>(Arrays.asList(
             "jakarta.enterprise.inject.spi.BeforeBeanDiscovery",
             "jakarta.enterprise.inject.spi.AfterTypeDiscovery",
             "jakarta.enterprise.inject.spi.AfterBeanDiscovery",
@@ -799,8 +795,8 @@ public class EventImpl<T> implements Event<T> {
             matching.add(createSyntheticObserverInfo(syntheticObserver));
         }
 
-        List<ObserverMethodInfo> deduped = new ArrayList<ObserverMethodInfo>();
-        Set<String> seen = new HashSet<String>();
+        List<ObserverMethodInfo> deduped = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
         for (ObserverMethodInfo observerInfo : matching) {
             String key = observerDedupKey(observerInfo);
             if (seen.add(key)) {
@@ -884,7 +880,7 @@ public class EventImpl<T> implements Event<T> {
                 continue;
             }
             Class<?> candidateClass = candidate.getBeanClass();
-            if (candidateClass == null || !AnnotationsEnum.hasSpecializesAnnotation(candidateClass)) {
+            if (!hasSpecializesAnnotation(candidateClass)) {
                 continue;
             }
             if (collectSpecializedSuperclasses(candidateClass).contains(beanClass)) {
@@ -895,14 +891,14 @@ public class EventImpl<T> implements Event<T> {
     }
 
     private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
-        Set<Class<?>> out = new HashSet<Class<?>>();
-        if (beanClass == null || !AnnotationsEnum.hasSpecializesAnnotation(beanClass)) {
+        Set<Class<?>> out = new HashSet<>();
+        if (!hasSpecializesAnnotation(beanClass)) {
             return out;
         }
         Class<?> current = beanClass.getSuperclass();
         while (current != null && !Object.class.equals(current)) {
             out.add(current);
-            if (!AnnotationsEnum.hasSpecializesAnnotation(current)) {
+            if (!hasSpecializesAnnotation(current)) {
                 break;
             }
             current = current.getSuperclass();
@@ -982,7 +978,7 @@ public class EventImpl<T> implements Event<T> {
             // Check if this is a synthetic observer (registered via AfterBeanDiscovery.addObserverMethod())
             if (observerInfo.isSynthetic()) {
                 // Invoke the synthetic observer's notify() method
-                jakarta.enterprise.inject.spi.ObserverMethod syntheticObserver = observerInfo.getSyntheticObserver();
+                ObserverMethod syntheticObserver = observerInfo.getSyntheticObserver();
                 final Object eventPayload = event;
                 final EventMetadata metadata = new EventMetadataImpl(qualifiers, firingInjectionPoint, eventPayload.getClass());
                 syntheticObserver.notify(new EventContext<Object>() {
@@ -1057,8 +1053,6 @@ public class EventImpl<T> implements Event<T> {
                 throw (RuntimeException) cause;
             }
             throw new ObserverException(cause);
-        } catch (ObserverException e) {
-            throw e;
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -1136,7 +1130,7 @@ public class EventImpl<T> implements Event<T> {
         }
 
         Class<?> declaringClass = method.getDeclaringClass();
-        if (declaringClass.isAnnotationPresent(Dependent.class)) {
+        if (AnnotationsEnum.hasDependentAnnotation(declaringClass)) {
             LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PreDestroy.class);
             return;
         }
@@ -1153,7 +1147,7 @@ public class EventImpl<T> implements Event<T> {
                                                        Type parameterType,
                                                        Annotation[] parameterAnnotations,
                                                        Bean<?> declaringBean) {
-        InjectionPoint injectionPoint = new InjectionPointImpl(parameter, (Bean) declaringBean);
+        InjectionPoint injectionPoint = new InjectionPointImpl(parameter, declaringBean);
         beanResolver.setCurrentInjectionPoint(injectionPoint);
         try {
             return beanResolver.resolve(parameterType, parameterAnnotations);
@@ -1167,7 +1161,7 @@ public class EventImpl<T> implements Event<T> {
         if (parameterType == null) {
             return false;
         }
-        if (parameterType.isAnnotationPresent(Dependent.class)) {
+        if (AnnotationsEnum.hasDependentAnnotation(parameterType)) {
             return true;
         }
         for (Annotation annotation : parameterType.getAnnotations()) {
@@ -1197,7 +1191,7 @@ public class EventImpl<T> implements Event<T> {
 
     /**
      * Guards transactional observer callbacks by ensuring required normal scopes are active.
-     * If the declaring bean uses an inactive normal scope (e.g., @RequestScoped after request end),
+     * If the declaring bean uses an inactive normal scope (e.g., @RequestScoped after the request ends),
      * the invocation is skipped and a warning is logged once per scope type.
      */
     private ContextActivation ensureObserverContext(ObserverMethodInfo observer) {

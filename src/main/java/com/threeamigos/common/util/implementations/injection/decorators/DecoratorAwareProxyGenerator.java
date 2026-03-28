@@ -7,7 +7,6 @@ import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
-import jakarta.inject.Inject;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
@@ -22,9 +21,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDelegateAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasInjectAnnotation;
 
 /**
  * Generates decorator proxies that wrap bean instances with decorator chains.
@@ -222,7 +223,7 @@ public class DecoratorAwareProxyGenerator {
             Object[] args = new Object[parameters.length];
             for (int i = 0; i < parameters.length; i++) {
                 Parameter parameter = parameters[i];
-                if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                if (hasDelegateAnnotation(parameter)) {
                     throw new IllegalStateException("Decorator " + decoratorClass.getName() +
                             " requires @Delegate constructor injection, but createDecoratorInstance was used");
                 }
@@ -268,7 +269,7 @@ public class DecoratorAwareProxyGenerator {
             Bean<?> decoratorBean = createSyntheticDecoratorBean(decoratorClass);
 
             for (int i = 0; i < parameters.length; i++) {
-                if (parameters[i].isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                if (hasDelegateAnnotation(parameters[i])) {
                     args[i] = delegate;
                 } else {
                     args[i] = beanManager.getInjectableReference(
@@ -308,7 +309,7 @@ public class DecoratorAwareProxyGenerator {
     private Constructor<?> findInjectionConstructor(Class<?> decoratorClass) throws NoSuchMethodException {
         Constructor<?> injectConstructor = null;
         for (Constructor<?> constructor : decoratorClass.getDeclaredConstructors()) {
-            if (constructor.isAnnotationPresent(Inject.class)) {
+            if (hasInjectAnnotation(constructor)) {
                 injectConstructor = constructor;
                 break;
             }
@@ -325,7 +326,7 @@ public class DecoratorAwareProxyGenerator {
                                           BeanManager beanManager,
                                           CreationalContext<?> creationalContext) throws Exception {
         for (Field field : decoratorClass.getDeclaredFields()) {
-            if (!field.isAnnotationPresent(Inject.class) || field.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+            if (!hasInjectAnnotation(field) || hasDelegateAnnotation(field)) {
                 continue;
             }
             field.setAccessible(true);
@@ -334,13 +335,13 @@ public class DecoratorAwareProxyGenerator {
         }
 
         for (Method method : decoratorClass.getDeclaredMethods()) {
-            if (!method.isAnnotationPresent(Inject.class)) {
+            if (!hasInjectAnnotation(method)) {
                 continue;
             }
             Parameter[] parameters = method.getParameters();
             Object[] args = new Object[parameters.length];
             for (int i = 0; i < parameters.length; i++) {
-                if (parameters[i].isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                if (hasDelegateAnnotation(parameters[i])) {
                     continue;
                 }
                 args[i] = beanManager.getInjectableReference(
@@ -351,7 +352,6 @@ public class DecoratorAwareProxyGenerator {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private Bean<?> createSyntheticDecoratorBean(Class<?> decoratorClass) {
         Set<Type> types = new HashSet<>();
         types.add(decoratorClass);
@@ -459,7 +459,7 @@ public class DecoratorAwareProxyGenerator {
                 Parameter[] parameters = method.getParameters();
                 int delegateParamIndex = -1;
                 for (int i = 0; i < parameters.length; i++) {
-                    if (parameters[i].isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                    if (hasDelegateAnnotation(parameters[i])) {
                         delegateParamIndex = i;
                         break;
                     }

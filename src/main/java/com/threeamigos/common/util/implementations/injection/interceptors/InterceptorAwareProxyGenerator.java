@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
@@ -81,7 +82,7 @@ public class InterceptorAwareProxyGenerator {
     // Value: Generated proxy class
     private final ConcurrentHashMap<Class<?>, Class<?>> proxyClassCache = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Class<?>, Optional<Method>> targetAroundInvokeCache =
-            new ConcurrentHashMap<Class<?>, Optional<Method>>();
+            new ConcurrentHashMap<>();
 
     /**
      * Creates an interceptor-aware proxy for a bean.
@@ -90,7 +91,7 @@ public class InterceptorAwareProxyGenerator {
      * <ul>
      * <li>Intercept all non-private business methods (public, protected, package-private)</li>
      * <li>Check if each method has interceptors configured (from methodInterceptorChains map)</li>
-     * <li>Execute interceptor chain if present, or direct invocation if not</li>
+     * <li>Execute an interceptor chain if present, or direct invocation if not</li>
      * <li>Return the result to the caller</li>
      * </ul>
      *
@@ -304,7 +305,7 @@ public class InterceptorAwareProxyGenerator {
      * 1. User calls: proxy.createOrder(order)
      * 2. ByteBuddy intercepts and calls: InterceptorMethodInterceptor.intercept(...)
      * 3. Interceptor checks: Does this method have interceptors?
-     * 4a. YES - Execute interceptor chain:
+     * 4a. YES - Execute an interceptor chain:
      *     InterceptorChain.invoke(targetInstance, method, args)
      *       → Interceptor 1 (e.g., TransactionalInterceptor)
      *       → Interceptor 2 (e.g., LoggingInterceptor)
@@ -407,7 +408,7 @@ public class InterceptorAwareProxyGenerator {
             Method found = null;
             while (current != null && current != Object.class && found == null) {
                 for (Method candidate : current.getDeclaredMethods()) {
-                    if (candidate.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+                    if (AnnotationsEnum.hasAroundInvokeAnnotation(candidate)) {
                         if (candidate.getParameterCount() == 1 &&
                                 jakarta.interceptor.InvocationContext.class.isAssignableFrom(candidate.getParameterTypes()[0])) {
                             candidate.setAccessible(true);

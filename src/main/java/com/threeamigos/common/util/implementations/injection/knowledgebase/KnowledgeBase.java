@@ -11,8 +11,6 @@ import com.threeamigos.common.util.implementations.injection.util.AnnotationComp
 import com.threeamigos.common.util.implementations.injection.util.AnnotationHelper;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
-import jakarta.enterprise.inject.Alternative;
-import jakarta.enterprise.inject.Stereotype;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.Extension;
@@ -88,7 +86,7 @@ public class KnowledgeBase {
     private final Collection<jakarta.enterprise.inject.spi.ObserverMethod<?>> syntheticObserverMethods = new ConcurrentLinkedQueue<>();
     // Beans marked by ProcessBeanAttributes.ignoreFinalMethods()
     private final Set<Bean<?>> ignoreFinalMethodsBeans =
-            Collections.newSetFromMap(new IdentityHashMap<Bean<?>, Boolean>());
+            Collections.newSetFromMap(new IdentityHashMap<>());
 
     // beans.xml configurations from all scanned archives
     // Collection is used instead of merging because each archive may have different configurations
@@ -100,11 +98,11 @@ public class KnowledgeBase {
     // Programmatically enabled alternatives (fully qualified class names)
     private final Set<String> programmaticallyEnabledAlternatives = ConcurrentHashMap.newKeySet();
     // Final application interceptor order (e.g. from AfterTypeDiscovery / beans.xml)
-    private final Map<String, Integer> applicationInterceptorOrder = new ConcurrentHashMap<String, Integer>();
+    private final Map<String, Integer> applicationInterceptorOrder = new ConcurrentHashMap<>();
     // Final application alternative order (e.g. from AfterTypeDiscovery)
-    private final Map<String, Integer> applicationAlternativeOrder = new ConcurrentHashMap<String, Integer>();
+    private final Map<String, Integer> applicationAlternativeOrder = new ConcurrentHashMap<>();
     // Final application decorator order (e.g. from AfterTypeDiscovery)
-    private final Map<String, Integer> applicationDecoratorOrder = new ConcurrentHashMap<String, Integer>();
+    private final Map<String, Integer> applicationDecoratorOrder = new ConcurrentHashMap<>();
     // True when AfterTypeDiscovery observers changed the corresponding list from its initial value.
     private volatile boolean afterTypeDiscoveryAlternativesCustomized;
     private volatile boolean afterTypeDiscoveryInterceptorsCustomized;
@@ -125,7 +123,7 @@ public class KnowledgeBase {
     }
 
     public void add(Class<?> clazz) {
-        if (!excludedClasses.contains(clazz) && !classes.contains(clazz)) {
+        if (!excludedClasses.contains(clazz)) {
             classes.add(clazz);
         }
     }
@@ -614,7 +612,7 @@ public class KnowledgeBase {
             return -1;
         }
         Integer index = applicationInterceptorOrder.get(interceptorClass.getName());
-        return index != null ? index.intValue() : -1;
+        return index != null ? index : -1;
     }
 
     public void setApplicationAlternativeOrder(List<Class<?>> orderedAlternatives) {
@@ -640,7 +638,7 @@ public class KnowledgeBase {
             return -1;
         }
         Integer index = applicationAlternativeOrder.get(alternativeClass.getName());
-        return index != null ? index.intValue() : -1;
+        return index != null ? index : -1;
     }
 
     public boolean hasApplicationAlternativeSelection() {
@@ -670,7 +668,7 @@ public class KnowledgeBase {
             return -1;
         }
         Integer index = applicationDecoratorOrder.get(decoratorClass.getName());
-        return index != null ? index.intValue() : -1;
+        return index != null ? index : -1;
     }
 
     public boolean hasApplicationDecoratorSelection() {
@@ -810,8 +808,8 @@ public class KnowledgeBase {
     }
 
     private int compareInterceptors(InterceptorInfo left, InterceptorInfo right) {
-        boolean leftPriority = left.getInterceptorClass().isAnnotationPresent(jakarta.annotation.Priority.class);
-        boolean rightPriority = right.getInterceptorClass().isAnnotationPresent(jakarta.annotation.Priority.class);
+        boolean leftPriority = AnnotationsEnum.hasPriorityAnnotation(left.getInterceptorClass());
+        boolean rightPriority = AnnotationsEnum.hasPriorityAnnotation(right.getInterceptorClass());
 
         if (leftPriority && rightPriority) {
             int byPriority = Integer.compare(left.getPriority(), right.getPriority());
@@ -916,14 +914,14 @@ public class KnowledgeBase {
     }
 
     private boolean isAlternativeDeclaration(Class<?> beanClass) {
-        if (beanClass.isAnnotationPresent(Alternative.class)) {
+        if (AnnotationsEnum.hasAlternativeAnnotation(beanClass)) {
             return true;
         }
 
         Set<Class<? extends Annotation>> visited = new HashSet<>();
         for (Annotation annotation : beanClass.getAnnotations()) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (annotationType.isAnnotationPresent(Stereotype.class) &&
+            if (AnnotationsEnum.hasStereotypeAnnotation(annotationType) &&
                 stereotypeDeclaresAlternative(annotationType, visited)) {
                 return true;
             }
@@ -937,13 +935,13 @@ public class KnowledgeBase {
             return false;
         }
 
-        if (stereotypeType.isAnnotationPresent(Alternative.class)) {
+        if (AnnotationsEnum.hasAlternativeAnnotation(stereotypeType)) {
             return true;
         }
 
         for (Annotation meta : stereotypeType.getAnnotations()) {
             Class<? extends Annotation> metaType = meta.annotationType();
-            if (metaType.isAnnotationPresent(Stereotype.class) &&
+            if (AnnotationsEnum.hasStereotypeAnnotation(metaType) &&
                 stereotypeDeclaresAlternative(metaType, visited)) {
                 return true;
             }
@@ -1146,7 +1144,7 @@ public class KnowledgeBase {
     /**
      * Gets all registered interceptor bindings.
      *
-     * @return map of interceptor binding class to their definitions
+     * @return map of interceptor-binding class to their definitions
      */
     public Map<Class<? extends Annotation>, Set<Annotation>> getRegisteredInterceptorBindings() {
         return Collections.unmodifiableMap(registeredInterceptorBindings);
@@ -1333,5 +1331,9 @@ public class KnowledgeBase {
      */
     public Set<Class<?>> getVetoedTypes() {
         return Collections.unmodifiableSet(vetoedTypes);
+    }
+
+    public List<String> getDeploymentErrors() {
+        return deploymentErrors;
     }
 }

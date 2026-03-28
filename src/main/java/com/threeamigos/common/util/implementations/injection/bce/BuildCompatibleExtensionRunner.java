@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.injection.discovery.NonPortab
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.BuildServices;
 import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
@@ -26,11 +27,9 @@ import jakarta.enterprise.inject.build.compatible.spi.Types;
 import jakarta.enterprise.inject.build.compatible.spi.InvokerFactory;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.spi.DefinitionException;
-import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.declarations.FieldInfo;
-import jakarta.enterprise.lang.model.declarations.MethodInfo;
 import jakarta.enterprise.inject.spi.Bean;
-import jakarta.annotation.Priority;
+import jakarta.enterprise.lang.model.declarations.ParameterInfo;
 import jakarta.interceptor.Interceptor;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 
@@ -48,6 +47,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.spi.SPIUtils.*;
 
 /**
  * Minimal phase executor for Build Compatible Extensions.
@@ -77,6 +79,7 @@ public class BuildCompatibleExtensionRunner {
         this.knowledgeBase = knowledgeBase;
         this.beanManager = beanManager;
         this.invokerRegistry = invokerRegistry;
+
         this.invokerFactory = new BceInvokerFactoryImpl(knowledgeBase, beanManager, messageHandler, invokerRegistry);
         this.registrationContext = new BceRegistrationContext(knowledgeBase);
         this.buildServices = new BceBuildServices();
@@ -86,7 +89,7 @@ public class BuildCompatibleExtensionRunner {
         this.scannedClasses = new BceScannedClasses(knowledgeBase, messageHandler);
     }
 
-    public void runPhase(BuildCompatibleExtensionSupport.SupportedPhase phase,
+    public void runPhase(BceSupportedPhase phase,
                          List<BuildCompatibleExtension> extensions) {
         if (phase == null || extensions == null || extensions.isEmpty()) {
             return;
@@ -104,9 +107,9 @@ public class BuildCompatibleExtensionRunner {
 
         BceSyntheticComponents syntheticComponents = null;
         EnhancementModelState enhancementModelState = null;
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.SYNTHESIS) {
+        if (phase == BceSupportedPhase.SYNTHESIS) {
             syntheticComponents = new BceSyntheticComponents(knowledgeBase, beanManager, invokerRegistry);
-        } else if (phase == BuildCompatibleExtensionSupport.SupportedPhase.ENHANCEMENT) {
+        } else if (phase == BceSupportedPhase.ENHANCEMENT) {
             enhancementModelState = new EnhancementModelState();
         }
 
@@ -122,7 +125,7 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private void collectPhaseMethods(BuildCompatibleExtension extension,
-                                     BuildCompatibleExtensionSupport.SupportedPhase phase,
+                                     BceSupportedPhase phase,
                                      List<PhaseMethodInvocation> sink) {
         for (Method method : extension.getClass().getDeclaredMethods()) {
             if (matchesPhaseAnnotation(method, phase)) {
@@ -132,37 +135,37 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private boolean matchesPhaseAnnotation(Method method,
-                                           BuildCompatibleExtensionSupport.SupportedPhase phase) {
+                                           BceSupportedPhase phase) {
         switch (phase) {
             case DISCOVERY:
-                return AnnotationsEnum.hasDiscoveryAnnotation(method);
+                return hasDiscoveryAnnotation(method);
             case ENHANCEMENT:
-                return AnnotationsEnum.hasEnhancementAnnotation(method);
+                return hasEnhancementAnnotation(method);
             case REGISTRATION:
-                return AnnotationsEnum.hasRegistrationAnnotation(method);
+                return hasRegistrationAnnotation(method);
             case SYNTHESIS:
-                return AnnotationsEnum.hasSynthesisAnnotation(method);
+                return hasSynthesisAnnotation(method);
             case VALIDATION:
-                return AnnotationsEnum.hasValidationAnnotation(method);
+                return hasValidationAnnotation(method);
             default:
                 return false;
         }
     }
 
     private void invokePhaseMethod(PhaseMethodInvocation invocation,
-                                   BuildCompatibleExtensionSupport.SupportedPhase phase,
+                                   BceSupportedPhase phase,
                                    BceSyntheticComponents syntheticComponents,
                                    EnhancementModelState enhancementModelState) {
         Method method = invocation.method;
         validatePhaseMethodSignature(method, phase);
 
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.ENHANCEMENT &&
+        if (phase == BceSupportedPhase.ENHANCEMENT &&
             hasEnhancementModelParameter(method)) {
             invokeEnhancementModelMethods(invocation, enhancementModelState);
             return;
         }
-        if ((phase == BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION ||
-            phase == BuildCompatibleExtensionSupport.SupportedPhase.VALIDATION) &&
+        if ((phase == BceSupportedPhase.REGISTRATION ||
+            phase == BceSupportedPhase.VALIDATION) &&
             hasRegistrationOrValidationModelParameter(method)) {
             invokeRegistrationOrValidationModelMethods(invocation, phase);
             return;
@@ -193,12 +196,12 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private int priorityOf(Method method) {
-        Priority priority = method.getAnnotation(Priority.class);
-        return priority != null ? priority.value() : Interceptor.Priority.APPLICATION + 500;
+        Integer priority = com.threeamigos.common.util.implementations.injection.AnnotationsEnum.getPriorityValue(method);
+        return priority != null ? priority : Interceptor.Priority.APPLICATION + 500;
     }
 
     private void validatePhaseMethodSignature(Method method,
-                                              BuildCompatibleExtensionSupport.SupportedPhase phase) {
+                                              BceSupportedPhase phase) {
         if (!Modifier.isPublic(method.getModifiers())) {
             throw new DefinitionException("Invalid BCE " + phase + " method " +
                 method.getDeclaringClass().getName() + "." + method.getName() +
@@ -217,22 +220,7 @@ public class BuildCompatibleExtensionRunner {
                 ": type parameters are not allowed.");
         }
 
-        int phaseAnnotationCount = 0;
-        if (AnnotationsEnum.hasDiscoveryAnnotation(method)) {
-            phaseAnnotationCount++;
-        }
-        if (AnnotationsEnum.hasEnhancementAnnotation(method)) {
-            phaseAnnotationCount++;
-        }
-        if (AnnotationsEnum.hasRegistrationAnnotation(method)) {
-            phaseAnnotationCount++;
-        }
-        if (AnnotationsEnum.hasSynthesisAnnotation(method)) {
-            phaseAnnotationCount++;
-        }
-        if (AnnotationsEnum.hasValidationAnnotation(method)) {
-            phaseAnnotationCount++;
-        }
+        int phaseAnnotationCount = getPhaseAnnotationCount(method);
         if (phaseAnnotationCount != 1) {
             throw new DefinitionException("Invalid BCE method " + method.getDeclaringClass().getName() +
                 "." + method.getName() + ": method must declare exactly one BCE phase annotation.");
@@ -247,8 +235,8 @@ public class BuildCompatibleExtensionRunner {
         Class<?>[] parameterTypes = method.getParameterTypes();
         switch (phase) {
             case DISCOVERY:
-                if (!areSupportedParameterTypes(parameterTypes,
-                    BuildServices.class, Types.class, Messages.class, MetaAnnotations.class, ScannedClasses.class)) {
+                if (!areSupportedParameterTypes(parameterTypes
+                )) {
                     throw new DefinitionException("Invalid BCE " + phase + " method " +
                         method.getDeclaringClass().getName() + "." + method.getName() +
                         ": supported parameters are from {BuildServices, Types, Messages, MetaAnnotations, ScannedClasses}.");
@@ -258,6 +246,7 @@ public class BuildCompatibleExtensionRunner {
                 validateEnhancementSignature(method);
                 break;
             case VALIDATION:
+            case REGISTRATION:
                 validateRegistrationOrValidationSignature(method, phase);
                 break;
             case SYNTHESIS:
@@ -266,63 +255,84 @@ public class BuildCompatibleExtensionRunner {
                         method.getDeclaringClass().getName() + "." + method.getName() +
                         ": expected SyntheticComponents and optional parameters from {BuildServices, Types, Messages}.");
                 }
-                boolean seenSyntheticComponents = false;
-                boolean seenBuildServices = false;
-                boolean seenTypes = false;
-                boolean seenMessages = false;
-                for (Class<?> parameterType : parameterTypes) {
-                    if (SyntheticComponents.class.isAssignableFrom(parameterType)) {
-                        if (seenSyntheticComponents) {
-                            throw new DefinitionException("Invalid BCE SYNTHESIS method " +
-                                method.getDeclaringClass().getName() + "." + method.getName() +
-                                ": duplicate SyntheticComponents parameter.");
-                        }
-                        seenSyntheticComponents = true;
-                        continue;
-                    }
-                    if (BuildServices.class.isAssignableFrom(parameterType)) {
-                        if (seenBuildServices) {
-                            throw new DefinitionException("Invalid BCE SYNTHESIS method " +
-                                method.getDeclaringClass().getName() + "." + method.getName() +
-                                ": duplicate BuildServices parameter.");
-                        }
-                        seenBuildServices = true;
-                        continue;
-                    }
-                    if (Types.class.isAssignableFrom(parameterType)) {
-                        if (seenTypes) {
-                            throw new DefinitionException("Invalid BCE SYNTHESIS method " +
-                                method.getDeclaringClass().getName() + "." + method.getName() +
-                                ": duplicate Types parameter.");
-                        }
-                        seenTypes = true;
-                        continue;
-                    }
-                    if (Messages.class.isAssignableFrom(parameterType)) {
-                        if (seenMessages) {
-                            throw new DefinitionException("Invalid BCE SYNTHESIS method " +
-                                method.getDeclaringClass().getName() + "." + method.getName() +
-                                ": duplicate Messages parameter.");
-                        }
-                        seenMessages = true;
-                        continue;
-                    }
-                    throw new DefinitionException("Invalid BCE SYNTHESIS method " +
-                        method.getDeclaringClass().getName() + "." + method.getName() +
-                        ": unsupported parameter type " + parameterType.getName());
-                }
-                if (!seenSyntheticComponents) {
+                if (!isSeenSyntheticComponents(method, parameterTypes)) {
                     throw new DefinitionException("Invalid BCE SYNTHESIS method " +
                         method.getDeclaringClass().getName() + "." + method.getName() +
                         ": missing SyntheticComponents parameter.");
                 }
                 break;
-            case REGISTRATION:
-                validateRegistrationOrValidationSignature(method, phase);
-                break;
             default:
                 break;
         }
+    }
+
+    private static boolean isSeenSyntheticComponents(Method method, Class<?>[] parameterTypes) {
+        boolean seenSyntheticComponents = false;
+        boolean seenBuildServices = false;
+        boolean seenTypes = false;
+        boolean seenMessages = false;
+        for (Class<?> parameterType : parameterTypes) {
+            if (SyntheticComponents.class.isAssignableFrom(parameterType)) {
+                if (seenSyntheticComponents) {
+                    throw new DefinitionException("Invalid BCE SYNTHESIS method " +
+                        method.getDeclaringClass().getName() + "." + method.getName() +
+                        ": duplicate SyntheticComponents parameter.");
+                }
+                seenSyntheticComponents = true;
+                continue;
+            }
+            if (BuildServices.class.isAssignableFrom(parameterType)) {
+                if (seenBuildServices) {
+                    throw new DefinitionException("Invalid BCE SYNTHESIS method " +
+                        method.getDeclaringClass().getName() + "." + method.getName() +
+                        ": duplicate BuildServices parameter.");
+                }
+                seenBuildServices = true;
+                continue;
+            }
+            if (Types.class.isAssignableFrom(parameterType)) {
+                if (seenTypes) {
+                    throw new DefinitionException("Invalid BCE SYNTHESIS method " +
+                        method.getDeclaringClass().getName() + "." + method.getName() +
+                        ": duplicate Types parameter.");
+                }
+                seenTypes = true;
+                continue;
+            }
+            if (Messages.class.isAssignableFrom(parameterType)) {
+                if (seenMessages) {
+                    throw new DefinitionException("Invalid BCE SYNTHESIS method " +
+                        method.getDeclaringClass().getName() + "." + method.getName() +
+                        ": duplicate Messages parameter.");
+                }
+                seenMessages = true;
+                continue;
+            }
+            throw new DefinitionException("Invalid BCE SYNTHESIS method " +
+                method.getDeclaringClass().getName() + "." + method.getName() +
+                ": unsupported parameter type " + parameterType.getName());
+        }
+        return seenSyntheticComponents;
+    }
+
+    private static int getPhaseAnnotationCount(Method method) {
+        int phaseAnnotationCount = 0;
+        if (hasDiscoveryAnnotation(method)) {
+            phaseAnnotationCount++;
+        }
+        if (hasEnhancementAnnotation(method)) {
+            phaseAnnotationCount++;
+        }
+        if (hasRegistrationAnnotation(method)) {
+            phaseAnnotationCount++;
+        }
+        if (AnnotationsEnum.hasSynthesisAnnotation(method)) {
+            phaseAnnotationCount++;
+        }
+        if (AnnotationsEnum.hasValidationAnnotation(method)) {
+            phaseAnnotationCount++;
+        }
+        return phaseAnnotationCount;
     }
 
     private void validateEnhancementSignature(Method method) {
@@ -380,13 +390,13 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private Object[] resolvePhaseMethodArguments(Method method,
-                                                 BuildCompatibleExtensionSupport.SupportedPhase phase,
+                                                 BceSupportedPhase phase,
                                                  BceSyntheticComponents syntheticComponents) {
         if (method.getParameterCount() == 0) {
             return new Object[0];
         }
 
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.SYNTHESIS) {
+        if (phase == BceSupportedPhase.SYNTHESIS) {
             Class<?>[] parameterTypes = method.getParameterTypes();
             Object[] args = new Object[parameterTypes.length];
             for (int i = 0; i < parameterTypes.length; i++) {
@@ -406,7 +416,7 @@ public class BuildCompatibleExtensionRunner {
             }
             return args;
         }
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION) {
+        if (phase == BceSupportedPhase.REGISTRATION) {
             Class<?>[] parameterTypes = method.getParameterTypes();
             Object[] args = new Object[parameterTypes.length];
             for (int i = 0; i < parameterTypes.length; i++) {
@@ -428,9 +438,9 @@ public class BuildCompatibleExtensionRunner {
             }
             return args;
         }
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.DISCOVERY ||
-            phase == BuildCompatibleExtensionSupport.SupportedPhase.ENHANCEMENT ||
-            phase == BuildCompatibleExtensionSupport.SupportedPhase.VALIDATION) {
+        if (phase == BceSupportedPhase.DISCOVERY ||
+            phase == BceSupportedPhase.ENHANCEMENT ||
+            phase == BceSupportedPhase.VALIDATION) {
             Class<?>[] parameterTypes = method.getParameterTypes();
             Object[] args = new Object[parameterTypes.length];
             for (int i = 0; i < parameterTypes.length; i++) {
@@ -454,18 +464,8 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private void validateRegistrationOrValidationSignature(Method method,
-                                                           BuildCompatibleExtensionSupport.SupportedPhase phase) {
-        Class<?>[] parameterTypes = method.getParameterTypes();
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION && parameterTypes.length > 7) {
-            throw new DefinitionException("Invalid BCE REGISTRATION method " +
-                method.getDeclaringClass().getName() + "." + method.getName() +
-                ": too many parameters.");
-        }
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.VALIDATION && parameterTypes.length > 5) {
-            throw new DefinitionException("Invalid BCE VALIDATION method " +
-                method.getDeclaringClass().getName() + "." + method.getName() +
-                ": too many parameters.");
-        }
+                                                           BceSupportedPhase phase) {
+        Class<?>[] parameterTypes = getClasses(method, phase);
         boolean seenInvokerFactory = false;
         boolean seenContext = false;
         boolean seenBuildServices = false;
@@ -474,14 +474,14 @@ public class BuildCompatibleExtensionRunner {
         int modelCount = 0;
         for (Class<?> parameterType : parameterTypes) {
             if (InvokerFactory.class.isAssignableFrom(parameterType)) {
-                if (phase != BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION || seenInvokerFactory) {
+                if (phase != BceSupportedPhase.REGISTRATION || seenInvokerFactory) {
                     throw invalidRegistrationOrValidationParameter(method, phase, parameterType, "duplicate/illegal InvokerFactory");
                 }
                 seenInvokerFactory = true;
                 continue;
             }
             if (BceRegistrationContext.class.isAssignableFrom(parameterType)) {
-                if (phase != BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION || seenContext) {
+                if (phase != BceSupportedPhase.REGISTRATION || seenContext) {
                     throw invalidRegistrationOrValidationParameter(method, phase, parameterType, "duplicate/illegal BceRegistrationContext");
                 }
                 seenContext = true;
@@ -521,8 +521,24 @@ public class BuildCompatibleExtensionRunner {
         }
     }
 
+    @Nonnull
+    private static Class<?>[] getClasses(Method method, BceSupportedPhase phase) {
+        Class<?>[] parameterTypes = method.getParameterTypes();
+        if (phase == BceSupportedPhase.REGISTRATION && parameterTypes.length > 7) {
+            throw new DefinitionException("Invalid BCE REGISTRATION method " +
+                method.getDeclaringClass().getName() + "." + method.getName() +
+                ": too many parameters.");
+        }
+        if (phase == BceSupportedPhase.VALIDATION && parameterTypes.length > 5) {
+            throw new DefinitionException("Invalid BCE VALIDATION method " +
+                method.getDeclaringClass().getName() + "." + method.getName() +
+                ": too many parameters.");
+        }
+        return parameterTypes;
+    }
+
     private DefinitionException invalidRegistrationOrValidationParameter(Method method,
-                                                                         BuildCompatibleExtensionSupport.SupportedPhase phase,
+                                                                         BceSupportedPhase phase,
                                                                          Class<?> parameterType,
                                                                          String reason) {
         return new DefinitionException("Invalid BCE " + phase + " method " +
@@ -540,17 +556,17 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private boolean isRegistrationOrValidationModelType(Class<?> parameterType) {
-        return BeanInfo.class.isAssignableFrom(parameterType) ||
-            ObserverInfo.class.isAssignableFrom(parameterType) ||
-            InterceptorInfo.class.isAssignableFrom(parameterType) ||
-            InjectionPointInfo.class.isAssignableFrom(parameterType) ||
-            DisposerInfo.class.isAssignableFrom(parameterType) ||
-            ScopeInfo.class.isAssignableFrom(parameterType) ||
-            StereotypeInfo.class.isAssignableFrom(parameterType);
+        return isBeanInfo(parameterType) ||
+            isObserverInfo(parameterType) ||
+            isInterceptorInfo(parameterType) ||
+            isInjectionPointInfo(parameterType) ||
+            isDisposerInfo(parameterType) ||
+            isScopeInfo(parameterType) ||
+            isStereotypeInfo(parameterType);
     }
 
     private void invokeRegistrationOrValidationModelMethods(PhaseMethodInvocation invocation,
-                                                            BuildCompatibleExtensionSupport.SupportedPhase phase) {
+                                                            BceSupportedPhase phase) {
         Method phaseMethod = invocation.method;
         Class<?> modelType = null;
         for (Class<?> parameterType : phaseMethod.getParameterTypes()) {
@@ -563,28 +579,28 @@ public class BuildCompatibleExtensionRunner {
             return;
         }
 
-        if (BeanInfo.class.isAssignableFrom(modelType)) {
+        if (isBeanInfo(modelType)) {
             List<BeanInfo> beans = collectBeanInfosForPhase(phaseMethod, phase);
             for (BeanInfo beanInfo : beans) {
                 invokeRegistrationOrValidationForModel(invocation, phase, beanInfo, null, null, null, null, null, null);
             }
             return;
         }
-        if (ObserverInfo.class.isAssignableFrom(modelType)) {
+        if (isObserverInfo(modelType)) {
             List<ObserverInfo> observers = collectObserverInfosForPhase(phaseMethod, phase);
             for (ObserverInfo observerInfo : observers) {
                 invokeRegistrationOrValidationForModel(invocation, phase, null, observerInfo, null, null, null, null, null);
             }
             return;
         }
-        if (InterceptorInfo.class.isAssignableFrom(modelType)) {
+        if (isInterceptorInfo(modelType)) {
             List<InterceptorInfo> interceptors = collectInterceptorInfosForPhase(phaseMethod, phase);
             for (InterceptorInfo interceptorInfo : interceptors) {
                 invokeRegistrationOrValidationForModel(invocation, phase, null, null, interceptorInfo, null, null, null, null);
             }
             return;
         }
-        if (InjectionPointInfo.class.isAssignableFrom(modelType)) {
+        if (isInjectionPointInfo(modelType)) {
             List<InjectionPointInfo> injectionPoints = collectInjectionPointInfosForPhase(phaseMethod, phase);
             for (InjectionPointInfo injectionPointInfo : injectionPoints) {
                 invokeRegistrationOrValidationForModel(
@@ -592,7 +608,7 @@ public class BuildCompatibleExtensionRunner {
             }
             return;
         }
-        if (DisposerInfo.class.isAssignableFrom(modelType)) {
+        if (isDisposerInfo(modelType)) {
             List<DisposerInfo> disposers = collectDisposerInfosForPhase(phaseMethod, phase);
             for (DisposerInfo disposerInfo : disposers) {
                 invokeRegistrationOrValidationForModel(
@@ -600,7 +616,7 @@ public class BuildCompatibleExtensionRunner {
             }
             return;
         }
-        if (ScopeInfo.class.isAssignableFrom(modelType)) {
+        if (isScopeInfo(modelType)) {
             List<ScopeInfo> scopes = collectScopeInfosForPhase(phaseMethod, phase);
             for (ScopeInfo scopeInfo : scopes) {
                 invokeRegistrationOrValidationForModel(
@@ -608,7 +624,7 @@ public class BuildCompatibleExtensionRunner {
             }
             return;
         }
-        if (StereotypeInfo.class.isAssignableFrom(modelType)) {
+        if (isStereotypeInfo(modelType)) {
             List<StereotypeInfo> stereotypes = collectStereotypeInfosForPhase(phaseMethod, phase);
             for (StereotypeInfo stereotypeInfo : stereotypes) {
                 invokeRegistrationOrValidationForModel(
@@ -618,10 +634,10 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private List<BeanInfo> collectBeanInfosForPhase(Method phaseMethod,
-                                                    BuildCompatibleExtensionSupport.SupportedPhase phase) {
-        List<BeanInfo> beans = new ArrayList<BeanInfo>();
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION) {
-            Registration registration = phaseMethod.getAnnotation(Registration.class);
+                                                    BceSupportedPhase phase) {
+        List<BeanInfo> beans = new ArrayList<>();
+        if (phase == BceSupportedPhase.REGISTRATION) {
+            Registration registration = getRegistrationAnnotation(phaseMethod);
             Class<?>[] acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
             for (Bean<?> bean : knowledgeBase.getBeans()) {
                 if (bean == null || bean.getBeanClass() == null) {
@@ -642,14 +658,15 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private List<ObserverInfo> collectObserverInfosForPhase(Method phaseMethod,
-                                                            BuildCompatibleExtensionSupport.SupportedPhase phase) {
-        List<ObserverInfo> out = new ArrayList<ObserverInfo>(BceObserverInfo.from(knowledgeBase.getObserverMethodInfos()));
+                                                            BceSupportedPhase phase) {
+        List<ObserverInfo> out = new ArrayList<>(BceObserverInfo.from(knowledgeBase.getObserverMethodInfos()));
         out.addAll(BceObserverInfo.fromSynthetic(knowledgeBase.getSyntheticObserverMethods()));
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION) {
-            Registration registration = phaseMethod.getAnnotation(Registration.class);
+        if (phase == BceSupportedPhase.REGISTRATION) {
+            Registration registration = com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+                .getRegistrationAnnotation(phaseMethod);
             Class<?>[] acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
             if (acceptedTypes.length > 0) {
-                List<ObserverInfo> filtered = new ArrayList<ObserverInfo>();
+                List<ObserverInfo> filtered = new ArrayList<>();
                 for (ObserverInfo observerInfo : out) {
                     if (isObserverAcceptedByRegistrationTypes(observerInfo, acceptedTypes)) {
                         filtered.add(observerInfo);
@@ -663,14 +680,13 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private List<InterceptorInfo> collectInterceptorInfosForPhase(Method phaseMethod,
-                                                                  BuildCompatibleExtensionSupport.SupportedPhase phase) {
-        List<InterceptorInfo> out = new ArrayList<InterceptorInfo>(
-            BceInterceptorInfo.from(knowledgeBase.getInterceptorInfos()));
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION) {
-            Registration registration = phaseMethod.getAnnotation(Registration.class);
+                                                                  BceSupportedPhase phase) {
+        List<InterceptorInfo> out = new ArrayList<>(BceInterceptorInfo.from(knowledgeBase.getInterceptorInfos()));
+        if (phase == BceSupportedPhase.REGISTRATION) {
+            Registration registration = getRegistrationAnnotation(phaseMethod);
             Class<?>[] acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
             if (acceptedTypes.length > 0) {
-                List<InterceptorInfo> filtered = new ArrayList<InterceptorInfo>();
+                List<InterceptorInfo> filtered = new ArrayList<>();
                 for (InterceptorInfo interceptorInfo : out) {
                     Class<?> declaringClass = BceMetadata.unwrapClassInfo(interceptorInfo.declaringClass());
                     if (isClassAcceptedByRegistrationTypes(declaringClass, acceptedTypes)) {
@@ -685,8 +701,8 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private List<InjectionPointInfo> collectInjectionPointInfosForPhase(Method phaseMethod,
-                                                                        BuildCompatibleExtensionSupport.SupportedPhase phase) {
-        List<InjectionPointInfo> out = new ArrayList<InjectionPointInfo>();
+                                                                        BceSupportedPhase phase) {
+        List<InjectionPointInfo> out = new ArrayList<>();
         List<BeanInfo> beans = collectBeanInfosForPhase(phaseMethod, phase);
         for (BeanInfo beanInfo : beans) {
             Collection<InjectionPointInfo> points = beanInfo.injectionPoints();
@@ -699,15 +715,15 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private List<DisposerInfo> collectDisposerInfosForPhase(Method phaseMethod,
-                                                            BuildCompatibleExtensionSupport.SupportedPhase phase) {
-        List<DisposerInfo> out = new ArrayList<DisposerInfo>();
+                                                            BceSupportedPhase phase) {
+        List<DisposerInfo> out = new ArrayList<>();
         Collection<ProducerBean<?>> producerBeans = knowledgeBase.getProducerBeans();
         if (producerBeans == null || producerBeans.isEmpty()) {
             return out;
         }
         Class<?>[] acceptedTypes = new Class<?>[0];
-        if (phase == BuildCompatibleExtensionSupport.SupportedPhase.REGISTRATION) {
-            Registration registration = phaseMethod.getAnnotation(Registration.class);
+        if (phase == BceSupportedPhase.REGISTRATION) {
+            Registration registration = getRegistrationAnnotation(phaseMethod);
             acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
         }
         for (ProducerBean<?> producerBean : producerBeans) {
@@ -728,10 +744,10 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private List<ScopeInfo> collectScopeInfosForPhase(Method phaseMethod,
-                                                      BuildCompatibleExtensionSupport.SupportedPhase phase) {
+                                                      BceSupportedPhase phase) {
         List<BeanInfo> beans = collectBeanInfosForPhase(phaseMethod, phase);
-        List<ScopeInfo> out = new ArrayList<ScopeInfo>();
-        List<String> seen = new ArrayList<String>();
+        List<ScopeInfo> out = new ArrayList<>();
+        List<String> seen = new ArrayList<>();
         for (BeanInfo beanInfo : beans) {
             ScopeInfo scopeInfo = beanInfo.scope();
             if (scopeInfo == null || scopeInfo.annotation() == null) {
@@ -749,10 +765,10 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private List<StereotypeInfo> collectStereotypeInfosForPhase(Method phaseMethod,
-                                                                BuildCompatibleExtensionSupport.SupportedPhase phase) {
+                                                                BceSupportedPhase phase) {
         List<BeanInfo> beans = collectBeanInfosForPhase(phaseMethod, phase);
-        List<StereotypeInfo> out = new ArrayList<StereotypeInfo>();
-        List<String> seen = new ArrayList<String>();
+        List<StereotypeInfo> out = new ArrayList<>();
+        List<String> seen = new ArrayList<>();
         for (BeanInfo beanInfo : beans) {
             Collection<StereotypeInfo> stereotypes = beanInfo.stereotypes();
             if (stereotypes == null) {
@@ -799,9 +815,8 @@ public class BuildCompatibleExtensionRunner {
             FieldInfo field = (FieldInfo) injectionPointInfo.declaration();
             return "F:" + field.declaringClass().name() + "#" + field.name();
         }
-        if (injectionPointInfo.declaration() instanceof jakarta.enterprise.lang.model.declarations.ParameterInfo) {
-            jakarta.enterprise.lang.model.declarations.ParameterInfo parameter =
-                (jakarta.enterprise.lang.model.declarations.ParameterInfo) injectionPointInfo.declaration();
+        if (injectionPointInfo.declaration() instanceof ParameterInfo) {
+            ParameterInfo parameter = (ParameterInfo) injectionPointInfo.declaration();
             return "P:" + parameter.declaringMethod().declaringClass().name() + "#" +
                 parameter.declaringMethod().name() + ":" + parameter.name();
         }
@@ -856,7 +871,7 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private void invokeRegistrationOrValidationForModel(PhaseMethodInvocation invocation,
-                                                        BuildCompatibleExtensionSupport.SupportedPhase phase,
+                                                        BceSupportedPhase phase,
                                                         BeanInfo beanInfo,
                                                         ObserverInfo observerInfo,
                                                         InterceptorInfo interceptorInfo,
@@ -871,39 +886,39 @@ public class BuildCompatibleExtensionRunner {
             Object[] args = new Object[parameterTypes.length];
             for (int i = 0; i < parameterTypes.length; i++) {
                 Class<?> parameterType = parameterTypes[i];
-                if (InterceptorInfo.class.isAssignableFrom(parameterType)) {
+                if (isInterceptorInfo(parameterType)) {
                     args[i] = interceptorInfo;
                     continue;
                 }
-                if (BeanInfo.class.isAssignableFrom(parameterType)) {
+                if (isBeanInfo(parameterType)) {
                     args[i] = beanInfo;
                     continue;
                 }
-                if (ObserverInfo.class.isAssignableFrom(parameterType)) {
+                if (isObserverInfo(parameterType)) {
                     args[i] = observerInfo;
                     continue;
                 }
-                if (InvokerFactory.class.isAssignableFrom(parameterType)) {
+                if (isInvokerFactory(parameterType)) {
                     args[i] = invokerFactory;
                     continue;
                 }
-                if (BceRegistrationContext.class.isAssignableFrom(parameterType)) {
+                if (isBceRegistrationContext(parameterType)) {
                     args[i] = registrationContext;
                     continue;
                 }
-                if (InjectionPointInfo.class.isAssignableFrom(parameterType)) {
+                if (isInjectionPointInfo(parameterType)) {
                     args[i] = injectionPointInfo;
                     continue;
                 }
-                if (DisposerInfo.class.isAssignableFrom(parameterType)) {
+                if (isDisposerInfo(parameterType)) {
                     args[i] = disposerInfo;
                     continue;
                 }
-                if (ScopeInfo.class.isAssignableFrom(parameterType)) {
+                if (isScopeInfo(parameterType)) {
                     args[i] = scopeInfo;
                     continue;
                 }
-                if (StereotypeInfo.class.isAssignableFrom(parameterType)) {
+                if (isStereotypeInfo(parameterType)) {
                     args[i] = stereotypeInfo;
                     continue;
                 }
@@ -935,36 +950,32 @@ public class BuildCompatibleExtensionRunner {
         }
     }
 
-    private void invokeEnhancementModelMethods(PhaseMethodInvocation invocation) {
-        invokeEnhancementModelMethods(invocation, new EnhancementModelState());
-    }
-
     private void invokeEnhancementModelMethods(PhaseMethodInvocation invocation,
                                                EnhancementModelState enhancementModelState) {
         Method phaseMethod = invocation.method;
         Class<?> modelType = findEnhancementModelParameterType(phaseMethod);
         if (modelType == null) {
-            invokePhaseMethod(invocation, BuildCompatibleExtensionSupport.SupportedPhase.ENHANCEMENT, null,
+            invokePhaseMethod(invocation, BceSupportedPhase.ENHANCEMENT, null,
                 enhancementModelState);
             return;
         }
 
-        if (ClassInfo.class.isAssignableFrom(modelType) || ClassConfig.class.isAssignableFrom(modelType)) {
+        if (isClassInfo(modelType) || isClassConfig(modelType)) {
             for (Class<?> clazz : getEnhancedClasses(phaseMethod)) {
                 invokeEnhancementForTarget(invocation, clazz, null, null, null, enhancementModelState);
             }
             return;
         }
-        if (MethodInfo.class.isAssignableFrom(modelType) || MethodConfig.class.isAssignableFrom(modelType)) {
+        if (isMethodInfo(modelType) || isMethodConfig(modelType)) {
             for (Class<?> clazz : getEnhancedClasses(phaseMethod)) {
-                List<Method> methods = new ArrayList<Method>(Arrays.asList(clazz.getDeclaredMethods()));
+                List<Method> methods = new ArrayList<>(Arrays.asList(clazz.getDeclaredMethods()));
                 methods.sort(Comparator.comparing(Method::getName).thenComparingInt(Method::getParameterCount));
                 for (Method method : methods) {
                     if (matchesEnhancementAnnotationFilter(method, phaseMethod)) {
                         invokeEnhancementForTarget(invocation, clazz, method, null, null, enhancementModelState);
                     }
                 }
-                List<Constructor<?>> constructors = new ArrayList<Constructor<?>>(Arrays.asList(clazz.getDeclaredConstructors()));
+                List<Constructor<?>> constructors = new ArrayList<>(Arrays.asList(clazz.getDeclaredConstructors()));
                 constructors.sort(Comparator.comparingInt(Constructor::getParameterCount));
                 for (Constructor<?> constructor : constructors) {
                     if (matchesEnhancementAnnotationFilter(constructor, phaseMethod)) {
@@ -974,9 +985,9 @@ public class BuildCompatibleExtensionRunner {
             }
             return;
         }
-        if (FieldInfo.class.isAssignableFrom(modelType) || FieldConfig.class.isAssignableFrom(modelType)) {
+        if (isFieldInfo(modelType) || isFieldConfig(modelType)) {
             for (Class<?> clazz : getEnhancedClasses(phaseMethod)) {
-                List<Field> fields = new ArrayList<Field>(Arrays.asList(clazz.getDeclaredFields()));
+                List<Field> fields = new ArrayList<>(Arrays.asList(clazz.getDeclaredFields()));
                 fields.sort(Comparator.comparing(Field::getName));
                 for (Field field : fields) {
                     if (matchesEnhancementAnnotationFilter(field, phaseMethod)) {
@@ -985,13 +996,6 @@ public class BuildCompatibleExtensionRunner {
                 }
             }
         }
-    }
-
-    private void invokeEnhancementForTarget(PhaseMethodInvocation invocation,
-                                            Class<?> clazz,
-                                            Method method,
-                                            Field field) {
-        invokeEnhancementForTarget(invocation, clazz, method, null, field, new EnhancementModelState());
     }
 
     private void invokeEnhancementForTarget(PhaseMethodInvocation invocation,
@@ -1059,19 +1063,19 @@ public class BuildCompatibleExtensionRunner {
                                            Constructor<?> constructor,
                                            Field field,
                                            EnhancementModelState enhancementModelState) {
-        if (ClassInfo.class.isAssignableFrom(parameterType)) {
+        if (isClassInfo(parameterType)) {
             if (enhancementModelState != null && enhancementModelState.classConfigs.containsKey(clazz)) {
                 return enhancementModelState.classConfigs.get(clazz).info();
             }
             return BceMetadata.classInfo(clazz);
         }
-        if (ClassConfig.class.isAssignableFrom(parameterType)) {
+        if (isClassConfig(parameterType)) {
             if (enhancementModelState == null) {
                 return BceEnhancementModels.classConfig(clazz);
             }
             return enhancementModelState.classConfig(clazz);
         }
-        if (MethodInfo.class.isAssignableFrom(parameterType)) {
+        if (isMethodInfo(parameterType)) {
             if (method == null && constructor == null) {
                 return null;
             }
@@ -1085,7 +1089,7 @@ public class BuildCompatibleExtensionRunner {
             }
             return BceMetadata.methodInfo(constructor);
         }
-        if (MethodConfig.class.isAssignableFrom(parameterType)) {
+        if (isMethodConfig(parameterType)) {
             if (method == null && constructor == null) {
                 return null;
             }
@@ -1097,7 +1101,7 @@ public class BuildCompatibleExtensionRunner {
             }
             return BceEnhancementModels.methodConfig(constructor);
         }
-        if (FieldInfo.class.isAssignableFrom(parameterType)) {
+        if (isFieldInfo(parameterType)) {
             if (field == null) {
                 return null;
             }
@@ -1106,7 +1110,7 @@ public class BuildCompatibleExtensionRunner {
             }
             return BceMetadata.fieldInfo(field);
         }
-        if (FieldConfig.class.isAssignableFrom(parameterType)) {
+        if (isFieldConfig(parameterType)) {
             if (field == null) {
                 return null;
             }
@@ -1119,9 +1123,9 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private static final class EnhancementModelState {
-        private final Map<Class<?>, ClassConfig> classConfigs = new HashMap<Class<?>, ClassConfig>();
-        private final Map<Method, MethodConfig> methodConfigs = new HashMap<Method, MethodConfig>();
-        private final Map<Field, FieldConfig> fieldConfigs = new HashMap<Field, FieldConfig>();
+        private final Map<Class<?>, ClassConfig> classConfigs = new HashMap<>();
+        private final Map<Method, MethodConfig> methodConfigs = new HashMap<>();
+        private final Map<Field, FieldConfig> fieldConfigs = new HashMap<>();
 
         private ClassConfig classConfig(Class<?> clazz) {
             if (!classConfigs.containsKey(clazz)) {
@@ -1146,11 +1150,11 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private List<Class<?>> getEnhancedClasses(Method phaseMethod) {
-        Enhancement enhancement = phaseMethod.getAnnotation(Enhancement.class);
+        Enhancement enhancement = getEnhancementAnnotation(phaseMethod);
         if (enhancement == null) {
             return Collections.emptyList();
         }
-        List<Class<?>> classes = new ArrayList<Class<?>>();
+        List<Class<?>> classes = new ArrayList<>();
         for (Class<?> clazz : knowledgeBase.getClasses()) {
             if (matchesEnhancementTypeFilter(clazz, enhancement) &&
                 matchesEnhancementAnnotationFilter(clazz, phaseMethod)) {
@@ -1180,7 +1184,7 @@ public class BuildCompatibleExtensionRunner {
 
     private boolean matchesEnhancementAnnotationFilter(java.lang.reflect.AnnotatedElement element,
                                                        Method phaseMethod) {
-        Enhancement enhancement = phaseMethod.getAnnotation(Enhancement.class);
+        Enhancement enhancement = getEnhancementAnnotation(phaseMethod);
         if (enhancement == null) {
             return false;
         }
@@ -1210,20 +1214,19 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private boolean isEnhancementModelType(Class<?> parameterType) {
-        return ClassInfo.class.isAssignableFrom(parameterType) ||
-            ClassConfig.class.isAssignableFrom(parameterType) ||
-            MethodInfo.class.isAssignableFrom(parameterType) ||
-            MethodConfig.class.isAssignableFrom(parameterType) ||
-            FieldInfo.class.isAssignableFrom(parameterType) ||
-            FieldConfig.class.isAssignableFrom(parameterType);
+        return isClassInfo(parameterType) ||
+            isClassConfig(parameterType) ||
+            isMethodInfo(parameterType) ||
+            isMethodConfig(parameterType) ||
+            isFieldInfo(parameterType) ||
+            isFieldConfig(parameterType);
     }
 
-    private boolean areSupportedParameterTypes(Class<?>[] parameterTypes, Class<?>... supportedTypes) {
-        List<Class<?>> allowed = java.util.Arrays.asList(supportedTypes);
-        List<Class<?>> seen = new ArrayList<Class<?>>();
+    private boolean areSupportedParameterTypes(Class<?>[] parameterTypes) {
+        List<Class<?>> seen = new ArrayList<>();
         for (Class<?> parameterType : parameterTypes) {
             Class<?> matched = null;
-            for (Class<?> allowedType : allowed) {
+            for (Class<?> allowedType : new Class<?>[]{BuildServices.class, Types.class, Messages.class, MetaAnnotations.class, ScannedClasses.class}) {
                 if (allowedType.isAssignableFrom(parameterType)) {
                     matched = allowedType;
                     break;
@@ -1241,19 +1244,19 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private Object resolveCommonServiceArgument(Class<?> parameterType) {
-        if (BuildServices.class.isAssignableFrom(parameterType)) {
+        if (isBuildServices(parameterType)) {
             return buildServices;
         }
-        if (Types.class.isAssignableFrom(parameterType)) {
+        if (isTypes(parameterType)) {
             return types;
         }
-        if (Messages.class.isAssignableFrom(parameterType)) {
+        if (isMessages(parameterType)) {
             return messages;
         }
-        if (MetaAnnotations.class.isAssignableFrom(parameterType)) {
+        if (isMetaAnnotations(parameterType)) {
             return metaAnnotations;
         }
-        if (ScannedClasses.class.isAssignableFrom(parameterType)) {
+        if (isScannedClasses(parameterType)) {
             return scannedClasses;
         }
         return null;

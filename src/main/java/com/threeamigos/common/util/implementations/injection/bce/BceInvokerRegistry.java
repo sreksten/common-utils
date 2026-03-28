@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class BceInvokerRegistry {
 
-    private final Map<String, Invoker<?, ?>> invokers = new ConcurrentHashMap<String, Invoker<?, ?>>();
+    private final Map<String, Invoker<?, ?>> invokers = new ConcurrentHashMap<>();
 
     public InvokerInfo register(Invoker<?, ?> invoker) {
         if (invoker == null) {

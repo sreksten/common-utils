@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedConstructorWrapper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedMethodWrapper;
@@ -7,13 +8,12 @@ import jakarta.enterprise.inject.spi.AnnotatedConstructor;
 import jakarta.enterprise.inject.spi.AnnotatedField;
 import jakarta.enterprise.inject.spi.AnnotatedMethod;
 import jakarta.enterprise.inject.spi.AnnotatedType;
-import jakarta.enterprise.context.NormalScope;
-import jakarta.inject.Scope;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 /**
  * Minimal AnnotatedType implementation used for SPI events where full
  * annotation metadata is not required. Provides type closure and class
- * reference; returns empty annotation/members collections.
+ * reference; returns empty annotation/member collections.
  */
 public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
 
@@ -74,7 +74,7 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
     }
 
     @Override
-    public <T extends Annotation> T getAnnotation(Class<T> annotationType) {
+    public <A extends Annotation> A getAnnotation(Class<A> annotationType) {
         if (annotationType == null) {
             return null;
         }
@@ -88,7 +88,7 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
 
     @Override
     public Set<Annotation> getAnnotations() {
-        Set<Annotation> annotations = new HashSet<Annotation>();
+        Set<Annotation> annotations = new HashSet<>();
         // Always include annotations declared directly on the type.
         java.util.Collections.addAll(annotations, javaClass.getDeclaredAnnotations());
 
@@ -117,11 +117,11 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
     }
 
     private Set<AnnotatedField<? super T>> buildFields() {
-        Set<AnnotatedField<? super T>> result = new HashSet<AnnotatedField<? super T>>();
+        Set<AnnotatedField<? super T>> result = new HashSet<>();
         Class<?> current = javaClass;
         while (current != null && current != Object.class) {
             for (Field field : current.getDeclaredFields()) {
-                result.add(new AnnotatedFieldWrapper<T>(field, this));
+                result.add(new AnnotatedFieldWrapper<>(field, this));
             }
             current = current.getSuperclass();
         }
@@ -129,20 +129,21 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
     }
 
     private Set<AnnotatedMethod<? super T>> buildMethods() {
-        Set<AnnotatedMethod<? super T>> result = new HashSet<AnnotatedMethod<? super T>>();
+        Set<AnnotatedMethod<? super T>> result = new HashSet<>();
         Class<?> current = javaClass;
         while (current != null && current != Object.class) {
             for (Method method : current.getDeclaredMethods()) {
-                result.add(new AnnotatedMethodWrapper<T>(method, this));
+                result.add(new AnnotatedMethodWrapper<>(method, this));
             }
             current = current.getSuperclass();
         }
         return result;
     }
 
+    @SuppressWarnings("unchecked")
     private Set<AnnotatedConstructor<T>> buildConstructors() {
         return java.util.Arrays.stream(javaClass.getDeclaredConstructors())
-                .map(c -> new AnnotatedConstructorWrapper<T>((java.lang.reflect.Constructor<T>) c, this))
+                .map(c -> new AnnotatedConstructorWrapper<>((java.lang.reflect.Constructor<T>) c, this))
                 .collect(Collectors.toSet());
     }
 
@@ -151,9 +152,7 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
         Class<?> current = clazz;
         while (current != null && current != Object.class) {
             closure.add(current);
-            for (Class<?> iface : current.getInterfaces()) {
-                closure.add(iface);
-            }
+            closure.addAll(Arrays.asList(current.getInterfaces()));
             current = current.getSuperclass();
         }
         closure.add(Object.class);
@@ -170,7 +169,7 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
     }
 
     private boolean isScopeAnnotation(Class<? extends Annotation> annotationType) {
-        return annotationType.isAnnotationPresent(Scope.class) ||
-                annotationType.isAnnotationPresent(NormalScope.class);
+        return AnnotationsEnum.hasScopeAnnotation(annotationType) ||
+                AnnotationsEnum.hasNormalScopeAnnotation(annotationType);
     }
 }

@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.bce;
 
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticObserver;
 import jakarta.enterprise.inject.spi.EventContext;
 import jakarta.enterprise.inject.spi.EventMetadata;
 import jakarta.enterprise.inject.spi.ObserverMethod;
@@ -21,7 +22,7 @@ final class BceSyntheticObserverMethod<T> implements ObserverMethod<T> {
     private final int priority;
     private final boolean async;
     private final TransactionPhase transactionPhase;
-    private final Class<? extends jakarta.enterprise.inject.build.compatible.spi.SyntheticObserver<T>> observerClass;
+    private final Class<? extends SyntheticObserver<T>> observerClass;
     private final Map<String, Object> params;
     private final BceInvokerRegistry invokerRegistry;
 
@@ -31,14 +32,14 @@ final class BceSyntheticObserverMethod<T> implements ObserverMethod<T> {
                                int priority,
                                boolean async,
                                TransactionPhase transactionPhase,
-                               Class<? extends jakarta.enterprise.inject.build.compatible.spi.SyntheticObserver<T>> observerClass,
+                               Class<? extends SyntheticObserver<T>> observerClass,
                                Map<String, Object> params,
                                BceInvokerRegistry invokerRegistry) {
         this.beanClass = beanClass;
         this.observedType = observedType;
         this.qualifiers = qualifiers != null
-            ? Collections.unmodifiableSet(new HashSet<Annotation>(qualifiers))
-            : Collections.<Annotation>emptySet();
+            ? Collections.unmodifiableSet(new HashSet<>(qualifiers))
+            : Collections.emptySet();
         this.priority = priority;
         this.async = async;
         this.transactionPhase = transactionPhase != null ? transactionPhase : TransactionPhase.IN_PROGRESS;
@@ -75,7 +76,7 @@ final class BceSyntheticObserverMethod<T> implements ObserverMethod<T> {
     @Override
     public void notify(final T event) {
         try {
-            final jakarta.enterprise.inject.build.compatible.spi.SyntheticObserver<T> observer =
+            final SyntheticObserver<T> observer =
                 observerClass.getDeclaredConstructor().newInstance();
             final BceParameters parameters = new BceParameters(params, invokerRegistry);
             observer.observe(new EventContext<T>() {

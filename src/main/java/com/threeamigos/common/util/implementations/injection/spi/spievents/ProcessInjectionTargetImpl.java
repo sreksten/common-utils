@@ -16,12 +16,7 @@ public class ProcessInjectionTargetImpl<T> extends PhaseAware
     private final AnnotatedType<T> annotatedType;
     private final KnowledgeBase knowledgeBase;
     private InjectionTarget<T> injectionTarget;
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProcessInjectionTargetImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase,
                                       AnnotatedType<T> annotatedType, InjectionTarget<T> injectionTarget) {
@@ -36,10 +31,6 @@ public class ProcessInjectionTargetImpl<T> extends PhaseAware
     @Override
     public AnnotatedType<T> getAnnotatedType() {
         assertObserverInvocationActive();
-        return annotatedType;
-    }
-
-    public AnnotatedType<T> getAnnotatedTypeInternal() {
         return annotatedType;
     }
 

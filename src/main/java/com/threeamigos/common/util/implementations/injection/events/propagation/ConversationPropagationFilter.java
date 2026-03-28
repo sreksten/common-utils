@@ -11,10 +11,10 @@ import java.io.IOException;
  * <p>Per CDI 4.1 Section 6.7.4, long-running conversations are propagated
  * via request parameter (default: "cid"). This filter:
  * <ul>
- *   <li>Checks for "cid" parameter in the request</li>
+ *   <li>Checks for the "cid" parameter in the request</li>
  *   <li>Restores the conversation if ID is valid</li>
  *   <li>Creates a new transient conversation if no ID present</li>
- *   <li>Cleans up ThreadLocal at request end</li>
+ *   <li>Cleans up ThreadLocal at the request end</li>
  * </ul>
  *
  * <p><b>Usage in web.xml:</b>
@@ -48,14 +48,13 @@ import java.io.IOException;
  *
  * <p><b>Thread Safety:</b> This filter is thread-safe. Each request thread
  * gets its own conversation state via ThreadLocal. The filter ensures proper
- * cleanup at request end to prevent memory leaks.
+ * cleanup at the request end to prevent memory leaks.
  *
  * <p><b>Implementation Note:</b> This filter requires a reference to the
- * ConversationScopedContext to properly synchronize conversation state.
+ * ConversationScopedContext to properly synchronize the conversation state.
  * The context reference can be set via {@link #setConversationContext(ConversationScopedContext)}.
  *
  * @author Stefano Reksten
- * @see ConversationImpl
  * @see ConversationScopedContext
  */
 public class ConversationPropagationFilter implements Filter {

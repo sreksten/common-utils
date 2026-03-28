@@ -5,8 +5,8 @@ import java.util.Map;
 /**
  * Lightweight, transport-agnostic registry for propagating conversation identifiers.
  * Uses ThreadLocal storage; callers bind/unbind around message handling or request handling.
- *
- * Designed to avoid compile-time deps on specific transports; integrate by mapping headers/metadata
+ * <p>
+ * Designed to avoid compile-time depends on specific transports; integrate by mapping headers/metadata
  * to a conversation id string and calling set/clear.
  */
 public final class ConversationPropagationRegistry {

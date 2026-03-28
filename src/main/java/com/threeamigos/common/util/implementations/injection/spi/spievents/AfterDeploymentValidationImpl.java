@@ -20,12 +20,7 @@ import jakarta.enterprise.inject.spi.AfterDeploymentValidation;
 public class AfterDeploymentValidationImpl implements AfterDeploymentValidation, ObserverInvocationLifecycle {
 
     private final KnowledgeBase knowledgeBase;
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public AfterDeploymentValidationImpl(KnowledgeBase knowledgeBase) {
         this.knowledgeBase = knowledgeBase;

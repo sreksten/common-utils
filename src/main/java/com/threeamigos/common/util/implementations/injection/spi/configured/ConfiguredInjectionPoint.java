@@ -50,7 +50,6 @@ public class ConfiguredInjectionPoint implements InjectionPoint {
         return Collections.unmodifiableSet(qualifiers);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public Bean<?> getBean() {
         return bean;

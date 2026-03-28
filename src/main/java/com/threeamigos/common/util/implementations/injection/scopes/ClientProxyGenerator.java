@@ -396,7 +396,7 @@ public class ClientProxyGenerator {
             //
             // So the contextualInstance we get here is ALREADY interceptor-aware if needed!
             @SuppressWarnings({"rawtypes", "unchecked"})
-            Object contextualInstance = context.get((Bean) bean, (jakarta.enterprise.context.spi.CreationalContext) new SerializableCreationalContext<Object>());
+            Object contextualInstance = context.get((Bean) bean, new SerializableCreationalContext<>());
 
             if (contextualInstance == null) {
                 throw new IllegalStateException(
@@ -511,10 +511,11 @@ public class ClientProxyGenerator {
          * and continue functioning properly after JVM restart or session migration.
          *
          * @return a properly initialized proxy instance
-         * @throws IllegalStateException if container not registered or bean not found
+         * @throws IllegalStateException if container isn't registered or bean not found
          */
         private Object readResolve() {
             // Get the classloader for this bean class
+            assert beanClass != null;
             ClassLoader classLoader = beanClass.getClassLoader();
 
             // Look up the container context
@@ -553,9 +554,8 @@ public class ClientProxyGenerator {
 
             // Create a new ClientProxyGenerator and generate the proxy
             ClientProxyGenerator generator = new ClientProxyGenerator(contextManager);
-            Object proxy = generator.createProxy(bean);
 
-            return proxy;
+            return generator.createProxy(bean);
         }
     }
 }

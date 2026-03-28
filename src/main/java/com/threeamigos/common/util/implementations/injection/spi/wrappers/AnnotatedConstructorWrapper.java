@@ -28,7 +28,7 @@ public class AnnotatedConstructorWrapper<X> implements AnnotatedConstructor<X> {
         this.constructor = constructor;
         this.declaringType = declaringType;
         this.parameters = Arrays.stream(constructor.getParameters())
-                .map(p -> new AnnotatedParameterWrapper<X>(p, this))
+                .map(p -> new AnnotatedParameterWrapper<>(p, this))
                 .collect(Collectors.toList());
     }
 

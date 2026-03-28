@@ -28,7 +28,7 @@ public class AnnotatedMethodWrapper<X> implements AnnotatedMethod<X> {
         this.method = method;
         this.declaringType = declaringType;
         this.parameters = Arrays.stream(method.getParameters())
-                .map(p -> new AnnotatedParameterWrapper<X>(p, this))
+                .map(p -> new AnnotatedParameterWrapper<>(p, this))
                 .collect(Collectors.toList());
     }
 

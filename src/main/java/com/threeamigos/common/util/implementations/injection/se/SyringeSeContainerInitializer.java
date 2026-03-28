@@ -27,16 +27,15 @@ import java.util.Set;
 public class SyringeSeContainerInitializer extends SeContainerInitializer {
     public static final String SCAN_IMPLICIT_PROPERTY = "jakarta.enterprise.inject.scan.implicit";
 
-    private final Set<Class<?>> beanClasses = new LinkedHashSet<Class<?>>();
-    private final List<PackageSpec> packages = new ArrayList<PackageSpec>();
-    private final Set<Extension> extensionInstances = new LinkedHashSet<Extension>();
-    private final Set<Class<? extends Extension>> extensionClasses = new LinkedHashSet<Class<? extends Extension>>();
-    private final Set<Class<?>> enabledInterceptors = new LinkedHashSet<Class<?>>();
-    private final Set<Class<?>> enabledDecorators = new LinkedHashSet<Class<?>>();
-    private final Set<Class<?>> selectedAlternatives = new LinkedHashSet<Class<?>>();
-    private final Set<Class<? extends Annotation>> selectedAlternativeStereotypes =
-            new LinkedHashSet<Class<? extends Annotation>>();
-    private Map<String, Object> properties = new LinkedHashMap<String, Object>();
+    private final Set<Class<?>> beanClasses = new LinkedHashSet<>();
+    private final List<PackageSpec> packages = new ArrayList<>();
+    private final Set<Extension> extensionInstances = new LinkedHashSet<>();
+    private final Set<Class<? extends Extension>> extensionClasses = new LinkedHashSet<>();
+    private final Set<Class<?>> enabledInterceptors = new LinkedHashSet<>();
+    private final Set<Class<?>> enabledDecorators = new LinkedHashSet<>();
+    private final Set<Class<?>> selectedAlternatives = new LinkedHashSet<>();
+    private final Set<Class<? extends Annotation>> selectedAlternativeStereotypes = new LinkedHashSet<>();
+    private Map<String, Object> properties = new LinkedHashMap<>();
     private boolean discoveryDisabled;
     private ClassLoader classLoader;
 
@@ -90,8 +89,9 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
         return this;
     }
 
+    @SafeVarargs
     @Override
-    public SeContainerInitializer addExtensions(Class<? extends Extension>... extensions) {
+    public final SeContainerInitializer addExtensions(Class<? extends Extension>... extensions) {
         if (extensions != null) {
             extensionClasses.addAll(Arrays.asList(extensions));
         }
@@ -122,8 +122,9 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
         return this;
     }
 
+    @SafeVarargs
     @Override
-    public SeContainerInitializer selectAlternativeStereotypes(
+    public final SeContainerInitializer selectAlternativeStereotypes(
             Class<? extends Annotation>... alternativeStereotypeClasses) {
         if (alternativeStereotypeClasses != null) {
             selectedAlternativeStereotypes.addAll(Arrays.asList(alternativeStereotypeClasses));
@@ -142,8 +143,8 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
     @Override
     public SeContainerInitializer setProperties(Map<String, Object> properties) {
         this.properties = properties == null
-                ? new LinkedHashMap<String, Object>()
-                : new LinkedHashMap<String, Object>(properties);
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(properties);
         return this;
     }
 
@@ -202,7 +203,7 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
         if (discoveryDisabled) {
             return new Syringe();
         }
-        Set<String> roots = new LinkedHashSet<String>();
+        Set<String> roots = new LinkedHashSet<>();
         for (PackageSpec pkg : packages) {
             roots.add(pkg.pkg.getName());
         }
@@ -218,8 +219,7 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
     }
 
     private void addSyntheticArchiveClasses(Syringe syringe, ClassLoader targetClassLoader) {
-        Set<Class<?>> syntheticArchiveTypes = new LinkedHashSet<Class<?>>();
-        syntheticArchiveTypes.addAll(beanClasses);
+        Set<Class<?>> syntheticArchiveTypes = new LinkedHashSet<>(beanClasses);
         for (PackageSpec packageSpec : packages) {
             syntheticArchiveTypes.addAll(resolvePackageTypes(packageSpec, targetClassLoader));
         }
@@ -231,7 +231,7 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
     }
 
     private Collection<Class<?>> resolvePackageTypes(PackageSpec packageSpec, ClassLoader classLoader) {
-        Set<Class<?>> out = new LinkedHashSet<Class<?>>();
+        Set<Class<?>> out = new LinkedHashSet<>();
         try {
             ClasspathScanner scanner = new ClasspathScanner(packageSpec.pkg.getName());
             for (Class<?> clazz : scanner.getAllClasses(classLoader)) {
@@ -311,7 +311,7 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
 
     private boolean isImplicitScanEnabled() {
         String sysValue = System.getProperty(SCAN_IMPLICIT_PROPERTY);
-        if (sysValue != null && Boolean.parseBoolean(sysValue)) {
+        if (Boolean.parseBoolean(sysValue)) {
             return true;
         }
 

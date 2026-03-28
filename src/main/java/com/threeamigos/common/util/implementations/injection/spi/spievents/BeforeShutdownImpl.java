@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import jakarta.enterprise.inject.spi.BeforeShutdown;
-import jakarta.enterprise.inject.spi.BeanManager;
 
 /**
  * BeforeShutdown event implementation.

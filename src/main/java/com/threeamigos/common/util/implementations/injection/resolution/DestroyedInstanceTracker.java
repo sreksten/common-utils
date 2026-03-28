@@ -11,7 +11,7 @@ import java.util.WeakHashMap;
 public final class DestroyedInstanceTracker {
 
     private static final Map<Object, Boolean> DESTROYED_INSTANCES =
-            Collections.synchronizedMap(new WeakHashMap<Object, Boolean>());
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     private DestroyedInstanceTracker() {
     }

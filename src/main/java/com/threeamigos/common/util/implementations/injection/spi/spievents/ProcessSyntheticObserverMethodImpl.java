@@ -25,30 +25,10 @@ public class ProcessSyntheticObserverMethodImpl<T, X> extends PhaseAware
     private ObserverMethod<T> observerMethod;
     private ObserverMethodConfiguratorImpl<T> configurator;
     private boolean vetoed;
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> lifecycleManaged = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> lifecycleManaged = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProcessSyntheticObserverMethodImpl(MessageHandler messageHandler,
                                               KnowledgeBase knowledgeBase,
@@ -101,7 +81,7 @@ public class ProcessSyntheticObserverMethodImpl<T, X> extends PhaseAware
         }
         configureCalledInCurrentInvocation.set(Boolean.TRUE);
         if (configurator == null) {
-            configurator = new ObserverMethodConfiguratorImpl<T>(null);
+            configurator = new ObserverMethodConfiguratorImpl<>(null);
             configurator.read(observerMethod);
         }
         return configurator;

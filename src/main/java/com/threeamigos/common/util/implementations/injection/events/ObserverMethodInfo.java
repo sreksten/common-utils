@@ -20,7 +20,7 @@ import java.util.Set;
  *   <li>May have qualifiers on the observed parameter to filter events</li>
  *   <li>May have additional injection points as other parameters</li>
  *   <li>Can specify reception condition (IF_EXISTS or ALWAYS)</li>
- *   <li>Can specify transaction phase for transactional observers</li>
+ *   <li>Can specify the transaction phase for transactional observers</li>
  * </ul>
  *
  * <p>Observer methods are invoked when events are fired via Event.fire() or Event.fireAsync().
@@ -87,7 +87,7 @@ public class ObserverMethodInfo {
      * @param transactionPhase the transaction phase for synchronous observers
      * @param priority the priority for observer invocation order
      * @param async true if asynchronous, false if synchronous
-     * @param declaringBean the declaring bean (may be null for synthetic observers)
+     * @param declaringBean the declaring bean (can be null for synthetic observers)
      * @param syntheticObserver the synthetic ObserverMethod instance
      */
     public ObserverMethodInfo(

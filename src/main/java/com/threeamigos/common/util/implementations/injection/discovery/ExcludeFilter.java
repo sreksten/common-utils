@@ -54,7 +54,7 @@ public class ExcludeFilter {
      *   <li>Has all conditions satisfied (if any)</li>
      * </ul>
      *
-     * @param className the fully-qualified class name to check
+     * @param className the fully qualified class name to check
      * @return true if the class should be excluded from bean discovery
      */
     public boolean isExcluded(String className) {
@@ -116,14 +116,14 @@ public class ExcludeFilter {
         // Check if-class-available conditions
         for (IfClassAvailable condition : exclude.getIfClassAvailable()) {
             if (!isClassAvailable(condition.getName())) {
-                return false; // Condition not met - exclusion doesn't apply
+                return false; // Condition isn't met - exclusion doesn't apply
             }
         }
 
         // Check if-class-not-available conditions
         for (IfClassNotAvailable condition : exclude.getIfClassNotAvailable()) {
             if (isClassAvailable(condition.getName())) {
-                return false; // Condition not met - exclusion doesn't apply
+                return false; // Condition isn't met - exclusion doesn't apply
             }
         }
 
@@ -134,11 +134,11 @@ public class ExcludeFilter {
             String actualValue = System.getProperty(propName);
 
             if (actualValue == null) {
-                return false; // Condition not met - exclusion doesn't apply
+                return false; // Condition isn't met - exclusion doesn't apply
             }
             // <if-system-property name="..."/> is satisfied when the property exists with any value.
             if (expectedValue != null && !expectedValue.equals(actualValue)) {
-                return false; // Condition not met - exclusion doesn't apply
+                return false; // Condition isn't met - exclusion doesn't apply
             }
         }
 
@@ -149,7 +149,7 @@ public class ExcludeFilter {
     /**
      * Checks if a class is available on the classpath.
      *
-     * @param className the fully-qualified class name
+     * @param className the fully qualified class name
      * @return true if the class can be loaded
      */
     private boolean isClassAvailable(String className) {

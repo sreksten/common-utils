@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p><b>CDI 4.1 Conversation Features:</b>
  * <ul>
- *   <li>Transient by default - conversations must be explicitly made long-running via {@link #begin()}</li>
+ *   <li>Transient-by-default - conversations must be explicitly made long-running via {@link #begin()}</li>
  *   <li>Long-running conversations persist across multiple requests</li>
  *   <li>Automatic timeout for long-running conversations (default: 30 minutes)</li>
  *   <li>Custom conversation IDs via {@link #begin(String)}</li>
@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p><b>Conversation Lifecycle:</b>
  * <ol>
- *   <li><b>Transient:</b> Default state, destroyed at end of request</li>
+ *   <li><b>Transient:</b> Default state, destroyed at the end of the request</li>
  *   <li><b>Long-running:</b> Activated via begin(), persists across requests</li>
  *   <li><b>Terminated:</b> Ended via end() or timeout, beans destroyed</li>
  * </ol>
@@ -34,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p><b>Implementation Note:</b> This is a simplified implementation that manages conversation
  * state internally without requiring external scope handlers. It uses ThreadLocal to maintain
- * per-request conversation state while tracking active conversations globally.
+ *  the per-request conversation state while tracking active conversations globally.
  *
  * @author Stefano Reksten
  * @see Conversation
@@ -215,8 +215,8 @@ public class ConversationImpl implements Conversation, Serializable {
     /**
      * Returns the timeout duration for this conversation in milliseconds.
      *
-     * <p>After this period of inactivity, the conversation will be automatically
-     * destroyed by the container. Default is 30 minutes.
+     * <p>After this period of inactivity, the container will automatically
+     * destroy the conversation. Default is 30 minutes.
      *
      * @return timeout in milliseconds
      */
@@ -234,7 +234,7 @@ public class ConversationImpl implements Conversation, Serializable {
      * active without any requests.
      *
      * @param milliseconds the timeout in milliseconds (must be positive)
-     * @throws IllegalArgumentException if milliseconds is not positive
+     * @throws IllegalArgumentException if milliseconds are not positive
      */
     @Override
     public void setTimeout(long milliseconds) {
@@ -251,7 +251,7 @@ public class ConversationImpl implements Conversation, Serializable {
      * <p>A transient conversation:
      * <ul>
      *   <li>Is destroyed at the end of the current request</li>
-     *   <li>Cannot be propagated to subsequent requests</li>
+     *   <li>Cannot be propagated to later requests</li>
      *   <li>Becomes long-running when {@link #begin()} is called</li>
      * </ul>
      *
@@ -280,7 +280,7 @@ public class ConversationImpl implements Conversation, Serializable {
      * @return a unique ID string
      */
     private static String generateStaticId() {
-        return "cid-" + UUID.randomUUID().toString();
+        return "cid-" + UUID.randomUUID();
     }
 
     /**

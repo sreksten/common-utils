@@ -1,7 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
-
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
@@ -169,7 +167,7 @@ public class InjectionPointImpl<T> implements InjectionPoint {
             }
             if ("equals".equals(name) && method.getParameterCount() == 1) {
                 Object other = args[0];
-                if (other == null || !namedType.isInstance(other)) {
+                if (!namedType.isInstance(other)) {
                     return false;
                 }
                 try {

@@ -32,30 +32,10 @@ public class ProcessProducerImpl<T, X> extends PhaseAware
     private final AnnotatedMember<T> annotatedMember;
     private Producer<X> producer;
     private ProducerConfiguratorImpl<X> configurator;
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> lifecycleManaged = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> lifecycleManaged = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProcessProducerImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Phase phase,
                                AnnotatedMember<T> annotatedMember, Producer<X> producer) {
@@ -103,7 +83,7 @@ public class ProcessProducerImpl<T, X> extends PhaseAware
         configureCalledInCurrentInvocation.set(Boolean.TRUE);
         info(phase, "Configuring Producer for " + annotatedMember.getJavaMember().getName());
         if (configurator == null) {
-            configurator = new ProducerConfiguratorImpl<X>(producer);
+            configurator = new ProducerConfiguratorImpl<>(producer);
         }
         return configurator;
     }

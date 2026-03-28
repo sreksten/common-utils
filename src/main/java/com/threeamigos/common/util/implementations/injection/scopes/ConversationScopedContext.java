@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -20,6 +21,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -43,6 +45,7 @@ import java.util.stream.Collectors;
  */
 public class ConversationScopedContext implements ScopeContext {
 
+    private final MessageHandler messageHandler;
     private final Map<String, Map<Bean<?>, Object>> conversationInstances = new ConcurrentHashMap<>();
     private final Map<String, Map<Bean<?>, CreationalContext<?>>> conversationContexts = new ConcurrentHashMap<>();
     private final Map<String, Map<String, Bean<?>>> conversationBeans = new ConcurrentHashMap<>();
@@ -98,7 +101,8 @@ public class ConversationScopedContext implements ScopeContext {
      * Constructor that starts the timeout cleanup scheduler.
      * The scheduler runs every 5 minutes to clean up expired conversations.
      */
-    public ConversationScopedContext() {
+    public ConversationScopedContext(MessageHandler messageHandler) {
+        this.messageHandler = Objects.requireNonNull(messageHandler, "messageHandler cannot be null");
         // Schedule cleanup every 5 minutes
         timeoutScheduler.scheduleAtFixedRate(
             this::cleanupTimedOutConversations,
@@ -425,9 +429,11 @@ public class ConversationScopedContext implements ScopeContext {
                     try {
                         beanImpl.invokePrePassivate(instance);
                     } catch (Exception e) {
-                        System.err.println("Error invoking @PrePassivate on bean " +
-                            bean.getBeanClass().getName() + " in conversation " + conversationId + ": " + e.getMessage());
-                        e.printStackTrace();
+                        messageHandler.handleException(
+                            "Error invoking @PrePassivate on bean " + bean.getBeanClass().getName() +
+                                " in conversation " + conversationId + ": " + e.getMessage(),
+                            e
+                        );
                     }
                 } else {
                     invokeAnnotationIfPresent(instance, "jakarta.ejb.PrePassivate");
@@ -516,9 +522,11 @@ public class ConversationScopedContext implements ScopeContext {
                 try {
                     beanImpl.invokePostActivate(instance);
                 } catch (Exception e) {
-                    System.err.println("Error invoking @PostActivate on bean " +
-                        bean.getBeanClass().getName() + " in conversation " + conversationId + ": " + e.getMessage());
-                    e.printStackTrace();
+                    messageHandler.handleException(
+                        "Error invoking @PostActivate on bean " + bean.getBeanClass().getName() +
+                            " in conversation " + conversationId + ": " + e.getMessage(),
+                        e
+                    );
                 }
             } else {
                 invokeAnnotationIfPresent(instance, "jakarta.ejb.PostActivate");
@@ -540,7 +548,7 @@ public class ConversationScopedContext implements ScopeContext {
             ConversationMetadata metadata = entry.getValue();
 
             if (metadata.isTimedOut()) {
-                System.out.println("Conversation " + conversationId + " timed out after " +
+                messageHandler.handleInfoMessage("Conversation " + conversationId + " timed out after " +
                     TimeUnit.MILLISECONDS.toMinutes(metadata.getTimeoutMillis()) + " minutes of inactivity. Destroying...");
                 destroyConversation(conversationId);
             }
@@ -563,8 +571,11 @@ public class ConversationScopedContext implements ScopeContext {
                 try {
                     bean.destroy(instance, ctx);
                 } catch (Exception e) {
-                    System.err.println("Error destroying bean " + bean.getBeanClass().getName() +
-                                     " in conversation " + conversationId + ": " + e.getMessage());
+                    messageHandler.handleException(
+                        "Error destroying bean " + bean.getBeanClass().getName() +
+                            " in conversation " + conversationId + ": " + e.getMessage(),
+                        e
+                    );
                 }
             }
         }
@@ -626,8 +637,11 @@ public class ConversationScopedContext implements ScopeContext {
         } catch (ClassNotFoundException e) {
             // jakarta.ejb not on classpath; nothing to do
         } catch (Exception e) {
-            System.err.println("Error invoking @" + annotationClassName + " on " +
-                instance.getClass().getName() + ": " + e.getMessage());
+            messageHandler.handleException(
+                "Error invoking @" + annotationClassName + " on " + instance.getClass().getName() +
+                    ": " + e.getMessage(),
+                e
+            );
         }
     }
 

@@ -25,7 +25,7 @@ public class BceRegistrationContext {
     }
 
     public Collection<BeanInfo> beans() {
-        Set<BeanInfo> result = new LinkedHashSet<BeanInfo>();
+        Set<BeanInfo> result = new LinkedHashSet<>();
         for (Bean<?> bean : knowledgeBase.getBeans()) {
             Class<?> beanClass = bean.getBeanClass();
             if (beanClass == null) {
@@ -52,7 +52,7 @@ public class BceRegistrationContext {
     public Collection<MethodInfo> methods(BeanInfo beanInfo) {
         Class<?> beanClass = BceMetadata.unwrapBeanClass(beanInfo);
         Method[] declared = beanClass.getDeclaredMethods();
-        List<MethodInfo> result = new ArrayList<MethodInfo>(declared.length);
+        List<MethodInfo> result = new ArrayList<>(declared.length);
         for (Method method : declared) {
             result.add(BceMetadata.methodInfo(method));
         }

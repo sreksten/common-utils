@@ -39,13 +39,9 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
     private final KnowledgeBase knowledgeBase;
     private final BeanManager beanManager;
     private final Consumer<Object> eventDispatcher;
-    private final ThreadLocal<Extension> currentObserverExtension = new ThreadLocal<Extension>();
+    private final ThreadLocal<Extension> currentObserverExtension = new ThreadLocal<>();
     private final ThreadLocal<List<Runnable>> endOfObserverActions = ThreadLocal.withInitial(ArrayList::new);
     private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
-
-    public AfterBeanDiscoveryImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, BeanManager beanManager) {
-        this(messageHandler, knowledgeBase, beanManager, null);
-    }
 
     public AfterBeanDiscoveryImpl(MessageHandler messageHandler,
                                   KnowledgeBase knowledgeBase,
@@ -84,7 +80,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
     public <T> BeanConfigurator<T> addBean() {
         assertObserverInvocationActive();
         info(Phase.AFTER_BEAN_DISCOVERY, "Creating BeanConfigurator for synthetic bean");
-        final BeanConfiguratorImpl<T> configurator = new BeanConfiguratorImpl<T>(messageHandler, knowledgeBase);
+        final BeanConfiguratorImpl<T> configurator = new BeanConfiguratorImpl<>(messageHandler, knowledgeBase);
         final AtomicBoolean applied = new AtomicBoolean(false);
         registerEndOfObserverAction(() -> {
             if (applied.compareAndSet(false, true)) {
@@ -116,7 +112,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
                 return observer;
             }
         };
-        registerEndOfObserverAction(() -> configurator.complete());
+        registerEndOfObserverAction(configurator::complete);
         return configurator;
     }
 
@@ -206,8 +202,8 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
         assertObserverInvocationActive();
         checkNotNull(type, "Class");
         info(Phase.AFTER_BEAN_DISCOVERY, "Getting annotated types for: " + type.getName());
-        List<AnnotatedType<T>> result = new ArrayList<AnnotatedType<T>>();
-        Set<String> seen = new HashSet<String>();
+        List<AnnotatedType<T>> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
         for (AnnotatedType<?> annotatedType : knowledgeBase.getRegisteredAnnotatedTypes().values()) {
             if (annotatedType.getJavaClass().equals(type)) {
                 result.add((AnnotatedType<T>)annotatedType);
@@ -271,7 +267,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
             if (actions.isEmpty()) {
                 return;
             }
-            List<Runnable> pending = new ArrayList<Runnable>(actions);
+            List<Runnable> pending = new ArrayList<>(actions);
             actions.clear();
             for (Runnable action : pending) {
                 action.run();

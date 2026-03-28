@@ -9,7 +9,6 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
-import java.lang.annotation.Repeatable;
 import java.lang.reflect.InvocationTargetException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -59,7 +58,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             return null;
         }
         return clazz -> {
-            Bean<? extends T> bean = lookup.apply((Class<? extends T>) clazz);
+            Bean<? extends T> bean = lookup.apply(clazz);
             return (Bean<? extends U>) bean;
         };
     }
@@ -250,7 +249,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         // Per CDI spec this iterable is stateless: each iterator() call creates a fresh handle set.
         return new Iterable<Handle<T>>() {
             @Override
-            public Iterator<Handle<T>> iterator() {
+            public @Nonnull Iterator<Handle<T>> iterator() {
                 try {
                     Collection<Class<? extends T>> implementations =
                             strategy().resolveImplementations(type, qualifiers);
@@ -409,7 +408,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
             int count = counts.getOrDefault(annotationType, 0) + 1;
             counts.put(annotationType, count);
-            if (count > 1 && !annotationType.isAnnotationPresent(Repeatable.class)) {
+            if (count > 1 && !com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasRepeatableAnnotation(annotationType)) {
                 throw new IllegalArgumentException(
                         "Duplicate non-repeating qualifier type passed to select(): @" + annotationType.getName());
             }
@@ -472,7 +471,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             @Override
             public T resolveInstance(Class<T> typeToResolve, Collection<Annotation> quals) {
                 Annotation[] qualArray = quals.toArray(new Annotation[0]);
-                return (T) resolvedBeanManager.createInstance().select((Class) typeToResolve, qualArray).get();
+                return (T) resolvedBeanManager.createInstance().select((Class<?>) typeToResolve, qualArray).get();
             }
 
             @Override

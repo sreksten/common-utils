@@ -52,8 +52,8 @@ public class ContextManager {
         contexts.put(Dependent.class, new DependentContext());
 
         // Initialize and register conversation, session, and request contexts
-        conversationContext = new ConversationScopedContext();
-        sessionContext = new SessionScopedContext();
+        conversationContext = new ConversationScopedContext(messageHandler);
+        sessionContext = new SessionScopedContext(messageHandler);
         requestContext = new RequestScopedContext();
         ConversationImpl.setConversationContext(conversationContext);
 

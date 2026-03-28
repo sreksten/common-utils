@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import jakarta.enterprise.inject.Vetoed;
 
 import java.io.File;
 import java.io.IOException;
@@ -71,7 +71,7 @@ public class ParallelClasspathScanner {
     public ParallelClasspathScanner(ClassLoader classLoader,
                      ClassConsumer sink,
                      KnowledgeBase knowledgeBase,
-                     String... packageNames) throws IOException, ClassNotFoundException {
+                     String... packageNames) throws IOException {
         Objects.requireNonNull(sink, "sink cannot be null");
         Objects.requireNonNull(packageNames, "packageNames cannot be null");
         this.beanArchiveDetector = new BeanArchiveDetector(knowledgeBase);
@@ -109,7 +109,7 @@ public class ParallelClasspathScanner {
     }
 
     public void getClassesFromResource(ClassLoader classLoader, URL resource, String packageName,
-                                       ClassConsumer sink) throws ClassNotFoundException, IOException {
+                                       ClassConsumer sink) throws IOException {
         if (resource.getProtocol().equals(FILE_PROTOCOL)) {
             findClassesInDirectory(classLoader, new File(resource.getFile()), packageName, sink);
         } else if (resource.getProtocol().equals(JAR_PROTOCOL)) {
@@ -120,7 +120,7 @@ public class ParallelClasspathScanner {
     }
 
     public void findClassesInDirectory(ClassLoader classLoader, File directory, String packageName,
-                                       ClassConsumer sink) throws ClassNotFoundException {
+                                       ClassConsumer sink) {
         if (!directory.exists() || !directory.isDirectory()) {
             return;
         }
@@ -305,7 +305,7 @@ public class ParallelClasspathScanner {
         try {
             String packageInfoClass = packageName + ".package-info";
             Class<?> pkgInfo = Class.forName(packageInfoClass, false, classLoader);
-            return pkgInfo.isAnnotationPresent(Vetoed.class);
+            return AnnotationsEnum.hasVetoedAnnotation(pkgInfo);
         } catch (ClassNotFoundException e) {
             // No package-info.java exists - package is not vetoed
             return false;
@@ -327,7 +327,7 @@ public class ParallelClasspathScanner {
      * Extracts the package name from a fully qualified class name.
      *
      * @param className the fully qualified class name
-     * @return the package name, or empty string if in default package
+     * @return the package name, or empty string if in the default package
      */
     private String getPackageFromClassName(String className) {
         int lastDot = className.lastIndexOf('.');
@@ -336,7 +336,7 @@ public class ParallelClasspathScanner {
 
     /**
      * Collects beans.xml configuration from an archive root (JAR or directory).
-     * Uses the canonical path as key to avoid duplicate collection from the same archive.
+     * Uses the canonical path as a key to avoid a duplicate collection from the same archive.
      *
      * @param archiveRoot the archive root (where META-INF/beans.xml would be located)
      */
@@ -450,7 +450,7 @@ public class ParallelClasspathScanner {
         for (com.threeamigos.common.util.implementations.injection.beansxml.IfClassAvailable condition :
                 exclude.getIfClassAvailable()) {
             if (!isClassAvailable(condition.getName(), classLoader)) {
-                return false; // Condition not met
+                return false; // Condition isn't met
             }
         }
 
@@ -458,7 +458,7 @@ public class ParallelClasspathScanner {
         for (com.threeamigos.common.util.implementations.injection.beansxml.IfClassNotAvailable condition :
                 exclude.getIfClassNotAvailable()) {
             if (isClassAvailable(condition.getName(), classLoader)) {
-                return false; // Condition not met (class IS available but shouldn't be)
+                return false; // Condition isn't met (class IS available but shouldn't be)
             }
         }
 
@@ -467,7 +467,7 @@ public class ParallelClasspathScanner {
                 exclude.getIfSystemProperty()) {
             String actualValue = System.getProperty(condition.getName());
             if (actualValue == null || !actualValue.equals(condition.getValue())) {
-                return false; // Condition not met
+                return false; // Condition isn't met
             }
         }
 

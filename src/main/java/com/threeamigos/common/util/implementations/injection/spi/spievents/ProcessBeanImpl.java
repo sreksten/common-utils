@@ -24,18 +24,8 @@ public class ProcessBeanImpl<T> extends PhaseAware
     protected final Bean<T> bean;
     private final Annotated annotated;
     protected final KnowledgeBase knowledgeBase;
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> lifecycleManaged = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> lifecycleManaged = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProcessBeanImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<T> bean, Annotated annotated) {
         super(messageHandler);

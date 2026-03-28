@@ -25,8 +25,7 @@ final class BceInterceptorInfo implements jakarta.enterprise.inject.build.compat
         if (interceptorInfos == null || interceptorInfos.isEmpty()) {
             return Collections.emptyList();
         }
-        Collection<jakarta.enterprise.inject.build.compatible.spi.InterceptorInfo> out =
-            new ArrayList<jakarta.enterprise.inject.build.compatible.spi.InterceptorInfo>();
+        Collection<jakarta.enterprise.inject.build.compatible.spi.InterceptorInfo> out = new ArrayList<>();
         for (InterceptorInfo interceptorInfo : interceptorInfos) {
             out.add(new BceInterceptorInfo(interceptorInfo));
         }
@@ -35,7 +34,7 @@ final class BceInterceptorInfo implements jakarta.enterprise.inject.build.compat
 
     @Override
     public Collection<AnnotationInfo> interceptorBindings() {
-        Collection<AnnotationInfo> out = new ArrayList<AnnotationInfo>();
+        Collection<AnnotationInfo> out = new ArrayList<>();
         for (Annotation annotation : interceptorInfo.getInterceptorBindings()) {
             out.add(BceMetadata.annotationInfo(annotation));
         }
@@ -103,7 +102,7 @@ final class BceInterceptorInfo implements jakarta.enterprise.inject.build.compat
 
     @Override
     public Integer priority() {
-        return Integer.valueOf(interceptorInfo.getPriority());
+        return interceptorInfo.getPriority();
     }
 
     @Override

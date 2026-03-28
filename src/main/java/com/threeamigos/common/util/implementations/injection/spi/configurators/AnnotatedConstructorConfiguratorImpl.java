@@ -8,6 +8,7 @@ import jakarta.enterprise.inject.spi.configurator.AnnotatedParameterConfigurator
 import java.lang.annotation.Annotation;
 import java.util.*;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * Implementation of AnnotatedConstructorConfigurator for modifying constructor metadata.
@@ -71,13 +72,13 @@ public class AnnotatedConstructorConfiguratorImpl<T> implements AnnotatedConstru
     }
 
     @Override
-    public java.util.stream.Stream<AnnotatedParameterConfigurator<T>> filterParams(Predicate<AnnotatedParameter<T>> predicate) {
+    public Stream<AnnotatedParameterConfigurator<T>> filterParams(Predicate<AnnotatedParameter<T>> predicate) {
         if (predicate == null) {
-            return parameterConfigurators.stream().map(c -> (AnnotatedParameterConfigurator<T>) c);
+            return parameterConfigurators.stream().map(c -> c);
         }
         return parameterConfigurators.stream()
                 .filter(configurator -> predicate.test(configurator.getAnnotated()))
-                .map(c -> (AnnotatedParameterConfigurator<T>) c);
+                .map(c -> c);
     }
 
     /**

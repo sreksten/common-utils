@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -352,8 +353,8 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
             // Infer scope from annotations on AnnotatedType; defaults remain @Dependent.
             for (Annotation annotation : type.getJavaClass().getAnnotations()) {
                 Class<? extends Annotation> annotationType = annotation.annotationType();
-                if (annotationType.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
-                        annotationType.isAnnotationPresent(jakarta.inject.Scope.class) ||
+                if (AnnotationsEnum.hasNormalScopeAnnotation(annotationType) ||
+                        AnnotationsEnum.hasScopeAnnotation(annotationType) ||
                         Dependent.class.equals(annotationType)) {
                     this.scope = annotationType;
                     break;

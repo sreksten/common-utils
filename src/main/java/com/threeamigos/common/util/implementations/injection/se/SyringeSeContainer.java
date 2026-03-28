@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.se;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
+import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.se.SeContainer;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -94,7 +95,7 @@ public class SyringeSeContainer implements SeContainer {
     }
 
     @Override
-    public Iterator<Object> iterator() {
+    public @Nonnull Iterator<Object> iterator() {
         ensureRunning();
         return cdi.iterator();
     }

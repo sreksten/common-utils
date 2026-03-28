@@ -409,7 +409,7 @@ public class InjectorImpl2 implements Injector {
             throw new IllegalArgumentException("Alternative class cannot be null");
         }
 
-        if (!alternativeClass.isAnnotationPresent(jakarta.enterprise.inject.Alternative.class)) {
+        if (!AnnotationsEnum.hasAlternativeAnnotation(alternativeClass)) {
             throw new IllegalArgumentException(
                     "Class " + alternativeClass.getName() + " is not marked with @Alternative");
         }
@@ -551,8 +551,9 @@ public class InjectorImpl2 implements Injector {
      */
     private int getBeanPriority(Bean<?> bean) {
         Class<?> beanClass = bean.getBeanClass();
-        if (beanClass.isAnnotationPresent(jakarta.annotation.Priority.class)) {
-            return beanClass.getAnnotation(jakarta.annotation.Priority.class).value();
+        Integer priority = AnnotationsEnum.getPriorityValue(beanClass);
+        if (priority != null) {
+            return priority;
         }
         return Integer.MAX_VALUE;  // Lowest priority
     }

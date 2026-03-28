@@ -17,7 +17,6 @@ import com.threeamigos.common.util.implementations.injection.spi.spievents.Simpl
 import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
-import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
 import jakarta.el.ELResolver;
@@ -33,7 +32,6 @@ import jakarta.enterprise.inject.spi.*;
 
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
-import java.lang.annotation.Repeatable;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -125,7 +123,7 @@ public class BeanManagerImpl implements BeanManager {
         this.typeChecker = new TypeChecker();
         this.decoratorResolver = new DecoratorResolver(knowledgeBase);
         this.decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
-        this.registeredExtensions = new ArrayList<Extension>();
+        this.registeredExtensions = new ArrayList<>();
 
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         if (classLoader == null) {
@@ -184,7 +182,7 @@ public class BeanManagerImpl implements BeanManager {
     // ==================== BeanContainer Methods ====================
 
     /**
-     * Obtains a contextual reference for a bean.
+     * Gets a contextual reference for a bean.
      *
      * <p>For normal scopes (@ApplicationScoped, @RequestScoped, etc.), this returns a client proxy
      * that delegates to the current contextual instance. For pseudo-scopes (@Dependent), this
@@ -200,7 +198,7 @@ public class BeanManagerImpl implements BeanManager {
      * UserService service = (UserService) beanManager.getReference(bean, UserService.class, ctx);
      * }</pre>
      *
-     * @param bean the bean to obtain a reference for
+     * @param bean the bean to get a reference for
      * @param beanType the type of the bean (must be in bean.getTypes())
      * @param ctx the creational context
      * @return a contextual reference (proxy for normal scopes, instance for pseudo-scopes)
@@ -227,7 +225,7 @@ public class BeanManagerImpl implements BeanManager {
 
         // For pseudo-scopes (e.g., @Dependent), get from context
         Context context = getContext(bean.getScope());
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "rawtypes"})
         Object instance = context.get((Contextual) bean, ctx);
         return maybeDecorateBuiltInInstance(bean, ctx, instance);
     }
@@ -372,7 +370,7 @@ public class BeanManagerImpl implements BeanManager {
         if (qualifiers == null || qualifiers.length == 0) {
             return;
         }
-        Set<Class<? extends Annotation>> seenNonRepeatable = new HashSet<Class<? extends Annotation>>();
+        Set<Class<? extends Annotation>> seenNonRepeatable = new HashSet<>();
         for (Annotation qualifier : qualifiers) {
             if (qualifier == null) {
                 continue;
@@ -381,7 +379,7 @@ public class BeanManagerImpl implements BeanManager {
             if (!isQualifier(qualifierType)) {
                 throw new IllegalArgumentException("Annotation is not a qualifier type: " + qualifierType.getName());
             }
-            if (qualifierType.getAnnotation(Repeatable.class) == null) {
+            if (!hasRepeatableAnnotation(qualifierType)) {
                 if (!seenNonRepeatable.add(qualifierType)) {
                     throw new IllegalArgumentException("Duplicate non-repeating qualifier: " + qualifierType.getName());
                 }
@@ -410,8 +408,8 @@ public class BeanManagerImpl implements BeanManager {
      * }</pre>
      *
      * @param name the EL name
-     * @return set of beans with the given name (may be empty, never null)
-     * @throws IllegalArgumentException if name is null or empty
+     * @return set of beans with the given name (can be empty, never null)
+     * @throws IllegalArgumentException if the name is null or empty
      */
     @Override
     public Set<Bean<?>> getBeans(String name) {
@@ -440,8 +438,8 @@ public class BeanManagerImpl implements BeanManager {
      * <p>Resolution algorithm:
      * <ol>
      *   <li>If only one bean, return it</li>
-     *   <li>If multiple alternatives exist, return highest priority alternative</li>
-     *   <li>If multiple alternatives with same priority, return null (ambiguous)</li>
+     *   <li>If multiple alternatives exist, return the highest priority alternative</li>
+     *   <li>If multiple alternatives with the same priority, return null (ambiguous)</li>
      *   <li>If multiple non-alternatives exist, return null (ambiguous)</li>
      * </ol>
      *
@@ -499,8 +497,8 @@ public class BeanManagerImpl implements BeanManager {
 
         // Apply CDI 4.1 resolution rules:
         // 1. Filter enabled beans (non-alternatives or enabled alternatives)
-        // 2. Select highest priority alternative if any exist
-        // 3. If multiple alternatives with same priority, return null (ambiguous)
+        // 2. Select the highest priority alternative if any exist
+        // 3. If multiple alternatives with the same priority, return null (ambiguous)
 
         List<Bean<? extends X>> alternatives = new ArrayList<>();
         List<Bean<? extends X>> nonAlternatives = new ArrayList<>();
@@ -577,7 +575,7 @@ public class BeanManagerImpl implements BeanManager {
     }
 
     private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
-        Set<Class<?>> out = new HashSet<Class<?>>();
+        Set<Class<?>> out = new HashSet<>();
         if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
             return out;
         }
@@ -673,7 +671,7 @@ public class BeanManagerImpl implements BeanManager {
 
                     for (Annotation annotation : declaringClass.getAnnotations()) {
                         Class<? extends Annotation> annotationType = annotation.annotationType();
-                        if (annotationType.isAnnotationPresent(jakarta.enterprise.inject.Stereotype.class)) {
+                        if (hasStereotypeAnnotation(annotationType)) {
                             String stereotypeName = annotationType.getName();
                             if (knowledgeBase.isAlternativeEnabledProgrammatically(stereotypeName) ||
                                     knowledgeBase.isAlternativeEnabledInBeansXml(stereotypeName)) {
@@ -725,7 +723,7 @@ public class BeanManagerImpl implements BeanManager {
 
         for (Annotation annotation : beanClass.getAnnotations()) {
             Class<? extends Annotation> type = annotation.annotationType();
-            if (type.isAnnotationPresent(jakarta.enterprise.inject.Stereotype.class)) {
+            if (hasStereotypeAnnotation(type)) {
                 String stereotypeName = type.getName();
                 if (knowledgeBase.isAlternativeEnabledProgrammatically(stereotypeName) ||
                         knowledgeBase.isAlternativeEnabledInBeansXml(stereotypeName)) {
@@ -849,8 +847,8 @@ public class BeanManagerImpl implements BeanManager {
      * @param event the event object
      * @param qualifiers the event qualifiers
      * @param <T> the event type
-     * @return set of matching observer methods (may be empty, never null)
-     * @throws IllegalArgumentException if event is null
+     * @return set of matching observer methods (can be empty, never null)
+     * @throws IllegalArgumentException if the event is null
      */
     @Override
     public <T> Set<ObserverMethod<? super T>> resolveObserverMethods(T event, Annotation... qualifiers) {
@@ -904,7 +902,7 @@ public class BeanManagerImpl implements BeanManager {
      * <pre>{@code
      * // Interceptor binding
      * @InterceptorBinding
-     * @Target({TYPE, METHOD})
+     * @Target({TYPE, METHOD ])
      * @Retention(RUNTIME)
      * public @interface Transactional { }
      *
@@ -955,7 +953,7 @@ public class BeanManagerImpl implements BeanManager {
                 .collect(Collectors.toList());
 
         // CDI Full extension: include custom Interceptor implementations registered as beans.
-        Set<Class<?>> seenInterceptorClasses = new HashSet<Class<?>>();
+        Set<Class<?>> seenInterceptorClasses = new HashSet<>();
         for (Interceptor<?> interceptor : resolved) {
             seenInterceptorClasses.add(interceptor.getBeanClass());
         }
@@ -1020,7 +1018,7 @@ public class BeanManagerImpl implements BeanManager {
         if (candidate == null || candidate.isEmpty()) {
             return false;
         }
-        Set<Class<? extends Annotation>> candidateTypes = new HashSet<Class<? extends Annotation>>();
+        Set<Class<? extends Annotation>> candidateTypes = new HashSet<>();
         for (Annotation annotation : candidate) {
             if (annotation != null) {
                 candidateTypes.add(annotation.annotationType());
@@ -1038,7 +1036,7 @@ public class BeanManagerImpl implements BeanManager {
         if (interceptorBindings == null || interceptorBindings.length == 0) {
             throw new IllegalArgumentException("At least one interceptor binding is required");
         }
-        Set<Class<? extends Annotation>> seenNonRepeatable = new HashSet<Class<? extends Annotation>>();
+        Set<Class<? extends Annotation>> seenNonRepeatable = new HashSet<>();
         for (Annotation binding : interceptorBindings) {
             if (binding == null) {
                 throw new IllegalArgumentException("Interceptor binding cannot be null");
@@ -1047,7 +1045,7 @@ public class BeanManagerImpl implements BeanManager {
             if (!isInterceptorBinding(bindingType)) {
                 throw new IllegalArgumentException("Annotation is not an interceptor binding type: " + bindingType.getName());
             }
-            if (bindingType.getAnnotation(Repeatable.class) == null) {
+            if (!hasRepeatableAnnotation(bindingType)) {
                 if (!seenNonRepeatable.add(bindingType)) {
                     throw new IllegalArgumentException("Duplicate non-repeating interceptor binding: " + bindingType.getName());
                 }
@@ -1182,10 +1180,10 @@ public class BeanManagerImpl implements BeanManager {
      * <pre>{@code
      * @InterceptorBinding
      * @Retention(RUNTIME)
-     * @Target({TYPE, METHOD})
+     * @Target({TYPE, METHOD ])
      * public @interface Transactional { }
      *
-     * beanManager.isInterceptorBinding(Transactional.class);  // true
+     * beanManager.isInterceptorBinding(Transactional.class); // true
      * }</pre>
      *
      * @param annotationType the annotation type to check
@@ -1199,7 +1197,7 @@ public class BeanManagerImpl implements BeanManager {
         // Check both annotation-based and programmatically registered interceptor bindings
         return com.threeamigos.common.util.implementations.injection.AnnotationsEnum
                    .hasActivateRequestContextAnnotation(annotationType) ||
-               annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
+               hasInterceptorBindingAnnotation(annotationType) ||
                knowledgeBase.isRegisteredInterceptorBinding(annotationType);
     }
 
@@ -1261,7 +1259,7 @@ public class BeanManagerImpl implements BeanManager {
      * }</pre>
      *
      * @param scopeType the scope annotation class
-     * @return collection of contexts (may be empty, never null)
+     * @return collection of contexts (can be empty, never null)
      * @throws IllegalArgumentException if scopeType is null
      */
     @Override
@@ -1347,13 +1345,13 @@ public class BeanManagerImpl implements BeanManager {
         // Create resolution strategy
         InstanceImpl.ResolutionStrategy<Object> strategy = new InstanceImpl.ResolutionStrategy<Object>() {
             @Override
-            public Object resolveInstance(Class<Object> type, Collection<Annotation> quals) throws Exception {
+            public Object resolveInstance(Class<Object> type, Collection<Annotation> quals) {
                 Annotation[] qualArray = quals.toArray(new Annotation[0]);
                 return beanResolver.resolve(type, qualArray);
             }
 
             @Override
-            public Collection<Class<?>> resolveImplementations(Class<Object> type, Collection<Annotation> quals) throws Exception {
+            public Collection<Class<?>> resolveImplementations(Class<Object> type, Collection<Annotation> quals) {
                 Annotation[] qualArray = quals.toArray(new Annotation[0]);
                 Set<Bean<?>> beans = getBeans(type, qualArray);
                 return beans.stream()
@@ -1460,7 +1458,7 @@ public class BeanManagerImpl implements BeanManager {
     // ==================== BeanManager Methods ====================
 
     /**
-     * Obtains an injectable reference for an injection point.
+     * Gets an injectable reference for an injection point.
      *
      * <p>Performs full resolution including type and qualifier matching.
      *
@@ -1474,7 +1472,7 @@ public class BeanManagerImpl implements BeanManager {
      *
      * @param injectionPoint the injection point
      * @param ctx the creational context
-     * @return the injectable reference (may be a proxy)
+     * @return the injectable reference (can be a proxy)
      * @throws IllegalArgumentException if injectionPoint is null
      * @throws jakarta.enterprise.inject.UnsatisfiedResolutionException if no bean found
      */
@@ -1574,7 +1572,7 @@ public class BeanManagerImpl implements BeanManager {
     }
 
     /**
-     * Obtains a passivation-capable bean by its ID.
+     * Gets a passivation-capable bean by its ID.
      *
      * <p>Passivation-capable beans can be serialized/deserialized.
      *
@@ -1693,7 +1691,7 @@ public class BeanManagerImpl implements BeanManager {
      * @param types the decorated types
      * @param qualifiers the qualifiers (usually empty for decorators)
      * @return list of decorators sorted by priority (can be empty, never null)
-     * @throws IllegalArgumentException if the types collection is null or empty
+     * @throws IllegalArgumentException if the types' collection is null or empty
      */
     @Override
     public List<Decorator<?>> resolveDecorators(Set<Type> types, Annotation... qualifiers) {
@@ -1705,14 +1703,14 @@ public class BeanManagerImpl implements BeanManager {
 
         Set<Annotation> requiredQualifiers = extractQualifiers(qualifiers);
         List<Decorator<?>> matchingDecorators = new ArrayList<>();
-        Set<Class<?>> seenDecoratorClasses = new HashSet<Class<?>>();
+        Set<Class<?>> seenDecoratorClasses = new HashSet<>();
 
         for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
             Decorator<?> decorator = createDecorator(decoratorInfo);
             if (!isDecoratorEnabled(decorator)) {
                 continue;
             }
-            if (!matchesDecoratorTypes(types, decorator.getDecoratedTypes(), decorator.getDelegateType())) {
+            if (doesNotMatchDecoratorTypes(types, decorator.getDecoratedTypes(), decorator.getDelegateType())) {
                 continue;
             }
             if (!qualifiersMatch(requiredQualifiers, decorator.getDelegateQualifiers())) {
@@ -1730,7 +1728,7 @@ public class BeanManagerImpl implements BeanManager {
             if (!seenDecoratorClasses.add(decorator.getBeanClass())) {
                 continue;
             }
-            if (!matchesDecoratorTypes(types, decorator.getDecoratedTypes(), decorator.getDelegateType())) {
+            if (doesNotMatchDecoratorTypes(types, decorator.getDecoratedTypes(), decorator.getDelegateType())) {
                 continue;
             }
             if (!qualifiersMatch(requiredQualifiers, decorator.getDelegateQualifiers())) {
@@ -1751,6 +1749,10 @@ public class BeanManagerImpl implements BeanManager {
         );
 
         return matchingDecorators;
+    }
+
+    private boolean doesNotMatchDecoratorTypes(Set<Type> requestedTypes, Set<Type> decoratedTypes, Type delegateType) {
+        return !matchesDecoratorTypes(requestedTypes, decoratedTypes, delegateType);
     }
 
     private boolean matchesDecoratorTypes(Set<Type> requestedTypes, Set<Type> decoratedTypes, Type delegateType) {
@@ -1821,9 +1823,8 @@ public class BeanManagerImpl implements BeanManager {
 
         // Check if the annotation has @NormalScope(passivating=true)
         if (hasNormalScopeAnnotation(annotationType)) {
-            jakarta.enterprise.context.NormalScope normalScope =
-                annotationType.getAnnotation(jakarta.enterprise.context.NormalScope.class);
-            return normalScope != null && normalScope.passivating();
+            Boolean passivating = getNormalScopePassivatingValue(annotationType);
+            return passivating != null && passivating;
         }
 
         return false;
@@ -1839,7 +1840,7 @@ public class BeanManagerImpl implements BeanManager {
      * @InterceptorBinding
      * @Inherited
      * @Retention(RUNTIME)
-     * @Target({TYPE, METHOD})
+     * @Target({TYPE, METHOD ])
      * public @interface Transactional {
      *     TransactionType value() default TransactionType.REQUIRED;
      * }
@@ -1859,10 +1860,8 @@ public class BeanManagerImpl implements BeanManager {
         }
 
         // Return all annotations on the interceptor binding, including transitives
-        Set<Annotation> bindings = new HashSet<>();
-        bindings.addAll(Arrays.asList(bindingType.getAnnotations()));
 
-        return bindings;
+        return new HashSet<>(Arrays.asList(bindingType.getAnnotations()));
     }
 
     /**
@@ -1902,10 +1901,7 @@ public class BeanManagerImpl implements BeanManager {
         }
 
         // Otherwise, return all annotations on the stereotype (for @Stereotype-annotated classes)
-        Set<Annotation> annotations = new HashSet<>();
-        annotations.addAll(Arrays.asList(stereotype.getAnnotations()));
-
-        return annotations;
+        return new HashSet<>(Arrays.asList(stereotype.getAnnotations()));
     }
 
     /**
@@ -2013,7 +2009,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public ELResolver getELResolver() {
-        // EL integration not implemented yet
+        // EL integration is not implemented yet
         throw new UnsupportedOperationException("EL integration not yet implemented");
     }
 
@@ -2028,7 +2024,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     @Override
     public ExpressionFactory wrapExpressionFactory(ExpressionFactory expressionFactory) {
-        // EL integration not implemented yet
+        // EL integration is not implemented yet
         return expressionFactory;
     }
 
@@ -2040,7 +2036,7 @@ public class BeanManagerImpl implements BeanManager {
      * @param type the class
      * @param <T> the class type
      * @return annotated type
-     * @throws IllegalArgumentException if type is null
+     * @throws IllegalArgumentException if the type is null
      * @throws UnsupportedOperationException always
      */
     @Override
@@ -2110,7 +2106,7 @@ public class BeanManagerImpl implements BeanManager {
      * @param declaringBean the declaring bean
      * @param <X> the produced type
      * @return producer factory
-     * @throws IllegalArgumentException if field is null
+     * @throws IllegalArgumentException if the field is null
      */
     @Override
     public <X> ProducerFactory<X> getProducerFactory(AnnotatedField<? super X> field, Bean<X> declaringBean) {
@@ -2137,7 +2133,7 @@ public class BeanManagerImpl implements BeanManager {
      * @param declaringBean the declaring bean
      * @param <X> the produced type
      * @return producer factory
-     * @throws IllegalArgumentException if method is null
+     * @throws IllegalArgumentException if the method is null
      */
     @Override
     public <X> ProducerFactory<X> getProducerFactory(AnnotatedMethod<? super X> method, Bean<X> declaringBean) {
@@ -2170,7 +2166,7 @@ public class BeanManagerImpl implements BeanManager {
      * @param type the annotated type
      * @param <T> the type
      * @return bean attributes
-     * @throws IllegalArgumentException if type is null
+     * @throws IllegalArgumentException if the type is null
      * @throws UnsupportedOperationException always
      */
     @Override
@@ -2186,7 +2182,7 @@ public class BeanManagerImpl implements BeanManager {
         Class<? extends Annotation> scope = extractScopeFromAnnotated(type);
         Set<Class<? extends Annotation>> stereotypes = extractStereotypesFromAnnotated(type);
         Set<Type> types = TypeClosureHelper.extractTypesFromClass(type.getJavaClass());
-        boolean alternative = type.isAnnotationPresent(jakarta.enterprise.inject.Alternative.class);
+        boolean alternative = hasAlternativeAnnotation(type.getJavaClass());
 
         return new BeanAttributesImpl<>(name, qualifiers, scope, stereotypes, types, alternative);
     }
@@ -2198,7 +2194,7 @@ public class BeanManagerImpl implements BeanManager {
      *
      * @param member the annotated member
      * @return bean attributes
-     * @throws IllegalArgumentException if member is null
+     * @throws IllegalArgumentException if the member is null
      * @throws UnsupportedOperationException always
      */
     @Override
@@ -2214,7 +2210,13 @@ public class BeanManagerImpl implements BeanManager {
         Class<? extends Annotation> scope = extractScopeFromAnnotated(member);
         Set<Class<? extends Annotation>> stereotypes = extractStereotypesFromAnnotated(member);
         Set<Type> types = extractTypesFromMember(member);
-        boolean alternative = member.isAnnotationPresent(jakarta.enterprise.inject.Alternative.class);
+        boolean alternative = false;
+        for (Annotation annotation : member.getAnnotations()) {
+            if (hasAlternativeAnnotation(annotation.annotationType())) {
+                alternative = true;
+                break;
+            }
+        }
 
         return new BeanAttributesImpl<>(name, qualifiers, scope, stereotypes, types, alternative);
     }
@@ -2293,7 +2295,7 @@ public class BeanManagerImpl implements BeanManager {
      *
      * @param field the annotated field
      * @return injection point
-     * @throws IllegalArgumentException if field is null
+     * @throws IllegalArgumentException if the field is null
      * @throws UnsupportedOperationException always
      */
     @Override
@@ -2429,7 +2431,7 @@ public class BeanManagerImpl implements BeanManager {
     private int getPriority(Object obj) {
         Integer applicationOrderPriority = getAfterTypeDiscoveryAlternativePriority(obj);
         if (applicationOrderPriority != null) {
-            return applicationOrderPriority.intValue();
+            return applicationOrderPriority;
         }
 
         Class<?> clazz = obj instanceof Bean ? ((Bean<?>) obj).getBeanClass() : obj.getClass();
@@ -2510,7 +2512,7 @@ public class BeanManagerImpl implements BeanManager {
         if (applicationOrder < 0) {
             return null;
         }
-        return Integer.valueOf(Integer.MAX_VALUE - applicationOrder);
+        return Integer.MAX_VALUE - applicationOrder;
     }
 
     private int getDecoratorPriority(Decorator<?> decorator) {
@@ -2569,7 +2571,7 @@ public class BeanManagerImpl implements BeanManager {
     }
 
     private Integer extractPriorityFromAnnotations(Annotation[] annotations) {
-        return extractPriorityFromAnnotations(annotations, new HashSet<Class<? extends Annotation>>());
+        return extractPriorityFromAnnotations(annotations, new HashSet<>());
     }
 
     private Integer extractPriorityFromAnnotations(Annotation[] annotations,
@@ -2593,7 +2595,7 @@ public class BeanManagerImpl implements BeanManager {
                 }
             }
 
-            if (!annotationType.isAnnotationPresent(jakarta.enterprise.inject.Stereotype.class)) {
+            if (!hasStereotypeAnnotation(annotationType)) {
                 continue;
             }
             if (!visitedStereotypes.add(annotationType)) {
@@ -2680,7 +2682,7 @@ public class BeanManagerImpl implements BeanManager {
      */
     private <T> Interceptor<T> createInterceptor(InterceptorInfo info) {
         final Class<?> interceptorClass = info.getInterceptorClass();
-        final Set<Annotation> bindings = new HashSet<Annotation>(info.getInterceptorBindings());
+        final Set<Annotation> bindings = new HashSet<>(info.getInterceptorBindings());
         return new Interceptor<T>() {
             @Override
             public Set<Annotation> getInterceptorBindings() {
@@ -2772,7 +2774,7 @@ public class BeanManagerImpl implements BeanManager {
 
             @Override
             public Set<Type> getTypes() {
-                Set<Type> types = new HashSet<Type>();
+                Set<Type> types = new HashSet<>();
                 types.add(interceptorClass);
                 types.add(Object.class);
                 return Collections.unmodifiableSet(types);
@@ -2780,7 +2782,7 @@ public class BeanManagerImpl implements BeanManager {
 
             @Override
             public Set<Annotation> getQualifiers() {
-                Set<Annotation> qualifiers = new HashSet<Annotation>();
+                Set<Annotation> qualifiers = new HashSet<>();
                 qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
                 qualifiers.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
                 return qualifiers;
@@ -2845,7 +2847,7 @@ public class BeanManagerImpl implements BeanManager {
 
             @Override
             public Set<Annotation> getQualifiers() {
-                return Collections.<Annotation>singleton(jakarta.enterprise.inject.Default.Literal.INSTANCE);
+                return Collections.singleton(jakarta.enterprise.inject.Default.Literal.INSTANCE);
             }
 
             @Override
@@ -2860,7 +2862,7 @@ public class BeanManagerImpl implements BeanManager {
 
             @Override
             public Set<Type> getTypes() {
-                return new HashSet<Type>(Arrays.<Type>asList(
+                return new HashSet<>(Arrays.<Type>asList(
                         info.getDecoratorClass(),
                         jakarta.enterprise.inject.spi.Decorator.class,
                         Object.class));
@@ -2913,24 +2915,10 @@ public class BeanManagerImpl implements BeanManager {
             dependentInstances.clear();
         }
 
-        public void addDependentInstance(Object instance) {
-            if (instance != null) {
-                dependentInstances.add(new DependentEntry(null, instance, null));
-            }
-        }
-
         public void addDependentInstance(Bean<Object> bean, Object instance, CreationalContext<Object> creationalContext) {
             if (bean != null && instance != null) {
                 dependentInstances.add(new DependentEntry(bean, instance, creationalContext));
             }
-        }
-
-        public List<Object> getDependentInstances() {
-            List<Object> instances = new ArrayList<>(dependentInstances.size());
-            for (DependentEntry entry : dependentInstances) {
-                instances.add(entry.instance);
-            }
-            return Collections.unmodifiableList(instances);
         }
 
         private static class DependentEntry {
@@ -3013,7 +3001,7 @@ public class BeanManagerImpl implements BeanManager {
             this.extension = extension;
             this.beanClass = (Class<T>) extension.getClass();
             this.types = collectTypes(beanClass);
-            this.qualifiers = new HashSet<Annotation>();
+            this.qualifiers = new HashSet<>();
             this.qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
             this.qualifiers.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
             this.stereotypes = Collections.emptySet();
@@ -3059,10 +3047,6 @@ public class BeanManagerImpl implements BeanManager {
             return false;
         }
 
-        public boolean isNullable() {
-            return false;
-        }
-
         @Override
         public T create(CreationalContext<T> creationalContext) {
             return extension;
@@ -3079,13 +3063,11 @@ public class BeanManagerImpl implements BeanManager {
         }
 
         private static Set<Type> collectTypes(Class<?> clazz) {
-            Set<Type> collected = new HashSet<Type>();
+            Set<Type> collected = new HashSet<>();
             Class<?> current = clazz;
             while (current != null && current != Object.class) {
                 collected.add(current);
-                for (Class<?> iface : current.getInterfaces()) {
-                    collected.add(iface);
-                }
+                collected.addAll(Arrays.asList(current.getInterfaces()));
                 current = current.getSuperclass();
             }
             collected.add(Object.class);
@@ -3097,19 +3079,20 @@ public class BeanManagerImpl implements BeanManager {
 
     /**
      * Extracts the bean name from an Annotated element.
-     * Returns empty string if no @Named annotation is present.
+     * Returns an empty string if no @Named annotation is present.
      */
     private String extractName(jakarta.enterprise.inject.spi.Annotated annotated) {
-        if (annotated.isAnnotationPresent(jakarta.inject.Named.class)) {
-            jakarta.inject.Named named = annotated.getAnnotation(jakarta.inject.Named.class);
-            String value = named.value();
-            if (value != null && !value.trim().isEmpty()) {
-                return value.trim();
-            }
-            // Default name: simple class name with first character lower-cased
-            if (annotated instanceof jakarta.enterprise.inject.spi.AnnotatedType) {
-                Class<?> clazz = ((jakarta.enterprise.inject.spi.AnnotatedType<?>) annotated).getJavaClass();
-                return decapitalize(clazz.getSimpleName());
+        for (Annotation annotation : annotated.getAnnotations()) {
+            if (NAMED.matches(annotation.annotationType())) {
+                String value = extractStringAttribute(annotation);
+                if (value != null && !value.trim().isEmpty()) {
+                    return value.trim();
+                }
+                // Default name: simple class name with first character lower-cased
+                if (annotated instanceof jakarta.enterprise.inject.spi.AnnotatedType) {
+                    Class<?> clazz = ((jakarta.enterprise.inject.spi.AnnotatedType<?>) annotated).getJavaClass();
+                    return decapitalize(clazz.getSimpleName());
+                }
             }
         }
         return "";
@@ -3207,12 +3190,25 @@ public class BeanManagerImpl implements BeanManager {
         return Character.toLowerCase(s.charAt(0)) + s.substring(1);
     }
 
+    private String extractStringAttribute(Annotation annotation) {
+        if (annotation == null) {
+            return null;
+        }
+        try {
+            Method method = annotation.annotationType().getMethod("value");
+            Object raw = method.invoke(annotation);
+            return raw == null ? null : raw.toString();
+        } catch (ReflectiveOperationException ignored) {
+            return null;
+        }
+    }
+
     /**
      * Checks if an annotation type is a scope annotation.
      */
     private boolean isScopeAnnotationType(Class<? extends Annotation> annotationType) {
-        return annotationType.isAnnotationPresent(jakarta.inject.Scope.class) ||
-               annotationType.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
+        return hasScopeAnnotation(annotationType) ||
+               hasNormalScopeAnnotation(annotationType) ||
                knowledgeBase.isRegisteredScope(annotationType);
     }
 
@@ -3220,7 +3216,7 @@ public class BeanManagerImpl implements BeanManager {
      * Checks if an annotation type is a stereotype annotation.
      */
     private boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
-        return annotationType.isAnnotationPresent(jakarta.enterprise.inject.Stereotype.class);
+        return hasStereotypeAnnotation(annotationType);
     }
 
     // ==================== Container Internal Methods ====================

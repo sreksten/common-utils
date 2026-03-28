@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
+import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.BeanContainer;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -40,12 +41,7 @@ import java.util.stream.Stream;
  */
 public class CDIImpl extends CDI<Object> {
 
-    private static final BooleanSupplier ALWAYS_ALLOWED = new BooleanSupplier() {
-        @Override
-        public boolean getAsBoolean() {
-            return true;
-        }
-    };
+    private static final BooleanSupplier ALWAYS_ALLOWED = () -> true;
 
     private static final Set<String> BEAN_CONTAINER_METHOD_SIGNATURES = beanContainerMethodSignatures();
 
@@ -76,7 +72,7 @@ public class CDIImpl extends CDI<Object> {
     /**
      * Returns the BeanManager for programmatic CDI access.
      *
-     * <p>Application components which cannot obtain a BeanManager reference
+     * <p>Application components which cannot get a BeanManager reference
      * via injection nor JNDI lookup can get the reference from the
      * jakarta.enterprise.inject.spi.CDI class via a static method call:
      * <pre>
@@ -96,7 +92,7 @@ public class CDIImpl extends CDI<Object> {
     // ========================================================================
 
     /**
-     * Obtains a child Instance for the given required type and qualifiers.
+     * Gets a child Instance for the given required type and qualifiers.
      *
      * @param subtype The required type
      * @param qualifiers The required qualifiers
@@ -110,7 +106,7 @@ public class CDIImpl extends CDI<Object> {
     }
 
     /**
-     * Obtains a child Instance for the given required type and qualifiers.
+     * Gets a child Instance for the given required type and qualifiers.
      *
      * @param subtype The required type
      * @param qualifiers The required qualifiers
@@ -178,7 +174,7 @@ public class CDIImpl extends CDI<Object> {
      * @return Iterator of matching bean instances
      */
     @Override
-    public Iterator<Object> iterator() {
+    public @Nonnull Iterator<Object> iterator() {
         ensurePortableAccessWindow();
         return rootInstance().iterator();
     }
@@ -195,7 +191,7 @@ public class CDIImpl extends CDI<Object> {
     }
 
     /**
-     * Obtains an Instance.Handle for the bean instance.
+     * Gets an Instance.Handle for the bean instance.
      *
      * @return The Handle
      */
@@ -206,7 +202,7 @@ public class CDIImpl extends CDI<Object> {
     }
 
     /**
-     * Obtains Handles for all beans that match the required type and qualifiers.
+     * Gets Handles for all beans that match the required type and qualifiers.
      *
      * @return Iterable of Handles
      */
@@ -239,7 +235,7 @@ public class CDIImpl extends CDI<Object> {
     }
 
     /**
-     * Obtains a child Instance for the given qualifiers.
+     * Gets a child Instance for the given qualifiers.
      *
      * @param qualifiers The qualifiers
      * @return The child Instance
@@ -272,19 +268,16 @@ public class CDIImpl extends CDI<Object> {
     }
 
     private BeanManager createLiteBeanManagerView(final BeanManager delegate) {
-        InvocationHandler handler = new InvocationHandler() {
-            @Override
-            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                if (method.getDeclaringClass() == Object.class) {
-                    return method.invoke(delegate, args);
-                }
-                if (!isBeanContainerMethod(method)) {
-                    throw new NonPortableBehaviourException(
-                        "Invoking BeanManager methods not inherited from BeanContainer is non-portable in CDI Lite: " +
-                            method.toString());
-                }
+        InvocationHandler handler = (proxy, method, args) -> {
+            if (method.getDeclaringClass() == Object.class) {
                 return method.invoke(delegate, args);
             }
+            if (!isBeanContainerMethod(method)) {
+                throw new NonPortableBehaviourException(
+                    "Invoking BeanManager methods not inherited from BeanContainer is non-portable in CDI Lite: " +
+                            method);
+            }
+            return method.invoke(delegate, args);
         };
         return (BeanManager) Proxy.newProxyInstance(
             BeanManager.class.getClassLoader(),
@@ -294,7 +287,7 @@ public class CDIImpl extends CDI<Object> {
     }
 
     private static Set<String> beanContainerMethodSignatures() {
-        Set<String> signatures = new HashSet<String>();
+        Set<String> signatures = new HashSet<>();
         for (Method method : BeanContainer.class.getMethods()) {
             signatures.add(signatureOf(method));
         }

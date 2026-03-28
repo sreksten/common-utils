@@ -10,6 +10,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -51,7 +52,7 @@ public class InjectionPointConfiguratorImpl implements InjectionPointConfigurato
     public InjectionPointConfigurator addQualifiers(Annotation... qualifiers) {
         if (qualifiers != null) {
             Arrays.stream(qualifiers)
-                  .filter(q -> q != null)
+                  .filter(Objects::nonNull)
                   .forEach(this.qualifiers::add);
         }
         return this;
@@ -61,7 +62,7 @@ public class InjectionPointConfiguratorImpl implements InjectionPointConfigurato
     public InjectionPointConfigurator addQualifiers(Set<Annotation> qualifiers) {
         if (qualifiers != null) {
             qualifiers.stream()
-                      .filter(q -> q != null)
+                      .filter(Objects::nonNull)
                       .forEach(this.qualifiers::add);
         }
         return this;

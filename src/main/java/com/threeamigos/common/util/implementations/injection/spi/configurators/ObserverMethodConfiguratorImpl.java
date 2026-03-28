@@ -27,7 +27,7 @@ import java.util.Set;
  *   <li>Transaction phase via {@link #transactionPhase(TransactionPhase)}</li>
  *   <li>Priority via {@link #priority(int)}</li>
  *   <li>Async flag via {@link #async(boolean)}</li>
- *   <li>Notification callback via {@link #notifyWith(java.util.function.Consumer)}</li>
+ *   <li>Notification callback via {@link #notifyWith(ObserverMethodConfigurator.EventConsumer)}</li>
  * </ul>
  *
  * @param <T> the type of event observed
@@ -164,7 +164,7 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
                 continue;
             }
 
-            if (annotation.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)) {
+            if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
                 resolvedQualifiers.add(annotation);
             }
         }

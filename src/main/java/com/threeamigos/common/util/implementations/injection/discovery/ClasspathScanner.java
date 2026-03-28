@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import jakarta.enterprise.inject.Vetoed;
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 
 import java.io.File;
 import java.io.IOException;
@@ -32,7 +32,7 @@ import java.util.jar.JarFile;
  * separate ClasspathScanner instances.
  *
  * <p><b>Thread Safety:</b> This class is NOT thread-safe. External
- * synchronization is required for concurrent access, or use separate instances
+ * synchronization is required for concurrent access or use separate instances
  * per thread.
  *
  * <p><b>Package Names:</b>
@@ -261,7 +261,7 @@ public class ClasspathScanner {
         try {
             String packageInfoClass = packageName + ".package-info";
             Class<?> pkgInfo = Class.forName(packageInfoClass, false, classLoader);
-            return pkgInfo.isAnnotationPresent(Vetoed.class);
+            return AnnotationsEnum.hasVetoedAnnotation(pkgInfo);
         } catch (ClassNotFoundException e) {
             // No package-info.java exists - package is not vetoed
             return false;
@@ -283,7 +283,7 @@ public class ClasspathScanner {
      * Extracts the package name from a fully qualified class name.
      *
      * @param className the fully qualified class name
-     * @return the package name, or empty string if in default package
+     * @return the package name, or empty string if in the default package
      */
     private String getPackageFromClassName(String className) {
         int lastDot = className.lastIndexOf('.');

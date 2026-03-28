@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.injection.discovery;
 
 /**
  * Consumer for classes discovered during classpath scanning.
- * Implementations process discovered classes and determine if they are CDI beans.
+ * Implementations of this interface process discovered classes and determine if they are CDI beans.
  */
 public interface ClassConsumer {
 

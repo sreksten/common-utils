@@ -31,17 +31,6 @@ public class ProcessProducerMethodImpl<T, X> extends ProcessProducerImpl<T, X>
     private final AnnotatedParameter<T> disposerParameter;
 
     /**
-     * Constructor for a producer method without a disposer.
-     */
-    public ProcessProducerMethodImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<X> bean,
-                                     AnnotatedMethod<T> annotatedMethod, Producer<X> producer) {
-        super(messageHandler, knowledgeBase, Phase.PROCESS_PRODUCER_METHOD, annotatedMethod, producer);
-        this.bean = bean;
-        this.annotatedMethod = annotatedMethod;
-        this.disposerParameter = null;
-    }
-
-    /**
      * Constructor for a producer method with a disposer.
      */
     public ProcessProducerMethodImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<X> bean,

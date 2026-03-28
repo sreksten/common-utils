@@ -32,7 +32,6 @@ import jakarta.enterprise.inject.Stereotype;
 
 import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
-import java.lang.annotation.Inherited;
 import java.lang.annotation.Target;
 import java.lang.reflect.*;
 import java.util.*;
@@ -117,7 +116,7 @@ public class CDI41BeanValidator {
         validateStereotypeNonPortableDeclarations(clazz);
         // CDI 4.1 §2.8.1.6: target compatibility for stereotypes-with-stereotypes.
         validateStereotypeTargetCompatibility(clazz);
-        // CDI Lite §8: only interceptor binding based interception is portable.
+        // CDI Lite §8: only interceptor-binding-based interception is portable.
         validateNonPortableInterceptionForms(clazz);
 
         // 1) Bean class eligibility (managed bean type)
@@ -621,9 +620,9 @@ public class CDI41BeanValidator {
             return;
         }
 
-        Named named = stereotypeType.getAnnotation(Named.class);
+        Annotation named = getNamedAnnotation(stereotypeType);
         if (named != null) {
-            String value = named.value();
+            String value = readNamedValue(named);
             if (value != null && !value.trim().isEmpty()) {
                 throw new DefinitionException(stereotypeType.getName() +
                         ": stereotype declares non-empty @Named(\"" + value + "\")");
@@ -768,7 +767,7 @@ public class CDI41BeanValidator {
     }
 
     private Set<ElementType> declaredTargetElements(Class<? extends Annotation> annotationType) {
-        Target target = annotationType.getAnnotation(Target.class);
+        Target target = hasTargetAnnotation(annotationType) ? getTargetAnnotation(annotationType) : null;
         if (target == null || target.value() == null) {
             return Collections.emptySet();
         }
@@ -925,7 +924,7 @@ public class CDI41BeanValidator {
     }
 
     private boolean isInheritedFromSuperclass(Class<?> clazz, Class<? extends Annotation> annotationType) {
-        if (!annotationType.isAnnotationPresent(Inherited.class)) {
+        if (!hasInheritedAnnotation(annotationType)) {
             return false;
         }
 
@@ -1001,9 +1000,9 @@ public class CDI41BeanValidator {
             }
         }
 
-        Named named = stereotypeAnnotation.getAnnotation(Named.class);
+        Annotation named = getNamedAnnotation(stereotypeAnnotation);
         if (named != null) {
-            return defaultedBeanName(named.value(), beanClass);
+            return defaultedBeanName(readNamedValue(named), beanClass);
         }
 
         for (Annotation meta : stereotypeAnnotation.getAnnotations()) {
@@ -1087,7 +1086,7 @@ public class CDI41BeanValidator {
             Class<? extends Annotation> declaredScope = firstDeclaredScope(current);
             if (declaredScope != null) {
                 // A scope declaration on an intermediate class blocks farther ancestors.
-                return declaredScope.isAnnotationPresent(Inherited.class) ? declaredScope : null;
+                return hasInheritedAnnotation(declaredScope) ? declaredScope : null;
             }
             current = current.getSuperclass();
         }
@@ -1212,17 +1211,17 @@ public class CDI41BeanValidator {
     // -----------------------
 
     private Constructor<?> findBeanConstructor(Class<?> clazz) {
-        List<Constructor<?>> injectCtors = Arrays.stream(clazz.getDeclaredConstructors())
+        List<Constructor<?>> constructors = Arrays.stream(clazz.getDeclaredConstructors())
                 .filter(AnnotationsEnum::hasInjectAnnotation)
                 .collect(Collectors.toList());
 
-        if (injectCtors.size() > 1) {
+        if (constructors.size() > 1) {
             knowledgeBase.addDefinitionError(clazz.getName() + ": declares more than one constructor annotated with @Inject");
             return null;
         }
 
-        if (injectCtors.size() == 1) {
-            Constructor<?> c = injectCtors.get(0);
+        if (constructors.size() == 1) {
+            Constructor<?> c = constructors.get(0);
 
             // Conservative CDI rule: bean constructor must not be private.
             if (Modifier.isPrivate(c.getModifiers())) {
@@ -1392,7 +1391,7 @@ public class CDI41BeanValidator {
     private boolean hasValidInjectionParameters(Parameter[] parameters, String owner) {
         boolean valid = true;
         for (Parameter p : parameters) {
-            // @Disposes/@Observes etc. are not "injection" parameters; if present in wrong place, handled elsewhere.
+            // @Disposes/@Observes etc. are not "injection" parameters; if present in the wrong place, handled elsewhere.
             if (hasDisposesAnnotation(p)) {
                 // handled at producer validation
                 continue;
@@ -1986,7 +1985,7 @@ public class CDI41BeanValidator {
             return false;
         }
         Executable executable = ((Parameter) injectionPoint).getDeclaringExecutable();
-        return executable instanceof Method && hasProducesAnnotation((Method) executable);
+        return executable instanceof Method && hasProducesAnnotation(executable);
     }
 
     private boolean validateDecoratorMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter) {
@@ -1997,7 +1996,7 @@ public class CDI41BeanValidator {
         }
 
         Class<?> declaringClass = declaringClassOf(injectionPoint);
-        if (declaringClass == null || !hasDecoratorAnnotation(declaringClass)) {
+        if (!hasDecoratorAnnotation(declaringClass)) {
             knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
                     ": Decorator metadata and @Decorated Bean metadata may only be injected into decorator instances");
             return false;
@@ -2033,14 +2032,14 @@ public class CDI41BeanValidator {
         }
 
         for (Field field : decoratorClass.getDeclaredFields()) {
-            if (field.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+            if (hasDelegateAnnotation(field)) {
                 return field.getGenericType();
             }
         }
 
         for (Constructor<?> constructor : decoratorClass.getDeclaredConstructors()) {
             for (Parameter parameter : constructor.getParameters()) {
-                if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                if (hasDelegateAnnotation(parameter)) {
                     return parameter.getParameterizedType();
                 }
             }
@@ -2051,7 +2050,7 @@ public class CDI41BeanValidator {
                 continue;
             }
             for (Parameter parameter : method.getParameters()) {
-                if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                if (hasDelegateAnnotation(parameter)) {
                     return parameter.getParameterizedType();
                 }
             }
@@ -2186,13 +2185,13 @@ public class CDI41BeanValidator {
         }
 
         // Producer member-level @Priority enables member alternatives.
-        Priority priority = element.getAnnotation(Priority.class);
+        Integer priority = getPriorityValue(element);
         if (priority != null) {
             return true;
         }
 
         // Class-level checks (bean class itself or producer declaring class).
-        if (declaringClass != null && isAlternativeEnabledForClass(declaringClass)) {
+        if (isAlternativeEnabledForClass(declaringClass)) {
             return true;
         }
 
@@ -2282,7 +2281,7 @@ public class CDI41BeanValidator {
      */
     private void validateManagedBeanPublicFieldScopeConstraint(Class<?> clazz,
                                                                Class<? extends Annotation> scopeAnnotation) {
-        if (scopeAnnotation == null || !isNormalScope(scopeAnnotation)) {
+        if (!isNormalScope(scopeAnnotation)) {
             return;
         }
 
@@ -2338,8 +2337,7 @@ public class CDI41BeanValidator {
             return true;
         }
 
-        return scopeAnnotation.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
-                scopeAnnotation.isAnnotationPresent(javax.enterprise.context.NormalScope.class);
+        return hasNormalScopeAnnotation(scopeAnnotation);
     }
 
     private void applySpecializationInheritance(BeanImpl<?> bean, Class<?> clazz, BeanArchiveMode beanArchiveMode) {
@@ -2352,7 +2350,7 @@ public class CDI41BeanValidator {
             return;
         }
 
-        Set<Annotation> mergedQualifiers = new HashSet<Annotation>(bean.getQualifiers());
+        Set<Annotation> mergedQualifiers = new HashSet<>(bean.getQualifiers());
         String inheritedName = "";
 
         for (Class<?> ancestor : specializedAncestors) {
@@ -2365,7 +2363,7 @@ public class CDI41BeanValidator {
             }
 
             BeanTypesExtractor.ExtractionResult ancestorTypes = beanTypesExtractor.extractManagedBeanTypes(ancestor);
-            Set<Type> missingTypes = new HashSet<Type>(ancestorTypes.getTypes());
+            Set<Type> missingTypes = new HashSet<>(ancestorTypes.getTypes());
             missingTypes.removeAll(bean.getTypes());
             if (!missingTypes.isEmpty()) {
                 knowledgeBase.addDefinitionError(clazz.getName() +
@@ -2388,7 +2386,7 @@ public class CDI41BeanValidator {
     }
 
     private List<Class<?>> specializationAncestors(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
-        List<Class<?>> ancestors = new ArrayList<Class<?>>();
+        List<Class<?>> ancestors = new ArrayList<>();
         Class<?> direct = clazz.getSuperclass();
         if (direct == null || Object.class.equals(direct)) {
             return ancestors;
@@ -2484,7 +2482,7 @@ public class CDI41BeanValidator {
     }
 
     private void validateQualifiers(Annotation[] annotations, String location) {
-        // CDI allows multiple qualifiers, but they must actually be qualifiers (meta-annotated @Qualifier)
+        // CDI allows multiple qualifiers, but they must actually be qualifiers (meta-annotated @Qualifier),
         // and you can't repeat the *same* qualifier type twice.
         List<Annotation> qualifiers = Arrays.stream(annotations)
                 .filter(a -> isQualifierAnnotationType(a.annotationType()))
@@ -2558,7 +2556,7 @@ public class CDI41BeanValidator {
     }
 
     /**
-     * Validates that a producer type is legal according to CDI 4.1 Section 3.3.2.
+     * Validates that a producer type is legal, according to CDI 4.1 Section 3.3.2.
      * <p>
      * Rules:
      * <ul>
@@ -2641,7 +2639,7 @@ public class CDI41BeanValidator {
             return;
         }
 
-        Class<? extends Annotation> scope = extractScope(method, Dependent.class);
+        Class<? extends Annotation> scope = extractScope(method);
         if (scope == null ||
                 Dependent.class.equals(scope) ||
                 "javax.enterprise.context.Dependent".equals(scope.getName())) {
@@ -2666,7 +2664,7 @@ public class CDI41BeanValidator {
             return;
         }
 
-        Class<? extends Annotation> scope = extractScope(field, Dependent.class);
+        Class<? extends Annotation> scope = extractScope(field);
         if (scope == null ||
                 Dependent.class.equals(scope) ||
                 "javax.enterprise.context.Dependent".equals(scope.getName())) {
@@ -3078,7 +3076,7 @@ public class CDI41BeanValidator {
             // Set bean attributes from producer method annotations
             producerBean.setName(extractProducerName(producerMethod));
             producerBean.setQualifiers(extractQualifiers(producerMethod));
-            producerBean.setScope(extractScope(producerMethod, Dependent.class));
+            producerBean.setScope(extractScope(producerMethod));
             producerBean.setStereotypes(extractStereotypes(producerMethod));
 
             BeanTypesExtractor.ExtractionResult producerTypes =
@@ -3106,7 +3104,7 @@ public class CDI41BeanValidator {
             // Set bean attributes from producer field annotations
             producerBean.setName(extractProducerName(producerField));
             producerBean.setQualifiers(extractQualifiers(producerField));
-            producerBean.setScope(extractScope(producerField, Dependent.class));
+            producerBean.setScope(extractScope(producerField));
             producerBean.setStereotypes(extractStereotypes(producerField));
 
             BeanTypesExtractor.ExtractionResult producerTypes =
@@ -3153,9 +3151,9 @@ public class CDI41BeanValidator {
      * Extracts producer name from @Named annotation, or returns empty string.
      */
     private String extractProducerName(AnnotatedElement element) {
-        Named named = element.getAnnotation(Named.class);
+        Annotation named = getNamedAnnotation(element);
         if (named != null) {
-            String value = named.value();
+            String value = readNamedValue(named);
             if (value != null && !value.isEmpty()) {
                 return value;
             }
@@ -3204,14 +3202,14 @@ public class CDI41BeanValidator {
     /**
      * Extracts scope from an annotated element, or returns default scope.
      */
-    private Class<? extends Annotation> extractScope(AnnotatedElement element, Class<? extends Annotation> defaultScope) {
+    private Class<? extends Annotation> extractScope(AnnotatedElement element) {
         List<Class<? extends Annotation>> directScopes = new ArrayList<>();
         for (Annotation ann : element.getAnnotations()) {
             Class<? extends Annotation> annotationType = ann.annotationType();
-            if (hasMetaAnnotation(annotationType, Scope.class) ||
+            if (hasMetaAnnotation(annotationType, javax.inject.Scope.class) ||
                 hasMetaAnnotation(annotationType, jakarta.inject.Scope.class) ||
-                hasMetaAnnotation(annotationType, NormalScope.class) ||
-                hasMetaAnnotation(annotationType, javax.enterprise.context.NormalScope.class)) {
+                hasMetaAnnotation(annotationType, javax.enterprise.context.NormalScope.class) ||
+                hasMetaAnnotation(annotationType, jakarta.enterprise.context.NormalScope.class)) {
                 directScopes.add(annotationType);
             }
         }
@@ -3253,7 +3251,7 @@ public class CDI41BeanValidator {
             return inheritedScope;
         }
 
-        return defaultScope;
+        return Dependent.class;
     }
 
     private String describeAnnotatedElement(AnnotatedElement element) {
@@ -3270,7 +3268,7 @@ public class CDI41BeanValidator {
     }
 
     /**
-     * Finds the disposer method for a producer member by matching disposed parameter type and qualifiers.
+     * Finds the disposer method for a producer member by matching a disposed parameter type and qualifiers.
      */
     private Method findDisposerForProducer(Class<?> clazz,
                                            Type producerType,
@@ -3402,13 +3400,13 @@ public class CDI41BeanValidator {
      * Populates injection metadata in BeanImpl for use during bean creation.
      * This includes:
      * - @Inject constructor (or no-args constructor)
-     * - @Inject fields (from entire class hierarchy)
-     * - @Inject methods (from entire class hierarchy, excluding overridden)
+     * - @Inject fields (from the entire class hierarchy)
+     * - @Inject methods (from the entire class hierarchy, excluding overridden)
      * - @PostConstruct method
      * - @PreDestroy method
      */
     private <T> void populateInjectionMetadata(BeanImpl<T> bean, Class<T> clazz) {
-        // 1. Find and set constructor per JSR-330 rules (only in the bean class itself)
+        // 1. Find and set a constructor per JSR-330 rules (only in the bean class itself)
         // - If there's an @Inject constructor, use it
         // - Otherwise, leave null (BeanImpl will use no-args constructor)
         Constructor<T> injectConstructor = null;
@@ -3449,22 +3447,22 @@ public class CDI41BeanValidator {
             currentClass = currentClass.getSuperclass();
         }
 
-        // 4. Find all @PostConstruct methods in hierarchy (superclass → subclass order)
+        // 4. Find all @PostConstruct methods in the hierarchy (superclass → subclass order)
         // Per Interceptors Specification 1.2+: All @PostConstruct methods in the hierarchy are invoked
         // unless overridden by a subclass
         findAllLifecycleMethods(clazz, PostConstruct.class, bean, true);
 
-        // 5. Find all @PreDestroy methods in hierarchy (superclass → subclass order during discovery)
+        // 5. Find all @PreDestroy methods in the hierarchy (superclass → subclass order during discovery)
         // Per Interceptors Specification 1.2+: All @PreDestroy methods in the hierarchy are invoked
         // unless overridden by a subclass. They will be executed in reverse order (subclass → superclass).
         findAllLifecycleMethods(clazz, PreDestroy.class, bean, false);
 
-        // 6. Find all @PrePassivate methods in hierarchy for passivating scopes
+        // 6. Find all @PrePassivate methods in the hierarchy for passivating scopes
         // NOTE: @PrePassivate is an EJB annotation (jakarta.ejb), NOT CDI 4.1 standard.
         // This is optional support for EJB integration. CDI 4.1 uses writeObject()/readObject().
         findAllPassivationMethods(clazz, bean, true);
 
-        // 7. Find all @PostActivate methods in hierarchy for passivating scopes
+        // 7. Find all @PostActivate methods in the hierarchy for passivating scopes
         // NOTE: @PostActivate is an EJB annotation (jakarta.ejb), NOT CDI 4.1 standard.
         // This is optional support for EJB integration. CDI 4.1 uses writeObject()/readObject().
         findAllPassivationMethods(clazz, bean, false);
@@ -3622,7 +3620,7 @@ public class CDI41BeanValidator {
      *   <li>{@code private void readObject(ObjectInputStream)} instead of @PostActivate</li>
      * </ul>
      * <p>
-     * <b>EJB Callback Behavior (when jakarta.ejb is on classpath):</b>
+     * <b>EJB Callback Behavior (when jakarta.ejb is on the classpath):</b>
      * <ul>
      *   <li>@PrePassivate methods are invoked before the session is serialized</li>
      *   <li>@PostActivate methods are invoked after the session is deserialized</li>
@@ -3798,9 +3796,9 @@ public class CDI41BeanValidator {
 
         // Extract priority
         int priority = Integer.MAX_VALUE;
-        Priority priorityAnnotation = clazz.getAnnotation(Priority.class);
-        if (priorityAnnotation != null) {
-            priority = priorityAnnotation.value();
+        Integer declaredPriority = getPriorityValue(clazz);
+        if (declaredPriority != null) {
+            priority = declaredPriority;
         }
 
         // Find interceptor methods
@@ -3874,7 +3872,7 @@ public class CDI41BeanValidator {
      * CDI 4.1 / Jakarta Interceptors 2.2: lifecycle interceptor methods declared
      * on interceptor classes must be non-static, non-final, return void or Object,
      * and accept exactly one InvocationContext parameter.
-     *
+     * <p>
      * Note: lifecycle methods declared on target beans follow different rules
      * (void, no-args). This validator is only used for interceptor classes.
      */
@@ -3888,7 +3886,7 @@ public class CDI41BeanValidator {
 
     /**
      * Extracts interceptor binding annotations from the class.
-     * An interceptor binding is an annotation that is itself annotated with @InterceptorBinding.
+     * An interceptor binding is an annotation itself annotated with @InterceptorBinding.
      */
     private Set<Annotation> extractInterceptorBindings(Class<?> clazz) {
         Set<Annotation> bindings = new HashSet<>();
@@ -3904,7 +3902,7 @@ public class CDI41BeanValidator {
      * Checks if an annotation type is an interceptor binding.
      */
     private boolean isInterceptorBinding(Class<? extends Annotation> annotationType) {
-        return annotationType.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
+        return hasInterceptorBindingAnnotation(annotationType) ||
                 knowledgeBase.isRegisteredInterceptorBinding(annotationType);
     }
 
@@ -3915,11 +3913,11 @@ public class CDI41BeanValidator {
 
     /**
      * Finds the @AroundInvoke method in the interceptor class.
-     * CDI spec: must have signature Object method(InvocationContext) throws Exception
+     * CDI spec: must have a signature Object method(InvocationContext) throws Exception
      */
     private Method findAroundInvokeMethod(Class<?> clazz) {
         for (Method method : getAllMethods(clazz)) {
-            if (method.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+            if (hasAroundInvokeAnnotation(method)) {
                 return method;
             }
         }
@@ -3928,11 +3926,11 @@ public class CDI41BeanValidator {
 
     /**
      * Finds the @AroundConstruct method in the interceptor class.
-     * CDI spec: must have signature void method(InvocationContext) throws Exception
+     * CDI spec: must have a signature void method (InvocationContext) throws Exception
      */
     private Method findAroundConstructMethod(Class<?> clazz) {
         for (Method method : getAllMethods(clazz)) {
-            if (method.isAnnotationPresent(jakarta.interceptor.AroundConstruct.class)) {
+            if (hasAroundConstructAnnotation(method)) {
                 return method;
             }
         }
@@ -3944,7 +3942,7 @@ public class CDI41BeanValidator {
      */
     private Method findPostConstructMethod(Class<?> clazz) {
         for (Method method : getAllMethods(clazz)) {
-            if (method.isAnnotationPresent(PostConstruct.class)) {
+            if (hasPostConstructAnnotation(method)) {
                 return method;
             }
         }
@@ -3956,7 +3954,7 @@ public class CDI41BeanValidator {
      */
     private Method findPreDestroyMethod(Class<?> clazz) {
         for (Method method : getAllMethods(clazz)) {
-            if (method.isAnnotationPresent(PreDestroy.class)) {
+            if (hasPreDestroyAnnotation(method)) {
                 return method;
             }
         }
@@ -3996,9 +3994,9 @@ public class CDI41BeanValidator {
     private void validateAndRegisterDecorator(Class<?> clazz) {
         // Extract priority
         int priority = Integer.MAX_VALUE;
-        Priority priorityAnnotation = clazz.getAnnotation(Priority.class);
+        Integer priorityAnnotation = getPriorityValue(clazz);
         if (priorityAnnotation != null) {
-            priority = priorityAnnotation.value();
+            priority = priorityAnnotation;
         }
 
         // Find the @Delegate injection point
@@ -4040,7 +4038,7 @@ public class CDI41BeanValidator {
             return;
         }
 
-        Set<String> decoratedMethodSignatures = new HashSet<String>();
+        Set<String> decoratedMethodSignatures = new HashSet<>();
         for (Type type : decoratedTypes) {
             Class<?> decoratedClass = rawTypeOf(type);
             if (decoratedClass == null) {
@@ -4109,7 +4107,7 @@ public class CDI41BeanValidator {
     private InjectionPoint findDelegateInjectionPoint(Class<?> clazz) {
         // Check fields
         for (Field field : clazz.getDeclaredFields()) {
-            if (field.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+            if (hasDelegateAnnotation(field)) {
                 return tryCreateInjectionPoint(field, null);
             }
         }
@@ -4117,7 +4115,7 @@ public class CDI41BeanValidator {
         // Check constructor parameters
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
             for (Parameter parameter : constructor.getParameters()) {
-                if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                if (hasDelegateAnnotation(parameter)) {
                     return tryCreateInjectionPoint(parameter, null);
                 }
             }
@@ -4127,7 +4125,7 @@ public class CDI41BeanValidator {
         for (Method method : clazz.getDeclaredMethods()) {
             if (hasInjectAnnotation(method)) {
                 for (Parameter parameter : method.getParameters()) {
-                    if (parameter.isAnnotationPresent(jakarta.decorator.Delegate.class)) {
+                    if (hasDelegateAnnotation(parameter)) {
                         return tryCreateInjectionPoint(parameter, null);
                     }
                 }
@@ -4142,8 +4140,8 @@ public class CDI41BeanValidator {
      * The decorated types are the interfaces/classes that the decorator implements/extends.
      */
     private Set<Type> extractDecoratedTypes(Class<?> clazz, InjectionPoint delegateInjectionPoint) {
-        Set<Type> decoratedTypes = new HashSet<Type>();
-        collectInterfaceDecoratedTypes(clazz, decoratedTypes, new HashSet<Type>());
+        Set<Type> decoratedTypes = new HashSet<>();
+        collectInterfaceDecoratedTypes(clazz, decoratedTypes, new HashSet<>());
         decoratedTypes.removeIf(t -> java.io.Serializable.class.equals(rawTypeOf(t)));
         return decoratedTypes;
     }
@@ -4153,8 +4151,8 @@ public class CDI41BeanValidator {
             return;
         }
 
-        for (Type iface : type.getGenericInterfaces()) {
-            collectInterfaceDecoratedTypes(iface, decoratedTypes, visited);
+        for (Type t : type.getGenericInterfaces()) {
+            collectInterfaceDecoratedTypes(t, decoratedTypes, visited);
         }
 
         collectInterfaceDecoratedTypes(type.getSuperclass(), decoratedTypes, visited);
@@ -4209,7 +4207,7 @@ public class CDI41BeanValidator {
             return true;
         }
 
-        Type viewOnDecoratedRaw = findTypeInHierarchy(delegateType, decoratedRaw, new HashSet<Type>());
+        Type viewOnDecoratedRaw = findTypeInHierarchy(delegateType, decoratedRaw, new HashSet<>());
         if (viewOnDecoratedRaw == null) {
             return false;
         }
@@ -4224,7 +4222,7 @@ public class CDI41BeanValidator {
 
         Class<?> beanRaw = rawTypeOf(beanType);
         Class<?> delegateRaw = rawTypeOf(delegateType);
-        if (beanRaw == null || delegateRaw == null || !delegateRaw.equals(beanRaw)) {
+        if (delegateRaw == null || !delegateRaw.equals(beanRaw)) {
             return false;
         }
 
@@ -4262,7 +4260,7 @@ public class CDI41BeanValidator {
         if (isActualType(beanParam) && isActualType(delegateParam)) {
             Class<?> beanRaw = rawTypeOf(beanParam);
             Class<?> delegateRaw = rawTypeOf(delegateParam);
-            if (beanRaw == null || delegateRaw == null || !beanRaw.equals(delegateRaw)) {
+            if (beanRaw == null || !beanRaw.equals(delegateRaw)) {
                 return false;
             }
             if (beanParam instanceof ParameterizedType && delegateParam instanceof ParameterizedType) {
@@ -4296,12 +4294,12 @@ public class CDI41BeanValidator {
 
     private boolean wildcardMatches(WildcardType wildcard, Type candidate) {
         for (Type upper : wildcard.getUpperBounds()) {
-            if (upper != null && !Object.class.equals(upper) && !isAssignable(candidate, upper)) {
+            if (!Object.class.equals(upper) && !isAssignable(candidate, upper)) {
                 return false;
             }
         }
         for (Type lower : wildcard.getLowerBounds()) {
-            if (lower != null && !isAssignable(lower, candidate)) {
+            if (!isAssignable(lower, candidate)) {
                 return false;
             }
         }
@@ -4348,8 +4346,8 @@ public class CDI41BeanValidator {
             return source;
         }
 
-        for (Type iface : raw.getGenericInterfaces()) {
-            Type found = findTypeInHierarchy(iface, targetRaw, visited);
+        for (Type type : raw.getGenericInterfaces()) {
+            Type found = findTypeInHierarchy(type, targetRaw, visited);
             if (found != null) {
                 return found;
             }

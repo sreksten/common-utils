@@ -1332,7 +1332,7 @@ public class InjectorImpl implements Injector {
      */
     Collection<Annotation> getQualifiers(Parameter param) {
         Collection<Annotation> qualifiers = Arrays.stream(param.getAnnotations())
-                .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
+                .filter(a -> AnnotationsEnum.hasQualifierAnnotation(a.annotationType()))
                 .collect(Collectors.toList());
         if (qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());
@@ -1352,7 +1352,7 @@ public class InjectorImpl implements Injector {
      */
     Collection<Annotation> getQualifiers(Field field) {
         Collection<Annotation> qualifiers = Arrays.stream(field.getAnnotations())
-                .filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class))
+                .filter(a -> AnnotationsEnum.hasQualifierAnnotation(a.annotationType()))
                 .collect(Collectors.toList());
         if (qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());

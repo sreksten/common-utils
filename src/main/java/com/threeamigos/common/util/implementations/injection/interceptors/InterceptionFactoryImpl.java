@@ -205,13 +205,12 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
         try {
             // Use InterceptorAwareProxyGenerator to create a proxy with interceptors
             // The proxy will delegate to the original instance
-            T proxy = proxyGenerator.createProxy(
+
+            return proxyGenerator.createProxy(
                 clazz,
                 instance,
                 methodInterceptorChains
             );
-
-            return proxy;
         } catch (Exception e) {
             throw new IllegalStateException(
                 "Failed to create intercepted instance for " + clazz.getName() +
@@ -225,7 +224,7 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
      *
      * <p>For each public method that can be intercepted:
      * <ol>
-     *   <li>Resolve interceptors for AROUND_INVOKE interception type</li>
+     *   <li>Resolve interceptors for an AROUND_INVOKE interception type</li>
      *   <li>Create an InterceptorChain linking all interceptors</li>
      *   <li>Map the method to its chain</li>
      * </ol>
@@ -312,7 +311,7 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
      */
     private Method findAroundInvokeMethod(Class<?> interceptorClass) {
         for (Method method : interceptorClass.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+            if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasAroundInvokeAnnotation(method)) {
                 return method;
             }
         }
@@ -349,11 +348,7 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
         }
 
         // Skip final methods if configured
-        if (ignoreFinalMethods && java.lang.reflect.Modifier.isFinal(method.getModifiers())) {
-            return true;
-        }
-
-        return false;
+        return ignoreFinalMethods && Modifier.isFinal(method.getModifiers());
     }
 
     private String unproxyableReason(Class<?> rawType) {
@@ -395,7 +390,7 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
     }
 
     /**
-     * Extracts interceptor binding annotations from the AnnotatedType.
+     * Extracts interceptor-binding annotations from the AnnotatedType.
      *
      * <p>An annotation is considered an interceptor binding if:
      * <ul>

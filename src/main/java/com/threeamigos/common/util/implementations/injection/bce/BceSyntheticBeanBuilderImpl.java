@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.injection.bce;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
+import jakarta.annotation.Nullable;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Any;
@@ -11,13 +12,11 @@ import jakarta.enterprise.inject.build.compatible.spi.InvokerInfo;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanDisposer;
-import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.types.Type;
 
 import java.lang.annotation.Annotation;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -33,10 +32,10 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
     private final BceInvokerRegistry invokerRegistry;
     private final Class<T> implementationClass;
 
-    private final Set<java.lang.reflect.Type> types = new LinkedHashSet<java.lang.reflect.Type>();
-    private final Set<Annotation> qualifiers = new LinkedHashSet<Annotation>();
-    private final Set<Class<? extends Annotation>> stereotypes = new LinkedHashSet<Class<? extends Annotation>>();
-    private final Map<String, Object> params = new LinkedHashMap<String, Object>();
+    private final Set<java.lang.reflect.Type> types = new LinkedHashSet<>();
+    private final Set<Annotation> qualifiers = new LinkedHashSet<>();
+    private final Set<Class<? extends Annotation>> stereotypes = new LinkedHashSet<>();
+    private final Map<String, Object> params = new LinkedHashMap<>();
     private Class<? extends Annotation> scope = Dependent.class;
     private boolean alternative;
     private Integer priority;
@@ -160,7 +159,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, boolean value) {
-        return withParamInternal(name, Boolean.valueOf(value));
+        return withParamInternal(name, value);
     }
 
     @Override
@@ -170,7 +169,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, int value) {
-        return withParamInternal(name, Integer.valueOf(value));
+        return withParamInternal(name, value);
     }
 
     @Override
@@ -180,7 +179,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, long value) {
-        return withParamInternal(name, Long.valueOf(value));
+        return withParamInternal(name, value);
     }
 
     @Override
@@ -190,7 +189,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, double value) {
-        return withParamInternal(name, Double.valueOf(value));
+        return withParamInternal(name, value);
     }
 
     @Override
@@ -302,13 +301,12 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         return this;
     }
 
-    @SuppressWarnings("unchecked")
     void complete() {
         if (creatorClass == null) {
             throw new IllegalStateException("Synthetic bean creator is required via createWith()");
         }
 
-        final Map<String, Object> frozenParams = Collections.unmodifiableMap(new LinkedHashMap<String, Object>(params));
+        final Map<String, Object> frozenParams = Collections.unmodifiableMap(new LinkedHashMap<>(params));
         final Class<? extends SyntheticBeanCreator<T>> frozenCreatorClass = creatorClass;
         final Class<? extends SyntheticBeanDisposer<T>> frozenDisposerClass = disposerClass;
 
@@ -324,6 +322,39 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
             }
         };
 
+        BiConsumer<T, CreationalContext<T>> destroyCallback = getCreationalContextBiConsumer(frozenDisposerClass, frozenParams);
+
+        Set<java.lang.reflect.Type> beanTypes = new LinkedHashSet<>(types);
+        if (beanTypes.isEmpty()) {
+            beanTypes.add(implementationClass);
+            beanTypes.add(Object.class);
+        }
+
+        Set<Annotation> beanQualifiers = new LinkedHashSet<>(qualifiers);
+        if (beanQualifiers.isEmpty()) {
+            beanQualifiers.add(Default.Literal.INSTANCE);
+            beanQualifiers.add(Any.Literal.INSTANCE);
+        }
+
+        SyntheticBean<T> bean = new SyntheticBean<>(
+                implementationClass,
+                beanTypes,
+                beanQualifiers,
+                scope,
+                name,
+                null,
+                stereotypes,
+                alternative,
+                priority,
+                createCallback,
+                destroyCallback,
+                Collections.emptySet()
+        );
+        knowledgeBase.addBean(bean);
+    }
+
+    @Nullable
+    private BiConsumer<T, CreationalContext<T>> getCreationalContextBiConsumer(Class<? extends SyntheticBeanDisposer<T>> frozenDisposerClass, Map<String, Object> frozenParams) {
         BiConsumer<T, CreationalContext<T>> destroyCallback = null;
         if (frozenDisposerClass != null) {
             destroyCallback = (instance, ctx) -> {
@@ -339,33 +370,6 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
                 }
             };
         }
-
-        Set<java.lang.reflect.Type> beanTypes = new LinkedHashSet<java.lang.reflect.Type>(types);
-        if (beanTypes.isEmpty()) {
-            beanTypes.add(implementationClass);
-            beanTypes.add(Object.class);
-        }
-
-        Set<Annotation> beanQualifiers = new LinkedHashSet<Annotation>(qualifiers);
-        if (beanQualifiers.isEmpty()) {
-            beanQualifiers.add(Default.Literal.INSTANCE);
-            beanQualifiers.add(Any.Literal.INSTANCE);
-        }
-
-        SyntheticBean<T> bean = new SyntheticBean<T>(
-            implementationClass,
-            beanTypes,
-            beanQualifiers,
-            scope,
-            name,
-            null,
-            stereotypes,
-            alternative,
-            priority,
-            createCallback,
-            destroyCallback,
-            Collections.<InjectionPoint>emptySet()
-        );
-        knowledgeBase.addBean(bean);
+        return destroyCallback;
     }
 }

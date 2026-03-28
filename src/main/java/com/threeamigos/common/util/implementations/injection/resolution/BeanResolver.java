@@ -12,7 +12,6 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
-import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
@@ -401,7 +400,7 @@ public class BeanResolver implements DependencyResolver {
     }
 
     private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
-        Set<Class<?>> out = new HashSet<Class<?>>();
+        Set<Class<?>> out = new HashSet<>();
         if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
             return out;
         }
@@ -558,8 +557,8 @@ public class BeanResolver implements DependencyResolver {
             super(bean);
             this.delegateType = info.getDelegateInjectionPoint().getType();
             this.delegateQualifiers = Collections.unmodifiableSet(
-                    new HashSet<Annotation>(info.getDelegateInjectionPoint().getQualifiers()));
-            this.decoratedTypes = Collections.unmodifiableSet(new HashSet<Type>(info.getDecoratedTypes()));
+                    new HashSet<>(info.getDelegateInjectionPoint().getQualifiers()));
+            this.decoratedTypes = Collections.unmodifiableSet(new HashSet<>(info.getDecoratedTypes()));
         }
 
         @Override
@@ -946,7 +945,7 @@ public class BeanResolver implements DependencyResolver {
         // Create a resolution strategy that delegates to BeanResolver
         InstanceImpl.ResolutionStrategy<T> strategy = new InstanceImpl.ResolutionStrategy<T>() {
             @Override
-            public T resolveInstance(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
+            public T resolveInstance(Class<T> typeToResolve, Collection<Annotation> quals) {
                 // Convert qualifiers to array
                 Annotation[] qualArray = quals.toArray(new Annotation[0]);
                 Object resolved = resolveWithDynamicInjectionPoint(typeToResolve, qualArray, ownerInjectionPoint);
@@ -954,7 +953,7 @@ public class BeanResolver implements DependencyResolver {
             }
 
             @Override
-            public Collection<Class<? extends T>> resolveImplementations(Class<T> typeToResolve, Collection<Annotation> quals) throws Exception {
+            public Collection<Class<? extends T>> resolveImplementations(Class<T> typeToResolve, Collection<Annotation> quals) {
                 // Find all matching beans
                 Annotation[] qualArray = quals.toArray(new Annotation[0]);
                 Collection<Bean<?>> beans = findMatchingBeansForIterator(typeToResolve, qualArray);
@@ -1045,11 +1044,7 @@ public class BeanResolver implements DependencyResolver {
                 return producerPriority;
             }
 
-            Integer declaringPriority = extractPriorityFromClass(producerBean.getDeclaringClass());
-            if (declaringPriority != null) {
-                return declaringPriority;
-            }
-            return null;
+            return extractPriorityFromClass(producerBean.getDeclaringClass());
         }
 
         if (bean instanceof BeanImpl) {
@@ -1132,7 +1127,7 @@ public class BeanResolver implements DependencyResolver {
 
         @Override
         public void release() {
-            // Cleanup dependent instances
+            // Clean up dependent instances
             dependentInstances.clear();
         }
 

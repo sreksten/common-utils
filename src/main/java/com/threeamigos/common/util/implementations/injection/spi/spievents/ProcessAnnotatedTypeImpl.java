@@ -1,7 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
-import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -28,12 +26,7 @@ public class ProcessAnnotatedTypeImpl<T> extends PhaseAware implements ProcessAn
     private boolean setAnnotatedTypeCalled = false;
     private boolean configureAnnotatedTypeCalled = false;
     private AnnotatedTypeConfigurator<T> configurator;
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProcessAnnotatedTypeImpl(MessageHandler messageHandler, AnnotatedType<T> annotatedType) {
         super(messageHandler);

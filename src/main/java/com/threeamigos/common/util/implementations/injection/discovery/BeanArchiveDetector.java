@@ -271,9 +271,6 @@ public class BeanArchiveDetector {
             baseMode = BeanArchiveMode.IMPLICIT;
         } else {
             switch (discoveryMode.trim().toLowerCase()) {
-                case "all":
-                    baseMode = BeanArchiveMode.EXPLICIT;
-                    break;
                 case "annotated":
                     baseMode = BeanArchiveMode.IMPLICIT;
                     break;

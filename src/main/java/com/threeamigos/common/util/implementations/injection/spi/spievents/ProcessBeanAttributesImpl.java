@@ -21,24 +21,9 @@ public class ProcessBeanAttributesImpl<T> extends PhaseAware
     private boolean ignoreFinalMethods = false;
     private final KnowledgeBase knowledgeBase;
     private BeanAttributesConfiguratorImpl<T> configurator;
-    private final ThreadLocal<Boolean> observerInvocationActive = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
-    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return Boolean.FALSE;
-        }
-    };
+    private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProcessBeanAttributesImpl(MessageHandler messageHandler, Annotated annotated,
                                      BeanAttributes<T> beanAttributes,
@@ -86,7 +71,7 @@ public class ProcessBeanAttributesImpl<T> extends PhaseAware
         }
         configureCalledInCurrentInvocation.set(Boolean.TRUE);
         if (configurator == null) {
-            configurator = new BeanAttributesConfiguratorImpl<T>(beanAttributes);
+            configurator = new BeanAttributesConfiguratorImpl<>(beanAttributes);
         }
         return configurator;
     }

@@ -8,7 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * HTTP implementation of {@link ConversationCarrier}.
  * <p>
  * Reads the conversation id from a request parameter (default "cid") and writes it back
- * to the response header "X-Conversation-Id" so clients can forward it on subsequent calls.
+ * to the response header "X-Conversation-Id" so clients can forward it on later calls.
  */
 public class HttpConversationCarrier implements ConversationCarrier {
 
@@ -42,6 +42,6 @@ public class HttpConversationCarrier implements ConversationCarrier {
     @Override
     public boolean shouldEndConversation() {
         String endFlag = request.getParameter("endConversation");
-        return endFlag != null && Boolean.parseBoolean(endFlag);
+        return Boolean.parseBoolean(endFlag);
     }
 }

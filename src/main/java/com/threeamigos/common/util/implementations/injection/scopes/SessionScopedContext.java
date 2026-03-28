@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -20,6 +21,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -43,11 +45,16 @@ import java.util.stream.Collectors;
  */
 public class SessionScopedContext implements ScopeContext {
 
+    private final MessageHandler messageHandler;
     private final Map<String, Map<String, Object>> sessionInstances = new ConcurrentHashMap<>();
     private final Map<String, Map<String, CreationalContext<?>>> sessionContexts = new ConcurrentHashMap<>();
     private final Map<String, Map<String, Bean<?>>> sessionBeans = new ConcurrentHashMap<>();
     private final ThreadLocal<String> currentSessionId = new ThreadLocal<>();
     private volatile boolean active = true;
+
+    public SessionScopedContext(MessageHandler messageHandler) {
+        this.messageHandler = Objects.requireNonNull(messageHandler, "messageHandler cannot be null");
+    }
 
     /**
      * Associates a session ID with the current thread.
@@ -180,9 +187,11 @@ public class SessionScopedContext implements ScopeContext {
                     try {
                         beanImpl.invokePrePassivate(instance);
                     } catch (Exception e) {
-                        System.err.println("Error invoking @PrePassivate on bean " +
-                            bean.getBeanClass().getName() + " in session " + sessionId + ": " + e.getMessage());
-                        e.printStackTrace();
+                        messageHandler.handleException(
+                            "Error invoking @PrePassivate on bean " + bean.getBeanClass().getName() +
+                                " in session " + sessionId + ": " + e.getMessage(),
+                            e
+                        );
                     }
                 } else if (bean == null) {
                     // Fallback: invoke annotation directly if metadata is missing
@@ -276,9 +285,11 @@ public class SessionScopedContext implements ScopeContext {
                 try {
                     beanImpl.invokePostActivate(instance);
                 } catch (Exception e) {
-                    System.err.println("Error invoking @PostActivate on bean " +
-                        bean.getBeanClass().getName() + " in session " + sessionId + ": " + e.getMessage());
-                    e.printStackTrace();
+                    messageHandler.handleException(
+                        "Error invoking @PostActivate on bean " + bean.getBeanClass().getName() +
+                            " in session " + sessionId + ": " + e.getMessage(),
+                        e
+                    );
                 }
             } else {
                 // Fallback when bean metadata isn't available
@@ -362,8 +373,11 @@ public class SessionScopedContext implements ScopeContext {
                 try {
                     bean.destroy(instance, ctx);
                 } catch (Exception e) {
-                    System.err.println("Error destroying bean " + bean.getBeanClass().getName() +
-                                     " in session " + sessionId + ": " + e.getMessage());
+                    messageHandler.handleException(
+                        "Error destroying bean " + bean.getBeanClass().getName() +
+                            " in session " + sessionId + ": " + e.getMessage(),
+                        e
+                    );
                 }
             }
         }
@@ -425,8 +439,11 @@ public class SessionScopedContext implements ScopeContext {
         } catch (ClassNotFoundException e) {
             // jakarta.ejb not on classpath; nothing to do
         } catch (Exception e) {
-            System.err.println("Error invoking @" + annotationClassName + " on " +
-                instance.getClass().getName() + ": " + e.getMessage());
+            messageHandler.handleException(
+                "Error invoking @" + annotationClassName + " on " +
+                    instance.getClass().getName() + ": " + e.getMessage(),
+                e
+            );
         }
     }
 

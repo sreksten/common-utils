@@ -6,7 +6,6 @@ import com.threeamigos.common.util.implementations.injection.util.LifecycleMetho
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
-import jakarta.enterprise.context.NormalScope;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.IllegalProductException;
@@ -434,13 +433,10 @@ public class ProducerBean<T> implements Bean<T> {
         if (scopeType == null) {
             return false;
         }
-        NormalScope normalScope = scopeType.getAnnotation(NormalScope.class);
-        if (normalScope != null) {
-            return normalScope.passivating();
-        }
-        javax.enterprise.context.NormalScope legacy = scopeType.getAnnotation(javax.enterprise.context.NormalScope.class);
-        if (legacy != null) {
-            return legacy.passivating();
+        Boolean passivating = com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+                .getNormalScopePassivatingValue(scopeType);
+        if (passivating != null) {
+            return passivating;
         }
         String name = scopeType.getName();
         return "jakarta.enterprise.context.SessionScoped".equals(name) ||
@@ -522,7 +518,7 @@ public class ProducerBean<T> implements Bean<T> {
         if (type == null) {
             return false;
         }
-        if (type.isAnnotationPresent(Dependent.class)) {
+        if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDependentAnnotation(type)) {
             return true;
         }
         for (Annotation annotation : type.getAnnotations()) {
@@ -556,7 +552,7 @@ public class ProducerBean<T> implements Bean<T> {
         if (parameterType == null) {
             return false;
         }
-        if (parameterType.isAnnotationPresent(Dependent.class)) {
+        if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDependentAnnotation(parameterType)) {
             return true;
         }
         for (Annotation annotation : parameterType.getAnnotations()) {
@@ -607,7 +603,7 @@ public class ProducerBean<T> implements Bean<T> {
     private Object resolveProducerParameter(Parameter parameter) {
         if (dependencyResolver instanceof BeanResolver) {
             BeanResolver beanResolver = (BeanResolver) dependencyResolver;
-            BeanImpl syntheticDeclaringBean = new BeanImpl((Class) declaringClass, false);
+            BeanImpl syntheticDeclaringBean = new BeanImpl(declaringClass, false);
             beanResolver.setCurrentInjectionPoint(new InjectionPointImpl(parameter, syntheticDeclaringBean));
             try {
                 return dependencyResolver.resolve(
@@ -635,7 +631,7 @@ public class ProducerBean<T> implements Bean<T> {
             }
         }
 
-        BeanImpl syntheticDeclaringBean = new BeanImpl((Class) declaringClass, false);
+        BeanImpl syntheticDeclaringBean = new BeanImpl(declaringClass, false);
         return new InjectionPointImpl(parameter, syntheticDeclaringBean);
     }
 
@@ -643,7 +639,7 @@ public class ProducerBean<T> implements Bean<T> {
     private Object resolveDisposerParameter(Parameter parameter) {
         if (dependencyResolver instanceof BeanResolver) {
             BeanResolver beanResolver = (BeanResolver) dependencyResolver;
-            BeanImpl syntheticDeclaringBean = new BeanImpl((Class) declaringClass, false);
+            BeanImpl syntheticDeclaringBean = new BeanImpl(declaringClass, false);
             beanResolver.setCurrentInjectionPoint(new InjectionPointImpl(parameter, syntheticDeclaringBean));
             try {
                 return dependencyResolver.resolve(
@@ -693,10 +689,6 @@ public class ProducerBean<T> implements Bean<T> {
 
     public boolean hasValidationErrors() {
         return hasValidationErrors;
-    }
-
-    public void setHasValidationErrors(boolean hasValidationErrors) {
-        this.hasValidationErrors = hasValidationErrors;
     }
 
     /**

@@ -533,7 +533,7 @@ public class TypeChecker {
         if (t1 instanceof TypeVariable) {
             TypeVariable<?> tv = (TypeVariable<?>) t1;
             Type[] bounds = tv.getBounds();
-            if (bounds == null || bounds.length == 0 || isOnlyObjectBound(bounds)) {
+            if (bounds.length == 0 || isOnlyObjectBound(bounds)) {
                 return true;
             }
             for (Type bound : bounds) {
@@ -558,7 +558,7 @@ public class TypeChecker {
         if (t2 instanceof TypeVariable) {
             TypeVariable<?> tv = (TypeVariable<?>) t2;
             Type[] bounds = tv.getBounds();
-            if (bounds == null || bounds.length == 0) {
+            if (bounds.length == 0) {
                 bounds = new Type[] { Object.class };
             }
 

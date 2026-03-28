@@ -555,15 +555,15 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private boolean hasInjectAnnotation(java.lang.reflect.AnnotatedElement element) {
-            return element.isAnnotationPresent(jakarta.inject.Inject.class);
+            return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasInjectAnnotation(element);
         }
 
         private boolean hasPostConstructAnnotation(Method method) {
-            return method.isAnnotationPresent(jakarta.annotation.PostConstruct.class);
+            return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasPostConstructAnnotation(method);
         }
 
         private boolean hasPreDestroyAnnotation(Method method) {
-            return method.isAnnotationPresent(jakarta.annotation.PreDestroy.class);
+            return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasPreDestroyAnnotation(method);
         }
 
         private static final class ResolvedInjectionPoint implements InjectionPoint {

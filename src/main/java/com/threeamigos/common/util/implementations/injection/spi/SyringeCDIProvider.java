@@ -47,7 +47,7 @@ public class SyringeCDIProvider implements CDIProvider {
     /**
      * Returns the CDI instance for the current context.
      *
-     * <p>This method is called by CDI.current() to obtain the container instance.
+     * <p>This method is called by CDI.current() to get the container instance.
      * Returns null if no container has been registered, indicating that another
      * provider should be tried.
      *

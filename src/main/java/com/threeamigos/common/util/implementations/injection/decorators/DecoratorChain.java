@@ -6,7 +6,6 @@ import jakarta.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Represents a chain of decorators that wrap a target bean instance.
@@ -135,7 +134,7 @@ public class DecoratorChain {
      *
      * <p>The delegate is the next instance in the chain:
      * <ul>
-     *   <li>For decorator at index i, delegate is decorator at index i+1</li>
+     *   <li>For a decorator at index i, a delegate is a decorator at index i+1</li>
      *   <li>For the last decorator, delegate is the target instance</li>
      * </ul>
      *

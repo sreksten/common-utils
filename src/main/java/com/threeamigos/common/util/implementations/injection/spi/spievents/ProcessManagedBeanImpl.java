@@ -5,21 +5,11 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.ConversationScoped;
-import jakarta.enterprise.context.RequestScoped;
-import jakarta.enterprise.context.SessionScoped;
-import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
-import jakarta.enterprise.inject.spi.AnnotatedMethod;
-import jakarta.enterprise.inject.spi.AnnotatedType;
-import jakarta.enterprise.inject.spi.Bean;
-import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.invoke.Invoker;
 import jakarta.enterprise.invoke.InvokerBuilder;
-import jakarta.enterprise.inject.spi.ProcessManagedBean;
 import jakarta.interceptor.Interceptor;
-import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 
 import java.lang.annotation.Annotation;
@@ -36,6 +26,11 @@ import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.CompletionStage;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasBuiltInNormalScopeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDependentAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDecoratorAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasInterceptorAnnotation;
+
 /**
  * ProcessManagedBean event implementation.
  *
@@ -48,11 +43,6 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
 
     private final AnnotatedType<T> annotatedType;
     private final BeanManager beanManager;
-
-    public ProcessManagedBeanImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<T> bean,
-                                  AnnotatedType<T> annotatedType) {
-        this(messageHandler, knowledgeBase, bean, annotatedType, null);
-    }
 
     public ProcessManagedBeanImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase, Bean<T> bean,
                                   AnnotatedType<T> annotatedType, BeanManager beanManager) {
@@ -79,7 +69,7 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
         validateTargetBean();
         validateTargetMethod(javaMethod);
         validateNonPortableTargetMethod(javaMethod);
-        return new SimpleInvokerBuilder<>(javaMethod, bean, bean.getBeanClass(), beanManager);
+        return new SimpleInvokerBuilder<>(javaMethod, bean.getBeanClass(), beanManager);
     }
 
     /**
@@ -88,12 +78,12 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
      */
     private void validateTargetBean() {
         Class<?> beanClass = bean.getBeanClass();
-        if (beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class) ||
+        if (hasInterceptorAnnotation(beanClass) ||
             bean instanceof Interceptor) {
             throw new DefinitionException("Cannot build invoker for interceptor bean: " + beanClass.getName());
         }
-        if (beanClass.isAnnotationPresent(jakarta.decorator.Decorator.class) ||
-            bean instanceof jakarta.enterprise.inject.spi.Decorator) {
+        if (hasDecoratorAnnotation(beanClass) ||
+            bean instanceof Decorator) {
             throw new DefinitionException("Cannot build invoker for decorator bean: " + beanClass.getName());
         }
     }
@@ -148,14 +138,7 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
     }
 
     private boolean isNormalScope(Class<? extends java.lang.annotation.Annotation> scope) {
-        return scope == ApplicationScoped.class ||
-            scope == RequestScoped.class ||
-            scope == SessionScoped.class ||
-            scope == ConversationScoped.class ||
-            "javax.enterprise.context.ApplicationScoped".equals(scope.getName()) ||
-            "javax.enterprise.context.RequestScoped".equals(scope.getName()) ||
-            "javax.enterprise.context.SessionScoped".equals(scope.getName()) ||
-            "javax.enterprise.context.ConversationScoped".equals(scope.getName());
+        return scope != null && hasBuiltInNormalScopeAnnotation(scope);
     }
 
     private String unproxyableReason(Class<?> rawType) {
@@ -203,15 +186,13 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
 
     private static class SimpleInvokerBuilder<T> implements InvokerBuilder<Invoker<T, ?>> {
         private final Method javaMethod;
-        private final Bean<T> bean;
         private final Class<?> targetBeanClass;
         private final BeanManager beanManager;
         private boolean instanceLookup;
-        private final Set<Integer> argumentLookups = new LinkedHashSet<Integer>();
+        private final Set<Integer> argumentLookups = new LinkedHashSet<>();
 
-        SimpleInvokerBuilder(Method javaMethod, Bean<T> bean, Class<?> targetBeanClass, BeanManager beanManager) {
+        SimpleInvokerBuilder(Method javaMethod, Class<?> targetBeanClass, BeanManager beanManager) {
             this.javaMethod = javaMethod;
-            this.bean = bean;
             this.targetBeanClass = targetBeanClass;
             this.beanManager = beanManager;
         }
@@ -313,7 +294,7 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
         }
 
         private List<LookupPlan> resolveArgumentLookupBeans() {
-            List<LookupPlan> plans = new ArrayList<LookupPlan>();
+            List<LookupPlan> plans = new ArrayList<>();
             if (argumentLookups.isEmpty()) {
                 return plans;
             }
@@ -331,13 +312,13 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
         }
 
         private Annotation[] extractQualifiers(Annotation[] annotations) {
-            List<Annotation> qualifiers = new ArrayList<Annotation>();
+            List<Annotation> qualifiers = new ArrayList<>();
             for (Annotation annotation : annotations) {
                 if (beanManager.isQualifier(annotation.annotationType())) {
                     qualifiers.add(annotation);
                 }
             }
-            return qualifiers.toArray(new Annotation[qualifiers.size()]);
+            return qualifiers.toArray(new Annotation[0]);
         }
 
         private Bean<?> resolveUniqueBean(Type requiredType, Annotation[] qualifiers) {
@@ -380,18 +361,18 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
 
     private static final class LookupContext {
         private final BeanManager beanManager;
-        private final List<DependentHandle> dependentHandles = new ArrayList<DependentHandle>();
+        private final List<DependentHandle> dependentHandles = new ArrayList<>();
 
         private LookupContext(BeanManager beanManager) {
             this.beanManager = beanManager;
         }
 
         private Object lookup(Bean<?> bean, Type requiredType) {
+            @SuppressWarnings("unchecked")
             Bean<Object> typedBean = (Bean<Object>) bean;
-            CreationalContext<Object> ctx = (CreationalContext<Object>) beanManager.createCreationalContext(typedBean);
+            CreationalContext<Object> ctx = beanManager.createCreationalContext(typedBean);
             Object reference = beanManager.getReference(typedBean, requiredType, ctx);
-            if (bean.getScope() == Dependent.class ||
-                "javax.enterprise.context.Dependent".equals(bean.getScope().getName())) {
+            if (bean.getScope() != null && hasDependentAnnotation(bean.getScope())) {
                 dependentHandles.add(new DependentHandle(typedBean, reference, ctx));
             }
             return reference;

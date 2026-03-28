@@ -159,7 +159,7 @@ public class CustomContextAdapter implements ScopeContext {
      * {@code @NormalScope(passivating=true)} annotation on their scope type.
      * <p>
      * <b>Current Implementation:</b> Returns false (conservative default).
-     * Custom passivating contexts should be explicitly marked.
+     * Custom-passivating contexts should be explicitly marked.
      *
      * @return false by default (custom contexts are assumed non-passivating)
      */

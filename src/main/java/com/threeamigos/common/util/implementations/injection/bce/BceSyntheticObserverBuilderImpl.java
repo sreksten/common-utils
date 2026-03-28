@@ -8,7 +8,6 @@ import jakarta.enterprise.inject.build.compatible.spi.SyntheticObserver;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticObserverBuilder;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
-import jakarta.enterprise.lang.model.types.Type;
 import jakarta.enterprise.inject.spi.ObserverMethod;
 
 import java.lang.annotation.Annotation;
@@ -25,11 +24,11 @@ final class BceSyntheticObserverBuilderImpl<T> implements SyntheticObserverBuild
     private final Class<T> observedClass;
 
     private Class<?> declaringClass = Object.class;
-    private final Set<Annotation> qualifiers = new LinkedHashSet<Annotation>();
+    private final Set<Annotation> qualifiers = new LinkedHashSet<>();
     private int priority = ObserverMethod.DEFAULT_PRIORITY;
     private boolean async = false;
     private TransactionPhase transactionPhase = TransactionPhase.IN_PROGRESS;
-    private final Map<String, Object> params = new LinkedHashMap<String, Object>();
+    private final Map<String, Object> params = new LinkedHashMap<>();
     private Class<? extends SyntheticObserver<T>> observerClass;
 
     BceSyntheticObserverBuilderImpl(KnowledgeBase knowledgeBase,
@@ -109,7 +108,7 @@ final class BceSyntheticObserverBuilderImpl<T> implements SyntheticObserverBuild
 
     @Override
     public SyntheticObserverBuilder<T> withParam(String name, boolean value) {
-        return withParamInternal(name, Boolean.valueOf(value));
+        return withParamInternal(name, value);
     }
 
     @Override
@@ -119,7 +118,7 @@ final class BceSyntheticObserverBuilderImpl<T> implements SyntheticObserverBuild
 
     @Override
     public SyntheticObserverBuilder<T> withParam(String name, int value) {
-        return withParamInternal(name, Integer.valueOf(value));
+        return withParamInternal(name, value);
     }
 
     @Override
@@ -129,7 +128,7 @@ final class BceSyntheticObserverBuilderImpl<T> implements SyntheticObserverBuild
 
     @Override
     public SyntheticObserverBuilder<T> withParam(String name, long value) {
-        return withParamInternal(name, Long.valueOf(value));
+        return withParamInternal(name, value);
     }
 
     @Override
@@ -139,7 +138,7 @@ final class BceSyntheticObserverBuilderImpl<T> implements SyntheticObserverBuild
 
     @Override
     public SyntheticObserverBuilder<T> withParam(String name, double value) {
-        return withParamInternal(name, Double.valueOf(value));
+        return withParamInternal(name, value);
     }
 
     @Override
@@ -249,20 +248,20 @@ final class BceSyntheticObserverBuilderImpl<T> implements SyntheticObserverBuild
         if (observerClass == null) {
             throw new IllegalStateException("Synthetic observer implementation is required via observeWith()");
         }
-        Set<Annotation> effectiveQualifiers = new LinkedHashSet<Annotation>(qualifiers);
+        Set<Annotation> effectiveQualifiers = new LinkedHashSet<>(qualifiers);
         if (effectiveQualifiers.isEmpty()) {
             effectiveQualifiers.add(Default.Literal.INSTANCE);
         }
-        BceSyntheticObserverMethod<T> observerMethod = new BceSyntheticObserverMethod<T>(
-            declaringClass,
-            observedClass,
-            effectiveQualifiers,
-            priority,
-            async,
-            transactionPhase,
-            observerClass,
-            Collections.unmodifiableMap(new LinkedHashMap<String, Object>(params)),
-            invokerRegistry
+        BceSyntheticObserverMethod<T> observerMethod = new BceSyntheticObserverMethod<>(
+                declaringClass,
+                observedClass,
+                effectiveQualifiers,
+                priority,
+                async,
+                transactionPhase,
+                observerClass,
+                Collections.unmodifiableMap(new LinkedHashMap<>(params)),
+                invokerRegistry
         );
         knowledgeBase.addSyntheticObserverMethod(observerMethod);
     }

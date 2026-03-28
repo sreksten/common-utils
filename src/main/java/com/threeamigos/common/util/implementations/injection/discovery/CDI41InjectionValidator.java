@@ -25,7 +25,6 @@ import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.inject.Provider;
-import jakarta.inject.Qualifier;
 
 import java.lang.annotation.Annotation;
 
@@ -53,7 +52,7 @@ import java.util.stream.Collectors;
  *   <li>Detect invalid beans being used as dependencies</li>
  *   <li>Handle Instance&lt;T&gt; and Provider&lt;T&gt; injection points (always satisfiable)</li>
  *   <li>Validate producer methods can satisfy injection points</li>
- *   <li>Detect circular dependencies during validation phase</li>
+ *   <li>Detect circular dependencies during the validation phase</li>
  *   <li>Validate enabled alternatives (only one per type)</li>
  *   <li>Report all resolution errors to KnowledgeBase</li>
  * </ul>
@@ -274,16 +273,16 @@ public class CDI41InjectionValidator {
             ProducerBean<?> producerBean = (ProducerBean<?>) bean;
             Method producerMethod = producerBean.getProducerMethod();
             if (producerMethod != null) {
-                Priority priority = producerMethod.getAnnotation(Priority.class);
+                Integer priority = getPriorityValue(producerMethod);
                 if (priority != null) {
-                    return priority.value();
+                    return priority;
                 }
             }
             Field producerField = producerBean.getProducerField();
             if (producerField != null) {
-                Priority priority = producerField.getAnnotation(Priority.class);
+                Integer priority = getPriorityValue(producerField);
                 if (priority != null) {
-                    return priority.value();
+                    return priority;
                 }
             }
 
@@ -292,9 +291,9 @@ public class CDI41InjectionValidator {
                 return explicitProducerPriority;
             }
 
-            Priority declaringPriority = producerBean.getDeclaringClass().getAnnotation(Priority.class);
+            Integer declaringPriority = getPriorityValue(producerBean.getDeclaringClass());
             if (declaringPriority != null) {
-                return declaringPriority.value();
+                return declaringPriority;
             }
         }
 
@@ -312,8 +311,8 @@ public class CDI41InjectionValidator {
             }
         }
 
-        Priority classPriority = bean.getBeanClass().getAnnotation(Priority.class);
-        return classPriority == null ? Integer.MIN_VALUE : classPriority.value();
+        Integer classPriority = getPriorityValue(bean.getBeanClass());
+        return classPriority == null ? Integer.MIN_VALUE : classPriority;
     }
 
     private boolean isValidSimpleBeanName(String name) {
@@ -472,7 +471,7 @@ public class CDI41InjectionValidator {
 
     private String beanDisplayName(Bean<?> bean) {
         String simpleName = bean.getBeanClass().getSimpleName();
-        if (simpleName != null && !simpleName.isEmpty()) {
+        if (!simpleName.isEmpty()) {
             return simpleName;
         }
         return bean.getBeanClass().getName();
@@ -615,10 +614,7 @@ public class CDI41InjectionValidator {
         if (type instanceof Class) {
             return Object.class.equals(type);
         }
-        if (type != null && "java.lang.Object".equals(type.getTypeName())) {
-            return true;
-        }
-        return false;
+        return type != null && "java.lang.Object".equals(type.getTypeName());
     }
 
     // ============================================
@@ -637,7 +633,7 @@ public class CDI41InjectionValidator {
      *   <li>@Dependent beans do NOT need to be Serializable (lifecycle tied to parent)</li>
      * </ul>
      *
-     * <p>When a bean is in a passivation-capable scope, it must be passivation capable:
+     * <p>When a bean is in a passivation-capable scope, it must be passivation-capable:
      * - The bean class must implement {@link java.io.Serializable}
      * - All dependencies (injection points) must be passivation capable (checked recursively)
      * - All interceptors and decorators must be serializable (checked in future phases)
@@ -879,7 +875,7 @@ public class CDI41InjectionValidator {
         boolean allValid = true;
         Class<?> beanClass = bean.getBeanClass();
 
-        Set<InterceptorInfo> boundInterceptors = new LinkedHashSet<InterceptorInfo>();
+        Set<InterceptorInfo> boundInterceptors = new LinkedHashSet<>();
         Set<Annotation> classBindings = extractInterceptorBindingAnnotations(beanClass.getAnnotations());
         if (!classBindings.isEmpty()) {
             boundInterceptors.addAll(knowledgeBase.getInterceptorsByBindings(classBindings));
@@ -889,7 +885,7 @@ public class CDI41InjectionValidator {
             if (Modifier.isStatic(modifiers) || Modifier.isPrivate(modifiers)) {
                 continue;
             }
-            Set<Annotation> effectiveBindings = new HashSet<Annotation>(classBindings);
+            Set<Annotation> effectiveBindings = new HashSet<>(classBindings);
             effectiveBindings.addAll(extractInterceptorBindingAnnotations(method.getAnnotations()));
             if (!effectiveBindings.isEmpty()) {
                 boundInterceptors.addAll(knowledgeBase.getInterceptorsByBindings(effectiveBindings));
@@ -909,7 +905,7 @@ public class CDI41InjectionValidator {
             }
             Bean<?> interceptorBean = findBeanByClass(validBeans, interceptorClass);
             if (interceptorBean != null) {
-                allValid &= validateDependenciesPassivationCapable(interceptorBean, new HashSet<Bean<?>>(), validBeans);
+                allValid &= validateDependenciesPassivationCapable(interceptorBean, new HashSet<>(), validBeans);
             }
             allValid &= validateDeclaredInjectionMembersPassivation(interceptorClass, validBeans, bean);
         }
@@ -930,7 +926,7 @@ public class CDI41InjectionValidator {
             }
             Bean<?> decoratorBean = findBeanByClass(validBeans, decoratorClass);
             if (decoratorBean != null) {
-                allValid &= validateDependenciesPassivationCapable(decoratorBean, new HashSet<Bean<?>>(), validBeans);
+                allValid &= validateDependenciesPassivationCapable(decoratorBean, new HashSet<>(), validBeans);
             }
             allValid &= validateDeclaredInjectionMembersPassivation(decoratorClass, validBeans, bean);
         }
@@ -962,8 +958,7 @@ public class CDI41InjectionValidator {
         boolean allValid = true;
 
         for (Field field : declaringClass.getDeclaredFields()) {
-            if (!field.isAnnotationPresent(jakarta.inject.Inject.class) &&
-                    !field.isAnnotationPresent(javax.inject.Inject.class)) {
+            if (!hasInjectAnnotation(field)) {
                 continue;
             }
             if (Modifier.isTransient(field.getModifiers())) {
@@ -979,8 +974,7 @@ public class CDI41InjectionValidator {
         }
 
         for (Constructor<?> constructor : declaringClass.getDeclaredConstructors()) {
-            if (!constructor.isAnnotationPresent(jakarta.inject.Inject.class) &&
-                    !constructor.isAnnotationPresent(javax.inject.Inject.class)) {
+            if (!hasInjectAnnotation(constructor)) {
                 continue;
             }
             for (Parameter parameter : constructor.getParameters()) {
@@ -998,8 +992,7 @@ public class CDI41InjectionValidator {
         }
 
         for (Method method : declaringClass.getDeclaredMethods()) {
-            if (!method.isAnnotationPresent(jakarta.inject.Inject.class) &&
-                    !method.isAnnotationPresent(javax.inject.Inject.class)) {
+            if (!hasInjectAnnotation(method)) {
                 continue;
             }
             for (Parameter parameter : method.getParameters()) {
@@ -1076,10 +1069,10 @@ public class CDI41InjectionValidator {
     }
 
     private Set<Annotation> extractInjectionQualifiers(Annotation[] annotations) {
-        Set<Annotation> qualifiers = new HashSet<Annotation>();
+        Set<Annotation> qualifiers = new HashSet<>();
         if (annotations != null) {
             for (Annotation annotation : annotations) {
-                if (annotation.annotationType().isAnnotationPresent(Qualifier.class) ||
+                if (hasQualifierAnnotation(annotation.annotationType()) ||
                     knowledgeBase.isRegisteredQualifier(annotation.annotationType())) {
                     qualifiers.add(annotation);
                 }
@@ -1147,8 +1140,7 @@ public class CDI41InjectionValidator {
                scopeName.equals("javax.enterprise.context.ConversationScoped") ||
                scopeName.equals("javax.enterprise.context.RequestScoped") ||
                // Check for @NormalScope meta-annotation
-               scopeAnnotation.isAnnotationPresent(jakarta.enterprise.context.NormalScope.class) ||
-               scopeAnnotation.isAnnotationPresent(javax.enterprise.context.NormalScope.class);
+               hasNormalScopeAnnotation(scopeAnnotation);
     }
 
     /**
@@ -1176,16 +1168,9 @@ public class CDI41InjectionValidator {
             return false;
         }
 
-        jakarta.enterprise.context.NormalScope jakartaNormalScope =
-                scopeAnnotation.getAnnotation(jakarta.enterprise.context.NormalScope.class);
-        if (jakartaNormalScope != null) {
-            return jakartaNormalScope.passivating();
-        }
-
-        javax.enterprise.context.NormalScope javaxNormalScope =
-                scopeAnnotation.getAnnotation(javax.enterprise.context.NormalScope.class);
-        if (javaxNormalScope != null) {
-            return javaxNormalScope.passivating();
+        Boolean passivating = getNormalScopePassivatingValue(scopeAnnotation);
+        if (passivating != null) {
+            return passivating;
         }
 
         // SessionScoped and ConversationScoped are passivation-capable
@@ -1209,7 +1194,7 @@ public class CDI41InjectionValidator {
      *   <li>Finds matching beans by type and qualifiers</li>
      *   <li>Reports unsatisfied dependencies (no beans found)</li>
      *   <li>Reports ambiguous dependencies (multiple beans found)</li>
-     *   <li>Checks if resolved bean has validation errors</li>
+     *   <li>Checks if a resolved bean has validation errors</li>
      *   <li>Enhancement 1: Validates producer methods can satisfy injection points</li>
      * </ul>
      *
@@ -1294,12 +1279,8 @@ public class CDI41InjectionValidator {
             return false;
         }
 
-        if (!validateProxyableBeanTypesIfRequired(injectionPoint, owningBean, resolvedBean)) {
-            return false;
-        }
-
+        return validateProxyableBeanTypesIfRequired(injectionPoint, owningBean, resolvedBean);
         // Injection point is valid
-        return true;
     }
 
     private boolean isBeanMetadataType(Type requiredType) {
@@ -1340,8 +1321,8 @@ public class CDI41InjectionValidator {
         }
         Method method = (Method) injectionPoint.getMember();
         for (Parameter parameter : method.getParameters()) {
-            if (AnnotationsEnum.hasObservesAnnotation(parameter) ||
-                AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
+            if (hasObservesAnnotation(parameter) ||
+                hasObservesAsyncAnnotation(parameter)) {
                 return true;
             }
         }
@@ -1413,7 +1394,7 @@ public class CDI41InjectionValidator {
     private Set<Annotation> extractInterceptorBindingAnnotations(Annotation[] annotations) {
         Set<Annotation> bindings = new HashSet<>();
         for (Annotation annotation : annotations) {
-            if (annotation.annotationType().isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class) ||
+            if (hasInterceptorBindingAnnotation(annotation.annotationType()) ||
                 knowledgeBase.isRegisteredInterceptorBinding(annotation.annotationType())) {
                 bindings.add(annotation);
             }
@@ -1426,7 +1407,7 @@ public class CDI41InjectionValidator {
             return false;
         }
         Class<?> beanClass = bean.getBeanClass();
-        if (beanClass == null || !BeanImpl.class.isInstance(bean)) {
+        if (beanClass == null || !(bean instanceof BeanImpl)) {
             return false;
         }
 
@@ -1436,7 +1417,7 @@ public class CDI41InjectionValidator {
         }
 
         Set<Annotation> beanQualifiers = bean.getQualifiers() == null
-                ? Collections.<Annotation>emptySet()
+                ? Collections.emptySet()
                 : bean.getQualifiers();
 
         for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
@@ -1476,7 +1457,7 @@ public class CDI41InjectionValidator {
                     // due to unresolved type variables; treat the pair as non-matching.
                 } catch (RuntimeException ex) {
                     // Defensive fallback to keep decorator matching best-effort and non-fatal.
-                    // The offending type pair is ignored and the validator keeps searching.
+                    // The offending type pair is ignored, and the validator keeps searching.
                 }
             }
         }
@@ -1600,7 +1581,7 @@ public class CDI41InjectionValidator {
 
     /**
      * Resolves candidates using CDI alternative precedence:
-     * if enabled alternatives are present they are preferred over non-alternatives,
+     * if enabled alternatives are present, they are preferred over non-alternatives,
      * and the highest-priority alternative wins; equal top priority remains ambiguous.
      */
     private Optional<Bean<?>> resolveByAlternativePrecedence(Collection<Bean<?>> candidates) {
@@ -1743,7 +1724,7 @@ public class CDI41InjectionValidator {
 
     /**
      * Checks if the type is Instance&lt;T&gt; or Provider&lt;T&gt;.
-     * These types are always satisfiable as they provide lazy/programmatic access.
+     * These types can always be satisfied as they provide lazy/programmatic access.
      *
      * @param type the type to check
      * @return true if the type is Instance or Provider
@@ -1822,7 +1803,7 @@ public class CDI41InjectionValidator {
 
         // Note: Producer methods are already validated by CDI41BeanValidator
         // and registered as beans in KnowledgeBase, so they're included in
-        // the validBeans collection above. No special handling needed here.
+        // the validBeans collection above. No special handling is needed here.
 
         return applySpecializationFiltering(matches);
     }
@@ -1883,7 +1864,6 @@ public class CDI41InjectionValidator {
                 }
             } catch (Exception e) {
                 // If TypeChecker fails, continue checking other bean types
-                continue;
             }
         }
 
@@ -1951,7 +1931,7 @@ public class CDI41InjectionValidator {
     }
 
     /**
-     * Checks if two qualifiers match according to CDI rules.
+     * Checks if two qualifiers match, according to CDI rules.
      *
      * @param a first qualifier
      * @param b second qualifier
@@ -2090,10 +2070,10 @@ public class CDI41InjectionValidator {
      * <ul>
      *   <li>Must have exactly one parameter annotated with @Observes or @ObservesAsync</li>
      *   <li>The observed parameter defines the event type</li>
-     *   <li>Cannot have both @Observes and @ObservesAsync on same method</li>
+     *   <li>Cannot have both @Observes and @ObservesAsync on the same method</li>
      *   <li>Can have additional injection points as other parameters</li>
      *   <li>May have qualifiers on observed parameter for event filtering</li>
-     *   <li>Conditional observers (@Observes(notifyObserver=IF_EXISTS)) only notified if bean exists</li>
+     *   <li>Conditional observers (@Observes(notifyObserver=IF_EXISTS)) only notified if the bean exists</li>
      * </ul>
      *
      * @param validBeans the beans to scan for observer methods
@@ -2108,7 +2088,7 @@ public class CDI41InjectionValidator {
 
         boolean allValid = true;
         boolean registerObserverInfos = knowledgeBase.getObserverMethodInfos().isEmpty();
-        Set<Bean<?>> specializationFiltered = applySpecializationFiltering(new HashSet<Bean<?>>(validBeans));
+        Set<Bean<?>> specializationFiltered = applySpecializationFiltering(new HashSet<>(validBeans));
 
         for (Bean<?> bean : specializationFiltered) {
             if (!(bean instanceof BeanImpl)) {
@@ -2144,11 +2124,11 @@ public class CDI41InjectionValidator {
         java.lang.reflect.Parameter observedParameter = null;
 
         for (java.lang.reflect.Parameter parameter : method.getParameters()) {
-            if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
+            if (hasObservesAnnotation(parameter)) {
                 observesCount++;
                 observedParameter = parameter;
             }
-            if (AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
+            if (hasObservesAsyncAnnotation(parameter)) {
                 observesAsyncCount++;
                 observedParameter = parameter;
             }
@@ -2188,18 +2168,18 @@ public class CDI41InjectionValidator {
         Set<Annotation> qualifiers = extractQualifiers(observedParameter);
 
         // Extract reception and transaction phase
-        jakarta.enterprise.event.Reception reception = jakarta.enterprise.event.Reception.ALWAYS;
+        jakarta.enterprise.event.Reception reception;
         jakarta.enterprise.event.TransactionPhase transactionPhase = jakarta.enterprise.event.TransactionPhase.IN_PROGRESS;
 
         if (async) {
             // Extract from @ObservesAsync
             jakarta.enterprise.event.ObservesAsync observesAsync =
-                observedParameter.getAnnotation(jakarta.enterprise.event.ObservesAsync.class);
+                getObservesAsyncAnnotation(observedParameter);
             reception = observesAsync.notifyObserver();
         } else {
             // Extract from @Observes
             jakarta.enterprise.event.Observes observes =
-                observedParameter.getAnnotation(jakarta.enterprise.event.Observes.class);
+                getObservesAnnotation(observedParameter);
             reception = observes.notifyObserver();
             transactionPhase = observes.during();
         }
@@ -2225,7 +2205,7 @@ public class CDI41InjectionValidator {
         // - Default is Interceptor.Priority.APPLICATION + 500
         // - @Priority on async observed parameter is non-portable
         int priority = jakarta.interceptor.Interceptor.Priority.APPLICATION + 500;
-        jakarta.annotation.Priority parameterPriority = observedParameter.getAnnotation(jakarta.annotation.Priority.class);
+        Integer parameterPriority = getPriorityValue(observedParameter);
         if (parameterPriority != null) {
             if (async) {
                 throw new NonPortableBehaviourException(
@@ -2234,12 +2214,12 @@ public class CDI41InjectionValidator {
                     " declares @Priority on observed event parameter; this is non-portable behavior"
                 );
             }
-            priority = parameterPriority.value();
+            priority = parameterPriority;
         } else {
             // Backward-compatible fallback for existing method-level priority declarations.
-            jakarta.annotation.Priority methodPriority = method.getAnnotation(jakarta.annotation.Priority.class);
+            Integer methodPriority = getPriorityValue(method);
             if (methodPriority != null) {
-                priority = methodPriority.value();
+                priority = methodPriority;
             }
         }
 
@@ -2267,7 +2247,7 @@ public class CDI41InjectionValidator {
     private Set<Annotation> extractQualifiers(java.lang.reflect.Parameter parameter) {
         Set<Annotation> qualifiers = new HashSet<>();
         for (Annotation annotation : parameter.getAnnotations()) {
-            if (annotation.annotationType().isAnnotationPresent(Qualifier.class) ||
+            if (hasQualifierAnnotation(annotation.annotationType()) ||
                 knowledgeBase.isRegisteredQualifier(annotation.annotationType())) {
                 qualifiers.add(annotation);
             }
@@ -2339,7 +2319,7 @@ public class CDI41InjectionValidator {
     }
 
     private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
-        Set<Class<?>> out = new HashSet<Class<?>>();
+        Set<Class<?>> out = new HashSet<>();
         if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
             return out;
         }
