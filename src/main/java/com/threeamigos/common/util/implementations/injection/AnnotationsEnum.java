@@ -42,35 +42,35 @@ public enum AnnotationsEnum {
      * Maps: {@code javax.inject.Inject}, {@code jakarta.inject.Inject}<br/>
      * Since: JSR-330
      */
-    INJECT(javax.inject.Inject.class, jakarta.inject.Inject.class),
+    INJECT(annotationClass("javax.inject.Inject"), jakarta.inject.Inject.class),
 
     /**
      * Identifies a type that the injector only instantiates once.<br/>
      * Maps: {@code javax.inject.Singleton}, {@code jakarta.inject.Singleton}<br/>
      * Since: JSR-330
      */
-    SINGLETON(javax.inject.Singleton.class, jakarta.inject.Singleton.class),
+    SINGLETON(annotationClass("javax.inject.Singleton"), jakarta.inject.Singleton.class),
 
     /**
      * String-based qualifier annotation.<br/>
      * Maps: {@code javax.inject.Named}, {@code jakarta.inject.Named}<br/>
      * Since: JSR-330
      */
-    NAMED(javax.inject.Named.class, jakarta.inject.Named.class),
+    NAMED(annotationClass("javax.inject.Named"), jakarta.inject.Named.class),
 
     /**
      * Identifies qualifier annotations (meta-annotation).<br/>
      * Maps: {@code javax.inject.Qualifier}, {@code jakarta.inject.Qualifier}<br/>
      * Since: JSR-330
      */
-    QUALIFIER(javax.inject.Qualifier.class, jakarta.inject.Qualifier.class),
+    QUALIFIER(annotationClass("javax.inject.Qualifier"), jakarta.inject.Qualifier.class),
 
     /**
      * Identifies scope annotations (meta-annotation).<br/>
      * Maps: {@code javax.inject.Scope}, {@code jakarta.inject.Scope}<br/>
      * Since: JSR-330
      */
-    SCOPE(javax.inject.Scope.class, jakarta.inject.Scope.class),
+    SCOPE(annotationClass("javax.inject.Scope"), jakarta.inject.Scope.class),
 
     // ==================== CDI Qualifier/Binding Annotations ====================
 
@@ -93,7 +93,7 @@ public enum AnnotationsEnum {
      * Maps: {@code javax.enterprise.util.Nonbinding}, {@code jakarta.enterprise.util.Nonbinding}<br/>
      * Since: CDI 1.0
      */
-    NONBINDING(javax.enterprise.util.Nonbinding.class, jakarta.enterprise.util.Nonbinding.class),
+    NONBINDING(annotationClass("javax.enterprise.util.Nonbinding"), jakarta.enterprise.util.Nonbinding.class),
 
     // ==================== JSR-250 Annotations ====================
 
@@ -102,21 +102,21 @@ public enum AnnotationsEnum {
      * Maps: {@code javax.annotation.PostConstruct}, {@code jakarta.annotation.PostConstruct}<br/>
      * Since: Common Annotations 1.0 (used by CDI since CDI 1.0)
      */
-    POST_CONSTRUCT(javax.annotation.PostConstruct.class, jakarta.annotation.PostConstruct.class),
+    POST_CONSTRUCT(annotationClass("javax.annotation.PostConstruct"), jakarta.annotation.PostConstruct.class),
 
     /**
      * Lifecycle callback executed before destruction.<br/>
      * Maps: {@code javax.annotation.PreDestroy}, {@code jakarta.annotation.PreDestroy}<br/>
      * Since: Common Annotations 1.0 (used by CDI since CDI 1.0)
      */
-    PRE_DESTROY(javax.annotation.PreDestroy.class, jakarta.annotation.PreDestroy.class),
+    PRE_DESTROY(annotationClass("javax.annotation.PreDestroy"), jakarta.annotation.PreDestroy.class),
 
     /**
      * Priority annotation for ordering.<br/>
      * Maps: {@code javax.annotation.Priority}, {@code jakarta.annotation.Priority}<br/>
      * Since: Common Annotations 1.2 (used by CDI since CDI 1.1)
      */
-    PRIORITY(javax.annotation.Priority.class, jakarta.annotation.Priority.class),
+    PRIORITY(annotationClass("javax.annotation.Priority"), jakarta.annotation.Priority.class),
 
     // ==================== CDI Annotations ====================
 
@@ -125,42 +125,42 @@ public enum AnnotationsEnum {
      * Maps: {@code javax.enterprise.inject.Alternative}, {@code jakarta.enterprise.inject.Alternative}<br/>
      * Since: CDI 1.0
      */
-    ALTERNATIVE(javax.enterprise.inject.Alternative.class, jakarta.enterprise.inject.Alternative.class),
+    ALTERNATIVE(annotationClass("javax.enterprise.inject.Alternative"), jakarta.enterprise.inject.Alternative.class),
 
     /**
      * Built-in qualifier that matches all beans.<br/>
      * Maps: {@code javax.enterprise.inject.Any}, {@code jakarta.enterprise.inject.Any}<br/>
      * Since: CDI 1.0
      */
-    ANY(javax.enterprise.inject.Any.class, jakarta.enterprise.inject.Any.class),
+    ANY(annotationClass("javax.enterprise.inject.Any"), jakarta.enterprise.inject.Any.class),
 
     /**
      * The default qualifier applied when no other qualifier is present.<br/>
      * Maps: {@code javax.enterprise.inject.Default}, {@code jakarta.enterprise.inject.Default}<br/>
      * Since: CDI 1.0
      */
-    DEFAULT(javax.enterprise.inject.Default.class, jakarta.enterprise.inject.Default.class),
+    DEFAULT(annotationClass("javax.enterprise.inject.Default"), jakarta.enterprise.inject.Default.class),
 
     /**
      * Marks a producer method or field.<br/>
      * Maps: {@code javax.enterprise.inject.Produces}, {@code jakarta.enterprise.inject.Produces}<br/>
      * Since: CDI 1.0
      */
-    PRODUCES(javax.enterprise.inject.Produces.class, jakarta.enterprise.inject.Produces.class),
+    PRODUCES(annotationClass("javax.enterprise.inject.Produces"), jakarta.enterprise.inject.Produces.class),
 
     /**
      * Marks a disposer method parameter.<br/>
      * Maps: {@code javax.enterprise.inject.Disposes}, {@code jakarta.enterprise.inject.Disposes}<br/>
      * Since: CDI 1.0
      */
-    DISPOSES(javax.enterprise.inject.Disposes.class, jakarta.enterprise.inject.Disposes.class),
+    DISPOSES(annotationClass("javax.enterprise.inject.Disposes"), jakarta.enterprise.inject.Disposes.class),
 
     /**
      * Marks a class that should not be discovered as a bean.<br/>
      * Maps: {@code javax.enterprise.inject.Vetoed}, {@code jakarta.enterprise.inject.Vetoed}<br/>
      * Since: CDI 1.1
      */
-    VETOED(javax.enterprise.inject.Vetoed.class, jakarta.enterprise.inject.Vetoed.class),
+    VETOED(annotationClass("javax.enterprise.inject.Vetoed"), jakarta.enterprise.inject.Vetoed.class),
 
     /**
      * Restricts the bean types of a bean to only the types specified in the annotation value.
@@ -179,77 +179,79 @@ public enum AnnotationsEnum {
      * Maps: {@code javax.enterprise.inject.Typed}, {@code jakarta.enterprise.inject.Typed}<br/>
      * Since: CDI 1.0
      */
-    TYPED(javax.enterprise.inject.Typed.class, jakarta.enterprise.inject.Typed.class),
+    TYPED(annotationClass("javax.enterprise.inject.Typed"), jakarta.enterprise.inject.Typed.class),
 
     /**
      * Identifies a stereotype annotation (meta-annotation).<br/>
      * Maps: {@code javax.enterprise.inject.Stereotype}, {@code jakarta.enterprise.inject.Stereotype}<br/>
      * Since: CDI 1.0
      */
-    STEREOTYPE(javax.enterprise.inject.Stereotype.class, jakarta.enterprise.inject.Stereotype.class),
+    STEREOTYPE(annotationClass("javax.enterprise.inject.Stereotype"), jakarta.enterprise.inject.Stereotype.class),
 
     /**
      * Indicates that a bean specializes another bean.<br/>
      * Maps: {@code javax.enterprise.inject.Specializes}, {@code jakarta.enterprise.inject.Specializes}<br/>
      * Since: CDI 1.0
      */
-    SPECIALIZES(javax.enterprise.inject.Specializes.class, jakarta.enterprise.inject.Specializes.class),
+    SPECIALIZES(annotationClass("javax.enterprise.inject.Specializes"), jakarta.enterprise.inject.Specializes.class),
 
     /**
      * Built-in stereotype that combines {@code @Named} and {@code @RequestScoped}.<br/>
      * Maps: {@code javax.enterprise.inject.Model}, {@code jakarta.enterprise.inject.Model}<br/>
      * Since: CDI 1.0
      */
-    MODEL(javax.enterprise.inject.Model.class, jakarta.enterprise.inject.Model.class),
+    MODEL(annotationClass("javax.enterprise.inject.Model"), jakarta.enterprise.inject.Model.class),
 
     /**
      * Deprecated qualifier indicating injection of a new instance of a bean.<br/>
      * Maps: {@code javax.enterprise.inject.New}<br/>
      * Since: CDI 1.0 (deprecated in CDI 1.1, removed from Jakarta CDI)
      */
-    NEW(javax.enterprise.inject.New.class),
+    NEW(annotationClass("javax.enterprise.inject.New")),
 
     /**
      * Built-in qualifier for getting bean metadata in interceptors.<br/>
      * Maps: {@code javax.enterprise.inject.Intercepted}, {@code jakarta.enterprise.inject.Intercepted}<br/>
      * Since: CDI 1.1
      */
-    INTERCEPTED(javax.enterprise.inject.Intercepted.class, jakarta.enterprise.inject.Intercepted.class),
+    INTERCEPTED(annotationClass("javax.enterprise.inject.Intercepted"), jakarta.enterprise.inject.Intercepted.class),
 
     /**
      * Annotation for transient method or constructor parameter references.<br/>
      * Maps: {@code javax.enterprise.inject.TransientReference}, {@code jakarta.enterprise.inject.TransientReference}<br/>
      * Since: CDI 2.0
      */
-    TRANSIENT_REFERENCE(javax.enterprise.inject.TransientReference.class, jakarta.enterprise.inject.TransientReference.class),
+    TRANSIENT_REFERENCE(annotationClass("javax.enterprise.inject.TransientReference"),
+            jakarta.enterprise.inject.TransientReference.class),
 
     /**
      * Identifies a decorator bean.<br/>
      * Maps: {@code javax.decorator.Decorator}, {@code jakarta.decorator.Decorator}<br/>
      * Since: CDI 1.0
      */
-    DECORATOR(javax.decorator.Decorator.class, jakarta.decorator.Decorator.class),
+    DECORATOR(annotationClass("javax.decorator.Decorator"), jakarta.decorator.Decorator.class),
 
     /**
      * Marks the delegate injection point in a decorator.<br/>
      * Maps: {@code javax.decorator.Delegate}, {@code jakarta.decorator.Delegate}<br/>
      * Since: CDI 1.0
      */
-    DELEGATE(javax.decorator.Delegate.class, jakarta.decorator.Delegate.class),
+    DELEGATE(annotationClass("javax.decorator.Delegate"), jakarta.decorator.Delegate.class),
 
     /**
      * Identifies an interceptor bean.<br/>
      * Maps: {@code javax.interceptor.Interceptor}, {@code jakarta.interceptor.Interceptor}<br/>
      * Since: CDI 1.0
      */
-    INTERCEPTOR(javax.interceptor.Interceptor.class, jakarta.interceptor.Interceptor.class),
+    INTERCEPTOR(annotationClass("javax.interceptor.Interceptor"), jakarta.interceptor.Interceptor.class),
 
     /**
      * Identifies interceptor-binding annotations (meta-annotation).<br/>
      * Maps: {@code javax.interceptor.InterceptorBinding}, {@code jakarta.interceptor.InterceptorBinding}<br/>
      * Since: CDI 1.0
      */
-    INTERCEPTOR_BINDING(javax.interceptor.InterceptorBinding.class, jakarta.interceptor.InterceptorBinding.class),
+    INTERCEPTOR_BINDING(annotationClass("javax.interceptor.InterceptorBinding"),
+            jakarta.interceptor.InterceptorBinding.class),
 
     // ==================== CDI Scope Annotations ====================
 
@@ -258,42 +260,44 @@ public enum AnnotationsEnum {
      * Maps: {@code javax.enterprise.context.Dependent}, {@code jakarta.enterprise.context.Dependent}<br/>
      * Since: CDI 1.0
      */
-    DEPENDENT(javax.enterprise.context.Dependent.class, jakarta.enterprise.context.Dependent.class),
+    DEPENDENT(annotationClass("javax.enterprise.context.Dependent"), jakarta.enterprise.context.Dependent.class),
 
     /**
      * Application scope (one instance per application).<br/>
      * Maps: {@code javax.enterprise.context.ApplicationScoped}, {@code jakarta.enterprise.context.ApplicationScoped}<br/>
      * Since: CDI 1.0
      */
-    APPLICATION_SCOPED(javax.enterprise.context.ApplicationScoped.class, jakarta.enterprise.context.ApplicationScoped.class),
+    APPLICATION_SCOPED(annotationClass("javax.enterprise.context.ApplicationScoped"),
+            jakarta.enterprise.context.ApplicationScoped.class),
 
     /**
      * Request scope (one instance per HTTP request).<br/>
      * Maps: {@code javax.enterprise.context.RequestScoped}, {@code jakarta.enterprise.context.RequestScoped}<br/>
      * Since: CDI 1.0
      */
-    REQUEST_SCOPED(javax.enterprise.context.RequestScoped.class, jakarta.enterprise.context.RequestScoped.class),
+    REQUEST_SCOPED(annotationClass("javax.enterprise.context.RequestScoped"), jakarta.enterprise.context.RequestScoped.class),
 
     /**
      * Session scope (one instance per HTTP session).<br/>
      * Maps: {@code javax.enterprise.context.SessionScoped}, {@code jakarta.enterprise.context.SessionScoped}<br/>
      * Since: CDI 1.0
      */
-    SESSION_SCOPED(javax.enterprise.context.SessionScoped.class, jakarta.enterprise.context.SessionScoped.class),
+    SESSION_SCOPED(annotationClass("javax.enterprise.context.SessionScoped"), jakarta.enterprise.context.SessionScoped.class),
 
     /**
      * Conversation scope (one instance per conversation).<br/>
      * Maps: {@code javax.enterprise.context.ConversationScoped}, {@code jakarta.enterprise.context.ConversationScoped}<br/>
      * Since: CDI 1.0
      */
-    CONVERSATION_SCOPED(javax.enterprise.context.ConversationScoped.class, jakarta.enterprise.context.ConversationScoped.class),
+    CONVERSATION_SCOPED(annotationClass("javax.enterprise.context.ConversationScoped"),
+            jakarta.enterprise.context.ConversationScoped.class),
 
     /**
      * Normal scope meta-annotation.<br/>
      * Maps: {@code javax.enterprise.context.NormalScope}, {@code jakarta.enterprise.context.NormalScope}<br/>
      * Since: CDI 1.0
      */
-    NORMAL_SCOPE(javax.enterprise.context.NormalScope.class, jakarta.enterprise.context.NormalScope.class),
+    NORMAL_SCOPE(annotationClass("javax.enterprise.context.NormalScope"), jakarta.enterprise.context.NormalScope.class),
 
     // ==================== CDI Event Annotations ====================
 
@@ -302,7 +306,7 @@ public enum AnnotationsEnum {
      * Maps: {@code javax.enterprise.context.Initialized}, {@code jakarta.enterprise.context.Initialized}<br/>
      * Since: CDI 1.1
      */
-    INITIALIZED(javax.enterprise.context.Initialized.class, jakarta.enterprise.context.Initialized.class),
+    INITIALIZED(annotationClass("javax.enterprise.context.Initialized"), jakarta.enterprise.context.Initialized.class),
 
     /**
      * Qualifier for context before-destroyed lifecycle events.<br/>
@@ -317,14 +321,14 @@ public enum AnnotationsEnum {
      * Maps: {@code javax.enterprise.context.Destroyed}, {@code jakarta.enterprise.context.Destroyed}<br/>
      * Since: CDI 1.1
      */
-    DESTROYED(javax.enterprise.context.Destroyed.class, jakarta.enterprise.context.Destroyed.class),
+    DESTROYED(annotationClass("javax.enterprise.context.Destroyed"), jakarta.enterprise.context.Destroyed.class),
 
     /**
      * Marks a method parameter that observes CDI events (synchronous).<br/>
      * Maps: {@code javax.enterprise.event.Observes}, {@code jakarta.enterprise.event.Observes}<br/>
      * Since: CDI 1.0
      */
-    OBSERVES(javax.enterprise.event.Observes.class, jakarta.enterprise.event.Observes.class),
+    OBSERVES(annotationClass("javax.enterprise.event.Observes"), jakarta.enterprise.event.Observes.class),
 
     /**
      * Marks a method parameter that observes CDI events (asynchronous).<br/>
@@ -339,21 +343,21 @@ public enum AnnotationsEnum {
      * Maps: {@code javax.interceptor.AroundInvoke}, {@code jakarta.interceptor.AroundInvoke}<br/>
      * Since: Interceptors 1.0 (used by CDI since CDI 1.0)
      */
-    AROUND_INVOKE(javax.interceptor.AroundInvoke.class, jakarta.interceptor.AroundInvoke.class),
+    AROUND_INVOKE(annotationClass("javax.interceptor.AroundInvoke"), jakarta.interceptor.AroundInvoke.class),
 
     /**
      * Interceptor method invoked around constructor invocation.<br/>
      * Maps: {@code javax.interceptor.AroundConstruct}, {@code jakarta.interceptor.AroundConstruct}<br/>
      * Since: Interceptors 1.2 (used by CDI since CDI 1.1)
      */
-    AROUND_CONSTRUCT(javax.interceptor.AroundConstruct.class, jakarta.interceptor.AroundConstruct.class),
+    AROUND_CONSTRUCT(annotationClass("javax.interceptor.AroundConstruct"), jakarta.interceptor.AroundConstruct.class),
 
     /**
      * Restricts ProcessAnnotatedType observer delivery to types containing at least one of the specified annotations.<br/>
      * Maps: {@code javax.enterprise.inject.spi.WithAnnotations}, {@code jakarta.enterprise.inject.spi.WithAnnotations}<br/>
      * Since: CDI 1.1
      */
-    WITH_ANNOTATIONS(javax.enterprise.inject.spi.WithAnnotations.class,
+    WITH_ANNOTATIONS(annotationClass("javax.enterprise.inject.spi.WithAnnotations"),
             jakarta.enterprise.inject.spi.WithAnnotations.class),
 
     /**
@@ -544,6 +548,18 @@ public enum AnnotationsEnum {
      */
     public static boolean hasSingletonAnnotation(AnnotatedElement element) {
         return SINGLETON.isPresent(element);
+    }
+
+    /**
+     * Normalizes JSR-330 {@code @Singleton} to CDI {@code @ApplicationScoped}.
+     * Returns the original scope type for all non-singleton scopes.
+     */
+    public static Class<? extends Annotation> normalizeSingletonToApplicationScoped(
+            Class<? extends Annotation> scopeType) {
+        if (scopeType != null && hasSingletonAnnotation(scopeType)) {
+            return jakarta.enterprise.context.ApplicationScoped.class;
+        }
+        return scopeType;
     }
 
     /**

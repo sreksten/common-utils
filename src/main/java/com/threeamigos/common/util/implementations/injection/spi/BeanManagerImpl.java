@@ -3105,7 +3105,7 @@ public class BeanManagerImpl implements BeanManager {
     private Class<? extends Annotation> extractScopeFromAnnotated(jakarta.enterprise.inject.spi.Annotated annotated) {
         for (Annotation ann : annotated.getAnnotations()) {
             if (isScopeAnnotationType(ann.annotationType())) {
-                return ann.annotationType();
+                return normalizeSingletonToApplicationScoped(ann.annotationType());
             }
         }
         return jakarta.enterprise.context.Dependent.class;

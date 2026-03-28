@@ -1039,7 +1039,7 @@ public class CDI41BeanValidator {
         for (Annotation annotation : declaredAnnotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
             if (isScopeAnnotationType(annotationType)) {
-                return annotationType;
+                return normalizeSingletonToApplicationScoped(annotationType);
             }
         }
 
@@ -1098,7 +1098,7 @@ public class CDI41BeanValidator {
         for (Annotation annotation : clazz.getDeclaredAnnotations()) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
             if (isScopeAnnotationType(annotationType)) {
-                return annotationType;
+                return normalizeSingletonToApplicationScoped(annotationType);
             }
         }
         return null;
@@ -1138,7 +1138,7 @@ public class CDI41BeanValidator {
                     }
                     Class<? extends Annotation> annotationType = annotation.annotationType();
                     if (isScopeAnnotationType(annotationType)) {
-                        return annotationType;
+                        return normalizeSingletonToApplicationScoped(annotationType);
                     }
                 }
             }
@@ -1148,7 +1148,7 @@ public class CDI41BeanValidator {
         for (Annotation a : stereotypeClass.getAnnotations()) {
             Class<? extends Annotation> at = a.annotationType();
             if (isScopeAnnotationType(at)) {
-                return at;
+                return normalizeSingletonToApplicationScoped(at);
             }
         }
 
@@ -2093,8 +2093,7 @@ public class CDI41BeanValidator {
                     "javax.enterprise.context.Dependent".equals(annotationType.getName())) {
                 continue;
             }
-            if (hasMetaAnnotation(annotationType, Scope.class) ||
-                    hasMetaAnnotation(annotationType, NormalScope.class)) {
+            if (hasScopeAnnotation(annotationType) || hasNormalScopeAnnotation(annotationType)) {
                 return true;
             }
         }
@@ -2268,7 +2267,7 @@ public class CDI41BeanValidator {
 
     private Class<? extends Annotation> extractBeanScope(Class<?> clazz, Class<? extends Annotation> discoveredScope) {
         if (discoveredScope != null) {
-            return discoveredScope;
+            return normalizeSingletonToApplicationScoped(discoveredScope);
         }
 
         // No explicit scope: resolve default scope from stereotypes (if any), otherwise @Dependent.
@@ -2470,8 +2469,8 @@ public class CDI41BeanValidator {
 
     private boolean isScopeAnnotationType(Class<? extends Annotation> at) {
         // CDI scopes are meta-annotated with @Scope or @NormalScope
-        return hasMetaAnnotation(at, Scope.class)
-                || hasMetaAnnotation(at, NormalScope.class)
+        return hasScopeAnnotation(at)
+                || hasNormalScopeAnnotation(at)
                 || knowledgeBase.isRegisteredScope(at)
                 // plus common built-ins
                 || at.equals(Dependent.class)
@@ -2824,8 +2823,8 @@ public class CDI41BeanValidator {
             return true;
         }
 
-        // "all other normal scope types"
-        if (hasMetaAnnotation(annotationType, NormalScope.class)) {
+        // "all other normal scope types" and pseudo scopes (e.g. @Singleton)
+        if (hasNormalScopeAnnotation(annotationType) || hasScopeAnnotation(annotationType)) {
             return true;
         }
 
@@ -3223,7 +3222,7 @@ public class CDI41BeanValidator {
         }
 
         if (!directScopes.isEmpty()) {
-            return directScopes.get(0);
+            return normalizeSingletonToApplicationScoped(directScopes.get(0));
         }
 
         Class<? extends Annotation> inheritedScope = null;
@@ -3248,7 +3247,7 @@ public class CDI41BeanValidator {
         }
 
         if (inheritedScope != null) {
-            return inheritedScope;
+            return normalizeSingletonToApplicationScoped(inheritedScope);
         }
 
         return Dependent.class;
