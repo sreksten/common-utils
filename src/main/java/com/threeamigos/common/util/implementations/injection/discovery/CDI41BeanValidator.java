@@ -10,8 +10,6 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.DefinitionException;
@@ -3446,12 +3444,12 @@ public class CDI41BeanValidator {
         // 4. Find all @PostConstruct methods in the hierarchy (superclass → subclass order)
         // Per Interceptors Specification 1.2+: All @PostConstruct methods in the hierarchy are invoked
         // unless overridden by a subclass
-        findAllLifecycleMethods(clazz, PostConstruct.class, bean, true);
+        findAllLifecycleMethods(clazz, POST_CONSTRUCT, bean, true);
 
         // 5. Find all @PreDestroy methods in the hierarchy (superclass → subclass order during discovery)
         // Per Interceptors Specification 1.2+: All @PreDestroy methods in the hierarchy are invoked
         // unless overridden by a subclass. They will be executed in reverse order (subclass → superclass).
-        findAllLifecycleMethods(clazz, PreDestroy.class, bean, false);
+        findAllLifecycleMethods(clazz, PRE_DESTROY, bean, false);
 
         // 6. Find all @PrePassivate methods in the hierarchy for passivating scopes
         // NOTE: @PrePassivate is an EJB annotation (jakarta.ejb), NOT CDI 4.1 standard.
@@ -3477,14 +3475,15 @@ public class CDI41BeanValidator {
      * </ul>
      *
      * @param clazz the bean class
-     * @param lifecycleAnnotation the lifecycle annotation class (@PostConstruct or @PreDestroy)
+     * @param lifecycleAnnotation lifecycle annotation enum value ({@code POST_CONSTRUCT} or {@code PRE_DESTROY})
      * @param bean the bean being populated
      * @param isPostConstruct true if @PostConstruct, false if @PreDestroy
      */
     private void findAllLifecycleMethods(Class<?> clazz,
-                                         Class<? extends Annotation> lifecycleAnnotation,
+                                         AnnotationsEnum lifecycleAnnotation,
                                          BeanImpl<?> bean,
                                          boolean isPostConstruct) {
+        String lifecycleAnnotationName = isPostConstruct ? "PostConstruct" : "PreDestroy";
         // Build class hierarchy: superclass → subclass
         List<Class<?>> hierarchy = new ArrayList<>();
         Class<?> current = clazz;
@@ -3510,14 +3509,14 @@ public class CDI41BeanValidator {
                     // - Return type is ignored (can be void or any type)
                     if (method.getParameterCount() != 0) {
                         knowledgeBase.addDefinitionError(
-                            fmtMethod(method) + ": " + lifecycleAnnotation.getSimpleName() +
+                            fmtMethod(method) + ": " + lifecycleAnnotationName +
                             " method must have no parameters"
                         );
                         return;
                     }
                     if (Modifier.isStatic(method.getModifiers())) {
                         knowledgeBase.addDefinitionError(
-                            fmtMethod(method) + ": " + lifecycleAnnotation.getSimpleName() +
+                            fmtMethod(method) + ": " + lifecycleAnnotationName +
                             " method must not be static"
                         );
                         return;
@@ -3527,7 +3526,7 @@ public class CDI41BeanValidator {
                     if (foundMethod != null) {
                         knowledgeBase.addDefinitionError(
                             currentClass.getName() + ": multiple " +
-                            lifecycleAnnotation.getSimpleName() +
+                            lifecycleAnnotationName +
                             " methods found in same class (only one allowed per class)"
                         );
                         return;
