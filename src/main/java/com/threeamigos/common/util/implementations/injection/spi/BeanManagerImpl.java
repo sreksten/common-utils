@@ -171,6 +171,20 @@ public class BeanManagerImpl implements BeanManager {
         }
     }
 
+    public void clearRegisteredExtensions() {
+        registeredExtensions.clear();
+    }
+
+    /**
+     * Clears runtime state retained by the BeanManager.
+     * Intended for container shutdown.
+     */
+    public void clearRuntimeState() {
+        registeredExtensions.clear();
+        beanResolver.clearRuntimeState();
+        decoratorAwareProxyGenerator.clearCache();
+    }
+
     public static BeanManagerImpl getRegisteredBeanManager(ClassLoader classLoader) {
         if (classLoader == null) {
             return null;

@@ -31,11 +31,19 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         // 1. Discover classes via Jandex
         Set<Class<?>> discoveredClasses = new HashSet<>();
         for (ClassInfo classInfo : index.getKnownClasses()) {
+            String className = classInfo.name().toString();
+            if (shouldSkipInfrastructureClass(className)) {
+                continue;
+            }
             try {
-                Class<?> clazz = module.getClassLoader().loadClass(classInfo.name().toString());
+                Class<?> clazz = module.getClassLoader().loadClass(className);
                 discoveredClasses.add(clazz);
-            } catch (ClassNotFoundException | NoClassDefFoundError e) {
-                // Ignore classes that cannot be resolved (optional dependencies like Ant/TestNG tasks)
+            } catch (ClassNotFoundException e) {
+                // Ignore classes that cannot be resolved.
+            } catch (LinkageError e) {
+                // Ignore classes that fail to link because optional/transitive types are not visible.
+            } catch (RuntimeException e) {
+                // Keep discovery resilient for non-application classes in third-party libraries.
             }
         }
 
@@ -45,13 +53,24 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
 
         // 2. Initialize Syringe via Bootstrap
         SyringeBootstrap bootstrap = new SyringeBootstrap(discoveredClasses, module.getClassLoader());
-        Syringe syringe = bootstrap.bootstrap();
+        Syringe syringe = null;
+        try {
+            syringe = bootstrap.bootstrap();
 
-        // 3. Attach Syringe to the deployment unit for later use (e.g., in Setup Actions)
-        deploymentUnit.putAttachment(SyringeAttachments.SYRINGE_CONTAINER, syringe);
+            // 3. Attach Syringe to the deployment unit for later use (e.g., in Setup Actions)
+            deploymentUnit.putAttachment(SyringeAttachments.SYRINGE_CONTAINER, syringe);
 
-        // 4. Register SetupAction for CDI.current() support
-        deploymentUnit.addToAttachmentList(org.jboss.as.server.deployment.Attachments.SETUP_ACTIONS, new SyringeSetupAction(syringe));
+            // 4. Register SetupAction for CDI.current() support
+            deploymentUnit.addToAttachmentList(org.jboss.as.server.deployment.Attachments.SETUP_ACTIONS, new SyringeSetupAction(syringe));
+        } catch (RuntimeException e) {
+            // Defensive cleanup on deployment failure before attachment is established.
+            try {
+                bootstrap.shutdown();
+            } catch (Exception ignored) {
+                // Best-effort cleanup.
+            }
+            throw e;
+        }
     }
 
     @Override
@@ -61,5 +80,23 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         if (syringe != null) {
             syringe.shutdown();
         }
+    }
+
+    private static boolean shouldSkipInfrastructureClass(String className) {
+        return className.startsWith("java.")
+                || className.startsWith("javax.")
+                || className.startsWith("jakarta.")
+                || className.startsWith("sun.")
+                || className.startsWith("com.sun.")
+                || className.startsWith("org.jboss.arquillian.")
+                || className.startsWith("org.jboss.shrinkwrap.")
+                || className.startsWith("org.testng.")
+                || className.startsWith("org.junit.")
+                || className.startsWith("org.hamcrest.")
+                || className.startsWith("org.apache.")
+                || className.startsWith("org.slf4j.")
+                || className.startsWith("ch.qos.logback.")
+                || className.startsWith("org.jboss.logging.")
+                || className.startsWith("com.threeamigos.common.util.implementations.injection.arquillian.");
     }
 }

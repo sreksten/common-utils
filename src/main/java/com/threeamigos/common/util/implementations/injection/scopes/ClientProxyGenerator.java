@@ -159,6 +159,14 @@ public class ClientProxyGenerator {
     }
 
     /**
+     * Clears generated proxy class cache for this generator instance.
+     * Intended for container shutdown to release class references promptly.
+     */
+    public void clearCache() {
+        proxyClassCache.clear();
+    }
+
+    /**
      * Holds BeanManager and ContextManager for a container.
      */
     static class ContainerContext {

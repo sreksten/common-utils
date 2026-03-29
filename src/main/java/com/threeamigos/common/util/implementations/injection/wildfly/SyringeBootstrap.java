@@ -64,6 +64,13 @@ public class SyringeBootstrap {
 
             return syringe;
         } catch (Exception e) {
+            // Ensure partially initialized containers are always torn down on bootstrap failure
+            // so static registries and classloader-bound caches do not leak across deployments.
+            try {
+                syringe.shutdown();
+            } catch (Exception ignored) {
+                // Best-effort cleanup.
+            }
             throw new DeploymentException("Failed to bootstrap Syringe", e);
         }
     }

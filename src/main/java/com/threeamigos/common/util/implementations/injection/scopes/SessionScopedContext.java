@@ -306,6 +306,7 @@ public class SessionScopedContext implements ScopeContext {
         sessionInstances.clear();
         sessionContexts.clear();
         sessionBeans.clear();
+        currentSessionId.remove();
         active = false;
     }
 

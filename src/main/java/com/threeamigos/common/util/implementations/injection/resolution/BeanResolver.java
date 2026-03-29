@@ -1224,6 +1224,16 @@ public class BeanResolver implements DependencyResolver {
     }
 
     /**
+     * Clears thread-local and cache state retained by this resolver instance.
+     * Intended for container shutdown.
+     */
+    public void clearRuntimeState() {
+        currentInjectionPoint.remove();
+        owningBeanManager = null;
+        decoratorAwareProxyGenerator.clearCache();
+    }
+
+    /**
      * Gets the current injection point context (for testing/debugging).
      *
      * @return the current injection point, or null if not set

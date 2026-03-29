@@ -101,6 +101,10 @@ public class DecoratorAwareProxyGenerator {
     // Value: Generated proxy class (if needed for decoration)
     private final ConcurrentHashMap<Class<?>, Class<?>> decoratorProxyCache = new ConcurrentHashMap<>();
 
+    public void clearCache() {
+        decoratorProxyCache.clear();
+    }
+
     /**
      * Creates a decorator chain wrapping the target instance.
      *

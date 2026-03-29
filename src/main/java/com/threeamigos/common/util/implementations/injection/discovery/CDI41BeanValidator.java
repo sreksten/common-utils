@@ -591,7 +591,19 @@ public class CDI41BeanValidator {
                     "These interception forms are non-portable in CDI Lite.");
         }
 
-        for (Method method : clazz.getDeclaredMethods()) {
+        final Method[] declaredMethods;
+        try {
+            declaredMethods = clazz.getDeclaredMethods();
+        } catch (NoClassDefFoundError e) {
+            // Some third-party classes on the classpath reference optional types that are not
+            // resolvable in the target deployment. These classes are not CDI beans and should
+            // not fail validation of non-portable interception forms.
+            return;
+        } catch (TypeNotPresentException e) {
+            return;
+        }
+
+        for (Method method : declaredMethods) {
             if (hasLegacyInterceptorDeclaration(method.getAnnotations())) {
                 throw new NonPortableBehaviourException(fmtMethod(method) +
                         ": uses @Interceptors/@ExcludeClassInterceptors/@ExcludeDefaultInterceptors. " +

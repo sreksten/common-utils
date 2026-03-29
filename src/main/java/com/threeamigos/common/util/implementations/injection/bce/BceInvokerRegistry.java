@@ -37,4 +37,8 @@ public class BceInvokerRegistry {
         }
         return invoker;
     }
+
+    public void clear() {
+        invokers.clear();
+    }
 }

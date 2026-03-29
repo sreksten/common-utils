@@ -212,7 +212,7 @@ public class Syringe {
      * methods are portable.
      */
     private boolean cdiLiteMode = false;
-    private boolean cdiFullLegacyInterceptionEnabled = false;
+    private boolean cdiFullLegacyInterceptionEnabled = true;
     private boolean legacyCdi10NewEnabled = false;
 
     /**
@@ -223,6 +223,8 @@ public class Syringe {
     private final Map<Class<? extends Annotation>, Context> customContextsToRegister = new HashMap<>();
     private final Set<String> processedSyntheticAnnotatedTypeIds = new HashSet<String>();
     private final Set<Class<?>> syntheticAnnotatedTypeClasses = new HashSet<Class<?>>();
+    private InterceptorAwareProxyGenerator runtimeInterceptorAwareProxyGenerator;
+    private DecoratorAwareProxyGenerator runtimeDecoratorAwareProxyGenerator;
 
     public Syringe() {
         this.messageHandler = new ConsoleMessageHandler();
@@ -314,6 +316,9 @@ public class Syringe {
             throw new IllegalStateException("Cannot change CDI mode after container initialization");
         }
         this.cdiLiteMode = cdiLiteMode;
+        // Keep interception behavior aligned with selected CDI mode by default:
+        // CDI Lite -> strict non-portable checks; CDI Full -> allow legacy forms.
+        this.cdiFullLegacyInterceptionEnabled = !cdiLiteMode;
     }
 
     /**
@@ -799,6 +804,8 @@ public class Syringe {
         InterceptorAwareProxyGenerator interceptorAwareProxyGenerator = new InterceptorAwareProxyGenerator();
         DecoratorResolver decoratorResolver = new DecoratorResolver(knowledgeBase);
         DecoratorAwareProxyGenerator decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
+        runtimeInterceptorAwareProxyGenerator = interceptorAwareProxyGenerator;
+        runtimeDecoratorAwareProxyGenerator = decoratorAwareProxyGenerator;
 
         for (Bean<?> bean : knowledgeBase.getBeans()) {
             if (bean instanceof BeanImpl<?>) {
@@ -900,6 +907,7 @@ public class Syringe {
             fireBeforeShutdown();
         } finally {
             cleanupStaticState();
+            cleanupInstanceState();
             // Clear state
             extensions.clear();
             buildCompatibleExtensions.clear();
@@ -922,6 +930,7 @@ public class Syringe {
         }
 
         ClientProxyGenerator.unregisterContainer(classLoader);
+        InterceptorAwareProxyGenerator.clearTargetAroundInvokeCache();
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCacheForClassLoader(classLoader);
         BeansXmlParser.clearJaxbContextCacheForClassLoader(classLoader);
         AnnotationsEnum.clearDynamicAnnotationsForClassLoader(classLoader);
@@ -931,6 +940,38 @@ public class Syringe {
         EventImpl.clearStaticState();
         SyringeCDIProvider.unregisterThreadLocalCDI();
         SyringeCDIProvider.unregisterGlobalCDI();
+    }
+
+    private void cleanupInstanceState() {
+        // Release instance registries and BCE handles.
+        bceInvokerRegistry.clear();
+        extensionClassNames.clear();
+        extensionInstances.clear();
+        buildCompatibleExtensionClassNames.clear();
+        customContextsToRegister.clear();
+        processedSyntheticAnnotatedTypeIds.clear();
+        syntheticAnnotatedTypeClasses.clear();
+        buildCompatibleExtensionRunner = null;
+
+        // Drop runtime metadata references eagerly.
+        knowledgeBase.clearAllState();
+
+        if (beanManager != null) {
+            try {
+                beanManager.clearRuntimeState();
+            } catch (Exception ignored) {
+                // Best-effort cleanup.
+            }
+        }
+        if (runtimeInterceptorAwareProxyGenerator != null) {
+            runtimeInterceptorAwareProxyGenerator.clearCache();
+            runtimeInterceptorAwareProxyGenerator = null;
+        }
+        if (runtimeDecoratorAwareProxyGenerator != null) {
+            runtimeDecoratorAwareProxyGenerator.clearCache();
+            runtimeDecoratorAwareProxyGenerator = null;
+        }
+        beanManager = null;
     }
 
     // ============================================================

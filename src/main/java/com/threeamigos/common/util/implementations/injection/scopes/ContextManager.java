@@ -90,6 +90,10 @@ public class ContextManager {
      * Destroys all contexts and their instances.
      */
     public void destroyAll() {
+        if (destroyed) {
+            return;
+        }
+
         ScopeContext applicationScopeContext = contexts.get(ApplicationScoped.class);
         ApplicationContextLifecycleListener applicationListener = applicationContextLifecycleListener;
         if (applicationScopeContext != null) {
@@ -116,6 +120,27 @@ public class ContextManager {
                 messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
             }
         }
+
+        // Ensure ThreadLocal state is released for the current thread at shutdown.
+        try {
+            conversationContext.clearCurrentThread();
+        } catch (Exception ignored) {
+        }
+        try {
+            sessionContext.deactivateSession();
+        } catch (Exception ignored) {
+        }
+        try {
+            requestContext.deactivateRequest();
+        } catch (Exception ignored) {
+        }
+
+        // Drop proxy class caches and context references.
+        proxyGenerator.clearCache();
+        contexts.clear();
+        requestContextLifecycleListener = null;
+        applicationContextLifecycleListener = null;
+
         destroyed = true;
     }
 

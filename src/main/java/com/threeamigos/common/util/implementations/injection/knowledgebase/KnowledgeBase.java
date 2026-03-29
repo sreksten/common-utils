@@ -1373,4 +1373,51 @@ public class KnowledgeBase {
     public List<String> getDeploymentErrors() {
         return deploymentErrors;
     }
+
+    /**
+     * Clears all mutable runtime state retained by the knowledge base.
+     * Intended to be called during container shutdown to release references.
+     */
+    public void clearAllState() {
+        excludedClasses.clear();
+        classes.clear();
+        classArchiveModes.clear();
+        annotatedTypeOverrides.clear();
+        beans.clear();
+        constructorsMap.clear();
+        producerBeans.clear();
+        interceptors.clear();
+        decorators.clear();
+        interceptorInfos.clear();
+        decoratorInfos.clear();
+        observerMethodInfos.clear();
+        observerMethodsDiscovered = false;
+
+        warnings.clear();
+        errors.clear();
+        definitionErrors.clear();
+        deploymentErrors.clear();
+        injectionErrors.clear();
+        illegalProductErrors.clear();
+
+        registeredStereotypes.clear();
+        registeredQualifiers.clear();
+        registeredScopes.clear();
+        registeredContextImplementations.clear();
+        registeredInterceptorBindings.clear();
+        registeredAnnotatedTypes.clear();
+        registeredAnnotatedTypeSources.clear();
+        syntheticObserverMethods.clear();
+        ignoreFinalMethodsBeans.clear();
+        beansXmlConfigurations.clear();
+        vetoedTypes.clear();
+        programmaticallyEnabledAlternatives.clear();
+        applicationInterceptorOrder.clear();
+        applicationAlternativeOrder.clear();
+        applicationDecoratorOrder.clear();
+        afterTypeDiscoveryAlternativesCustomized = false;
+        afterTypeDiscoveryInterceptorsCustomized = false;
+        afterTypeDiscoveryDecoratorsCustomized = false;
+        implicitBeanArchiveScanningEnabled = true;
+    }
 }

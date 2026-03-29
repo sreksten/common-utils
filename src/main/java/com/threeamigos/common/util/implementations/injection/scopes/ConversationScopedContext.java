@@ -355,7 +355,9 @@ public class ConversationScopedContext implements ScopeContext {
         }
         conversationInstances.clear();
         conversationContexts.clear();
+        conversationBeans.clear();
         conversationMetadata.clear();
+        currentConversationId.remove();
         active = false;
     }
 

@@ -84,6 +84,10 @@ public class InterceptorAwareProxyGenerator {
     private static final ConcurrentHashMap<Class<?>, Optional<Method>> targetAroundInvokeCache =
             new ConcurrentHashMap<>();
 
+    public static void clearTargetAroundInvokeCache() {
+        targetAroundInvokeCache.clear();
+    }
+
     public static void clearTargetAroundInvokeCacheForClassLoader(ClassLoader classLoader) {
         if (classLoader == null) {
             return;
@@ -92,6 +96,10 @@ public class InterceptorAwareProxyGenerator {
             Class<?> type = entry.getKey();
             return type != null && type.getClassLoader() == classLoader;
         });
+    }
+
+    public void clearCache() {
+        proxyClassCache.clear();
     }
 
     /**
