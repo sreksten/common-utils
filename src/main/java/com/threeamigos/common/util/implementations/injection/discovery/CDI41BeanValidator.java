@@ -594,10 +594,10 @@ public class CDI41BeanValidator {
         final Method[] declaredMethods;
         try {
             declaredMethods = clazz.getDeclaredMethods();
-        } catch (NoClassDefFoundError e) {
-            // Some third-party classes on the classpath reference optional types that are not
-            // resolvable in the target deployment. These classes are not CDI beans and should
-            // not fail validation of non-portable interception forms.
+        } catch (LinkageError e) {
+            // Some third-party classes on the classpath reference optional or inaccessible types.
+            // These classes are not CDI beans and should not fail validation of non-portable
+            // interception forms.
             return;
         } catch (TypeNotPresentException e) {
             return;

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("3.10 - Unproxyable bean types")
 public class UnproxyableBeanTypesTest {
@@ -80,6 +81,19 @@ public class UnproxyableBeanTypesTest {
     }
 
     @Test
+    @DisplayName("3.10 - Regression: unproxyable array deployment keeps CDI deployment-problem semantics")
+    void arrayUnproxyableFailureKeepsCdiDeploymentProblemSemantics() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), ArrayConsumer.class);
+
+        DeploymentException thrown = assertThrows(DeploymentException.class, syringe::setup);
+        assertTrue(
+                !throwableChainContains(thrown, "IllegalAccessError")
+                        && !throwableChainContains(thrown, "NoClassDefFoundError")
+                        && !throwableChainContains(thrown, "ClassNotFoundException"),
+                "Expected CDI deployment problem, not linkage/classloading failure details");
+    }
+
+    @Test
     @DisplayName("3.10 - Unproxyable bean type is allowed when no client proxy and no bound interceptor are required")
     void unproxyableBeanTypeIsAllowedWhenNoProxyOrInterceptorIsRequired() {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), FinalDependentAllowedConsumer.class);
@@ -109,5 +123,17 @@ public class UnproxyableBeanTypesTest {
                 .filter(candidate -> candidate.getBeanClass().equals(beanClass))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Managed bean not found: " + beanClass.getName()));
+    }
+
+    private boolean throwableChainContains(Throwable throwable, String textFragment) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.contains(textFragment)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

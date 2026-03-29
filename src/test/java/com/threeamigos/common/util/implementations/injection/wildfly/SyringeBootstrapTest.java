@@ -1,10 +1,30 @@
 package com.threeamigos.common.util.implementations.injection.wildfly;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
+import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import org.junit.jupiter.api.Test;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.inject.Stereotype;
+import jakarta.interceptor.AroundInvoke;
+import jakarta.interceptor.Interceptors;
+import jakarta.interceptor.InvocationContext;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import java.lang.annotation.ElementType;
+import java.lang.reflect.Field;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SyringeBootstrapTest {
@@ -13,6 +33,33 @@ public class SyringeBootstrapTest {
     public static class MyBean {
         public String hello() {
             return "hello";
+        }
+    }
+
+    @Stereotype
+    @ApplicationScoped
+    @RequestScoped
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface InvalidScopeStereotype {
+    }
+
+    @InvalidScopeStereotype
+    public static class InvalidScopedBean {
+    }
+
+    public static class LegacyStyleInterceptor {
+        @AroundInvoke
+        public Object aroundInvoke(InvocationContext context) throws Exception {
+            return context.proceed();
+        }
+    }
+
+    @jakarta.enterprise.context.Dependent
+    @Interceptors(LegacyStyleInterceptor.class)
+    public static class LegacyInterceptedBean {
+        public String ping() {
+            return "pong";
         }
     }
 
@@ -37,14 +84,57 @@ public class SyringeBootstrapTest {
 
     @Test
     public void testStandaloneSECompatibility() {
-        // Test that Syringe still works in SE mode with the package constructor
-        Syringe syringe = new Syringe(MyBean.class.getPackage().getName());
-        syringe.setup();
+        // Test that Syringe still works in SE mode with explicit discovered classes.
+        Syringe syringe = new Syringe();
+        syringe.initialize();
+        syringe.addDiscoveredClass(MyBean.class);
+        syringe.start();
 
         MyBean bean = syringe.getBeanManager().createInstance().select(MyBean.class).get();
         assertNotNull(bean);
         assertEquals("hello", bean.hello());
 
         syringe.shutdown();
+    }
+
+    @Test
+    public void testBootstrapFailureCleansGlobalRegistries() throws Exception {
+        Set<Class<?>> classes = new HashSet<Class<?>>();
+        classes.add(InvalidScopeStereotype.class);
+        classes.add(InvalidScopedBean.class);
+
+        ClassLoader original = Thread.currentThread().getContextClassLoader();
+        URLClassLoader isolatedLoader = new URLClassLoader(new URL[0], original);
+        Thread.currentThread().setContextClassLoader(isolatedLoader);
+        try {
+            SyringeBootstrap bootstrap = new SyringeBootstrap(classes, isolatedLoader);
+
+            assertThrows(DeploymentException.class, bootstrap::bootstrap);
+
+            // Regression for failed bootstrap leak: BeanManager registry must not retain classloader.
+            assertNull(BeanManagerImpl.getRegisteredBeanManager(isolatedLoader));
+
+            // Regression for failed bootstrap leak: proxy container registry must not retain classloader.
+            Field registryField = ClientProxyGenerator.class.getDeclaredField("containerRegistry");
+            registryField.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Map<ClassLoader, ?> registry = (Map<ClassLoader, ?>) registryField.get(null);
+            assertFalse(registry.containsKey(isolatedLoader));
+        } finally {
+            Thread.currentThread().setContextClassLoader(original);
+            isolatedLoader.close();
+        }
+    }
+
+    @Test
+    public void testManagedBootstrapForcesCdiFullLegacyInterception() {
+        Set<Class<?>> classes = new HashSet<Class<?>>();
+        classes.add(LegacyStyleInterceptor.class);
+        classes.add(LegacyInterceptedBean.class);
+
+        SyringeBootstrap bootstrap = new SyringeBootstrap(classes, Thread.currentThread().getContextClassLoader());
+        Syringe syringe = assertDoesNotThrow(bootstrap::bootstrap);
+        assertNotNull(syringe);
+        bootstrap.shutdown();
     }
 }

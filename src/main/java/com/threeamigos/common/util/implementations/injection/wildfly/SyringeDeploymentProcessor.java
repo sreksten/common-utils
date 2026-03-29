@@ -10,13 +10,18 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.as.server.deployment.annotation.CompositeIndex;
 import org.jboss.modules.Module;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * DeploymentUnitProcessor that initializes Syringe for each deployment.
  */
 public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
+
+    private static final Pattern HASH_SUFFIX = Pattern.compile("^[0-9a-fA-F]{24,}$");
 
     @Override
     public void deploy(DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
@@ -28,11 +33,20 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             return;
         }
 
+        List<String> indexedClassNames = new ArrayList<String>();
+        for (ClassInfo classInfo : index.getKnownClasses()) {
+            indexedClassNames.add(classInfo.name().toString());
+        }
+        String scopedPackagePrefix = resolveScopedPackagePrefix(indexedClassNames, deploymentUnit.getName());
+
         // 1. Discover classes via Jandex
         Set<Class<?>> discoveredClasses = new HashSet<>();
-        for (ClassInfo classInfo : index.getKnownClasses()) {
-            String className = classInfo.name().toString();
+        for (String className : indexedClassNames) {
             if (shouldSkipInfrastructureClass(className)) {
+                continue;
+            }
+            if (scopedPackagePrefix != null
+                    && !(className.equals(scopedPackagePrefix) || className.startsWith(scopedPackagePrefix + "."))) {
                 continue;
             }
             try {
@@ -46,6 +60,9 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
                 // Keep discovery resilient for non-application classes in third-party libraries.
             }
         }
+
+        // Narrow discovered classes to deployment-local test package for TCK-generated archives.
+        discoveredClasses = narrowToDeploymentScope(discoveredClasses, deploymentUnit.getName());
 
         if (discoveredClasses.isEmpty()) {
             return;
@@ -88,6 +105,11 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
                 || className.startsWith("jakarta.")
                 || className.startsWith("sun.")
                 || className.startsWith("com.sun.")
+                || className.startsWith("org.jboss.as.")
+                || className.startsWith("org.jboss.modules.")
+                || className.startsWith("org.jboss.msc.")
+                || className.startsWith("org.jboss.threads.")
+                || className.startsWith("org.wildfly.")
                 || className.startsWith("org.jboss.arquillian.")
                 || className.startsWith("org.jboss.shrinkwrap.")
                 || className.startsWith("org.testng.")
@@ -98,5 +120,128 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
                 || className.startsWith("ch.qos.logback.")
                 || className.startsWith("org.jboss.logging.")
                 || className.startsWith("com.threeamigos.common.util.implementations.injection.arquillian.");
+    }
+
+    static String resolveScopedPackagePrefix(List<String> indexedClassNames, String deploymentName) {
+        if (indexedClassNames == null || indexedClassNames.isEmpty() || deploymentName == null || deploymentName.trim().isEmpty()) {
+            return null;
+        }
+        String baseName = normalizeDeploymentBaseName(deploymentName);
+        if (baseName.isEmpty()) {
+            return null;
+        }
+
+        String anchorClassName = null;
+        int bestLen = -1;
+        for (String className : indexedClassNames) {
+            String simpleName = simpleName(className);
+            if (simpleName.isEmpty() || !baseName.startsWith(simpleName)) {
+                continue;
+            }
+            if (simpleName.length() > bestLen) {
+                anchorClassName = className;
+                bestLen = simpleName.length();
+            }
+        }
+        if (anchorClassName == null) {
+            return null;
+        }
+
+        String anchorSimpleName = simpleName(anchorClassName);
+        String suffix = baseName.substring(anchorSimpleName.length());
+        if (!HASH_SUFFIX.matcher(suffix).matches()) {
+            return null;
+        }
+
+        int idx = anchorClassName.lastIndexOf('.');
+        return idx > 0 ? anchorClassName.substring(0, idx) : null;
+    }
+
+    private static String normalizeDeploymentBaseName(String deploymentName) {
+        String baseName = deploymentName;
+        int slash = Math.max(baseName.lastIndexOf('/'), baseName.lastIndexOf('\\'));
+        if (slash >= 0 && slash + 1 < baseName.length()) {
+            baseName = baseName.substring(slash + 1);
+        }
+        if (baseName.endsWith(".war") || baseName.endsWith(".jar") || baseName.endsWith(".ear")) {
+            baseName = baseName.substring(0, baseName.length() - 4);
+        }
+        return baseName;
+    }
+
+    private static String simpleName(String className) {
+        if (className == null || className.isEmpty()) {
+            return "";
+        }
+        int idx = className.lastIndexOf('.');
+        return idx >= 0 ? className.substring(idx + 1) : className;
+    }
+
+    static Set<Class<?>> narrowToDeploymentScope(Set<Class<?>> candidates, String deploymentName) {
+        if (candidates == null || candidates.isEmpty() || deploymentName == null || deploymentName.trim().isEmpty()) {
+            return candidates;
+        }
+
+        String baseName = normalizeDeploymentBaseName(deploymentName);
+
+        Class<?> anchorClass = findAnchorClass(baseName, candidates);
+        if (anchorClass == null) {
+            return candidates;
+        }
+
+        String simpleName = anchorClass.getSimpleName();
+        if (!baseName.startsWith(simpleName)) {
+            return candidates;
+        }
+        String suffix = baseName.substring(simpleName.length());
+        if (!HASH_SUFFIX.matcher(suffix).matches()) {
+            // Not a TCK hashed archive name, keep original behavior.
+            return candidates;
+        }
+
+        Package anchorPackage = anchorClass.getPackage();
+        if (anchorPackage == null) {
+            return candidates;
+        }
+        String packagePrefix = anchorPackage.getName();
+
+        Set<Class<?>> filtered = new HashSet<Class<?>>();
+        for (Class<?> candidate : candidates) {
+            try {
+                Package candidatePackage = candidate.getPackage();
+                String candidatePackageName = candidatePackage != null ? candidatePackage.getName() : "";
+                if (candidatePackageName.equals(packagePrefix) || candidatePackageName.startsWith(packagePrefix + ".")) {
+                    filtered.add(candidate);
+                }
+            } catch (LinkageError e) {
+                // Skip classes that cannot be safely introspected in the deployment module.
+            }
+        }
+
+        return filtered.isEmpty() ? candidates : filtered;
+    }
+
+    private static Class<?> findAnchorClass(String baseName, Set<Class<?>> candidates) {
+        Class<?> best = null;
+        int bestLen = -1;
+
+        for (Class<?> candidate : candidates) {
+            try {
+                String simpleName = candidate.getSimpleName();
+                if (simpleName == null || simpleName.isEmpty()) {
+                    continue;
+                }
+                if (!baseName.startsWith(simpleName)) {
+                    continue;
+                }
+                if (simpleName.length() > bestLen) {
+                    best = candidate;
+                    bestLen = simpleName.length();
+                }
+            } catch (LinkageError e) {
+                // Skip classes that cannot be safely introspected in the deployment module.
+            }
+        }
+        return best;
     }
 }

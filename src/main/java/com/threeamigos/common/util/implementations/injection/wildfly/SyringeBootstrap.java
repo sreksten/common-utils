@@ -47,6 +47,11 @@ public class SyringeBootstrap {
      */
     public Syringe bootstrap() {
         try {
+            // Managed WildFly runner targets CDI Full behavior.
+            // Keep this explicit to avoid accidental mode drift from future defaults.
+            syringe.forceCdiLiteMode(false);
+            syringe.enableCdiFullLegacyInterception(true);
+
             // 1. Initialize core infrastructure (extensions, BeanManager)
             syringe.initialize();
 
