@@ -37,6 +37,9 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,6 +50,7 @@ public class InterceptorBindingsTest {
     @BeforeEach
     void clearRecorder() {
         InterceptorRecorder.reset();
+        ConstructorContractInterceptor.reset();
     }
 
     @Test
@@ -89,6 +93,39 @@ public class InterceptorBindingsTest {
                 "target-constructor",
                 "around-construct-after"
         ), InterceptorRecorder.events());
+    }
+
+    @Test
+    @DisplayName("8.3 - Regression: @AroundConstruct proceed returns null, target is set after proceed, and setParameters is honored")
+    void shouldRespectAroundConstructProceedContractAndParameterReplacement() {
+        Syringe syringe = newSyringe(
+                ConstructorContractInterceptor.class,
+                ConstructorContractBean.class,
+                ContractParameter.class
+        );
+
+        ConstructorContractBean bean = syringe.inject(ConstructorContractBean.class);
+
+        assertEquals("from-interceptor", bean.receivedValue);
+        assertEquals("original", ConstructorContractInterceptor.parameterValueBeforeReplace);
+        assertNull(ConstructorContractInterceptor.targetBeforeProceed);
+        assertNull(ConstructorContractInterceptor.proceedResult);
+        assertNotNull(ConstructorContractInterceptor.targetAfterProceed);
+        assertNotEquals(ConstructorContractInterceptor.targetBeforeProceed, ConstructorContractInterceptor.targetAfterProceed);
+        assertTrue(ConstructorContractInterceptor.targetAfterProceed instanceof ConstructorContractBean);
+    }
+
+    @Test
+    @DisplayName("8.3 - Regression: @AroundConstruct proceeds with original constructor exception type")
+    void shouldPropagateOriginalConstructorExceptionFromAroundConstructProceed() {
+        Syringe syringe = newSyringe(
+                ConstructorFailureInterceptor.class,
+                ConstructorFailureBean.class
+        );
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> syringe.inject(ConstructorFailureBean.class));
+        assertEquals("boom", thrown.getMessage());
     }
 
     @Test
@@ -351,6 +388,18 @@ public class InterceptorBindingsTest {
         String value();
     }
 
+    @InterceptorBinding
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target({ElementType.TYPE, ElementType.METHOD, ElementType.CONSTRUCTOR})
+    public @interface ConstructorContractBinding {
+    }
+
+    @InterceptorBinding
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target({ElementType.TYPE, ElementType.METHOD, ElementType.CONSTRUCTOR})
+    public @interface ConstructorFailureBinding {
+    }
+
     @Dependent
     public static class InterceptorRecorder {
         private static final List<String> EVENTS = new ArrayList<String>();
@@ -452,6 +501,78 @@ public class InterceptorBindingsTest {
         public ConstructorInterceptedBean() {
             created = true;
             InterceptorRecorder.record("target-constructor");
+        }
+    }
+
+    @ConstructorContractBinding
+    @Interceptor
+    @Priority(Interceptor.Priority.APPLICATION + 31)
+    public static class ConstructorContractInterceptor {
+        static Object targetBeforeProceed;
+        static Object proceedResult;
+        static Object targetAfterProceed;
+        static String parameterValueBeforeReplace;
+
+        static void reset() {
+            targetBeforeProceed = null;
+            proceedResult = null;
+            targetAfterProceed = null;
+            parameterValueBeforeReplace = null;
+        }
+
+        @AroundConstruct
+        Object aroundConstruct(InvocationContext context) throws Exception {
+            targetBeforeProceed = context.getTarget();
+            Object[] parameters = context.getParameters();
+            if (parameters.length == 1 && parameters[0] instanceof ContractParameter) {
+                parameterValueBeforeReplace = ((ContractParameter) parameters[0]).value;
+            }
+            context.setParameters(new Object[]{new ContractParameter("from-interceptor")});
+            proceedResult = context.proceed();
+            targetAfterProceed = context.getTarget();
+            return proceedResult;
+        }
+    }
+
+    @ConstructorContractBinding
+    @Dependent
+    public static class ConstructorContractBean {
+        final String receivedValue;
+
+        @Inject
+        public ConstructorContractBean(ContractParameter parameter) {
+            this.receivedValue = parameter.value;
+        }
+    }
+
+    @Dependent
+    public static class ContractParameter {
+        final String value;
+
+        public ContractParameter() {
+            this("original");
+        }
+
+        public ContractParameter(String value) {
+            this.value = value;
+        }
+    }
+
+    @ConstructorFailureBinding
+    @Interceptor
+    @Priority(Interceptor.Priority.APPLICATION + 32)
+    public static class ConstructorFailureInterceptor {
+        @AroundConstruct
+        Object aroundConstruct(InvocationContext context) throws Exception {
+            return context.proceed();
+        }
+    }
+
+    @ConstructorFailureBinding
+    @Dependent
+    public static class ConstructorFailureBean {
+        public ConstructorFailureBean() {
+            throw new IllegalStateException("boom");
         }
     }
 

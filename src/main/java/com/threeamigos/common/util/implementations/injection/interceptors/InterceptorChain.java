@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.interceptors;
 
 import jakarta.interceptor.InvocationContext;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -136,12 +137,25 @@ public class InterceptorChain {
         // Create target invocation (final step in the chain - invoke the actual constructor)
         InvocationContextImpl.TargetInvocation targetInvocation = ctx -> {
             constructor.setAccessible(true);
-            Object instance = constructor.newInstance(ctx.getParameters());
+            Object instance;
+            try {
+                instance = constructor.newInstance(ctx.getParameters());
+            } catch (InvocationTargetException e) {
+                Throwable cause = e.getTargetException();
+                if (cause instanceof Exception) {
+                    throw (Exception) cause;
+                }
+                if (cause instanceof Error) {
+                    throw (Error) cause;
+                }
+                throw new RuntimeException(cause);
+            }
             // Set the target on the context after construction
             if (ctx instanceof InvocationContextImpl) {
                 ((InvocationContextImpl) ctx).setTarget(instance);
             }
-            return instance;
+            // Per Interceptors contract, @AroundConstruct proceed() returns null.
+            return null;
         };
 
         // Create invocation context for constructor interception
@@ -149,8 +163,10 @@ public class InterceptorChain {
                 constructor, args, this, targetInvocation
         );
 
-        // Start chain execution
-        return context.proceed();
+        // Start chain execution. In constructor interception, proceed() returns null;
+        // the constructed instance is exposed via InvocationContext.getTarget().
+        context.proceed();
+        return context.getTarget();
     }
 
     /**
