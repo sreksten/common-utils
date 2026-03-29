@@ -64,7 +64,8 @@ public class SyringeWildFlyArquillianContainer implements DeployableContainer<Sy
 
     @Override
     public ProtocolDescription getDefaultProtocol() {
-        return new ProtocolDescription("Servlet 6.0");
+        // Must match arquillian-protocol-servlet-jakarta expectation
+        return new ProtocolDescription("Servlet 5.0");
     }
 
     @Override
@@ -81,10 +82,12 @@ public class SyringeWildFlyArquillianContainer implements DeployableContainer<Sy
         }
 
         ProtocolMetaData metaData = new ProtocolMetaData();
-        // Assume default context root: archive name without .war/.ear
+        // Arquillian servlet protocol resolves base URI by servlet name + context root.
         String contextRoot = deriveContextRoot(runtimeName);
         HTTPContext httpContext = new HTTPContext(configuration.getManagementHost(), configuration.getHttpPort());
-        httpContext.add(new Servlet(contextRoot, contextRoot));
+        httpContext.add(new Servlet("ArquillianServletRunnerEE9", contextRoot));
+        // Keep legacy name for compatibility with older protocol artifacts.
+        httpContext.add(new Servlet("ArquillianServletRunner", contextRoot));
         metaData.addContext(httpContext);
         return metaData;
     }
@@ -140,11 +143,15 @@ public class SyringeWildFlyArquillianContainer implements DeployableContainer<Sy
     }
 
     private static String deriveContextRoot(String runtimeName) {
-        if (runtimeName == null) {
-            return "";
+        if (runtimeName == null || runtimeName.trim().isEmpty()) {
+            return "/";
         }
         int idx = runtimeName.lastIndexOf('.');
-        return idx > 0 ? runtimeName.substring(0, idx) : runtimeName;
+        String root = idx > 0 ? runtimeName.substring(0, idx) : runtimeName;
+        if (!root.startsWith("/")) {
+            root = "/" + root;
+        }
+        return root;
     }
 
     /**

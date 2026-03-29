@@ -630,6 +630,15 @@ public class ContainerLifecycleEventsTest {
     }
 
     @Test
+    @DisplayName("23.6.3 - ObserverMethodWithoutNotifyMethodTest: invalid ObserverMethodConfigurator observer is a definition error")
+    void shouldMatchTckObserverMethodWithoutNotifyMethodDefinitionError() {
+        Syringe syringe = newIsolatedSyringe();
+        syringe.addExtension(AfterBeanDiscoveryAddInvalidObserverMethodExtension.class.getName());
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
     @DisplayName("23.6.3 - getAnnotatedType/getAnnotatedTypes expose discovered and added annotated types")
     void shouldExposeDiscoveredAndAddedAnnotatedTypesFromAfterBeanDiscovery() {
         AfterBeanDiscoveryAnnotatedTypeRecorder.reset();

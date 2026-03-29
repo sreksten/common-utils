@@ -275,6 +275,17 @@ public class ModularityInCDIFullTest {
     }
 
     @Test
+    @DisplayName("16.1.3 - InconsistentSpecializationTest: deployment problem when two enabled beans specialize the same managed bean")
+    void shouldMatchTckInconsistentSpecializationDeploymentFailure() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), InconsistentSpecializationClient.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        syringe.enableAlternative(FirstSpecializingAlternative.class);
+        syringe.enableAlternative(SecondSpecializingAlternative.class);
+
+        assertThrows(DeploymentException.class, syringe::setup);
+    }
+
+    @Test
     @DisplayName("16.1.3 - Specialization is consistent when only one specializing bean is enabled")
     void shouldAllowSpecializationWhenOnlyOneSpecializingBeanIsEnabled() {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), InconsistentSpecializationClient.class);

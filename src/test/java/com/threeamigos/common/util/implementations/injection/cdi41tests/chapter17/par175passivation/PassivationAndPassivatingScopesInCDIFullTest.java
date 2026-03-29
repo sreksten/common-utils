@@ -103,6 +103,8 @@ public class PassivationAndPassivatingScopesInCDIFullTest {
             SerializableCustomPassivatingScopedBean.class,
             NonSerializableCustomPassivatingScopedBean.class,
             SessionBeanWithNonPassivationCapableDependency.class,
+            SessionBeanWithNonPassivationCapableConstructorDependency.class,
+            SessionBeanWithNonPassivationCapableInitializerDependency.class,
             InvalidPassivatingProducerMethodHolder.class,
             InvalidPassivatingProducerFieldHolder.class,
             RuntimeInvalidPassivatingProducerMethodHolder.class,
@@ -410,6 +412,46 @@ public class PassivationAndPassivatingScopesInCDIFullTest {
     @Test
     @DisplayName("17.5.5 - A passivating scoped managed bean with a non-passivation-capable injection point is a deployment problem")
     void shouldFailDeploymentForManagedBeanWithNonPassivationCapableInjectionPointInPassivatingScope() {
+        Syringe syringe = newSyringe(
+                SessionBeanWithNonPassivationCapableDependency.class,
+                NonSerializableDependentPlain.class
+        );
+        assertThrows(DeploymentException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("17.5.5 - NonPassivatingInjectedFieldTest: passivating scoped bean with non-passivation-capable field dependency is a deployment problem")
+    void shouldMatchTckNonPassivatingInjectedFieldDeploymentFailure() {
+        Syringe syringe = newSyringe(
+                SessionBeanWithNonPassivationCapableDependency.class,
+                NonSerializableDependentPlain.class
+        );
+        assertThrows(DeploymentException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("17.5.5 - NonPassivatingConstructorParamTest: passivating scoped bean with non-passivation-capable constructor dependency is a deployment problem")
+    void shouldMatchTckNonPassivatingConstructorParamDeploymentFailure() {
+        Syringe syringe = newSyringe(
+                SessionBeanWithNonPassivationCapableConstructorDependency.class,
+                NonSerializableDependentPlain.class
+        );
+        assertThrows(DeploymentException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("17.5.5 - NonPassivatingInitParamTest: passivating scoped bean with non-passivation-capable initializer dependency is a deployment problem")
+    void shouldMatchTckNonPassivatingInitParamDeploymentFailure() {
+        Syringe syringe = newSyringe(
+                SessionBeanWithNonPassivationCapableInitializerDependency.class,
+                NonSerializableDependentPlain.class
+        );
+        assertThrows(DeploymentException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("17.5.5 - PassivationCapableDependencyErrorTest: passivating scope validates passivation-capable dependencies at deployment")
+    void shouldMatchTckPassivationCapableDependencyErrorDeploymentFailure() {
         Syringe syringe = newSyringe(
                 SessionBeanWithNonPassivationCapableDependency.class,
                 NonSerializableDependentPlain.class
@@ -867,6 +909,26 @@ public class PassivationAndPassivatingScopesInCDIFullTest {
     public static class SessionBeanWithNonPassivationCapableDependency implements Serializable {
         @Inject
         NonSerializableDependentPlain dependency;
+    }
+
+    @SessionScoped
+    public static class SessionBeanWithNonPassivationCapableConstructorDependency implements Serializable {
+        private final NonSerializableDependentPlain dependency;
+
+        @Inject
+        public SessionBeanWithNonPassivationCapableConstructorDependency(NonSerializableDependentPlain dependency) {
+            this.dependency = dependency;
+        }
+    }
+
+    @SessionScoped
+    public static class SessionBeanWithNonPassivationCapableInitializerDependency implements Serializable {
+        private NonSerializableDependentPlain dependency;
+
+        @Inject
+        void init(NonSerializableDependentPlain dependency) {
+            this.dependency = dependency;
+        }
     }
 
     public static final class FinalNonSerializableValue {

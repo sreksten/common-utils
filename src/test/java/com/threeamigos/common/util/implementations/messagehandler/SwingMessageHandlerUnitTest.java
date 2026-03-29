@@ -23,6 +23,7 @@ import static org.mockito.Mockito.*;
 @DisplayName("SwingMessageHandler unit test")
 @Tag("unit")
 @Tag("messageHandler")
+
 class SwingMessageHandlerUnitTest {
 
     @Test

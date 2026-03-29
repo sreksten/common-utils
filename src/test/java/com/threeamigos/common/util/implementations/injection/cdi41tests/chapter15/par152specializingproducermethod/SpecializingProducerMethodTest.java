@@ -3,10 +3,12 @@ package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.Specializes;
 import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -49,11 +51,31 @@ public class SpecializingProducerMethodTest {
         assertThrows(DefinitionException.class, syringe::setup);
     }
 
+    @Test
+    @DisplayName("15.2 - TwoBeansSpecializeTheSameBeanTest: deployment problem when two enabled producer methods specialize the same producer method")
+    public void shouldFailWhenTwoEnabledProducerMethodsSpecializeTheSameProducerMethod() {
+        Syringe syringe = newSyringeIncludingInvalid(
+                GiftProducerBase.class,
+                FirstSpecializingGiftProducer.class,
+                SecondSpecializingGiftProducer.class,
+                GiftConsumer.class,
+                ProducedValue.class
+        );
+        syringe.enableAlternative(FirstSpecializingGiftProducer.class);
+        syringe.enableAlternative(SecondSpecializingGiftProducer.class);
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
     private Syringe newSyringe(Class<?>... beanClasses) {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), beanClasses);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.exclude(StaticSpecializingProducer.class);
         syringe.exclude(NonOverridingSpecializingProducer.class);
+        syringe.exclude(GiftProducerBase.class);
+        syringe.exclude(FirstSpecializingGiftProducer.class);
+        syringe.exclude(SecondSpecializingGiftProducer.class);
+        syringe.exclude(GiftConsumer.class);
         return syringe;
     }
 
@@ -105,6 +127,42 @@ public class SpecializingProducerMethodTest {
         public ProducedValue produceOther() {
             return new ProducedValue("invalid-non-override");
         }
+    }
+
+    @Dependent
+    public static class GiftProducerBase {
+        @Produces
+        public ProducedValue produceGift() {
+            return new ProducedValue("base-gift");
+        }
+    }
+
+    @Alternative
+    @Dependent
+    public static class FirstSpecializingGiftProducer extends GiftProducerBase {
+        @Override
+        @Produces
+        @Specializes
+        public ProducedValue produceGift() {
+            return new ProducedValue("first-specializer");
+        }
+    }
+
+    @Alternative
+    @Dependent
+    public static class SecondSpecializingGiftProducer extends GiftProducerBase {
+        @Override
+        @Produces
+        @Specializes
+        public ProducedValue produceGift() {
+            return new ProducedValue("second-specializer");
+        }
+    }
+
+    @Dependent
+    public static class GiftConsumer {
+        @Inject
+        ProducedValue producedValue;
     }
 
     public static class ProducedValue {
