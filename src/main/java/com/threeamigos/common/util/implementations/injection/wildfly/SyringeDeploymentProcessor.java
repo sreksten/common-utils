@@ -6,10 +6,13 @@ import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
 import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.DeploymentUnitProcessor;
+import org.jboss.as.server.deployment.module.ResourceRoot;
 import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.Index;
 import org.jboss.as.server.deployment.annotation.CompositeIndex;
 import org.jboss.modules.Module;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -26,17 +29,37 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
     @Override
     public void deploy(DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
         final DeploymentUnit deploymentUnit = phaseContext.getDeploymentUnit();
-        final CompositeIndex index = deploymentUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
+        final Index localIndex = deploymentUnit.getAttachment(Attachments.ANNOTATION_INDEX);
+        final CompositeIndex compositeIndex = deploymentUnit.getAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX);
         final Module module = deploymentUnit.getAttachment(Attachments.MODULE);
 
-        if (index == null || module == null) {
+        if (module == null) {
             return;
         }
 
-        List<String> indexedClassNames = new ArrayList<String>();
-        for (ClassInfo classInfo : index.getKnownClasses()) {
-            indexedClassNames.add(classInfo.name().toString());
+        List<String> localIndexedClassNames = new ArrayList<String>();
+        if (localIndex != null) {
+            for (ClassInfo classInfo : localIndex.getKnownClasses()) {
+                localIndexedClassNames.add(classInfo.name().toString());
+            }
         }
+
+        List<String> compositeIndexedClassNames = new ArrayList<String>();
+        if (compositeIndex != null) {
+            for (ClassInfo classInfo : compositeIndex.getKnownClasses()) {
+                compositeIndexedClassNames.add(classInfo.name().toString());
+            }
+        }
+        List<String> indexedClassNames = selectIndexedClassNames(localIndexedClassNames, compositeIndexedClassNames);
+
+        if (indexedClassNames.isEmpty()) {
+            return;
+        }
+        List<String> deploymentClassNames = collectDeploymentClassNames(deploymentUnit);
+        if (!deploymentClassNames.isEmpty()) {
+            indexedClassNames = deploymentClassNames;
+        }
+
         String scopedPackagePrefix = resolveScopedPackagePrefix(indexedClassNames, deploymentUnit.getName());
 
         // 1. Discover classes via Jandex
@@ -46,7 +69,7 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
                 continue;
             }
             if (scopedPackagePrefix != null
-                    && !(className.equals(scopedPackagePrefix) || className.startsWith(scopedPackagePrefix + "."))) {
+                    && !scopedPackagePrefix.equals(packageName(className))) {
                 continue;
             }
             try {
@@ -210,7 +233,7 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             try {
                 Package candidatePackage = candidate.getPackage();
                 String candidatePackageName = candidatePackage != null ? candidatePackage.getName() : "";
-                if (candidatePackageName.equals(packagePrefix) || candidatePackageName.startsWith(packagePrefix + ".")) {
+                if (candidatePackageName.equals(packagePrefix)) {
                     filtered.add(candidate);
                 }
             } catch (LinkageError e) {
@@ -243,5 +266,73 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             }
         }
         return best;
+    }
+
+    static List<String> selectIndexedClassNames(List<String> localIndexedClassNames, List<String> compositeIndexedClassNames) {
+        if (localIndexedClassNames != null && !localIndexedClassNames.isEmpty()) {
+            return localIndexedClassNames;
+        }
+        if (compositeIndexedClassNames != null) {
+            return compositeIndexedClassNames;
+        }
+        return new ArrayList<String>();
+    }
+
+    private static String packageName(String className) {
+        if (className == null || className.isEmpty()) {
+            return "";
+        }
+        int idx = className.lastIndexOf('.');
+        return idx > 0 ? className.substring(0, idx) : "";
+    }
+
+    static List<String> collectDeploymentClassNames(DeploymentUnit deploymentUnit) {
+        List<String> classNames = new ArrayList<String>();
+        if (deploymentUnit == null) {
+            return classNames;
+        }
+
+        ResourceRoot deploymentRoot = deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+        if (deploymentRoot == null || deploymentRoot.getRoot() == null) {
+            return classNames;
+        }
+
+        try {
+            Object root = deploymentRoot.getRoot();
+            Method getChild = root.getClass().getMethod("getChild", String.class);
+            Object classesRoot = getChild.invoke(root, "WEB-INF/classes");
+
+            Method exists = classesRoot.getClass().getMethod("exists");
+            boolean classesRootExists = Boolean.TRUE.equals(exists.invoke(classesRoot));
+            if (!classesRootExists) {
+                classesRoot = root;
+            }
+
+            Method getChildrenRecursively = classesRoot.getClass().getMethod("getChildrenRecursively");
+            @SuppressWarnings("unchecked")
+            List<Object> files = (List<Object>) getChildrenRecursively.invoke(classesRoot);
+            for (Object file : files) {
+                Method relativePathMethod = file.getClass().getMethod("getPathNameRelativeTo", classesRoot.getClass());
+                String relativePath = (String) relativePathMethod.invoke(file, classesRoot);
+                if (relativePath == null || !relativePath.endsWith(".class")) {
+                    continue;
+                }
+                if (relativePath.contains("/WEB-INF/lib/") || relativePath.contains("\\WEB-INF\\lib\\")) {
+                    continue;
+                }
+                if (relativePath.endsWith("module-info.class") || relativePath.endsWith("package-info.class")) {
+                    continue;
+                }
+                String className = relativePath
+                        .substring(0, relativePath.length() - ".class".length())
+                        .replace('/', '.')
+                        .replace('\\', '.');
+                classNames.add(className);
+            }
+        } catch (Exception e) {
+            return new ArrayList<String>();
+        }
+
+        return classNames;
     }
 }

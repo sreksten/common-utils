@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
+import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;
@@ -47,6 +48,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -73,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("11.1 - The Bean Container")
 @Execution(ExecutionMode.SAME_THREAD)
+@Isolated
 public class BeanContainerTest {
 
     private CdiStateSnapshot cdiStateSnapshot;
@@ -200,6 +203,26 @@ public class BeanContainerTest {
 
         assertNotNull(bean);
         assertEquals("default-only", bean.value());
+    }
+
+    @Test
+    @DisplayName("11.1.1 - Managed bootstrap registers global CDI so CDI.current().select works without thread-local setup")
+    void shouldAllowCdiCurrentSelectInManagedBootstrapWithoutThreadLocalContext() {
+        Syringe syringe = new Syringe();
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        try {
+            syringe.initialize();
+            syringe.addDiscoveredClass(DefaultOnlyBean.class, BeanArchiveMode.EXPLICIT);
+            syringe.start();
+
+            SyringeCDIProvider.unregisterThreadLocalCDI();
+            DefaultOnlyBean bean = CDI.current().select(DefaultOnlyBean.class).get();
+
+            assertNotNull(bean);
+            assertEquals("default-only", bean.value());
+        } finally {
+            syringe.shutdown();
+        }
     }
 
     @Test

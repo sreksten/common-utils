@@ -217,7 +217,7 @@ public class CDI41InjectionValidator {
 
             String x = name.substring(0, dotIndex);
             String y = name.substring(dotIndex + 1);
-            if (names.contains(x) && isValidSimpleBeanName(y)) {
+            if (names.contains(x) && isValidBeanName(y)) {
                 knowledgeBase.addDefinitionError(
                         "Bean name conflict detected: '" + x + "' and '" + name + "'"
                 );
@@ -338,6 +338,22 @@ public class CDI41InjectionValidator {
         return true;
     }
 
+    private boolean isValidBeanName(String name) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        String[] segments = name.split("\\.");
+        if (segments.length == 0) {
+            return false;
+        }
+        for (String segment : segments) {
+            if (!isValidSimpleBeanName(segment)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // ============================================
     // Enhancement 2: Circular Dependency Detection
     // ============================================
@@ -381,9 +397,11 @@ public class CDI41InjectionValidator {
 
                 Bean<?> dependency = resolvedDependency.get();
                 if (containsByIdentity(stack, dependency)) {
-                    String chain = formatCircularDependencyChain(stack, dependency);
-                    reportCircularDependency(chain, injectionPoint, owningBean);
-                    allValid = false;
+                    if (!isResolvableCircularDependency(stack, dependency)) {
+                        String chain = formatCircularDependencyChain(stack, dependency);
+                        reportCircularDependency(chain, injectionPoint, owningBean);
+                        allValid = false;
+                    }
                     continue;
                 }
 
@@ -483,6 +501,57 @@ public class CDI41InjectionValidator {
             return simpleName;
         }
         return bean.getBeanClass().getName();
+    }
+
+    private boolean isResolvableCircularDependency(Deque<Bean<?>> stack, Bean<?> repeatedBean) {
+        List<Bean<?>> cycle = extractCycle(stack, repeatedBean);
+        for (Bean<?> bean : cycle) {
+            if (isNormalScopedBean(bean)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<Bean<?>> extractCycle(Deque<Bean<?>> stack, Bean<?> repeatedBean) {
+        List<Bean<?>> path = new ArrayList<>(stack);
+        int start = indexByIdentity(path, repeatedBean);
+        if (start < 0) {
+            return Collections.singletonList(repeatedBean);
+        }
+        return new ArrayList<>(path.subList(start, path.size()));
+    }
+
+    private boolean isNormalScopedBean(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        Class<? extends Annotation> scope = bean.getScope();
+        if (scope == null) {
+            return false;
+        }
+
+        String scopeName = scope.getName();
+        if ("jakarta.enterprise.context.ApplicationScoped".equals(scopeName) ||
+                "jakarta.enterprise.context.RequestScoped".equals(scopeName) ||
+                "jakarta.enterprise.context.SessionScoped".equals(scopeName) ||
+                "jakarta.enterprise.context.ConversationScoped".equals(scopeName) ||
+                "javax.enterprise.context.ApplicationScoped".equals(scopeName) ||
+                "javax.enterprise.context.RequestScoped".equals(scopeName) ||
+                "javax.enterprise.context.SessionScoped".equals(scopeName) ||
+                "javax.enterprise.context.ConversationScoped".equals(scopeName)) {
+            return true;
+        }
+
+        for (Annotation meta : scope.getAnnotations()) {
+            String metaName = meta.annotationType().getName();
+            if ("jakarta.enterprise.context.NormalScope".equals(metaName) ||
+                    "javax.enterprise.context.NormalScope".equals(metaName)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // ============================================
@@ -1553,7 +1622,7 @@ public class CDI41InjectionValidator {
 
     private boolean hasNonPrivateNoArgConstructor(Class<?> type) {
         for (Constructor<?> constructor : type.getDeclaredConstructors()) {
-            if (constructor.getParameterCount() == 0 && !Modifier.isPrivate(constructor.getModifiers())) {
+            if (!Modifier.isPrivate(constructor.getModifiers()) && constructor.getParameterCount() == 0) {
                 return true;
             }
         }

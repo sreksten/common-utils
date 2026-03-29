@@ -3,6 +3,8 @@ package com.threeamigos.common.util.implementations.injection.wildfly;
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
+import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
+import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,6 +13,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.lang.reflect.Method;
 
 /**
  * SyringeBootstrap - Managed bootstrap for Syringe in application server environments (e.g., WildFly).
@@ -66,6 +69,9 @@ public class SyringeBootstrap {
 
             // 4. Complete the initialization flow (processing, validation)
             syringe.start();
+            SyringeCDIProvider.ensureProviderConfigured();
+            SyringeCDIProvider.registerGlobalCDI(syringe.getCDI());
+            mirrorProviderStateToDeploymentClassLoader(syringe.getCDI());
 
             return syringe;
         } catch (Exception e) {
@@ -84,6 +90,7 @@ public class SyringeBootstrap {
      * Shuts down the Syringe container.
      */
     public void shutdown() {
+        mirrorProviderCleanupToDeploymentClassLoader();
         syringe.shutdown();
     }
 
@@ -114,6 +121,38 @@ public class SyringeBootstrap {
                     stream.close();
                 }
             }
+        }
+    }
+
+    private void mirrorProviderStateToDeploymentClassLoader(CDI<Object> cdi) {
+        ClassLoader own = SyringeCDIProvider.class.getClassLoader();
+        if (classLoader == null || classLoader == own) {
+            return;
+        }
+        try {
+            Class<?> providerClass = Class.forName(SyringeCDIProvider.class.getName(), true, classLoader);
+            Method ensure = providerClass.getMethod("ensureProviderConfigured");
+            ensure.invoke(null);
+            Method registerGlobal = providerClass.getMethod("registerGlobalCDI", CDI.class);
+            registerGlobal.invoke(null, cdi);
+        } catch (Throwable ignored) {
+            // Best effort for classloader-isolated deployments.
+        }
+    }
+
+    private void mirrorProviderCleanupToDeploymentClassLoader() {
+        ClassLoader own = SyringeCDIProvider.class.getClassLoader();
+        if (classLoader == null || classLoader == own) {
+            return;
+        }
+        try {
+            Class<?> providerClass = Class.forName(SyringeCDIProvider.class.getName(), true, classLoader);
+            Method unregisterThreadLocal = providerClass.getMethod("unregisterThreadLocalCDI");
+            unregisterThreadLocal.invoke(null);
+            Method unregisterGlobal = providerClass.getMethod("unregisterGlobalCDI");
+            unregisterGlobal.invoke(null);
+        } catch (Throwable ignored) {
+            // Best effort for classloader-isolated deployments.
         }
     }
 }

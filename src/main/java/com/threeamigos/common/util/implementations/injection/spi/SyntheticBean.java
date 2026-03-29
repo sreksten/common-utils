@@ -37,6 +37,8 @@ public class SyntheticBean<T> implements Bean<T>, PassivationCapable {
 
     // Injection points
     private final Set<InjectionPoint> injectionPoints;
+    private final Map<T, CreationalContext<T>> contextsByInstance =
+            Collections.synchronizedMap(new IdentityHashMap<T, CreationalContext<T>>());
 
     /**
      * Constructor for building synthetic beans.
@@ -130,18 +132,27 @@ public class SyntheticBean<T> implements Bean<T>, PassivationCapable {
                 "Synthetic bean " + beanClass.getName() + " has no create callback defined"
             );
         }
-        return createCallback.apply(creationalContext);
+        T instance = createCallback.apply(creationalContext);
+        if (instance != null && creationalContext != null) {
+            contextsByInstance.put(instance, creationalContext);
+        }
+        return instance;
     }
 
     @Override
     public void destroy(T instance, CreationalContext<T> creationalContext) {
+        CreationalContext<T> contextToRelease = creationalContext;
+        if (contextToRelease == null && instance != null) {
+            contextToRelease = contextsByInstance.remove(instance);
+        }
+
         if (destroyCallback != null) {
-            destroyCallback.accept(instance, creationalContext);
+            destroyCallback.accept(instance, contextToRelease);
         }
 
         // Always release the creational context
-        if (creationalContext != null) {
-            creationalContext.release();
+        if (contextToRelease != null) {
+            contextToRelease.release();
         }
     }
 

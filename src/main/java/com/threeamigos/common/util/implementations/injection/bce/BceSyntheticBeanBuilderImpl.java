@@ -8,10 +8,12 @@ import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.build.compatible.spi.InvokerInfo;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanDisposer;
+import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.types.Type;
@@ -309,11 +311,13 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         final Map<String, Object> frozenParams = Collections.unmodifiableMap(new LinkedHashMap<>(params));
         final Class<? extends SyntheticBeanCreator<T>> frozenCreatorClass = creatorClass;
         final Class<? extends SyntheticBeanDisposer<T>> frozenDisposerClass = disposerClass;
+        final Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent =
+                Collections.synchronizedMap(new java.util.IdentityHashMap<CreationalContext<?>, java.util.List<DependentLookupInstance>>());
 
         Function<CreationalContext<T>, T> createCallback = ctx -> {
             try {
                 SyntheticBeanCreator<T> creator = frozenCreatorClass.getDeclaredConstructor().newInstance();
-                return creator.create(beanManager.createInstance(), new BceParameters(frozenParams, invokerRegistry));
+                return creator.create(createLookup(ctx, dependentLookupsByParent), new BceParameters(frozenParams, invokerRegistry));
             } catch (RuntimeException e) {
                 throw e;
             } catch (Exception e) {
@@ -322,7 +326,10 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
             }
         };
 
-        BiConsumer<T, CreationalContext<T>> destroyCallback = getCreationalContextBiConsumer(frozenDisposerClass, frozenParams);
+        BiConsumer<T, CreationalContext<T>> destroyCallback = getCreationalContextBiConsumer(
+                frozenDisposerClass,
+                frozenParams,
+                dependentLookupsByParent);
 
         Set<java.lang.reflect.Type> beanTypes = new LinkedHashSet<>(types);
         if (beanTypes.isEmpty()) {
@@ -354,14 +361,18 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
     }
 
     @Nullable
-    private BiConsumer<T, CreationalContext<T>> getCreationalContextBiConsumer(Class<? extends SyntheticBeanDisposer<T>> frozenDisposerClass, Map<String, Object> frozenParams) {
+    private BiConsumer<T, CreationalContext<T>> getCreationalContextBiConsumer(
+            Class<? extends SyntheticBeanDisposer<T>> frozenDisposerClass,
+            Map<String, Object> frozenParams,
+            Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent) {
         BiConsumer<T, CreationalContext<T>> destroyCallback = null;
         if (frozenDisposerClass != null) {
             destroyCallback = (instance, ctx) -> {
                 try {
                     SyntheticBeanDisposer<T> disposer = frozenDisposerClass.getDeclaredConstructor().newInstance();
-                    disposer.dispose(instance, beanManager.createInstance(),
+                    disposer.dispose(instance, createLookup(ctx, dependentLookupsByParent),
                         new BceParameters(frozenParams, invokerRegistry));
+                    releaseDependentLookups(ctx, dependentLookupsByParent);
                 } catch (RuntimeException e) {
                     throw e;
                 } catch (Exception e) {
@@ -369,7 +380,112 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
                         frozenDisposerClass.getName(), e);
                 }
             };
+        } else {
+            destroyCallback = (instance, ctx) -> releaseDependentLookups(ctx, dependentLookupsByParent);
         }
         return destroyCallback;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private Instance<Object> createLookup(
+            CreationalContext<?> parentContext,
+            Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent) {
+        return new com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl<>(
+                Object.class,
+                defaultQualifiers(),
+                new com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl.ResolutionStrategy<Object>() {
+                    @Override
+                    public Object resolveInstance(Class<Object> type, java.util.Collection<Annotation> quals) {
+                        Annotation[] qualifierArray = quals.toArray(new Annotation[0]);
+                        java.util.Set<Bean<?>> beans = beanManager.getBeans(type, qualifierArray);
+                        Bean<?> bean = beanManager.resolve(beans);
+                        if (bean == null) {
+                            throw new jakarta.enterprise.inject.UnsatisfiedResolutionException(
+                                    "No bean found for type " + type.getName());
+                        }
+                        if (bean.getScope() == null ||
+                                "jakarta.enterprise.context.Dependent".equals(bean.getScope().getName())) {
+                            Bean<Object> dependentBean = (Bean<Object>) bean;
+                            CreationalContext<Object> childContext = beanManager.createCreationalContext(dependentBean);
+                            Object instance = dependentBean.create(childContext);
+                            if (parentContext != null) {
+                                synchronized (dependentLookupsByParent) {
+                                    java.util.List<DependentLookupInstance> lookups =
+                                            dependentLookupsByParent.get(parentContext);
+                                    if (lookups == null) {
+                                        lookups = new java.util.ArrayList<DependentLookupInstance>();
+                                        dependentLookupsByParent.put(parentContext, lookups);
+                                    }
+                                    lookups.add(new DependentLookupInstance(dependentBean, instance, childContext));
+                                }
+                            }
+                            return instance;
+                        }
+                        return beanManager.getReference(bean, type, (CreationalContext) parentContext);
+                    }
+
+                    @Override
+                    public java.util.Collection<Class<?>> resolveImplementations(Class<Object> type,
+                                                                                 java.util.Collection<Annotation> quals) {
+                        Annotation[] qualifierArray = quals.toArray(new Annotation[0]);
+                        java.util.Set<Bean<?>> beans = beanManager.getBeans(type, qualifierArray);
+                        java.util.List<Class<?>> classes = new java.util.ArrayList<Class<?>>();
+                        for (Bean<?> bean : beans) {
+                            classes.add(bean.getBeanClass());
+                        }
+                        return classes;
+                    }
+
+                    @Override
+                    public void invokePreDestroy(Object instance) {
+                        // not used by BCE lookup callbacks
+                    }
+                },
+                null,
+                beanManager
+        );
+    }
+
+    private void releaseDependentLookups(
+            CreationalContext<?> parentContext,
+            Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent) {
+        if (parentContext == null) {
+            return;
+        }
+        java.util.List<DependentLookupInstance> lookups;
+        synchronized (dependentLookupsByParent) {
+            lookups = dependentLookupsByParent.remove(parentContext);
+        }
+        if (lookups == null) {
+            return;
+        }
+        for (DependentLookupInstance lookup : lookups) {
+            if (lookup != null) {
+                lookup.destroy();
+            }
+        }
+    }
+
+    private static final class DependentLookupInstance {
+        private final Bean<Object> bean;
+        private final Object instance;
+        private final CreationalContext<Object> creationalContext;
+
+        private DependentLookupInstance(Bean<Object> bean, Object instance, CreationalContext<Object> creationalContext) {
+            this.bean = bean;
+            this.instance = instance;
+            this.creationalContext = creationalContext;
+        }
+
+        private void destroy() {
+            bean.destroy(instance, creationalContext);
+        }
+    }
+
+    private java.util.Set<Annotation> defaultQualifiers() {
+        java.util.Set<Annotation> qualifiers = new java.util.LinkedHashSet<>();
+        qualifiers.add(Default.Literal.INSTANCE);
+        qualifiers.add(Any.Literal.INSTANCE);
+        return qualifiers;
     }
 }

@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.injection.discovery.NonPortab
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
+import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import net.bytebuddy.ByteBuddy;
@@ -19,7 +20,10 @@ import net.bytebuddy.matcher.ElementMatchers;
 
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Type;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -221,14 +225,14 @@ public class ClientProxyGenerator {
      */
     @SuppressWarnings("unchecked")
     public <T> T createProxy(Bean<T> bean) {
-        Class<?> beanClass = bean.getBeanClass();
+        Class<?> beanClass = resolveProxyBaseClass(bean);
 
         // Get or generate the proxy class
         Class<?> proxyClass = proxyClassCache.computeIfAbsent(beanClass, this::generateProxyClass);
 
         try {
             // Create an instance of the proxy
-            T proxy = (T) proxyClass.getDeclaredConstructor().newInstance();
+            T proxy = (T) instantiateProxy(proxyClass);
 
             // Initialize the proxy with the bean and context manager
             // This is done via the ProxyState interface that the proxy implements
@@ -240,6 +244,135 @@ public class ClientProxyGenerator {
         } catch (Exception e) {
             throw new RuntimeException("Failed to create proxy for bean: " + beanClass.getName(), e);
         }
+    }
+
+    private Object instantiateProxy(Class<?> proxyClass) throws Exception {
+        try {
+            Constructor<?> noArg = proxyClass.getDeclaredConstructor();
+            noArg.setAccessible(true);
+            return noArg.newInstance();
+        } catch (NoSuchMethodException ignored) {
+            // Fall back to invoking the first visible constructor with default values.
+        } catch (Exception e) {
+            Object allocated = allocateWithoutConstructor(proxyClass);
+            if (allocated != null) {
+                return allocated;
+            }
+            throw e;
+        }
+
+        Constructor<?>[] constructors = proxyClass.getDeclaredConstructors();
+        if (constructors.length == 0) {
+            Object allocated = allocateWithoutConstructor(proxyClass);
+            if (allocated != null) {
+                return allocated;
+            }
+            throw new IllegalStateException("Proxy class has no constructors: " + proxyClass.getName());
+        }
+
+        Exception lastError = null;
+        for (Constructor<?> constructor : constructors) {
+            try {
+                constructor.setAccessible(true);
+                Class<?>[] parameterTypes = constructor.getParameterTypes();
+                Object[] args = new Object[parameterTypes.length];
+                for (int i = 0; i < parameterTypes.length; i++) {
+                    args[i] = defaultValue(parameterTypes[i]);
+                }
+                return constructor.newInstance(args);
+            } catch (Exception e) {
+                lastError = e;
+            }
+        }
+
+        Object allocated = allocateWithoutConstructor(proxyClass);
+        if (allocated != null) {
+            return allocated;
+        }
+        throw lastError != null ? lastError :
+                new IllegalStateException("Failed to instantiate proxy class " + proxyClass.getName());
+    }
+
+    private Object allocateWithoutConstructor(Class<?> proxyClass) {
+        try {
+            Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+            Field theUnsafe = unsafeClass.getDeclaredField("theUnsafe");
+            theUnsafe.setAccessible(true);
+            Object unsafe = theUnsafe.get(null);
+            Method allocateInstance = unsafeClass.getMethod("allocateInstance", Class.class);
+            return allocateInstance.invoke(unsafe, proxyClass);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Object defaultValue(Class<?> type) {
+        if (!type.isPrimitive()) {
+            return null;
+        }
+        if (type == boolean.class) return false;
+        if (type == byte.class) return (byte) 0;
+        if (type == short.class) return (short) 0;
+        if (type == int.class) return 0;
+        if (type == long.class) return 0L;
+        if (type == float.class) return 0f;
+        if (type == double.class) return 0d;
+        if (type == char.class) return '\0';
+        return null;
+    }
+
+    private Class<?> resolveProxyBaseClass(Bean<?> bean) {
+        if (bean instanceof ProducerBean<?>) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Method producerMethod = producerBean.getProducerMethod();
+            if (producerMethod != null) {
+                return producerMethod.getReturnType();
+            }
+            Field producerField = producerBean.getProducerField();
+            if (producerField != null) {
+                return producerField.getType();
+            }
+        }
+        Class<?> fallback = bean.getBeanClass();
+        Class<?> inferred = inferProxyBaseFromBeanTypes(bean, fallback);
+        return inferred != null ? inferred : fallback;
+    }
+
+    private Class<?> inferProxyBaseFromBeanTypes(Bean<?> bean, Class<?> fallback) {
+        Class<?> best = null;
+        int bestDepth = -1;
+        for (Type beanType : bean.getTypes()) {
+            if (!(beanType instanceof Class<?>)) {
+                continue;
+            }
+            Class<?> candidate = (Class<?>) beanType;
+            if (candidate == Object.class || candidate.isInterface() ||
+                    candidate.isAnnotation() || candidate.isArray() || candidate.isPrimitive()) {
+                continue;
+            }
+            int depth = classHierarchyDepth(candidate);
+            if (depth > bestDepth) {
+                best = candidate;
+                bestDepth = depth;
+            }
+        }
+        if (best == null) {
+            return fallback;
+        }
+        if (fallback != null && best.equals(fallback)) {
+            return fallback;
+        }
+        return best;
+    }
+
+    private int classHierarchyDepth(Class<?> type) {
+        int depth = 0;
+        Class<?> current = type;
+        while (current != null && current != Object.class) {
+            depth++;
+            current = current.getSuperclass();
+        }
+        return depth;
     }
 
     /**
@@ -274,7 +407,7 @@ public class ClientProxyGenerator {
                 // - 0 for numeric primitives
                 // - false for boolean
                 // This is safe because the proxy never uses the parent's state - it only delegates.
-                .subclass(beanClass, ConstructorStrategy.Default.DEFAULT_CONSTRUCTOR)
+                .subclass(beanClass, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
 
                 // Add fields to store the bean and contextManager
                 .defineField("$$_bean", Bean.class, net.bytebuddy.description.modifier.Visibility.PRIVATE)

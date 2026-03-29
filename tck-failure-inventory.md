@@ -29,8 +29,8 @@
 ## By Functional Area
 
 ### Core DI resolution & injection (139)
-- [ ] **org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.array.ArrayTest**
-- [ ] **org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.privateConstructor.PrivateConstructorTest**
+- [x] **org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.array.ArrayTest**
+- [x] **org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.privateConstructor.PrivateConstructorTest**
 - [ ] **org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest**
 - [ ] **org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanWithLookup.SyntheticBeanWithLookupTest**
 - [ ] **org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupGreaterThanNumberOfParamsTest**

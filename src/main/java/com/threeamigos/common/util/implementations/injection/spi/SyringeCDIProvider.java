@@ -2,6 +2,9 @@ package com.threeamigos.common.util.implementations.injection.spi;
 
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.inject.spi.CDIProvider;
+import java.lang.reflect.Field;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * CDI Provider implementation for the Syringe container.
@@ -129,5 +132,44 @@ public class SyringeCDIProvider implements CDIProvider {
      */
     public static boolean isAvailable() {
         return CURRENT_CDI.get() != null || globalCDI != null;
+    }
+
+    /**
+     * Ensures CDI.current() is wired to a provider that can return Syringe CDI instances.
+     *
+     * <p>In managed containers, another provider may already be configured and
+     * {@link CDI#setCDIProvider(CDIProvider)} then throws {@link IllegalStateException}.
+     * In that case we best-effort replace the configured provider with Syringe provider.
+     */
+    public static void ensureProviderConfigured() {
+        SyringeCDIProvider provider = new SyringeCDIProvider();
+        try {
+            CDI.setCDIProvider(provider);
+            return;
+        } catch (IllegalStateException ignored) {
+            // Fall back to reflective replacement.
+        }
+
+        try {
+            Field configuredProvider = CDI.class.getDeclaredField("configuredProvider");
+            configuredProvider.setAccessible(true);
+            Object currentConfigured = configuredProvider.get(null);
+            if (!(currentConfigured instanceof SyringeCDIProvider)) {
+                configuredProvider.set(null, provider);
+            }
+
+            Field discoveredProviders = CDI.class.getDeclaredField("discoveredProviders");
+            discoveredProviders.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Set<CDIProvider> discovered = (Set<CDIProvider>) discoveredProviders.get(null);
+            Set<CDIProvider> updated = new HashSet<CDIProvider>();
+            if (discovered != null) {
+                updated.addAll(discovered);
+            }
+            updated.add(provider);
+            discoveredProviders.set(null, updated);
+        } catch (Exception ignored) {
+            // Best-effort setup. If reflection is blocked, existing configuration remains.
+        }
     }
 }

@@ -324,7 +324,22 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             public void destroy() {
                 if (!destroyed && instance != null) {
                     try {
-                        strategy().invokePreDestroy(instance);
+                        Bean<T> bean = null;
+                        Function<Class<? extends T>, Bean<? extends T>> lookup = InstanceImpl.this.beanLookup;
+                        if (lookup != null) {
+                            @SuppressWarnings("unchecked")
+                            Bean<T> resolvedBean = (Bean<T>) lookup.apply(beanClass);
+                            bean = resolvedBean;
+                        }
+
+                        if (bean != null) {
+                            @SuppressWarnings("unchecked")
+                            jakarta.enterprise.context.spi.Contextual<T> contextual =
+                                    (jakarta.enterprise.context.spi.Contextual<T>) bean;
+                            contextual.destroy(instance, null);
+                        } else {
+                            strategy().invokePreDestroy(instance);
+                        }
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to destroy instance of " + beanClass.getName(), e);
                     }

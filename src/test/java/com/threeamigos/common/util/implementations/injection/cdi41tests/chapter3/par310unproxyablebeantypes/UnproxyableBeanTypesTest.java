@@ -10,6 +10,7 @@ import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par310unproxyablebeantypes.bullet6.ArrayConsumer;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par310unproxyablebeantypes.bullet7.FinalDependentAllowedConsumer;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par310unproxyablebeantypes.bullet8.InterceptedFinalBeanConsumer;
+import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter3.par310unproxyablebeantypes.bullet9.PrivateConstructorConsumer;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
@@ -28,6 +29,14 @@ public class UnproxyableBeanTypesTest {
     @DisplayName("3.10 - Class without non-private no-arg constructor is unproxyable for client proxy")
     void classWithoutNonPrivateNoArgConstructorIsDeploymentProblemWhenClientProxyRequired() {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), NoNoArgConstructorConsumer.class);
+
+        assertThrows(DeploymentException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("3.10 - Class with private constructor is unproxyable for client proxy")
+    void classWithPrivateConstructorIsDeploymentProblemWhenClientProxyRequired() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(), PrivateConstructorConsumer.class);
 
         assertThrows(DeploymentException.class, syringe::setup);
     }

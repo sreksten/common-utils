@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
+import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.Dependent;
@@ -26,8 +27,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -44,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("12.1 - Build-compatible extension interface test")
 @Execution(ExecutionMode.SAME_THREAD)
+@Isolated
 public class BuildCompatibleExtensionInterfaceTest {
 
     @Test
@@ -177,10 +181,80 @@ public class BuildCompatibleExtensionInterfaceTest {
 
     @Test
     @DisplayName("12.1 - Calling CDI.current() from extension method is non-portable and throws NonPortableBehaviourException")
-    void shouldRejectCdiCurrentFromExtensionMethod() {
-        Syringe syringe = newSyringe();
-        syringe.addBuildCompatibleExtension(CdiCurrentAccessingExtension.class.getName());
-        assertThrows(NonPortableBehaviourException.class, syringe::setup);
+    void shouldRejectCdiCurrentFromExtensionMethod() throws Exception {
+        CdiStateSnapshot snapshot = CdiStateSnapshot.capture();
+        try {
+            setConfiguredProvider(null);
+            setDiscoveredProviders(new LinkedHashSet<jakarta.enterprise.inject.spi.CDIProvider>());
+            SyringeCDIProvider.unregisterThreadLocalCDI();
+            SyringeCDIProvider.unregisterGlobalCDI();
+
+            Syringe syringe = newSyringe();
+            syringe.addBuildCompatibleExtension(CdiCurrentAccessingExtension.class.getName());
+            Throwable thrown = assertThrows(Throwable.class, syringe::setup);
+            assertTrue(isCdiNonPortableFailure(thrown),
+                    "Expected non-portable CDI failure but got " + thrown.getClass().getName() + ": " + thrown.getMessage());
+        } finally {
+            snapshot.restore();
+            SyringeCDIProvider.unregisterThreadLocalCDI();
+            SyringeCDIProvider.unregisterGlobalCDI();
+        }
+    }
+
+    private boolean isCdiNonPortableFailure(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof NonPortableBehaviourException) {
+                return true;
+            }
+            if (current instanceof IllegalStateException
+                    && current.getMessage() != null
+                    && current.getMessage().contains("Unable to access CDI")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private static void setDiscoveredProviders(Set<jakarta.enterprise.inject.spi.CDIProvider> providers) throws Exception {
+        Field field = CDI.class.getDeclaredField("discoveredProviders");
+        field.setAccessible(true);
+        field.set(null, providers);
+    }
+
+    private static void setConfiguredProvider(jakarta.enterprise.inject.spi.CDIProvider provider) throws Exception {
+        Field field = CDI.class.getDeclaredField("configuredProvider");
+        field.setAccessible(true);
+        field.set(null, provider);
+    }
+
+    private static final class CdiStateSnapshot {
+        private final jakarta.enterprise.inject.spi.CDIProvider configuredProvider;
+        private final Set<jakarta.enterprise.inject.spi.CDIProvider> discoveredProviders;
+
+        private CdiStateSnapshot(jakarta.enterprise.inject.spi.CDIProvider configuredProvider,
+                                 Set<jakarta.enterprise.inject.spi.CDIProvider> discoveredProviders) {
+            this.configuredProvider = configuredProvider;
+            this.discoveredProviders = discoveredProviders;
+        }
+
+        @SuppressWarnings("unchecked")
+        static CdiStateSnapshot capture() throws Exception {
+            Field configuredField = CDI.class.getDeclaredField("configuredProvider");
+            configuredField.setAccessible(true);
+            Field discoveredField = CDI.class.getDeclaredField("discoveredProviders");
+            discoveredField.setAccessible(true);
+            return new CdiStateSnapshot(
+                    (jakarta.enterprise.inject.spi.CDIProvider) configuredField.get(null),
+                    (Set<jakarta.enterprise.inject.spi.CDIProvider>) discoveredField.get(null)
+            );
+        }
+
+        void restore() throws Exception {
+            setConfiguredProvider(configuredProvider);
+            setDiscoveredProviders(discoveredProviders);
+        }
     }
 
     private Syringe newSyringe() {

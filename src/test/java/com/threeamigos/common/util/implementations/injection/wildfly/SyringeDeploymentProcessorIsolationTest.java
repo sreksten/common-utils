@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.wildfly;
 
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter19.par193interceptorresolution.InterceptorResolutionInCDIFullTest;
 import com.threeamigos.common.util.implementations.injection.cdi41tests.chapter20.par201decoratorbeans.DecoratorBeansTest;
+import com.threeamigos.common.util.implementations.injection.wildfly.subpackage.DynamicLookupBrokenSubpackageBean;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +29,20 @@ class SyringeDeploymentProcessorIsolationTest {
 
         assertEquals(1, filtered.size());
         assertTrue(filtered.contains(InterceptorResolutionInCDIFullTest.class));
+    }
+
+    @Test
+    @DisplayName("Chapter 27.2 deployment isolation: hashed archive excludes subpackages of anchor package")
+    void shouldExcludeSubpackagesFromHashedArchiveScope() {
+        Set<Class<?>> candidates = new HashSet<Class<?>>();
+        candidates.add(DynamicLookupTestAnchor.class);
+        candidates.add(DynamicLookupBrokenSubpackageBean.class);
+
+        String deploymentName = "DynamicLookupTestAnchor1234567890abcdef1234567890abcdef12345678.war";
+        Set<Class<?>> filtered = SyringeDeploymentProcessor.narrowToDeploymentScope(candidates, deploymentName);
+
+        assertEquals(1, filtered.size());
+        assertTrue(filtered.contains(DynamicLookupTestAnchor.class));
     }
 
     @Test
@@ -67,4 +82,35 @@ class SyringeDeploymentProcessorIsolationTest {
         );
         assertNull(SyringeDeploymentProcessor.resolveScopedPackagePrefix(indexed, "myapp.war"));
     }
+
+    @Test
+    @DisplayName("Chapter 27.2 deployment isolation: local deployment index has priority over composite index")
+    void shouldPreferLocalIndexWhenSelectingIndexedClassNames() {
+        List<String> local = Arrays.asList(
+                "org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest",
+                "org.jboss.cdi.tck.tests.lookup.dynamic.ObtainsInstanceBean"
+        );
+        List<String> composite = Arrays.asList(
+                "org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest",
+                "org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.FieldInjectionBar"
+        );
+
+        List<String> selected = SyringeDeploymentProcessor.selectIndexedClassNames(local, composite);
+        assertEquals(local, selected);
+    }
+
+    @Test
+    @DisplayName("Chapter 27.2 deployment isolation: composite index is used only when local index is empty")
+    void shouldFallbackToCompositeIndexWhenLocalIsEmpty() {
+        List<String> selected = SyringeDeploymentProcessor.selectIndexedClassNames(
+                java.util.Collections.<String>emptyList(),
+                Arrays.asList("org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest"));
+
+        assertEquals(1, selected.size());
+        assertEquals("org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest", selected.get(0));
+    }
+
+    static class DynamicLookupTestAnchor {
+    }
+
 }

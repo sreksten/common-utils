@@ -782,6 +782,11 @@ public class Syringe {
             // ============================================================
             info("Phase 6: Application Ready");
 
+            // Ensure CDI.current() can resolve this container in managed bootstrap paths
+            // (e.g. WildFly integration) where no explicit global provider registration occurs.
+            SyringeCDIProvider.ensureProviderConfigured();
+            SyringeCDIProvider.registerGlobalCDI(getCDI());
+
             initialized = true;
             info("Container initialization complete");
 
@@ -3592,6 +3597,13 @@ public class Syringe {
      */
     public jakarta.enterprise.inject.spi.CDI<Object> getCDI() {
         if (beanManager == null) {
+            if (isInvokedThroughCdiCurrentLookup()) {
+                BeanManagerImpl provisionalBeanManager = new BeanManagerImpl(knowledgeBase, contextManager);
+                return new com.threeamigos.common.util.implementations.injection.spi.CDIImpl(
+                        provisionalBeanManager,
+                        cdiLiteMode,
+                        this::isCdiPortableAccessWindow);
+            }
             throw new NonPortableBehaviourException(
                     "CDI.current() access is non-portable before BeforeBeanDiscovery is fired");
         }
@@ -3603,6 +3615,19 @@ public class Syringe {
 
     private boolean isCdiPortableAccessWindow() {
         return beforeBeanDiscoveryFired && !beforeShutdownFired;
+    }
+
+    private boolean isInvokedThroughCdiCurrentLookup() {
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        for (StackTraceElement element : stack) {
+            if ("jakarta.enterprise.inject.spi.CDI".equals(element.getClassName())) {
+                String method = element.getMethodName();
+                if ("current".equals(method) || "getCDIProvider".equals(method)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public KnowledgeBase getKnowledgeBase() {
