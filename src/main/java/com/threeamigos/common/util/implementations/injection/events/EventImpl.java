@@ -688,6 +688,11 @@ public class EventImpl<T> implements Event<T> {
             "javax.enterprise.inject.spi.ProcessObserverMethod"
     ));
 
+    public static void clearStaticState() {
+        TRANSACTION_DOWNGRADE_WARNED.set(false);
+        INACTIVE_SCOPE_WARNED.clear();
+    }
+
     private boolean containsUnresolvableTypeVariable(Type type) {
         if (type instanceof TypeVariable) {
             return true;

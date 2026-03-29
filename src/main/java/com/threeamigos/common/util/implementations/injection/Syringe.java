@@ -4,6 +4,8 @@ import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecu
 import com.threeamigos.common.util.implementations.injection.bce.BceSupportedPhase;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.Alternatives;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import com.threeamigos.common.util.implementations.injection.bce.BuildCompatibleExtensionRunner;
 import com.threeamigos.common.util.implementations.injection.bce.BceInvokerRegistry;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.BeanManagerBean;
@@ -19,6 +21,7 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Decor
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
+import com.threeamigos.common.util.implementations.injection.events.propagation.ConversationPropagationRegistry;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
@@ -27,8 +30,12 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanAttr
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
+import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
+import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.scopes.ConversationImpl;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.InjectionTargetFactoryImpl;
+import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
@@ -610,6 +617,24 @@ public class Syringe {
     }
 
     /**
+     * Registers a parsed beans.xml configuration for managed bootstrap environments.
+     *
+     * <p>This is used when class discovery is delegated to an application server and
+     * beans.xml parsing is performed externally.
+     *
+     * @param beansXml parsed beans.xml configuration
+     */
+    public void addBeansXmlConfiguration(BeansXml beansXml) {
+        if (initialized) {
+            throw new IllegalStateException("Container already initialized");
+        }
+        if (knowledgeBase == null) {
+            throw new IllegalStateException("Container not yet initialized. Call initialize() first.");
+        }
+        knowledgeBase.addBeansXml(beansXml);
+    }
+
+    /**
      * Registers CDI built-in beans required by the spec.
      */
     private void registerBuiltInBeans() {
@@ -849,33 +874,63 @@ public class Syringe {
      * </ol>
      */
     public void shutdown() {
-        if (!initialized) {
+        if (shutdownStarted) {
             return;
         }
         shutdownStarted = true;
+        try {
+            if (!initialized) {
+                return;
+            }
 
-        info("Shutting down container");
+            info("Shutting down container");
 
-        // CDI 4.1 9.6.2: fire Shutdown during container shutdown and not later than
-        // @BeforeDestroyed(ApplicationScoped.class).
-        Set<Annotation> shutdownQualifiers = new HashSet<Annotation>();
-        shutdownQualifiers.add(Any.Literal.INSTANCE);
-        new EventImpl<Shutdown>(Shutdown.class, shutdownQualifiers, knowledgeBase, beanManager.getBeanResolver(),
-                contextManager, beanManager.getBeanResolver().getTransactionServices(),
-                null, null, true).fire(new Shutdown());
+            // CDI 4.1 9.6.2: fire Shutdown during container shutdown and not later than
+            // @BeforeDestroyed(ApplicationScoped.class).
+            Set<Annotation> shutdownQualifiers = new HashSet<Annotation>();
+            shutdownQualifiers.add(Any.Literal.INSTANCE);
+            new EventImpl<Shutdown>(Shutdown.class, shutdownQualifiers, knowledgeBase, beanManager.getBeanResolver(),
+                    contextManager, beanManager.getBeanResolver().getTransactionServices(),
+                    null, null, true).fire(new Shutdown());
 
-        // Destroy all beans (call @PreDestroy methods)
-        destroyAllBeans();
+            // Destroy all beans (call @PreDestroy methods)
+            destroyAllBeans();
 
-        // Fire BeforeShutdown as the final lifecycle event after contexts are destroyed.
-        fireBeforeShutdown();
+            // Fire BeforeShutdown as the final lifecycle event after contexts are destroyed.
+            fireBeforeShutdown();
+        } finally {
+            cleanupStaticState();
+            // Clear state
+            extensions.clear();
+            buildCompatibleExtensions.clear();
+            initialized = false;
+            info("Container shutdown complete");
+        }
+    }
 
-        // Clear state
-        extensions.clear();
-        buildCompatibleExtensions.clear();
-        initialized = false;
+    private void cleanupStaticState() {
+        ClassLoader classLoader = null;
+        if (beanManager != null) {
+            classLoader = beanManager.getRegistrationClassLoader();
+            beanManager.unregisterFromGlobalRegistries();
+        }
+        if (classLoader == null) {
+            classLoader = Thread.currentThread().getContextClassLoader();
+        }
+        if (classLoader == null) {
+            classLoader = Syringe.class.getClassLoader();
+        }
 
-        info("Container shutdown complete");
+        ClientProxyGenerator.unregisterContainer(classLoader);
+        InterceptorAwareProxyGenerator.clearTargetAroundInvokeCacheForClassLoader(classLoader);
+        BeansXmlParser.clearJaxbContextCacheForClassLoader(classLoader);
+        AnnotationsEnum.clearDynamicAnnotationsForClassLoader(classLoader);
+        ConversationImpl.clearAllGlobalState();
+        ConversationPropagationRegistry.clear();
+        DestroyedInstanceTracker.clear();
+        EventImpl.clearStaticState();
+        SyringeCDIProvider.unregisterThreadLocalCDI();
+        SyringeCDIProvider.unregisterGlobalCDI();
     }
 
     // ============================================================

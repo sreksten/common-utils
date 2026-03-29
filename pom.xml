@@ -40,6 +40,18 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>cdi-tck-api</artifactId>
+            <version>4.1.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.el</groupId>
+            <artifactId>jakarta.el-api</artifactId>
+            <version>6.0.1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>jakarta.interceptor</groupId>
             <artifactId>jakarta.interceptor-api</artifactId>
             <version>2.2.0</version>
@@ -265,6 +277,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.3.0</version>
+                <configuration>
+                    <excludes>
+                        <exclude>jakarta/enterprise/invoke/**</exclude>
+                    </excludes>
+                </configuration>
                 <executions>
                     <execution>
                         <id>arquillian-adapter</id>
@@ -276,6 +293,7 @@
                             <classifier>arquillian</classifier>
                             <includes>
                                 <include>com/threeamigos/common/util/implementations/injection/arquillian/**</include>
+                                <include>META-INF/cdi-tck.properties</include>
                                 <include>META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension</include>
                                 <include>META-INF/services/org.jboss.arquillian.container.spi.client.container.DeployableContainer</include>
                                 <include>META-INF/services/org.jboss.arquillian.container.spi.client.container.DeploymentExceptionTransformer</include>

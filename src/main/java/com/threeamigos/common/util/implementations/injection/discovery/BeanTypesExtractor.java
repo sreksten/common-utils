@@ -1,9 +1,11 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.GenericArrayType;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -37,8 +39,15 @@ public final class BeanTypesExtractor {
         Objects.requireNonNull(beanClass, "beanClass cannot be null");
 
         List<String> definitionErrors = new ArrayList<>();
-        Set<Type> unrestrictedTypes = computeManagedUnrestrictedTypes(beanClass, definitionErrors);
-        Set<Type> legalTypes = keepLegalBeanTypes(unrestrictedTypes);
+        Set<Type> unrestrictedTypes = TypeClosureHelper.extractTypesFromClass(beanClass);
+        Set<Type> resultingTypes = unrestrictedTypes;
+        if (hasTypedAnnotation(beanClass)) {
+            Annotation typedAnnotation = getTypedAnnotation(beanClass);
+            if (typedAnnotation != null) {
+                resultingTypes = computeTypedBeanTypes(beanClass, typedAnnotation, unrestrictedTypes, definitionErrors);
+            }
+        }
+        Set<Type> legalTypes = keepLegalBeanTypes(resultingTypes);
         return new ExtractionResult(legalTypes, definitionErrors);
     }
 
@@ -48,25 +57,29 @@ public final class BeanTypesExtractor {
      * <p>The result is the unrestricted producer type set with illegal bean types removed.
      */
     public ExtractionResult extractProducerBeanTypes(Type producerType) {
+        return extractProducerBeanTypes(producerType, null);
+    }
+
+    /**
+     * Extracts resulting bean types for a producer method/field type with optional producer-member annotations.
+     */
+    public ExtractionResult extractProducerBeanTypes(Type producerType, AnnotatedElement producerElement) {
         Objects.requireNonNull(producerType, "producerType cannot be null");
 
+        List<String> definitionErrors = new ArrayList<>();
         Set<Type> unrestrictedTypes = TypeClosureHelper.extractTypesFromType(producerType);
-        Set<Type> legalTypes = keepLegalBeanTypes(unrestrictedTypes);
-        return new ExtractionResult(legalTypes, Collections.emptyList());
-    }
-
-    private Set<Type> computeManagedUnrestrictedTypes(Class<?> beanClass, List<String> definitionErrors) {
-        if (hasTypedAnnotation(beanClass)) {
-            Annotation typedAnnotation = getTypedAnnotation(beanClass);
+        Set<Type> resultingTypes = unrestrictedTypes;
+        if (producerElement != null && hasTypedAnnotation(producerElement)) {
+            Annotation typedAnnotation = getTypedAnnotation(producerElement);
             if (typedAnnotation != null) {
-                return computeTypedBeanTypes(beanClass, typedAnnotation, definitionErrors);
+                resultingTypes = computeTypedBeanTypes(RawTypeExtractor.getRawType(producerType), typedAnnotation, unrestrictedTypes, definitionErrors);
             }
         }
-
-        return TypeClosureHelper.extractTypesFromClass(beanClass);
+        Set<Type> legalTypes = keepLegalBeanTypes(resultingTypes);
+        return new ExtractionResult(legalTypes, definitionErrors);
     }
 
-    private Set<Type> computeTypedBeanTypes(Class<?> beanClass, Annotation typedAnnotation, List<String> definitionErrors) {
+    private Set<Type> computeTypedBeanTypes(Class<?> beanClass, Annotation typedAnnotation, Set<Type> unrestrictedTypes, List<String> definitionErrors) {
         Set<Type> types = new LinkedHashSet<>();
 
         try {
@@ -84,7 +97,17 @@ public final class BeanTypesExtractor {
                             + " which is not a type of bean class " + beanClass.getName());
                     continue;
                 }
-                types.add(typedClass);
+                boolean matched = false;
+                for (Type unrestricted : unrestrictedTypes) {
+                    Class<?> unrestrictedRaw = RawTypeExtractor.getRawType(unrestricted);
+                    if (typedClass.equals(unrestrictedRaw)) {
+                        types.add(unrestricted);
+                        matched = true;
+                    }
+                }
+                if (!matched) {
+                    types.add(typedClass);
+                }
             }
             types.add(Object.class);
             return types;

@@ -1,7 +1,14 @@
 package com.threeamigos.common.util.implementations.injection.wildfly;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import jakarta.enterprise.inject.spi.DeploymentException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
@@ -43,12 +50,16 @@ public class SyringeBootstrap {
             // 1. Initialize core infrastructure (extensions, BeanManager)
             syringe.initialize();
 
-            // 2. Feed discovered classes to the container
+            // 2. Register beans.xml metadata from deployment classloader so scan exclusions
+            // and alternatives/decorators/interceptors declarations are honored.
+            registerBeansXmlConfigurations();
+
+            // 3. Feed discovered classes to the container
             for (Class<?> clazz : discoveredClasses) {
                 syringe.addDiscoveredClass(clazz);
             }
 
-            // 3. Complete the initialization flow (processing, validation)
+            // 4. Complete the initialization flow (processing, validation)
             syringe.start();
 
             return syringe;
@@ -62,5 +73,35 @@ public class SyringeBootstrap {
      */
     public void shutdown() {
         syringe.shutdown();
+    }
+
+    private void registerBeansXmlConfigurations() throws IOException {
+        BeansXmlParser parser = new BeansXmlParser();
+        Set<String> seenUrls = new HashSet<String>();
+        loadBeansXmlFromPath(parser, seenUrls, "META-INF/beans.xml");
+        loadBeansXmlFromPath(parser, seenUrls, "WEB-INF/beans.xml");
+    }
+
+    private void loadBeansXmlFromPath(BeansXmlParser parser,
+                                      Set<String> seenUrls,
+                                      String path) throws IOException {
+        Enumeration<URL> resources = classLoader.getResources(path);
+        while (resources.hasMoreElements()) {
+            URL url = resources.nextElement();
+            String external = url.toExternalForm();
+            if (!seenUrls.add(external)) {
+                continue;
+            }
+            InputStream stream = null;
+            try {
+                stream = url.openStream();
+                BeansXml beansXml = parser.parse(stream);
+                syringe.addBeansXmlConfiguration(beansXml);
+            } finally {
+                if (stream != null) {
+                    stream.close();
+                }
+            }
+        }
     }
 }

@@ -19,12 +19,19 @@ public class SyringeDependencyProcessor implements DeploymentUnitProcessor {
     private static final String INJECT_API_MODULE = "jakarta.inject.api";
     private static final String ANNOTATION_API_MODULE = "jakarta.annotation.api";
     private static final String INTERCEPTOR_API_MODULE = "jakarta.interceptor.api";
+    private static final String TRANSACTION_API_MODULE = "jakarta.transaction.api";
+    private static final String SERVLET_API_MODULE = "jakarta.servlet.api";
+    private static final String JBOSS_AS_CONTROLLER_MODULE = "org.jboss.as.controller";
+    private static final String JBOSS_AS_CONTROLLER_CLIENT_MODULE = "org.jboss.as.controller-client";
+    private static final String JBOSS_AS_SERVER_MODULE = "org.jboss.as.server";
+    private static final String JBOSS_AS_NAMING_MODULE = "org.jboss.as.naming";
+    private static final String MSC_MODULE = "org.jboss.msc";
+    private static final String JBOSS_MODULES_MODULE = "org.jboss.modules";
+    private static final String DMR_MODULE = "org.jboss.dmr";
+    private static final String STAXMAPPER_MODULE = "org.jboss.staxmapper";
+    private static final String JAXB_API_MODULE = "jakarta.xml.bind.api";
     private static final String GUICE_MODULE = "com.google.inject";
     private static final String SNAKEYAML_MODULE = "org.yaml.snakeyaml";
-    private static final String WELD_CORE_MODULE = "org.jboss.weld.core";
-    private static final String MSC_MODULE = "org.jboss.msc";
-    private static final String SHRINKWRAP_DESCRIPTORS_MODULE = "org.jboss.shrinkwrap.descriptors";
-    private static final String ANT_MODULE = "org.apache.ant";
 
     @Override
     public void deploy(DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
@@ -49,12 +56,19 @@ public class SyringeDependencyProcessor implements DeploymentUnitProcessor {
         moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, INJECT_API_MODULE, false, false, true, false));
         moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, ANNOTATION_API_MODULE, false, false, true, false));
         moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, INTERCEPTOR_API_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, TRANSACTION_API_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, SERVLET_API_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, JBOSS_AS_CONTROLLER_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, JBOSS_AS_CONTROLLER_CLIENT_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, JBOSS_AS_SERVER_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, JBOSS_AS_NAMING_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, MSC_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, JBOSS_MODULES_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, DMR_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, STAXMAPPER_MODULE, false, false, true, false));
+        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, JAXB_API_MODULE, false, false, true, false));
         moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, GUICE_MODULE, false, false, true, false));
         moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, SNAKEYAML_MODULE, false, false, true, false));
-        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, WELD_CORE_MODULE, false, false, true, false));
-        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, MSC_MODULE, false, false, true, false));
-        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, SHRINKWRAP_DESCRIPTORS_MODULE, false, false, true, false));
-        moduleSpecification.addSystemDependency(new ModuleDependency(moduleLoader, ANT_MODULE, false, false, true, false));
     }
 
     @Override

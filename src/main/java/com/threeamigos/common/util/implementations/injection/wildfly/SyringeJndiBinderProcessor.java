@@ -35,8 +35,8 @@ public class SyringeJndiBinderProcessor implements DeploymentUnitProcessor {
             return;
         }
 
-        // Bind BeanManager into the module namespace (java:module/BeanManager). Using the 4-arg
-        // overload keeps the naming context service names consistent with WildFly's expectations.
+        //FIXME
+        // Bind BeanManager into the standard module namespace expected by CDI consumers.
         final String moduleName = simpleName(deploymentUnit.getName());
         final String appName = deploymentUnit.getParent() != null
                 ? simpleName(deploymentUnit.getParent().getName())
@@ -49,6 +49,14 @@ public class SyringeJndiBinderProcessor implements DeploymentUnitProcessor {
             // If the namespace is rejected (e.g., illegal context), do not fail deployment;
             // just skip binding. CDI.current() and injection still work.
             NamingLogger.ROOT_LOGGER.debug("Skipping BeanManager JNDI binding", e);
+            return;
+        }
+
+        // If another component already registered BeanManager binding,
+        // do not attempt to register the same MSC service again.
+        if (phaseContext.getServiceRegistry().getService(bindInfo.getBinderServiceName()) != null) {
+            NamingLogger.ROOT_LOGGER.debugf("BeanManager binder service already present for deployment %s, skipping Syringe binding",
+                    deploymentUnit.getName());
             return;
         }
 

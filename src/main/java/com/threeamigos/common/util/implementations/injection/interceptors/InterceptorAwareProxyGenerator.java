@@ -84,6 +84,16 @@ public class InterceptorAwareProxyGenerator {
     private static final ConcurrentHashMap<Class<?>, Optional<Method>> targetAroundInvokeCache =
             new ConcurrentHashMap<>();
 
+    public static void clearTargetAroundInvokeCacheForClassLoader(ClassLoader classLoader) {
+        if (classLoader == null) {
+            return;
+        }
+        targetAroundInvokeCache.entrySet().removeIf(entry -> {
+            Class<?> type = entry.getKey();
+            return type != null && type.getClassLoader() == classLoader;
+        });
+    }
+
     /**
      * Creates an interceptor-aware proxy for a bean.
      * <p>

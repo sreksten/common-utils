@@ -292,6 +292,11 @@ public class ConversationImpl implements Conversation, Serializable {
         conversationContext.remove();
     }
 
+    public static void clearAllGlobalState() {
+        activeConversations.clear();
+        clearCurrentConversation();
+    }
+
     /**
      * Gets the active conversation state for a given ID (for propagation across requests).
      *

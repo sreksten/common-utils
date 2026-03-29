@@ -258,7 +258,10 @@ public class TypeChecker {
         }
 
         if (targetType instanceof Class<?>) {
-            return true;
+            // CDI type-safe resolution for raw required types is based on bean type identity
+            // (with primitive/wrapper normalization), not general Java subclass assignability.
+            // Example: if a bean has only @Typed(Canary.class), it must not match required type Bird.
+            return normalizedTargetRaw.equals(normalizedImplementationRaw);
         }
 
         if (targetType instanceof ParameterizedType) {

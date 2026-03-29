@@ -1117,6 +1117,16 @@ public enum AnnotationsEnum {
         registerDynamicAnnotation(bindingType, DYNAMIC_INTERCEPTOR_BINDINGS);
     }
 
+    public static void clearDynamicAnnotationsForClassLoader(ClassLoader classLoader) {
+        if (classLoader == null) {
+            return;
+        }
+        DYNAMIC_QUALIFIERS.removeIf(type -> type != null && type.getClassLoader() == classLoader);
+        DYNAMIC_SCOPES.removeIf(type -> type != null && type.getClassLoader() == classLoader);
+        DYNAMIC_STEREOTYPES.removeIf(type -> type != null && type.getClassLoader() == classLoader);
+        DYNAMIC_INTERCEPTOR_BINDINGS.removeIf(type -> type != null && type.getClassLoader() == classLoader);
+    }
+
     private static void registerDynamicAnnotation(Class<? extends Annotation> annotationType,
                                                   Set<Class<? extends Annotation>> sink) {
         if (annotationType == null || sink == null) {

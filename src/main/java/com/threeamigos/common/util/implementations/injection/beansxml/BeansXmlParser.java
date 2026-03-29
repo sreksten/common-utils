@@ -61,6 +61,16 @@ public class BeansXmlParser {
     private static final ConcurrentHashMap<Class<?>, JAXBContext> jaxbContextCache =
         new ConcurrentHashMap<>();
 
+    public static void clearJaxbContextCacheForClassLoader(ClassLoader classLoader) {
+        if (classLoader == null) {
+            return;
+        }
+        jaxbContextCache.entrySet().removeIf(entry -> {
+            Class<?> type = entry.getKey();
+            return type != null && type.getClassLoader() == classLoader;
+        });
+    }
+
     /**
      * Whether to enable XSD validation during parsing.
      * Default: false (for performance and backward compatibility).

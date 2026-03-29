@@ -106,6 +106,7 @@ public class BeanManagerImpl implements BeanManager {
     private final DecoratorAwareProxyGenerator decoratorAwareProxyGenerator;
     private final List<Extension> registeredExtensions;
     private final String beanManagerId;
+    private final ClassLoader registrationClassLoader;
     private volatile boolean legacyCdi10NewEnabled;
     private volatile boolean afterBeanDiscoveryFired;
     private volatile boolean afterDeploymentValidationFired;
@@ -133,8 +134,18 @@ public class BeanManagerImpl implements BeanManager {
         if (classLoader == null) {
             classLoader = BeanManagerImpl.class.getClassLoader();
         }
+        this.registrationClassLoader = classLoader;
         BEAN_MANAGER_REGISTRY.put(classLoader, this);
         BEAN_MANAGER_ID_REGISTRY.put(beanManagerId, this);
+    }
+
+    public ClassLoader getRegistrationClassLoader() {
+        return registrationClassLoader;
+    }
+
+    public void unregisterFromGlobalRegistries() {
+        BEAN_MANAGER_ID_REGISTRY.remove(beanManagerId, this);
+        BEAN_MANAGER_REGISTRY.remove(registrationClassLoader, this);
     }
 
     public void setLegacyCdi10NewEnabled(boolean enabled) {
@@ -222,7 +233,7 @@ public class BeanManagerImpl implements BeanManager {
         if (beanType == null) {
             throw new IllegalArgumentException("beanType cannot be null");
         }
-        if (!bean.getTypes().contains(beanType)) {
+        if (!isBeanTypeInBeanTypes(beanType, bean.getTypes())) {
             throw new IllegalArgumentException(
                 "beanType " + beanType + " is not a bean type of bean " + bean.getBeanClass().getName());
         }
@@ -271,6 +282,45 @@ public class BeanManagerImpl implements BeanManager {
         return decoratorAwareProxyGenerator
                 .createDecoratorChain(instance, decorators, this, creationalContext)
                 .getOutermostInstance();
+    }
+
+    private boolean isBeanTypeInBeanTypes(Type requestedType, Set<Type> beanTypes) {
+        if (beanTypes.contains(requestedType)) {
+            return true;
+        }
+        if (!(requestedType instanceof Class<?>)) {
+            return false;
+        }
+
+        Class<?> requestedClass = (Class<?>) requestedType;
+        Class<?> alternate = requestedClass.isPrimitive() ? boxPrimitive(requestedClass) : unboxWrapper(requestedClass);
+        return alternate != null && beanTypes.contains(alternate);
+    }
+
+    private Class<?> boxPrimitive(Class<?> type) {
+        if (type == int.class) return Integer.class;
+        if (type == long.class) return Long.class;
+        if (type == double.class) return Double.class;
+        if (type == float.class) return Float.class;
+        if (type == boolean.class) return Boolean.class;
+        if (type == char.class) return Character.class;
+        if (type == byte.class) return Byte.class;
+        if (type == short.class) return Short.class;
+        if (type == void.class) return Void.class;
+        return null;
+    }
+
+    private Class<?> unboxWrapper(Class<?> type) {
+        if (type == Integer.class) return int.class;
+        if (type == Long.class) return long.class;
+        if (type == Double.class) return double.class;
+        if (type == Float.class) return float.class;
+        if (type == Boolean.class) return boolean.class;
+        if (type == Character.class) return char.class;
+        if (type == Byte.class) return byte.class;
+        if (type == Short.class) return short.class;
+        if (type == Void.class) return void.class;
+        return null;
     }
 
     /**

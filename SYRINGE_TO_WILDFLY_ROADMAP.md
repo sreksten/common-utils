@@ -1,103 +1,130 @@
-# Syringe to WildFly Integration Roadmap
+# Syringe to WildFly Integration Roadmap (Revalidated)
 
-This document outlines the architectural and implementation steps required to integrate **Syringe** as a primary CDI container within **WildFly**.
+This roadmap was re-checked against the current implementation in `common-utils`.
 
-## 1. Modularization (WildFly Modules)
-WildFly uses a JBoss Modules-based ClassLoading system. Syringe must be packaged as a system module.
+## Current Reality
 
-- **Objective:** Allow WildFly to load Syringe without bundling it in every WAR/EAR.
-- **Steps:**
-    1. Create a directory: `${WILDFLY_HOME}/modules/system/layers/base/com/threeamigos/common/util/main/`
-    2. Add `common-utils.jar` (containing Syringe) to this directory.
-    3. Create a `module.xml`:
-       ```xml
-       <module xmlns="urn:jboss:module:1.3" name="com.threeamigos.common.util">
-           <resources>
-               <resource-root path="common-utils.jar"/>
-           </resources>
-           <dependencies>
-               <module name="jakarta.enterprise.api"/>
-               <module name="jakarta.inject.api"/>
-               <module name="jakarta.servlet.api"/>
-               <!-- Other dependencies -->
-           </dependencies>
-       </module>
-       ```
+Syringe has working integration pieces, but WildFly execution is still **Weld-coupled**:
 
-## 2. Syringe Bootstrap API (Core Refactor)
-Currently, `Syringe` is designed for SE-style manual instantiation and automatic classpath scanning. For WildFly, we need a managed bootstrap.
+- `SyringeExtension` registers deployment processors on Weld-specific phases:
+  - `Phase.DEPENDENCIES_WELD`
+  - `Phase.POST_MODULE_WELD_PORTABLE_EXTENSIONS`
+  - `Phase.INSTALL_WELD_BEAN_MANAGER`
+- `SyringeDependencyProcessor` explicitly adds module dependency `org.jboss.weld.core`.
+- Arquillian support is present (`SyringeWildFlyArquillianContainer`, `SyringeArquillianExtension`, transformer, enricher), but this does not by itself replace Weld inside WildFly.
 
-- **Refactor Suggestions:**
-    - Decouple **Discovery** from **Initialization**. [DONE]
-    - Create a `SyringeBootstrap` class that accepts a `Set<Class<?>>` and a `ClassLoader` directly. [DONE]
-    - **Why?** WildFly already scans all classes via Jandex (a high-performance indexer). Syringe should reuse this index instead of re-scanning the JARs.
+Because of this, today we have: **Syringe integrated into a Weld-shaped server lifecycle**, not full “Syringe instead of Weld”.
 
-## 3. WildFly Subsystem Implementation
-You must create a dedicated WildFly extension.
+## Point-by-Point Status Check
 
-- **Extension Class:** `com.threeamigos.common.util.implementations.injection.wildfly.SyringeExtension` [DONE]
-    - Registers the `syringe` subsystem in `standalone.xml`.
-    - Handles the parsing of `<syringe xmlns="urn:jboss:domain:syringe:1.0"/>`.
-- **Subsystem Add Handler:** `SyringeSubsystemAdd` [DONE]
-    - Registers a global "Syringe Manager Service" in the **MSC (Modular Service Container)**.
+### 1. Modularization (WildFly Modules)
+- Status: **Partial**
+- Present:
+  - Service registration for WildFly extension: `META-INF/services/org.jboss.as.controller.Extension`.
+  - `SyringeDependencyProcessor` adds `com.threeamigos.common.util` module to deployments.
+- Missing/Needs hardening:
+  - Production-ready module distribution docs/scripts for WildFly install.
+  - Clear versioned module layout and compatibility matrix per WildFly version.
 
-## 4. Deployment Unit Processors (DUPs) [DONE]
-The DUP is the "hook" that detects a deployment (WAR/EAR) and attaches Syringe.
+### 2. Syringe Bootstrap API
+- Status: **Implemented (with caveats)**
+- Present:
+  - `SyringeBootstrap(Set<Class<?>>, ClassLoader)` exists.
+  - `SyringeDeploymentProcessor` uses Jandex `CompositeIndex` and bootstraps deployment-specific Syringe.
+- Caveat:
+  - `classLoader` parameter in `SyringeBootstrap` is accepted but not actively used in bootstrap decisions.
 
-- **Phase: DEPENDENCIES** [DONE]
-    - Added `SyringeDependencyProcessor` to add `com.threeamigos.common.util` module dependency to deployments.
-- **Phase: POST_MODULE** [DONE]
-    - Added `SyringeDeploymentProcessor` to retrieve the `CompositeIndex` (Jandex) from the `DeploymentUnit`.
-    - Extract all classes and instantiate a deployment-specific `Syringe` container via `SyringeBootstrap`.
-- **Phase: INSTALL** [DONE]
-    - Register the `BeanManager` in JNDI at `java:comp/BeanManager`.
-    - Implementation: `SyringeJndiBinderProcessor`.
+### 3. WildFly Subsystem
+- Status: **Implemented**
+- Present:
+  - `SyringeExtension` registers subsystem and XML parser.
+  - `SyringeSubsystemAdd` installs `SyringeService`.
+  - Namespace parsing for `urn:jboss:domain:syringe:1.0`.
+- Caveat:
+  - Runtime activation points are tied to Weld phase slots.
 
-## 5. CDI Bridge (The Provider) [DONE]
-To satisfy `CDI.current()`, we must use the existing `SyringeCDIProvider`.
+### 4. Deployment Unit Processors (DUPs)
+- Status: **Implemented (Weld-coupled)**
+- Present:
+  - `SyringeDependencyProcessor` (module dependencies).
+  - `SyringeDeploymentProcessor` (class extraction, bootstrap, attach container, setup action).
+  - `SyringeJndiBinderProcessor` (JNDI bind of BeanManager).
+- Gap:
+  - The processors execute in Weld phase anchors; not provider-neutral.
 
-- **Implementation:** [DONE]
-    - Created `SyringeSetupAction` which implements WildFly's `SetupAction` interface.
-    - Before a request enters a Servlet or EJB, WildFly executes this setup action.
-    - **Action:** Calls `SyringeCDIProvider.registerThreadLocalCDI(syringe.getCDI())`.
-    - **Cleanup:** Calls `SyringeCDIProvider.unregisterThreadLocalCDI()` in the teardown action.
-    - **Registration:** `SyringeDeploymentProcessor` adds the `SyringeSetupAction` to the deployment's `SETUP_ACTIONS` attachment list.
-- **Benefit:** This ensures that `CDI.current()` always returns the container instance belonging to the current deployment, maintaining isolation between multiple WARs.
+### 5. CDI Bridge (`CDI.current()`)
+- Status: **Implemented**
+- Present:
+  - `SyringeCDIProvider` registered via ServiceLoader.
+  - `SyringeSetupAction` registers/unregisters thread-local CDI per request/deployment execution path.
+- Caveat:
+  - Provider precedence and coexistence with Weld provider in full server runtime still needs explicit governance/testing.
 
-## 6. Integration with Jakarta EE Services
-A true WildFly integration requires Syringe to interact with other subsystems:
+### 6. Jakarta EE Service Integration
+- Status: **Partial**
+- Present:
+  - JTA helper abstractions exist (`util/tx` package).
+  - Servlet-related utility/filter code exists.
+- Missing:
+  - End-to-end WildFly integration for `@Resource`, `@PersistenceContext`, `@EJB`.
+  - Verified integration contract with Undertow/EJB/JPA subsystems for container-managed artifacts.
 
-- **Resource Injection:** Syringe should handle `@Resource`, `@PersistenceContext`, and `@EJB` by delegating back to WildFly's JNDI/Naming system.
-- **Transaction Support:** Integrate Syringe's interceptors with WildFly's Transaction Manager (`JTA`).
-- **Servlet Injection:** Provide a `SyringeServletExtension` that allows Syringe to inject into Servlets, Filters, and Listeners (which are instantiated by the Web Subsystem, not Syringe).
+### 7. TCK + Arquillian
+- Status: **Partial**
+- Present:
+  - DeployableContainer implementation and Arquillian extension registration.
+  - Deployment exception transformer and test enricher.
+- Missing:
+  - A fully Weld-free in-container TCK path in WildFly.
+  - Server configuration that guarantees Syringe is the active CDI engine instead of Weld.
 
-## 7. TCK Readiness & Arquillian
-To achieve official CDI 4.1 compliance, Syringe must pass the TCK using the Arquillian framework.
+## Rethought Roadmap (for True Syringe-as-Provider in WildFly)
 
-- **Arquillian Container Adapter:**
-    - Develop a `Syringe-WildFly-Arquillian` adapter.
-    - This adapter manages the server lifecycle and handles deployment of the TCK test WARs.
-- **Test Enrichment:**
-    - Implement an Arquillian `TestEnricher` to ensure `@Inject` works inside the test classes themselves.
-- **Weld Replacement:**
-    - Ensure the test environment is configured to exclude Weld and use the `syringe` subsystem exclusively to avoid JNDI name conflicts.
+## Phase A: Define Target Runtime Model
+- Decide and document one supported model:
+  - `Model 1`: Syringe coexists with Weld (current state).
+  - `Model 2`: Syringe replaces Weld as CDI provider (target requested).
+- For `Model 2`, define subsystem ownership boundaries with web/ejb/jpa/naming/transactions.
 
-## 8. Configuration Example
-In WildFly's `standalone.xml`:
+## Phase B: Remove Weld Coupling in Boot Sequence
+- Replace Weld phase anchors in `SyringeExtension` with provider-neutral phase anchors.
+- Remove hard dependency on `org.jboss.weld.core` from `SyringeDependencyProcessor`.
+- Add explicit startup ordering dependencies only where technically required.
+
+## Phase C: CDI Service Surface Completion
+- Ensure BeanManager lifecycle and visibility match Jakarta EE expectations.
+- Implement or bridge required integration points:
+  - Resource injection delegation.
+  - Transaction synchronization and interceptor interactions.
+  - Servlet/listener/filter injection lifecycle for server-instantiated components.
+
+## Phase D: Server Configuration and Conflict Control
+- Provide deterministic configuration to disable/replace Weld CDI activation for deployments under Syringe.
+- Add startup validation that fails fast if both providers would claim the same deployment semantics.
+
+## Phase E: Qualification and TCK Strategy
+- Keep two tracks:
+  - `SE track`: Syringe pure CDI behavior tests (`cdi41tests`) for fast regression.
+  - `WF in-container track`: Arquillian/WildFly validation of runtime integration.
+- For compliance evidence, ensure in-container runs prove Syringe provider ownership, not only transformed exception parity.
+
+## Immediate Next Technical Steps
+
+1. Refactor `SyringeExtension` deployment processor phase registrations away from `*_WELD*`.
+2. Remove `org.jboss.weld.core` module injection from `SyringeDependencyProcessor` and run smoke deployments.
+3. Add runtime diagnostics endpoint/log at deployment start:
+   - active CDI provider class
+   - BeanManager implementation class
+   - subsystem that bound `java:module/BeanManager`
+4. Add one dedicated integration test deployment asserting provider identity inside WildFly runtime.
+
+## Minimal Configuration Example
+
 ```xml
 <profile>
-    ...
-    <subsystem xmlns="urn:jboss:domain:syringe:1.0">
-        <!-- Syringe global settings go here -->
-    </subsystem>
+    <!-- other subsystems -->
+    <subsystem xmlns="urn:jboss:domain:syringe:1.0"/>
 </profile>
 ```
 
-## Summary of Responsibilities
-| Component | Responsibility |
-| :--- | :--- |
-| **WildFly DUP** | Scans classes, manages lifecycle of Syringe instances. |
-| **Syringe** | Handles dependency injection, interceptors, and observers. |
-| **SyringeCDIProvider** | Bridges the gap for static `CDI.current()` calls. |
-| **JNDI** | Exposes the `BeanManager` to the rest of the application server. |
-| **Arquillian Adapter**| Manages the test lifecycle for TCK execution. |
+Note: this XML alone does not guarantee Weld replacement; provider selection depends on runtime wiring and subsystem activation rules above.

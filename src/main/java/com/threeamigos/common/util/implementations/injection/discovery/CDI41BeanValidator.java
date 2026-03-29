@@ -3073,7 +3073,7 @@ public class CDI41BeanValidator {
             producerBean.setStereotypes(extractStereotypes(producerMethod));
 
             BeanTypesExtractor.ExtractionResult producerTypes =
-                    beanTypesExtractor.extractProducerBeanTypes(producerMethod.getGenericReturnType());
+                    beanTypesExtractor.extractProducerBeanTypes(producerMethod.getGenericReturnType(), producerMethod);
             for (String error : producerTypes.getDefinitionErrors()) {
                 knowledgeBase.addDefinitionError(fmtMethod(producerMethod) + ": " + error);
             }
@@ -3101,7 +3101,7 @@ public class CDI41BeanValidator {
             producerBean.setStereotypes(extractStereotypes(producerField));
 
             BeanTypesExtractor.ExtractionResult producerTypes =
-                    beanTypesExtractor.extractProducerBeanTypes(producerField.getGenericType());
+                    beanTypesExtractor.extractProducerBeanTypes(producerField.getGenericType(), producerField);
             for (String error : producerTypes.getDefinitionErrors()) {
                 knowledgeBase.addDefinitionError(fmtField(producerField) + ": " + error);
             }

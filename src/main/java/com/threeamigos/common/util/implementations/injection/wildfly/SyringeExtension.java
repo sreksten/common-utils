@@ -92,9 +92,10 @@ public class SyringeExtension implements Extension {
             context.addStep(new AbstractDeploymentChainStep() {
                 @Override
                 protected void execute(DeploymentProcessorTarget processorTarget) {
-                    processorTarget.addDeploymentProcessor(SUBSYSTEM_NAME, Phase.DEPENDENCIES, Phase.DEPENDENCIES_WELD, new SyringeDependencyProcessor());
-                    processorTarget.addDeploymentProcessor(SUBSYSTEM_NAME, Phase.POST_MODULE, Phase.POST_MODULE_WELD_PORTABLE_EXTENSIONS, new SyringeDeploymentProcessor());
-                    processorTarget.addDeploymentProcessor(SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_WELD_BEAN_MANAGER, new SyringeJndiBinderProcessor());
+                    // Use provider-neutral phase anchors to avoid hard coupling to Weld.
+                    processorTarget.addDeploymentProcessor(SUBSYSTEM_NAME, Phase.DEPENDENCIES, Phase.DEPENDENCIES_MODULE, new SyringeDependencyProcessor());
+                    processorTarget.addDeploymentProcessor(SUBSYSTEM_NAME, Phase.POST_MODULE, Phase.POST_MODULE_REFLECTION_INDEX, new SyringeDeploymentProcessor());
+                    processorTarget.addDeploymentProcessor(SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_MODULE_JNDI_BINDINGS, new SyringeJndiBinderProcessor());
                 }
             }, OperationContext.Stage.RUNTIME);
         }

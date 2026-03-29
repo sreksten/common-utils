@@ -25,4 +25,8 @@ public final class DestroyedInstanceTracker {
     public static boolean isDestroyed(Object instance) {
         return instance != null && DESTROYED_INSTANCES.containsKey(instance);
     }
+
+    public static void clear() {
+        DESTROYED_INSTANCES.clear();
+    }
 }
