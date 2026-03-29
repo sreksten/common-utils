@@ -23,6 +23,7 @@ import com.threeamigos.common.util.implementations.injection.util.TypeClosureHel
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
 import jakarta.el.ELResolver;
 import jakarta.el.ExpressionFactory;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.AlterableContext;
 import jakarta.enterprise.context.spi.Context;
@@ -31,15 +32,18 @@ import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.*;
+import jakarta.inject.Singleton;
 
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -1372,13 +1376,29 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("scopeType cannot be null");
         }
 
-        // For now, return single context (can be extended for custom scopes)
-        try {
-            Context context = getContext(scopeType);
-            return Collections.singleton(context);
-        } catch (Exception e) {
-            return Collections.emptyList();
+        Set<Context> contexts = new LinkedHashSet<>();
+
+        Class<? extends Annotation> effectiveScope = scopeType;
+        if (Singleton.class.equals(scopeType)) {
+            effectiveScope = ApplicationScoped.class;
         }
+
+        try {
+            contexts.add(getContext(effectiveScope));
+        } catch (Exception ignored) {
+            // no active runtime context for this scope
+        }
+
+        for (Class<? extends AlterableContext> contextImplementation :
+                knowledgeBase.getContextImplementations(scopeType)) {
+            try {
+                contexts.add(contextImplementation.getDeclaredConstructor().newInstance());
+            } catch (Exception ignored) {
+                // ignore unusable custom context implementations and return the rest
+            }
+        }
+
+        return contexts;
     }
 
     /**
@@ -1509,9 +1529,28 @@ public class BeanManagerImpl implements BeanManager {
     @Override
     public boolean isMatchingBean(Set<Type> beanTypes, Set<Annotation> beanQualifiers,
                                    Type requiredType, Set<Annotation> requiredQualifiers) {
+        if (beanTypes == null) {
+            throw new IllegalArgumentException("beanTypes cannot be null");
+        }
+        if (beanQualifiers == null) {
+            throw new IllegalArgumentException("beanQualifiers cannot be null");
+        }
+        if (requiredType == null) {
+            throw new IllegalArgumentException("requiredType cannot be null");
+        }
+        if (requiredQualifiers == null) {
+            throw new IllegalArgumentException("requiredQualifiers cannot be null");
+        }
+
+        validateQualifierSet(beanQualifiers, "beanQualifiers");
+        validateQualifierSet(requiredQualifiers, "requiredQualifiers");
+
         // Check type compatibility
         boolean typeMatches = false;
         for (Type beanType : beanTypes) {
+            if (beanType == null || !isLegalBeanType(beanType)) {
+                continue;
+            }
             if (typeChecker.isAssignable(requiredType, beanType)) {
                 typeMatches = true;
                 break;
@@ -1522,8 +1561,12 @@ public class BeanManagerImpl implements BeanManager {
             return false;
         }
 
-        // Check qualifier match
-        return qualifiersMatch(requiredQualifiers, beanQualifiers);
+        Set<Annotation> normalizedBeanQualifiers = normalizeBeanQualifiers(beanQualifiers);
+        Set<Annotation> normalizedRequiredQualifiers = requiredQualifiers.isEmpty() ?
+                Collections.singleton(jakarta.enterprise.inject.Default.Literal.INSTANCE) :
+                requiredQualifiers;
+
+        return qualifiersMatch(normalizedRequiredQualifiers, normalizedBeanQualifiers);
     }
 
     /**
@@ -1550,13 +1593,34 @@ public class BeanManagerImpl implements BeanManager {
     @Override
     public boolean isMatchingEvent(Type eventType, Set<Annotation> eventQualifiers,
                                     Type observedType, Set<Annotation> observedQualifiers) {
+        if (eventType == null) {
+            throw new IllegalArgumentException("eventType cannot be null");
+        }
+        if (eventQualifiers == null) {
+            throw new IllegalArgumentException("eventQualifiers cannot be null");
+        }
+        if (observedType == null) {
+            throw new IllegalArgumentException("observedType cannot be null");
+        }
+        if (observedQualifiers == null) {
+            throw new IllegalArgumentException("observedQualifiers cannot be null");
+        }
+        if (containsTypeVariable(eventType)) {
+            throw new IllegalArgumentException("eventType cannot contain type variables: " + eventType.getTypeName());
+        }
+
+        validateQualifierSet(eventQualifiers, "eventQualifiers");
+        validateQualifierSet(observedQualifiers, "observedQualifiers");
+
         // Check type compatibility
-        if (!typeChecker.isAssignable(eventType, observedType)) {
+        if (!typeChecker.isEventTypeAssignable(observedType, eventType)) {
             return false;
         }
 
-        // Check qualifier match
-        return observerQualifiersMatch(eventQualifiers, observedQualifiers);
+        Set<Annotation> normalizedEventQualifiers = normalizeEventQualifiers(eventQualifiers);
+        Set<Annotation> normalizedObservedQualifiers = normalizeObservedEventQualifiers(observedQualifiers);
+
+        return observerQualifiersMatch(normalizedEventQualifiers, normalizedObservedQualifiers);
     }
 
     // ==================== BeanManager Methods ====================
@@ -2525,6 +2589,78 @@ public class BeanManagerImpl implements BeanManager {
         }
 
         return true;
+    }
+
+    private void validateQualifierSet(Set<Annotation> qualifiers, String paramName) {
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null) {
+                throw new IllegalArgumentException(paramName + " cannot contain null qualifiers");
+            }
+            if (!isQualifier(qualifier.annotationType())) {
+                throw new IllegalArgumentException("Annotation is not a qualifier type: " +
+                        qualifier.annotationType().getName());
+            }
+        }
+    }
+
+    private boolean isLegalBeanType(Type beanType) {
+        if (beanType instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) beanType;
+            for (Type arg : parameterizedType.getActualTypeArguments()) {
+                if (arg instanceof WildcardType || arg instanceof TypeVariable) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private Set<Annotation> normalizeEventQualifiers(Set<Annotation> eventQualifiers) {
+        Set<Annotation> normalized = new HashSet<>(eventQualifiers);
+        if (normalized.isEmpty()) {
+            normalized.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
+        }
+        normalized.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
+        return normalized;
+    }
+
+    private Set<Annotation> normalizeObservedEventQualifiers(Set<Annotation> observedQualifiers) {
+        if (observedQualifiers.isEmpty()) {
+            return Collections.singleton(jakarta.enterprise.inject.Any.Literal.INSTANCE);
+        }
+        return observedQualifiers;
+    }
+
+    private boolean containsTypeVariable(Type type) {
+        if (type instanceof TypeVariable) {
+            return true;
+        }
+        if (type instanceof ParameterizedType) {
+            for (Type arg : ((ParameterizedType) type).getActualTypeArguments()) {
+                if (containsTypeVariable(arg)) {
+                    return true;
+                }
+            }
+            Type ownerType = ((ParameterizedType) type).getOwnerType();
+            return ownerType != null && containsTypeVariable(ownerType);
+        }
+        if (type instanceof GenericArrayType) {
+            return containsTypeVariable(((GenericArrayType) type).getGenericComponentType());
+        }
+        if (type instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) type;
+            for (Type upperBound : wildcardType.getUpperBounds()) {
+                if (containsTypeVariable(upperBound)) {
+                    return true;
+                }
+            }
+            for (Type lowerBound : wildcardType.getLowerBounds()) {
+                if (containsTypeVariable(lowerBound)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

@@ -1395,9 +1395,18 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         // ========================================================================
         // PHASE 3: Build constructor interceptor chain (@AroundConstruct)
         // ========================================================================
-        List<InterceptorInfo> constructorInterceptors = interceptorResolver.resolve(
+        Constructor<?> constructorForInterception = injectConstructor;
+        if (constructorForInterception == null) {
+            try {
+                constructorForInterception = beanClass.getDeclaredConstructor();
+            } catch (NoSuchMethodException ignored) {
+                constructorForInterception = null;
+            }
+        }
+
+        List<InterceptorInfo> constructorInterceptors = interceptorResolver.resolveForConstructor(
             beanClass,
-            null,  // null method = constructor interception
+            constructorForInterception,
             InterceptionType.AROUND_CONSTRUCT
         );
 

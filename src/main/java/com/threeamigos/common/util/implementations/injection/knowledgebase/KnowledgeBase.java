@@ -11,6 +11,7 @@ import com.threeamigos.common.util.implementations.injection.util.AnnotationComp
 import com.threeamigos.common.util.implementations.injection.util.AnnotationHelper;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
+import jakarta.enterprise.context.spi.AlterableContext;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.Extension;
@@ -71,6 +72,9 @@ public class KnowledgeBase {
     // Programmatically registered scopes (via BeforeBeanDiscovery.addScope)
     // Maps scope annotation class -> ScopeMetadata containing normal/passivating flags
     private final Map<Class<? extends Annotation>, ScopeMetadata> registeredScopes = new ConcurrentHashMap<>();
+    // Programmatically registered context implementations (via Build Compatible Extension MetaAnnotations.addContext)
+    private final Map<Class<? extends Annotation>, List<Class<? extends AlterableContext>>> registeredContextImplementations =
+            new ConcurrentHashMap<>();
 
     // Programmatically registered interceptor bindings (via BeforeBeanDiscovery.addInterceptorBinding)
     // Maps interceptor binding class -> set of meta-annotations that define the binding
@@ -1093,6 +1097,39 @@ public class KnowledgeBase {
      */
     public Map<Class<? extends Annotation>, ScopeMetadata> getRegisteredScopes() {
         return Collections.unmodifiableMap(registeredScopes);
+    }
+
+    /**
+     * Registers a context implementation class for a scope.
+     *
+     * <p>This is used by BCE {@code MetaAnnotations.addContext()} to keep track of
+     * all declared context implementations for a given scope.
+     */
+    public void addContextImplementation(Class<? extends Annotation> scopeType,
+                                         Class<? extends AlterableContext> contextImplementation) {
+        if (scopeType == null) {
+            throw new IllegalArgumentException("Scope type cannot be null");
+        }
+        if (contextImplementation == null) {
+            throw new IllegalArgumentException("Context implementation cannot be null");
+        }
+
+        registeredContextImplementations
+                .computeIfAbsent(scopeType, key -> Collections.synchronizedList(new ArrayList<>()))
+                .add(contextImplementation);
+    }
+
+    /**
+     * Gets all context implementations registered for the given scope.
+     */
+    public List<Class<? extends AlterableContext>> getContextImplementations(Class<? extends Annotation> scopeType) {
+        List<Class<? extends AlterableContext>> implementations = registeredContextImplementations.get(scopeType);
+        if (implementations == null || implementations.isEmpty()) {
+            return Collections.emptyList();
+        }
+        synchronized (implementations) {
+            return Collections.unmodifiableList(new ArrayList<>(implementations));
+        }
     }
 
     /**

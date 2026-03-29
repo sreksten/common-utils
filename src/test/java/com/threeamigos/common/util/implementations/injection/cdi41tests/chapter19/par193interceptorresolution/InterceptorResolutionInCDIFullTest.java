@@ -114,6 +114,13 @@ public class InterceptorResolutionInCDIFullTest {
 
     private Syringe newSyringe(Class<?>... beanClasses) {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), beanClasses);
+        // Keep this test isolated from regression fixtures that intentionally fail deployment.
+        syringe.exclude(
+                InterceptorResolutionRegressionTest.ConflictingBoundBean.class,
+                InterceptorResolutionRegressionTest.FooBinding.class,
+                InterceptorResolutionRegressionTest.BarBinding.class,
+                InterceptorResolutionRegressionTest.Baz.class
+        );
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         return syringe;
     }

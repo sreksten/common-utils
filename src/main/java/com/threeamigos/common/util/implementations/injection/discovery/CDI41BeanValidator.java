@@ -116,6 +116,9 @@ public class CDI41BeanValidator {
         validateStereotypeTargetCompatibility(clazz);
         // CDI Lite §8: only interceptor-binding-based interception is portable.
         validateNonPortableInterceptionForms(clazz);
+        // Interceptors spec: conflicting interceptor binding values (including transitive/stereotype)
+        // are definition errors.
+        validateConflictingInterceptorBindings(clazz);
 
         // 1) Bean class eligibility (managed bean type)
         if (!isCandidateBeanClass(clazz, beanArchiveMode)) {
@@ -3900,6 +3903,79 @@ public class CDI41BeanValidator {
     private boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
         return hasMetaAnnotation(annotationType, Stereotype.class) ||
                 knowledgeBase.isRegisteredStereotype(annotationType);
+    }
+
+    private void validateConflictingInterceptorBindings(Class<?> clazz) {
+        Map<Class<? extends Annotation>, Annotation> collectedBindings = new LinkedHashMap<>();
+        Set<Class<? extends Annotation>> directBindingTypes = new HashSet<>();
+        for (Annotation annotation : annotationsOf(clazz)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (isInterceptorBinding(annotationType)) {
+                directBindingTypes.add(annotationType);
+                collectInterceptorBinding(annotation, collectedBindings, new HashSet<>(), clazz.getName(), directBindingTypes);
+            }
+        }
+        for (Annotation annotation : annotationsOf(clazz)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (isStereotypeAnnotationType(annotationType)) {
+                collectStereotypeInterceptorBindings(annotationType, collectedBindings, new HashSet<>(), clazz.getName(), directBindingTypes);
+            }
+        }
+    }
+
+    private void collectStereotypeInterceptorBindings(Class<? extends Annotation> stereotypeType,
+                                                      Map<Class<? extends Annotation>, Annotation> collectedBindings,
+                                                      Set<Class<? extends Annotation>> visitedStereotypes,
+                                                      String location,
+                                                      Set<Class<? extends Annotation>> directBindingTypes) {
+        if (!visitedStereotypes.add(stereotypeType)) {
+            return;
+        }
+        try {
+            for (Annotation stereotypeAnnotation : stereotypeType.getAnnotations()) {
+                Class<? extends Annotation> annotationType = stereotypeAnnotation.annotationType();
+                if (isInterceptorBinding(annotationType)) {
+                    collectInterceptorBinding(stereotypeAnnotation, collectedBindings, new HashSet<>(), location, directBindingTypes);
+                } else if (isStereotypeAnnotationType(annotationType)) {
+                    collectStereotypeInterceptorBindings(annotationType, collectedBindings, visitedStereotypes, location, directBindingTypes);
+                }
+            }
+        } finally {
+            visitedStereotypes.remove(stereotypeType);
+        }
+    }
+
+    private void collectInterceptorBinding(Annotation binding,
+                                           Map<Class<? extends Annotation>, Annotation> collectedBindings,
+                                           Set<Class<? extends Annotation>> visitedBindings,
+                                           String location,
+                                           Set<Class<? extends Annotation>> directBindingTypes) {
+        Class<? extends Annotation> bindingType = binding.annotationType();
+        Annotation existing = collectedBindings.get(bindingType);
+        if (existing != null &&
+                !com.threeamigos.common.util.implementations.injection.util.AnnotationComparator.equals(existing, binding)) {
+            // CDI 4.1 §8.3: a bean class-level interceptor binding overrides the same
+            // interceptor binding declared by an applied stereotype.
+            if (directBindingTypes.contains(bindingType)) {
+                return;
+            }
+            throw new DefinitionException(location + ": conflicting interceptor binding values for @" +
+                    bindingType.getSimpleName());
+        }
+        collectedBindings.putIfAbsent(bindingType, binding);
+
+        if (!visitedBindings.add(bindingType)) {
+            return;
+        }
+        try {
+            for (Annotation metaAnnotation : bindingType.getAnnotations()) {
+                if (isInterceptorBinding(metaAnnotation.annotationType())) {
+                    collectInterceptorBinding(metaAnnotation, collectedBindings, visitedBindings, location, directBindingTypes);
+                }
+            }
+        } finally {
+            visitedBindings.remove(bindingType);
+        }
     }
 
     /**

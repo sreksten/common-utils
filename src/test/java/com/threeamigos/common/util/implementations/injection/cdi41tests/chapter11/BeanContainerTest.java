@@ -13,7 +13,12 @@ import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.Stereotype;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
+import jakarta.enterprise.inject.build.compatible.spi.Discovery;
+import jakarta.enterprise.inject.build.compatible.spi.MetaAnnotations;
 import jakarta.enterprise.util.AnnotationLiteral;
+import jakarta.enterprise.util.TypeLiteral;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanContainer;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -26,12 +31,16 @@ import jakarta.enterprise.inject.spi.ObserverMethod;
 import jakarta.enterprise.inject.spi.InterceptionType;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 import jakarta.annotation.Priority;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InterceptorBinding;
 import jakarta.interceptor.InvocationContext;
 import jakarta.inject.Qualifier;
+import jakarta.enterprise.context.NormalScope;
+import jakarta.enterprise.context.spi.AlterableContext;
+import jakarta.enterprise.context.spi.Contextual;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,6 +51,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.lang.annotation.Annotation;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
@@ -726,6 +736,117 @@ public class BeanContainerTest {
     }
 
     @Test
+    @DisplayName("11.1.12 - BeanContainer.getContexts(scope) returns BCE-registered context implementations and supports Singleton scope lookup")
+    void shouldReturnBceRegisteredContextsAndSingletonFallback() {
+        Syringe syringe = newSyringe(PlainService.class);
+        syringe.addBuildCompatibleExtension(ContextRegisteringExtension.class.getName());
+        syringe.setup();
+
+        BeanContainer container = syringe.getBeanManager();
+
+        java.util.Collection<Context> customContexts = container.getContexts(CustomScoped.class);
+        assertEquals(2, customContexts.size());
+
+        java.util.Collection<Context> noImplContexts = container.getContexts(NoImplScoped.class);
+        assertEquals(0, noImplContexts.size());
+
+        java.util.Collection<Context> singletonContexts = container.getContexts(Singleton.class);
+        assertTrue(singletonContexts.size() >= 1);
+    }
+
+    @Test
+    @DisplayName("11.1.14 - BeanContainer.isMatchingBean validates null arguments and non-qualifier annotations")
+    void shouldValidateIsMatchingBeanArgumentsAndQualifierTypes() {
+        Syringe syringe = newSyringe(PlainService.class);
+        syringe.setup();
+
+        BeanContainer container = syringe.getBeanManager();
+        Set<Type> beanTypes = new HashSet<Type>();
+        beanTypes.add(PlainService.class);
+        Set<Annotation> beanQualifiers = new HashSet<Annotation>();
+        Set<Annotation> requiredQualifiers = new HashSet<Annotation>();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingBean(null, beanQualifiers, PlainService.class, requiredQualifiers));
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingBean(beanTypes, null, PlainService.class, requiredQualifiers));
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingBean(beanTypes, beanQualifiers, null, requiredQualifiers));
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingBean(beanTypes, beanQualifiers, PlainService.class, null));
+
+        beanQualifiers.add(new NotQualifierLiteral());
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingBean(beanTypes, beanQualifiers, PlainService.class, requiredQualifiers));
+    }
+
+    @Test
+    @DisplayName("11.1.14 - BeanContainer.isMatchingBean applies @Default/@Any semantics and ignores illegal bean types")
+    void shouldApplyMatchingBeanDefaultAndAnySemanticsAndIgnoreIllegalBeanTypes() {
+        Syringe syringe = newSyringe(PlainService.class);
+        syringe.setup();
+
+        BeanContainer container = syringe.getBeanManager();
+        Set<Type> beanTypes = new HashSet<Type>();
+        beanTypes.add(PlainService.class);
+        beanTypes.add(Object.class);
+        beanTypes.add(new TypeLiteral<List<?>>() {}.getType());
+
+        Set<Annotation> emptyQualifiers = new HashSet<Annotation>();
+        Set<Annotation> anyRequired = new HashSet<Annotation>();
+        anyRequired.add(Any.Literal.INSTANCE);
+        Set<Annotation> defaultRequired = new HashSet<Annotation>();
+        defaultRequired.add(Default.Literal.INSTANCE);
+
+        assertTrue(container.isMatchingBean(beanTypes, emptyQualifiers, PlainService.class, defaultRequired));
+        assertTrue(container.isMatchingBean(beanTypes, emptyQualifiers, PlainService.class, anyRequired));
+        assertTrue(!container.isMatchingBean(beanTypes, emptyQualifiers, new TypeLiteral<List<?>>() {}.getType(), emptyQualifiers));
+    }
+
+    @Test
+    @DisplayName("11.1.14 - BeanContainer.isMatchingEvent validates null/type-variable/non-qualifier arguments and applies @Default/@Any semantics")
+    void shouldValidateAndMatchEventsPerBeanContainerRules() {
+        Syringe syringe = newSyringe(PlainService.class);
+        syringe.setup();
+
+        BeanContainer container = syringe.getBeanManager();
+
+        Set<Annotation> eventQualifiers = new HashSet<Annotation>();
+        Set<Annotation> observedQualifiers = new HashSet<Annotation>();
+        observedQualifiers.add(Default.Literal.INSTANCE);
+        assertTrue(container.isMatchingEvent(ResolutionEventPayload.class, eventQualifiers, ResolutionEventPayload.class, observedQualifiers));
+
+        eventQualifiers.add(new BlueLiteral());
+        assertTrue(!container.isMatchingEvent(ResolutionEventPayload.class, eventQualifiers, ResolutionEventPayload.class, observedQualifiers));
+
+        Set<Annotation> observedAny = new HashSet<Annotation>();
+        observedAny.add(Any.Literal.INSTANCE);
+        assertTrue(container.isMatchingEvent(ResolutionEventPayload.class, eventQualifiers, ResolutionEventPayload.class, observedAny));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingEvent(null, new HashSet<Annotation>(), ResolutionEventPayload.class, new HashSet<Annotation>()));
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingEvent(ResolutionEventPayload.class, null, ResolutionEventPayload.class, new HashSet<Annotation>()));
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingEvent(ResolutionEventPayload.class, new HashSet<Annotation>(), null, new HashSet<Annotation>()));
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingEvent(ResolutionEventPayload.class, new HashSet<Annotation>(), ResolutionEventPayload.class, null));
+
+        Set<Annotation> nonQualifierSet = new HashSet<Annotation>();
+        nonQualifierSet.add(new NotQualifierLiteral());
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingEvent(ResolutionEventPayload.class, nonQualifierSet, ResolutionEventPayload.class, new HashSet<Annotation>()));
+
+        Type typeVariableEventType = typeVariableRuntimeEventType();
+        assertThrows(IllegalArgumentException.class,
+                () -> container.isMatchingEvent(typeVariableEventType, new HashSet<Annotation>(), Object.class, new HashSet<Annotation>()));
+    }
+
+    private <X> Type typeVariableRuntimeEventType() {
+        return new TypeLiteral<GenericRuntimeEvent<X>>() {}.getType();
+    }
+
+    @Test
     @DisplayName("11.1 - In CDI Lite mode, invoking BeanManager methods not inherited from BeanContainer is non-portable")
     void shouldRejectNonBeanContainerBeanManagerMethodsInCdiLiteMode() {
         Syringe syringe = newSyringe(DefaultOnlyBean.class);
@@ -887,6 +1008,78 @@ public class BeanContainerTest {
 
     public static final class NotQualifierLiteral extends AnnotationLiteral<NotQualifier> implements NotQualifier {
         private static final long serialVersionUID = 1L;
+    }
+
+    @NormalScope
+    @Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD})
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface CustomScoped {
+    }
+
+    @NormalScope
+    @Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD})
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface NoImplScoped {
+    }
+
+    public static class ContextRegisteringExtension implements BuildCompatibleExtension {
+        @Discovery
+        public void discovery(MetaAnnotations metaAnnotations) {
+            metaAnnotations.addContext(CustomScoped.class, CustomContextImpl1.class);
+            metaAnnotations.addContext(CustomScoped.class, CustomContextImpl2.class);
+        }
+    }
+
+    public static class CustomContextImpl1 implements AlterableContext {
+        @Override
+        public void destroy(Contextual<?> contextual) {
+        }
+
+        @Override
+        public Class<? extends Annotation> getScope() {
+            return CustomScoped.class;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+            return null;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual) {
+            return null;
+        }
+
+        @Override
+        public boolean isActive() {
+            return true;
+        }
+    }
+
+    public static class CustomContextImpl2 implements AlterableContext {
+        @Override
+        public void destroy(Contextual<?> contextual) {
+        }
+
+        @Override
+        public Class<? extends Annotation> getScope() {
+            return CustomScoped.class;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+            return null;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual) {
+            return null;
+        }
+
+        @Override
+        public boolean isActive() {
+            return false;
+        }
     }
 
     @Named("namedService")

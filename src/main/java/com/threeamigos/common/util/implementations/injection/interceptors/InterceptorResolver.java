@@ -7,6 +7,7 @@ import jakarta.enterprise.inject.spi.InterceptionType;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
 
@@ -88,16 +89,10 @@ public class InterceptorResolver {
         Objects.requireNonNull(targetClass, "targetClass cannot be null");
         Objects.requireNonNull(interceptionType, "interceptionType cannot be null");
 
-        // Determine which bindings to use
-        Set<Annotation> targetBindings;
-
-        if (method != null && hasInterceptorBindings(method)) {
-            // Method-level bindings OVERRIDE class-level bindings (CDI spec)
-            targetBindings = extractInterceptorBindings(method);
-        } else {
-            // Use class-level bindings (includes stereotype inheritance)
-            targetBindings = extractInterceptorBindings(targetClass);
-        }
+        Set<Annotation> classBindings = extractInterceptorBindings(targetClass);
+        Set<Annotation> targetBindings = method != null
+                ? mergeBindings(classBindings, extractInterceptorBindings(method))
+                : classBindings;
 
         // If no bindings, no interceptors apply
         if (targetBindings.isEmpty()) {
@@ -119,7 +114,34 @@ public class InterceptorResolver {
      * @return sorted list of matching interceptors
      */
     public List<InterceptorInfo> resolveForClass(Class<?> targetClass, InterceptionType interceptionType) {
-        return resolve(targetClass, null, interceptionType);
+        return resolve(targetClass, (Method) null, interceptionType);
+    }
+
+    /**
+     * Resolves interceptors for constructor interception.
+     *
+     * <p>Constructor-level bindings augment class-level bindings. When both class and constructor
+     * declare the same interceptor binding type, constructor declaration overrides class declaration.
+     */
+    public List<InterceptorInfo> resolveForConstructor(
+            Class<?> targetClass,
+            Constructor<?> constructor,
+            InterceptionType interceptionType) {
+
+        Objects.requireNonNull(targetClass, "targetClass cannot be null");
+        Objects.requireNonNull(interceptionType, "interceptionType cannot be null");
+
+        Set<Annotation> classBindings = extractInterceptorBindings(targetClass);
+        Set<Annotation> constructorBindings = constructor != null
+                ? extractInterceptorBindings(constructor)
+                : Collections.emptySet();
+        Set<Annotation> targetBindings = mergeBindings(classBindings, constructorBindings);
+
+        if (targetBindings.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return knowledgeBase.getInterceptorsByBindingsAndType(interceptionType, targetBindings);
     }
 
     /**
@@ -137,13 +159,13 @@ public class InterceptorResolver {
             return extractInterceptorBindingsFromHierarchy((Class<?>) element);
         }
 
-        Set<Annotation> bindings = new HashSet<>();
+        Map<Class<? extends Annotation>, Annotation> bindings = new LinkedHashMap<>();
         for (Annotation annotation : element.getAnnotations()) {
             if (isInterceptorBinding(annotation.annotationType())) {
-                bindings.add(annotation);
+                addBindingWithTransitives(annotation, bindings, new HashSet<>(), true);
             }
         }
-        return bindings;
+        return new HashSet<>(bindings.values());
     }
 
     /**
@@ -156,20 +178,22 @@ public class InterceptorResolver {
      * @return set of interceptor bindings declared on the stereotype
      */
     private Set<Annotation> extractInterceptorBindingsFromStereotype(Class<? extends Annotation> stereotypeClass) {
-        Set<Annotation> bindings = new HashSet<>();
+        Map<Class<? extends Annotation>, Annotation> bindings = new LinkedHashMap<>();
 
         for (Annotation annotation : stereotypeClass.getAnnotations()) {
             if (isInterceptorBinding(annotation.annotationType())) {
-                bindings.add(annotation);
+                addBindingWithTransitives(annotation, bindings, new HashSet<>(), true);
             }
 
             // Handle nested stereotypes (stereotype on stereotype)
             if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
-                bindings.addAll(extractInterceptorBindingsFromStereotype(annotation.annotationType()));
+                for (Annotation nestedBinding : extractInterceptorBindingsFromStereotype(annotation.annotationType())) {
+                    bindings.putIfAbsent(nestedBinding.annotationType(), nestedBinding);
+                }
             }
         }
 
-        return bindings;
+        return new HashSet<>(bindings.values());
     }
 
     /**
@@ -189,7 +213,7 @@ public class InterceptorResolver {
         // take precedence over bindings declared on stereotypes.
         for (Annotation annotation : type.getAnnotations()) {
             if (isInterceptorBinding(annotation.annotationType())) {
-                bindingsByType.put(annotation.annotationType(), annotation);
+                addBindingWithTransitives(annotation, bindingsByType, new HashSet<>(), true);
             }
         }
 
@@ -207,6 +231,53 @@ public class InterceptorResolver {
         }
 
         return new HashSet<>(bindingsByType.values());
+    }
+
+    private Set<Annotation> mergeBindings(Set<Annotation> inheritedBindings, Set<Annotation> overridingBindings) {
+        Map<Class<? extends Annotation>, Annotation> merged = new LinkedHashMap<>();
+        for (Annotation annotation : inheritedBindings) {
+            merged.put(annotation.annotationType(), annotation);
+        }
+        for (Annotation annotation : overridingBindings) {
+            merged.put(annotation.annotationType(), annotation);
+        }
+        return new HashSet<>(merged.values());
+    }
+
+    private void addBindingWithTransitives(Annotation binding,
+                                           Map<Class<? extends Annotation>, Annotation> sink,
+                                           Set<Class<? extends Annotation>> visiting,
+                                           boolean overrideExisting) {
+        Class<? extends Annotation> bindingType = binding.annotationType();
+        if (!isInterceptorBinding(bindingType)) {
+            return;
+        }
+
+        if (overrideExisting || !sink.containsKey(bindingType)) {
+            sink.put(bindingType, binding);
+        }
+
+        if (!visiting.add(bindingType)) {
+            return;
+        }
+        try {
+            for (Annotation metaAnnotation : bindingType.getAnnotations()) {
+                if (isInterceptorBinding(metaAnnotation.annotationType())) {
+                    addBindingWithTransitives(metaAnnotation, sink, visiting, false);
+                }
+            }
+
+            Set<Annotation> dynamicDefinition = knowledgeBase.getInterceptorBindingDefinition(bindingType);
+            if (dynamicDefinition != null) {
+                for (Annotation metaAnnotation : dynamicDefinition) {
+                    if (isInterceptorBinding(metaAnnotation.annotationType())) {
+                        addBindingWithTransitives(metaAnnotation, sink, visiting, false);
+                    }
+                }
+            }
+        } finally {
+            visiting.remove(bindingType);
+        }
     }
 
     /**

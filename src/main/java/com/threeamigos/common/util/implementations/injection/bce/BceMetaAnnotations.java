@@ -54,6 +54,7 @@ final class BceMetaAnnotations implements MetaAnnotations {
                            boolean isNormal,
                            Class<? extends AlterableContext> contextImplementation) {
         knowledgeBase.addScope(scopeAnnotation, isNormal, false);
+        knowledgeBase.addContextImplementation(scopeAnnotation, contextImplementation);
         messageHandler.handleInfoMessage("[BCE] Registered context for scope " +
             scopeAnnotation.getName() + " using " + contextImplementation.getName());
     }

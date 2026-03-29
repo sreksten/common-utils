@@ -67,12 +67,25 @@ public final class BeanTypesExtractor {
         Objects.requireNonNull(producerType, "producerType cannot be null");
 
         List<String> definitionErrors = new ArrayList<>();
-        Set<Type> unrestrictedTypes = TypeClosureHelper.extractTypesFromType(producerType);
+        Set<Type> unrestrictedTypes = new LinkedHashSet<>();
+        Class<?> producerRawType = RawTypeExtractor.getRawType(producerType);
+
+        // CDI 4.1 §3.2.1: primitive/array producer return types contribute exactly
+        // the return type and Object.
+        if (producerRawType.isPrimitive() || producerRawType.isArray()) {
+            unrestrictedTypes.add(producerType);
+            unrestrictedTypes.add(Object.class);
+        } else {
+            // Keep the declared producer type itself (may be parameterized) and derive
+            // additional closure from the raw class hierarchy.
+            unrestrictedTypes.add(producerType);
+            unrestrictedTypes.addAll(TypeClosureHelper.extractTypesFromClass(producerRawType));
+        }
         Set<Type> resultingTypes = unrestrictedTypes;
         if (producerElement != null && hasTypedAnnotation(producerElement)) {
             Annotation typedAnnotation = getTypedAnnotation(producerElement);
             if (typedAnnotation != null) {
-                resultingTypes = computeTypedBeanTypes(RawTypeExtractor.getRawType(producerType), typedAnnotation, unrestrictedTypes, definitionErrors);
+                resultingTypes = computeTypedBeanTypes(producerRawType, typedAnnotation, unrestrictedTypes, definitionErrors);
             }
         }
         Set<Type> legalTypes = keepLegalBeanTypes(resultingTypes);
