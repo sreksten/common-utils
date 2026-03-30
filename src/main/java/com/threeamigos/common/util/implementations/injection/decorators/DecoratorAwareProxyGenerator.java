@@ -10,11 +10,20 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
+import net.bytebuddy.implementation.MethodDelegation;
+import net.bytebuddy.implementation.bind.annotation.AllArguments;
+import net.bytebuddy.implementation.bind.annotation.Origin;
+import net.bytebuddy.implementation.bind.annotation.RuntimeType;
+import net.bytebuddy.implementation.bind.annotation.This;
+import net.bytebuddy.matcher.ElementMatchers;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
@@ -218,10 +227,14 @@ public class DecoratorAwareProxyGenerator {
             CreationalContext<?> creationalContext) {
 
         Class<?> decoratorClass = decoratorInfo.getDecoratorClass();
+        Class<?> instantiationClass = getOrGenerateDecoratorProxyClass(decoratorClass);
         Bean<?> decoratorBean = createSyntheticDecoratorBean(decoratorClass);
 
         try {
             Constructor<?> constructor = findInjectionConstructor(decoratorClass);
+            if (!constructor.getDeclaringClass().equals(instantiationClass)) {
+                constructor = instantiationClass.getDeclaredConstructor(constructor.getParameterTypes());
+            }
             constructor.setAccessible(true);
             Parameter[] parameters = constructor.getParameters();
             Object[] args = new Object[parameters.length];
@@ -263,12 +276,17 @@ public class DecoratorAwareProxyGenerator {
             CreationalContext<?> creationalContext) {
 
         Class<?> decoratorClass = decoratorInfo.getDecoratorClass();
+        Class<?> instantiationClass = getOrGenerateDecoratorProxyClass(decoratorClass);
         InjectionPoint delegateInjectionPoint = decoratorInfo.getDelegateInjectionPoint();
 
         try {
-            Constructor<?> constructor = (Constructor<?>) delegateInjectionPoint.getMember();
+            Constructor<?> delegateConstructor = (Constructor<?>) delegateInjectionPoint.getMember();
+            Constructor<?> constructor = delegateConstructor;
+            if (!delegateConstructor.getDeclaringClass().equals(instantiationClass)) {
+                constructor = instantiationClass.getDeclaredConstructor(delegateConstructor.getParameterTypes());
+            }
             constructor.setAccessible(true);
-            Parameter[] parameters = constructor.getParameters();
+            Parameter[] parameters = delegateConstructor.getParameters();
             Object[] args = new Object[parameters.length];
             Bean<?> decoratorBean = createSyntheticDecoratorBean(decoratorClass);
 
@@ -511,8 +529,55 @@ public class DecoratorAwareProxyGenerator {
      * @return the generated proxy class
      */
     private Class<?> generateDecoratorProxyClass(Class<?> decoratorClass) {
-        // For now, just return the original class
-        // Future: Generate ByteBuddy proxy if needed
-        return decoratorClass;
+        if (!Modifier.isAbstract(decoratorClass.getModifiers())) {
+            return decoratorClass;
+        }
+        try {
+            return new ByteBuddy()
+                    .subclass(decoratorClass, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
+                    .method(ElementMatchers.isAbstract())
+                    .intercept(MethodDelegation.to(AbstractMethodDelegateInterceptor.class))
+                    .make()
+                    .load(decoratorClass.getClassLoader())
+                    .getLoaded();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to generate concrete decorator proxy for "
+                    + decoratorClass.getName(), e);
+        }
+    }
+
+    public static class AbstractMethodDelegateInterceptor {
+
+        @RuntimeType
+        public static Object intercept(@This Object decorator,
+                                       @Origin Method method,
+                                       @AllArguments Object[] args) throws Throwable {
+            Field delegateField = findDelegateField(decorator.getClass());
+            if (delegateField == null) {
+                throw new IllegalStateException("Abstract decorator method invoked without @Delegate field: "
+                        + decorator.getClass().getName());
+            }
+            delegateField.setAccessible(true);
+            Object delegate = delegateField.get(decorator);
+            if (delegate == null) {
+                throw new IllegalStateException("@Delegate not injected for decorator " + decorator.getClass().getName());
+            }
+            Method delegateMethod = delegate.getClass().getMethod(method.getName(), method.getParameterTypes());
+            delegateMethod.setAccessible(true);
+            return delegateMethod.invoke(delegate, args);
+        }
+
+        private static Field findDelegateField(Class<?> type) {
+            Class<?> current = type;
+            while (current != null && !Object.class.equals(current)) {
+                for (Field field : current.getDeclaredFields()) {
+                    if (hasDelegateAnnotation(field)) {
+                        return field;
+                    }
+                }
+                current = current.getSuperclass();
+            }
+            return null;
+        }
     }
 }

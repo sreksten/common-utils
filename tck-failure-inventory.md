@@ -79,14 +79,14 @@
 - [x] **org.jboss.cdi.tck.tests.event.observer.method.ObserverMethodTest**
 
 ### Alternatives/stereotypes/specialization (35)
-- [ ] **org.jboss.cdi.tck.tests.alternative.selection.stereotype.priority.StereotypeWithAlternativeSelectedByPriorityTest**
-- [ ] **org.jboss.cdi.tck.tests.definition.stereotype.named.DefaultNamedTest**
-- [ ] **org.jboss.cdi.tck.tests.full.alternative.broken.incorrect.name.stereotype.NoAnnotationWithSpecifiedNameTest**
-- [ ] **org.jboss.cdi.tck.tests.full.inheritance.specialization.qualifiers.SpecializingBeanQualifiersTest**
-- [ ] **org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.inconsistent.InconsistentSpecializationTest**
-- [ ] **org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.ConflictingPrioritiesFromSingleStereotypeTest**
-- [ ] **org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend3.SpecializingClassExtendsNonSimpleBeanTest**
-- [ ] **org.jboss.cdi.tck.tests.alternative.selection.SelectedAlternative01Test**
+- [x] **org.jboss.cdi.tck.tests.alternative.selection.stereotype.priority.StereotypeWithAlternativeSelectedByPriorityTest**
+- [x] **org.jboss.cdi.tck.tests.definition.stereotype.named.DefaultNamedTest**
+- [x] **org.jboss.cdi.tck.tests.full.alternative.broken.incorrect.name.stereotype.NoAnnotationWithSpecifiedNameTest**
+- [x] **org.jboss.cdi.tck.tests.full.inheritance.specialization.qualifiers.SpecializingBeanQualifiersTest**
+- [x] **org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.inconsistent.InconsistentSpecializationTest**
+- [x] **org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.ConflictingPrioritiesFromSingleStereotypeTest**
+- [x] **org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend3.SpecializingClassExtendsNonSimpleBeanTest**
+- [x] **org.jboss.cdi.tck.tests.alternative.selection.SelectedAlternative01Test**
 
 ### Contexts/scopes (33)
 - [ ] **org.jboss.cdi.tck.tests.full.context.passivating.dependency.builtin.BuiltinBeanPassivationDependencyTest**

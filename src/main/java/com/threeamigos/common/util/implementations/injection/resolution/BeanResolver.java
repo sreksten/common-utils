@@ -962,7 +962,8 @@ public class BeanResolver implements DependencyResolver {
         if (contextManager.isNormalScope(scope)) {
             // For normal scopes, return a client proxy
             // The proxy will delegate to the contextual instance on each method call
-            return contextManager.createClientProxy(bean);
+            T proxy = contextManager.createClientProxy(bean);
+            return maybeDecorateResolvedInstance(bean, proxy, new CreationalContextImpl<T>());
         } else {
             // For pseudo-scopes like @Dependent, return the actual instance
             ScopeContext context = contextManager.getContext(scope);
@@ -988,6 +989,9 @@ public class BeanResolver implements DependencyResolver {
         }
 
         List<DecoratorInfo> decorators = decoratorResolver.resolve(bean.getTypes(), bean.getQualifiers());
+        if (decorators.isEmpty() && owningBeanManager != null) {
+            decorators = resolveDecoratorsViaBeanManager(bean);
+        }
         if (decorators.isEmpty() || owningBeanManager == null) {
             return instance;
         }
@@ -997,6 +1001,37 @@ public class BeanResolver implements DependencyResolver {
                 .createDecoratorChain(instance, decorators, owningBeanManager, creationalContext)
                 .getOutermostInstance();
         return decorated;
+    }
+
+    private <T> List<DecoratorInfo> resolveDecoratorsViaBeanManager(Bean<T> bean) {
+        Annotation[] qualifierArray = bean.getQualifiers().toArray(new Annotation[0]);
+        List<Decorator<?>> resolved;
+        try {
+            resolved = owningBeanManager.resolveDecorators(bean.getTypes(), qualifierArray);
+        } catch (IllegalStateException lifecycleGuard) {
+            // BeanManager SPI lookup is not available before AfterBeanDiscovery.
+            return Collections.emptyList();
+        }
+        if (resolved.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<DecoratorInfo> infos = new ArrayList<DecoratorInfo>();
+        for (Decorator<?> decorator : resolved) {
+            DecoratorInfo info = findDecoratorInfoByClass(decorator.getBeanClass());
+            if (info != null) {
+                infos.add(info);
+            }
+        }
+        return infos;
+    }
+
+    private DecoratorInfo findDecoratorInfoByClass(Class<?> decoratorClass) {
+        for (DecoratorInfo info : knowledgeBase.getDecoratorInfos()) {
+            if (info.getDecoratorClass().equals(decoratorClass)) {
+                return info;
+            }
+        }
+        return null;
     }
 
     /**

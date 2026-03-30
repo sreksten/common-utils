@@ -35,6 +35,7 @@ import jakarta.enterprise.inject.spi.*;
 import jakarta.inject.Singleton;
 
 import java.io.Serializable;
+import java.io.ObjectStreamException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Member;
@@ -95,7 +96,8 @@ import static com.threeamigos.common.util.implementations.injection.util.Qualifi
  * @author Stefano Reksten
  * @see jakarta.enterprise.inject.spi.BeanManager
  */
-public class BeanManagerImpl implements BeanManager {
+public class BeanManagerImpl implements BeanManager, Serializable {
+    private static final long serialVersionUID = 1L;
 
     private static final ConcurrentHashMap<ClassLoader, BeanManagerImpl> BEAN_MANAGER_REGISTRY =
             new ConcurrentHashMap<>();
@@ -201,6 +203,10 @@ public class BeanManagerImpl implements BeanManager {
 
     public String getBeanManagerId() {
         return beanManagerId;
+    }
+
+    private Object writeReplace() throws ObjectStreamException {
+        return new SerializedBeanManagerReference(beanManagerId);
     }
 
     /**
@@ -1353,15 +1359,30 @@ public class BeanManagerImpl implements BeanManager {
             throw new IllegalArgumentException("scopeType cannot be null");
         }
 
-        // Delegate to ContextManager - wrap ScopeContext as Context
+        Collection<com.threeamigos.common.util.implementations.injection.scopes.ScopeContext> activeContexts;
         try {
-            com.threeamigos.common.util.implementations.injection.scopes.ScopeContext scopeContext =
-                contextManager.getContext(scopeType);
-            return new ScopeContextAdapter(scopeContext, scopeType);
+            activeContexts = contextManager.getActiveContexts(scopeType);
         } catch (IllegalArgumentException e) {
             throw new jakarta.enterprise.context.ContextNotActiveException(
-                "Context not active for scope: " + scopeType.getName());
+                    "Context not active for scope: " + scopeType.getName());
         }
+
+        if (activeContexts.size() > 1) {
+            throw new IllegalStateException("More than one active context for scope: " + scopeType.getName());
+        }
+        com.threeamigos.common.util.implementations.injection.scopes.ScopeContext scopeContext;
+        if (activeContexts.isEmpty()) {
+            Collection<com.threeamigos.common.util.implementations.injection.scopes.ScopeContext> registered =
+                    contextManager.getRegisteredContexts(scopeType);
+            if (registered.isEmpty()) {
+                throw new jakarta.enterprise.context.ContextNotActiveException(
+                        "Context not active for scope: " + scopeType.getName());
+            }
+            scopeContext = registered.iterator().next();
+        } else {
+            scopeContext = activeContexts.iterator().next();
+        }
+        return new ScopeContextAdapter(scopeContext, scopeType);
     }
 
     /**
@@ -1398,9 +1419,13 @@ public class BeanManagerImpl implements BeanManager {
         }
 
         try {
-            contexts.add(getContext(effectiveScope));
+            Collection<com.threeamigos.common.util.implementations.injection.scopes.ScopeContext> registeredContexts =
+                    contextManager.getRegisteredContexts(effectiveScope);
+            for (com.threeamigos.common.util.implementations.injection.scopes.ScopeContext registered : registeredContexts) {
+                contexts.add(new ScopeContextAdapter(registered, effectiveScope));
+            }
         } catch (Exception ignored) {
-            // no active runtime context for this scope
+            // no runtime context for this scope
         }
 
         for (Class<? extends AlterableContext> contextImplementation :
@@ -1413,6 +1438,31 @@ public class BeanManagerImpl implements BeanManager {
         }
 
         return contexts;
+    }
+
+    private static final class SerializedBeanManagerReference implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final String beanManagerId;
+        private SerializedBeanManagerReference(String beanManagerId) {
+            this.beanManagerId = beanManagerId;
+        }
+
+        private Object readResolve() throws ObjectStreamException {
+            BeanManagerImpl byId = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+            if (byId != null) {
+                return byId;
+            }
+            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+            if (tccl == null) {
+                tccl = BeanManagerImpl.class.getClassLoader();
+            }
+            BeanManagerImpl byClassLoader = BeanManagerImpl.getRegisteredBeanManager(tccl);
+            if (byClassLoader != null) {
+                return byClassLoader;
+            }
+            throw new java.io.InvalidObjectException("No BeanManager registered for deserialization handle");
+        }
     }
 
     /**

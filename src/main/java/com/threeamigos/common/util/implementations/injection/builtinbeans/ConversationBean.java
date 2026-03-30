@@ -1,12 +1,18 @@
 package com.threeamigos.common.util.implementations.injection.builtinbeans;
 
+import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.decorators.DecoratorChain;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.scopes.ConversationImpl;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.enterprise.context.Conversation;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.CDI;
+import jakarta.enterprise.inject.spi.Decorator;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 
 import java.lang.annotation.Annotation;
@@ -71,7 +77,36 @@ public class ConversationBean implements Bean<Conversation> {
 
     @Override
     public Conversation create(CreationalContext<Conversation> context) {
-        return new ConversationImpl();
+        Conversation conversation = new ConversationImpl();
+        try {
+            jakarta.enterprise.inject.spi.BeanManager beanManager = CDI.current().getBeanManager();
+            Set<Type> types = new HashSet<Type>();
+            types.add(Conversation.class);
+            types.add(Object.class);
+            List<Decorator<?>> decorators = beanManager.resolveDecorators(types, Default.Literal.INSTANCE);
+            if (decorators.isEmpty() || !(beanManager instanceof BeanManagerImpl)) {
+                return conversation;
+            }
+            BeanManagerImpl beanManagerImpl = (BeanManagerImpl) beanManager;
+            List<DecoratorInfo> infos = new ArrayList<DecoratorInfo>();
+            for (Decorator<?> decorator : decorators) {
+                DecoratorInfo info = findDecoratorInfoByClass(
+                        beanManagerImpl.getKnowledgeBase().getDecoratorInfos(),
+                        decorator.getBeanClass());
+                if (info != null) {
+                    infos.add(info);
+                }
+            }
+            if (infos.isEmpty()) {
+                return conversation;
+            }
+            DecoratorChain chain = new DecoratorAwareProxyGenerator()
+                    .createDecoratorChain(conversation, infos, beanManager, context);
+            return (Conversation) chain.getOutermostInstance();
+        } catch (Exception ignored) {
+            // Built-in conversation remains usable even if decorator wrapping fails.
+            return conversation;
+        }
     }
 
     @Override
@@ -122,5 +157,14 @@ public class ConversationBean implements Bean<Conversation> {
     @Override
     public String toString() {
         return "ConversationBean[type=Conversation, scope=@RequestScoped, qualifiers=@Default]";
+    }
+
+    private DecoratorInfo findDecoratorInfoByClass(Collection<DecoratorInfo> infos, Class<?> decoratorClass) {
+        for (DecoratorInfo info : infos) {
+            if (info.getDecoratorClass().equals(decoratorClass)) {
+                return info;
+            }
+        }
+        return null;
     }
 }

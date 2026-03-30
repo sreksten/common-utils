@@ -566,7 +566,8 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasPreDestroyAnnotation(method);
         }
 
-        private static final class ResolvedInjectionPoint implements InjectionPoint {
+        private static final class ResolvedInjectionPoint implements InjectionPoint, java.io.Serializable {
+            private static final long serialVersionUID = 1L;
             private final InjectionPoint delegate;
             private final Type resolvedType;
 

@@ -9,8 +9,14 @@ import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.inject.spi.Bean;
 
 import java.lang.annotation.Annotation;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.APPLICATION_SCOPED;
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.DEPENDENT;
@@ -37,6 +43,7 @@ public class ContextManager {
     private final MessageHandler messageHandler;
 
     private final Map<Class<? extends Annotation>, ScopeContext> contexts = new ConcurrentHashMap<>();
+    private final Map<Class<? extends Annotation>, List<ScopeContext>> contextsByScope = new ConcurrentHashMap<>();
     private final ConversationScopedContext conversationContext;
     private final SessionScopedContext sessionContext;
     private final RequestScopedContext requestContext;
@@ -63,6 +70,11 @@ public class ContextManager {
         contexts.put(ConversationScoped.class, conversationContext);
         contexts.put(SessionScoped.class, sessionContext);
         contexts.put(RequestScoped.class, requestContext);
+        contextsByScope.put(ApplicationScoped.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(contexts.get(ApplicationScoped.class))));
+        contextsByScope.put(Dependent.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(contexts.get(Dependent.class))));
+        contextsByScope.put(ConversationScoped.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(conversationContext)));
+        contextsByScope.put(SessionScoped.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(sessionContext)));
+        contextsByScope.put(RequestScoped.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(requestContext)));
 
         // Initialize proxy generator
         proxyGenerator = new ClientProxyGenerator(this);
@@ -79,11 +91,46 @@ public class ContextManager {
         if (destroyed) {
             throw new IllegalStateException("CDI container is shut down");
         }
-        ScopeContext context = contexts.get(scopeAnnotation);
-        if (context == null) {
+        List<ScopeContext> registered = contextsByScope.get(scopeAnnotation);
+        if (registered == null || registered.isEmpty()) {
             throw new IllegalArgumentException("Unsupported scope: " + scopeAnnotation.getName());
         }
-        return context;
+        List<ScopeContext> activeContexts = getActiveContexts(scopeAnnotation);
+        if (activeContexts.isEmpty()) {
+            return registered.get(0);
+        }
+        if (activeContexts.size() > 1) {
+            throw new IllegalStateException("More than one active context for scope: " + scopeAnnotation.getName());
+        }
+        return activeContexts.get(0);
+    }
+
+    public List<ScopeContext> getActiveContexts(Class<? extends Annotation> scopeAnnotation) {
+        if (destroyed) {
+            throw new IllegalStateException("CDI container is shut down");
+        }
+        List<ScopeContext> registered = contextsByScope.get(scopeAnnotation);
+        if (registered == null || registered.isEmpty()) {
+            throw new IllegalArgumentException("Unsupported scope: " + scopeAnnotation.getName());
+        }
+        List<ScopeContext> activeContexts = new ArrayList<>();
+        for (ScopeContext context : registered) {
+            if (context != null && context.isActive()) {
+                activeContexts.add(context);
+            }
+        }
+        return activeContexts;
+    }
+
+    public Collection<ScopeContext> getRegisteredContexts(Class<? extends Annotation> scopeAnnotation) {
+        if (destroyed) {
+            throw new IllegalStateException("CDI container is shut down");
+        }
+        List<ScopeContext> registered = contextsByScope.get(scopeAnnotation);
+        if (registered == null) {
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(registered);
     }
 
     /**
@@ -138,6 +185,7 @@ public class ContextManager {
         // Drop proxy class caches and context references.
         proxyGenerator.clearCache();
         contexts.clear();
+        contextsByScope.clear();
         requestContextLifecycleListener = null;
         applicationContextLifecycleListener = null;
 
@@ -313,7 +361,33 @@ public class ContextManager {
         if (context == null) {
             throw new IllegalArgumentException("Context cannot be null");
         }
-        contexts.put(scopeAnnotation, context);
+        if (isBuiltInScope(scopeAnnotation)) {
+            // CDI allows extensions to replace built-in contexts; keep a single active mapping.
+            CopyOnWriteArrayList<ScopeContext> replacement = new CopyOnWriteArrayList<ScopeContext>();
+            replacement.add(context);
+            contextsByScope.put(scopeAnnotation, replacement);
+            contexts.put(scopeAnnotation, context);
+            return;
+        }
+        List<ScopeContext> registered =
+                contextsByScope.computeIfAbsent(scopeAnnotation, key -> new CopyOnWriteArrayList<ScopeContext>());
+        for (ScopeContext existing : registered) {
+            if (Objects.equals(existing, context)) {
+                return;
+            }
+        }
+        registered.add(context);
+        if (!contexts.containsKey(scopeAnnotation)) {
+            contexts.put(scopeAnnotation, context);
+        }
+    }
+
+    private boolean isBuiltInScope(Class<? extends Annotation> scopeAnnotation) {
+        return ApplicationScoped.class.equals(scopeAnnotation)
+                || Dependent.class.equals(scopeAnnotation)
+                || ConversationScoped.class.equals(scopeAnnotation)
+                || SessionScoped.class.equals(scopeAnnotation)
+                || RequestScoped.class.equals(scopeAnnotation);
     }
 
     public void setRequestContextLifecycleListener(RequestContextLifecycleListener listener) {

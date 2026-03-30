@@ -8,7 +8,12 @@ import com.threeamigos.common.util.implementations.injection.spi.wrappers.Annota
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.enterprise.inject.spi.PassivationCapable;
+import jakarta.enterprise.inject.spi.CDI;
 
+import java.io.Serializable;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Executable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
@@ -19,6 +24,7 @@ import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
@@ -38,7 +44,8 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
  *   <li>Whether it's a decorator delegate injection point</li>
  * </ul>
  */
-public class InjectionPointImpl<T> implements InjectionPoint {
+public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
+    private static final long serialVersionUID = 1L;
 
     private final Member member;
     private final Bean<T> bean;
@@ -295,5 +302,250 @@ public class InjectionPointImpl<T> implements InjectionPoint {
     @Override
     public boolean isTransient() {
         return isTransient;
+    }
+
+    private Object writeReplace() {
+        return new SerializedInjectionPoint(this);
+    }
+
+    private static final class SerializedInjectionPoint implements InjectionPoint, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final Type type;
+        private final Set<Annotation> qualifiers;
+        private final MemberRef memberRef;
+        private final boolean delegate;
+        private final boolean trans;
+        private final String beanId;
+        private final String beanClassName;
+        private final Type annotatedBaseType;
+
+        private transient Bean<?> bean;
+        private transient Member member;
+
+        private SerializedInjectionPoint(InjectionPoint injectionPoint) {
+            this.type = injectionPoint.getType();
+            this.qualifiers = new LinkedHashSet<Annotation>(injectionPoint.getQualifiers());
+            this.memberRef = MemberRef.of(injectionPoint.getMember());
+            this.delegate = injectionPoint.isDelegate();
+            this.trans = injectionPoint.isTransient();
+            Bean<?> sourceBean = injectionPoint.getBean();
+            this.bean = sourceBean;
+            if (sourceBean instanceof PassivationCapable) {
+                this.beanId = ((PassivationCapable) sourceBean).getId();
+            } else {
+                this.beanId = null;
+            }
+            this.beanClassName = sourceBean != null ? sourceBean.getBeanClass().getName() : null;
+            Annotated annotated = injectionPoint.getAnnotated();
+            this.annotatedBaseType = annotated != null ? annotated.getBaseType() : injectionPoint.getType();
+            this.member = injectionPoint.getMember();
+        }
+
+        @Override
+        public Type getType() {
+            return type;
+        }
+
+        @Override
+        public Set<Annotation> getQualifiers() {
+            return Collections.unmodifiableSet(qualifiers);
+        }
+
+        @Override
+        public Bean<?> getBean() {
+            if (bean != null) {
+                return bean;
+            }
+            try {
+                jakarta.enterprise.inject.spi.BeanManager beanManager = CDI.current().getBeanManager();
+                if (beanId != null) {
+                    Bean<?> passivationCapable = beanManager.getPassivationCapableBean(beanId);
+                    if (passivationCapable != null) {
+                        bean = passivationCapable;
+                        return bean;
+                    }
+                }
+                if (beanClassName != null) {
+                    Class<?> beanClass = Class.forName(beanClassName);
+                    @SuppressWarnings({"rawtypes", "unchecked"})
+                    Set<Bean<?>> beans = (Set) beanManager.getBeans(beanClass);
+                    Bean<?> resolved = beanManager.resolve(beans);
+                    if (resolved != null) {
+                        bean = resolved;
+                    }
+                }
+            } catch (Exception ignored) {
+                // Bean lookup best effort for serialization support.
+            }
+            return bean;
+        }
+
+        @Override
+        public Member getMember() {
+            if (member != null) {
+                return member;
+            }
+            member = memberRef.resolve();
+            return member;
+        }
+
+        @Override
+        public Annotated getAnnotated() {
+            return new AnnotatedBaseTypeOnly(annotatedBaseType, qualifiers);
+        }
+
+        @Override
+        public boolean isDelegate() {
+            return delegate;
+        }
+
+        @Override
+        public boolean isTransient() {
+            return trans;
+        }
+    }
+
+    private static final class AnnotatedBaseTypeOnly implements Annotated, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final Type baseType;
+        private final Set<Annotation> annotations;
+
+        private AnnotatedBaseTypeOnly(Type baseType, Set<Annotation> qualifiers) {
+            this.baseType = baseType;
+            this.annotations = new LinkedHashSet<Annotation>(qualifiers);
+        }
+
+        @Override
+        public Type getBaseType() {
+            return baseType;
+        }
+
+        @Override
+        public Set<Type> getTypeClosure() {
+            return Collections.<Type>singleton(baseType);
+        }
+
+        @Override
+        public <T extends Annotation> T getAnnotation(Class<T> annotationType) {
+            for (Annotation annotation : annotations) {
+                if (annotationType.equals(annotation.annotationType())) {
+                    return annotationType.cast(annotation);
+                }
+            }
+            return null;
+        }
+
+        @Override
+        public Set<Annotation> getAnnotations() {
+            return Collections.unmodifiableSet(annotations);
+        }
+
+        @Override
+        public <T extends Annotation> Set<T> getAnnotations(Class<T> annotationType) {
+            if (annotationType == null) {
+                return Collections.emptySet();
+            }
+            Set<T> matches = new LinkedHashSet<T>();
+            for (Annotation annotation : annotations) {
+                if (annotationType.equals(annotation.annotationType())) {
+                    matches.add(annotationType.cast(annotation));
+                }
+            }
+            return matches;
+        }
+
+        @Override
+        public boolean isAnnotationPresent(Class<? extends Annotation> annotationType) {
+            return getAnnotation(annotationType) != null;
+        }
+    }
+
+    private static final class MemberRef implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final String declaringClassName;
+        private final String name;
+        private final boolean constructor;
+        private final String[] parameterTypeNames;
+
+        private MemberRef(String declaringClassName, String name, boolean constructor, String[] parameterTypeNames) {
+            this.declaringClassName = declaringClassName;
+            this.name = name;
+            this.constructor = constructor;
+            this.parameterTypeNames = parameterTypeNames;
+        }
+
+        private static MemberRef of(Member member) {
+            if (member == null) {
+                return new MemberRef(null, null, false, new String[0]);
+            }
+            if (member instanceof Field) {
+                Field field = (Field) member;
+                return new MemberRef(field.getDeclaringClass().getName(), field.getName(), false, new String[0]);
+            }
+            if (member instanceof Executable) {
+                Executable executable = (Executable) member;
+                Class<?>[] parameterTypes = executable.getParameterTypes();
+                String[] parameterTypeNames = new String[parameterTypes.length];
+                for (int i = 0; i < parameterTypes.length; i++) {
+                    parameterTypeNames[i] = parameterTypes[i].getName();
+                }
+                return new MemberRef(
+                        executable.getDeclaringClass().getName(),
+                        executable.getName(),
+                        executable instanceof Constructor,
+                        parameterTypeNames
+                );
+            }
+            return new MemberRef(member.getDeclaringClass().getName(), member.getName(), false, new String[0]);
+        }
+
+        private Member resolve() {
+            if (declaringClassName == null || name == null) {
+                return null;
+            }
+            try {
+                Class<?> declaringClass = Class.forName(declaringClassName);
+                if (constructor) {
+                    Class<?>[] parameterTypes = loadParameterTypes();
+                    Constructor<?> ctor = declaringClass.getDeclaredConstructor(parameterTypes);
+                    ctor.setAccessible(true);
+                    return ctor;
+                }
+                if (parameterTypeNames.length == 0) {
+                    Field field = declaringClass.getDeclaredField(name);
+                    field.setAccessible(true);
+                    return field;
+                }
+                Class<?>[] parameterTypes = loadParameterTypes();
+                Method method = declaringClass.getDeclaredMethod(name, parameterTypes);
+                method.setAccessible(true);
+                return method;
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        private Class<?>[] loadParameterTypes() throws ClassNotFoundException {
+            Class<?>[] parameterTypes = new Class<?>[parameterTypeNames.length];
+            for (int i = 0; i < parameterTypeNames.length; i++) {
+                parameterTypes[i] = loadClass(parameterTypeNames[i]);
+            }
+            return parameterTypes;
+        }
+
+        private Class<?> loadClass(String name) throws ClassNotFoundException {
+            if ("boolean".equals(name)) return boolean.class;
+            if ("byte".equals(name)) return byte.class;
+            if ("short".equals(name)) return short.class;
+            if ("int".equals(name)) return int.class;
+            if ("long".equals(name)) return long.class;
+            if ("float".equals(name)) return float.class;
+            if ("double".equals(name)) return double.class;
+            if ("char".equals(name)) return char.class;
+            return Class.forName(name);
+        }
     }
 }
