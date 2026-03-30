@@ -268,8 +268,13 @@ public class BeanResolver implements DependencyResolver {
 
     @Override
     public Object resolveDeclaringBeanInstance(Class<?> declaringClass) {
-        // Find the bean for the declaring class
+        // Find the managed bean for the declaring class.
+        // ProducerBean#getBeanClass() returns the declaring class too, but using that here
+        // would recurse infinitely when the producer tries to obtain its declaring instance.
         for (Bean<?> bean : knowledgeBase.getValidBeans()) {
+            if (bean instanceof ProducerBean) {
+                continue;
+            }
             if (bean.getBeanClass().equals(declaringClass)) {
                 return getInstanceFromScope(bean);
             }

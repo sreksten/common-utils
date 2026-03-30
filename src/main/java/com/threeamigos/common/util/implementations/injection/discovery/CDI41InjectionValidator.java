@@ -129,6 +129,8 @@ public class CDI41InjectionValidator {
         allValid &= validateNameResolution(validBeans);
         // CDI 4.1 §20.3: if a decorator matches a managed bean, the bean class must be proxyable.
         allValid &= validateDecoratedManagedBeansProxyable(validBeans);
+        // CDI 4.1 §3.10: intercepted beans must be proxyable.
+        allValid &= validateInterceptedManagedBeansProxyable(validBeans);
 
         // Enhancement 4: Validate passivation capability for beans in passivating scopes
         allValid &= validatePassivation(validBeans);
@@ -169,6 +171,40 @@ public class CDI41InjectionValidator {
             knowledgeBase.addDefinitionError(
                     "Managed bean " + bean.getBeanClass().getName() +
                             " matches a decorator but is unproxyable: " + reason);
+            allValid = false;
+        }
+        return allValid;
+    }
+
+    private boolean validateInterceptedManagedBeansProxyable(Collection<Bean<?>> validBeans) {
+        boolean allValid = true;
+        for (Bean<?> bean : validBeans) {
+            if (!(bean instanceof BeanImpl<?>)) {
+                continue;
+            }
+            Class<?> beanClass = bean.getBeanClass();
+            if (beanClass == null) {
+                continue;
+            }
+            if (hasInterceptorAnnotation(beanClass) || hasDecoratorAnnotation(beanClass)) {
+                continue;
+            }
+            if (!hasBoundInterceptor(bean)) {
+                continue;
+            }
+
+            // Keep this deployment check narrowly focused on the CDI regression case:
+            // beans with bound interceptors must not declare non-private final business methods.
+            // Broader proxyability constraints are enforced elsewhere (e.g. injection-point resolution).
+            Method finalBusinessMethod = findNonStaticFinalNonPrivateMethod(beanClass);
+            if (finalBusinessMethod == null || knowledgeBase.shouldIgnoreFinalMethods(bean)) {
+                continue;
+            }
+
+            knowledgeBase.addError(
+                    "Managed bean " + beanClass.getName() +
+                            " has bound interceptor(s) but declares non-private final method: " +
+                            finalBusinessMethod.getName());
             allValid = false;
         }
         return allValid;
@@ -1006,7 +1042,9 @@ public class CDI41InjectionValidator {
         Class<?> beanClass = bean.getBeanClass();
 
         Set<InterceptorInfo> boundInterceptors = new LinkedHashSet<>();
+        Set<Class<?>> legacyInterceptorClasses = new LinkedHashSet<>();
         Set<Annotation> classBindings = extractInterceptorBindingAnnotations(beanClass.getAnnotations());
+        legacyInterceptorClasses.addAll(extractLegacyInterceptorClasses(beanClass.getAnnotations()));
         if (!classBindings.isEmpty()) {
             boundInterceptors.addAll(knowledgeBase.getInterceptorsByBindings(classBindings));
         }
@@ -1017,6 +1055,7 @@ public class CDI41InjectionValidator {
             }
             Set<Annotation> effectiveBindings = new HashSet<>(classBindings);
             effectiveBindings.addAll(extractInterceptorBindingAnnotations(method.getAnnotations()));
+            legacyInterceptorClasses.addAll(extractLegacyInterceptorClasses(method.getAnnotations()));
             if (!effectiveBindings.isEmpty()) {
                 boundInterceptors.addAll(knowledgeBase.getInterceptorsByBindings(effectiveBindings));
             }
@@ -1029,6 +1068,26 @@ public class CDI41InjectionValidator {
                         "Bean " + beanClass.getName() + " has passivation-capable scope @" +
                                 bean.getScope().getSimpleName() +
                                 " and bound interceptor " + interceptorClass.getName() +
+                                " which is not Serializable"
+                );
+                allValid = false;
+            }
+            Bean<?> interceptorBean = findBeanByClass(validBeans, interceptorClass);
+            if (interceptorBean != null) {
+                allValid &= validateDependenciesPassivationCapable(interceptorBean, new HashSet<>(), validBeans);
+            }
+            allValid &= validateDeclaredInjectionMembersPassivation(interceptorClass, validBeans, bean);
+        }
+
+        for (Class<?> interceptorClass : legacyInterceptorClasses) {
+            if (interceptorClass == null) {
+                continue;
+            }
+            if (!java.io.Serializable.class.isAssignableFrom(interceptorClass)) {
+                knowledgeBase.addError(
+                        "Bean " + beanClass.getName() + " has passivation-capable scope @" +
+                                bean.getScope().getSimpleName() +
+                                " and legacy interceptor " + interceptorClass.getName() +
                                 " which is not Serializable"
                 );
                 allValid = false;
@@ -1080,6 +1139,36 @@ public class CDI41InjectionValidator {
             }
         }
         return null;
+    }
+
+    private List<Class<?>> extractLegacyInterceptorClasses(Annotation[] annotations) {
+        if (annotations == null || annotations.length == 0) {
+            return Collections.emptyList();
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation == null) {
+                continue;
+            }
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (annotationType == null) {
+                continue;
+            }
+            String name = annotationType.getName();
+            if (!"jakarta.interceptor.Interceptors".equals(name) &&
+                    !"javax.interceptor.Interceptors".equals(name)) {
+                continue;
+            }
+            try {
+                Method valueMethod = annotationType.getMethod("value");
+                Object raw = valueMethod.invoke(annotation);
+                if (raw instanceof Class[]) {
+                    return Arrays.asList((Class<?>[]) raw);
+                }
+            } catch (Exception ignored) {
+                return Collections.emptyList();
+            }
+        }
+        return Collections.emptyList();
     }
 
     private boolean validateDeclaredInjectionMembersPassivation(Class<?> declaringClass,
@@ -1522,13 +1611,47 @@ public class CDI41InjectionValidator {
 
     private Set<Annotation> extractInterceptorBindingAnnotations(Annotation[] annotations) {
         Set<Annotation> bindings = new HashSet<>();
+        if (annotations == null) {
+            return bindings;
+        }
         for (Annotation annotation : annotations) {
-            if (hasInterceptorBindingAnnotation(annotation.annotationType()) ||
-                knowledgeBase.isRegisteredInterceptorBinding(annotation.annotationType())) {
-                bindings.add(annotation);
-            }
+            collectInterceptorBindings(annotation, bindings, new HashSet<Class<? extends Annotation>>());
         }
         return bindings;
+    }
+
+    private void collectInterceptorBindings(Annotation annotation,
+                                            Set<Annotation> bindings,
+                                            Set<Class<? extends Annotation>> visited) {
+        if (annotation == null) {
+            return;
+        }
+        Class<? extends Annotation> annotationType = annotation.annotationType();
+        if (annotationType == null || !visited.add(annotationType)) {
+            return;
+        }
+
+        try {
+            if (hasInterceptorBindingAnnotation(annotationType) ||
+                    knowledgeBase.isRegisteredInterceptorBinding(annotationType)) {
+                bindings.add(annotation);
+            }
+
+            if (hasStereotypeAnnotation(annotationType) ||
+                    knowledgeBase.isRegisteredStereotype(annotationType)) {
+                for (Annotation meta : annotationType.getAnnotations()) {
+                    collectInterceptorBindings(meta, bindings, visited);
+                }
+            } else if (hasInterceptorBindingAnnotation(annotationType) ||
+                    knowledgeBase.isRegisteredInterceptorBinding(annotationType)) {
+                // Include transitive interceptor bindings declared as meta-annotations.
+                for (Annotation meta : annotationType.getAnnotations()) {
+                    collectInterceptorBindings(meta, bindings, visited);
+                }
+            }
+        } finally {
+            visited.remove(annotationType);
+        }
     }
 
     private boolean hasBoundDecorator(Bean<?> bean) {

@@ -587,10 +587,19 @@ public class KnowledgeBase {
         if (info == null) {
             return false;
         }
-        if (!hasAfterTypeDiscoveryInterceptorsCustomized()) {
+        Class<?> interceptorClass = info.getInterceptorClass();
+        if (interceptorClass == null) {
+            return false;
+        }
+        if ("com.threeamigos.common.util.implementations.injection.builtinbeans.ActivateRequestContextInterceptor"
+                .equals(interceptorClass.getName())) {
             return true;
         }
-        return getApplicationInterceptorOrder(info.getInterceptorClass()) >= 0;
+
+        // CDI Full enablement: interceptor is enabled only when selected by application ordering
+        // (@Priority and/or AfterTypeDiscovery) or explicitly listed in beans.xml.
+        return getApplicationInterceptorOrder(interceptorClass) >= 0
+                || getInterceptorBeansXmlOrder(interceptorClass) >= 0;
     }
 
     public void setApplicationInterceptorOrder(List<Class<?>> orderedInterceptors) {

@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Qualifier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -22,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @DisplayName("3.4.1 - TCK parity: DisposesMethodCalledOnceTest")
+@Isolated
 class DisposesMethodCalledOnceTckParityTest {
 
     @Test

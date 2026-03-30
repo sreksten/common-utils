@@ -49,14 +49,14 @@
 - [x] **org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.BeforeBeanDiscoveryTest**
 
 ### Producers/disposers/initializers (72)
-- [ ] **org.jboss.cdi.tck.tests.implementation.simple.definition.constructorHasDisposesParameter.ConstructorHasDisposesParameterTest**
-- [ ] **org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedProducerMethodTest**
-- [ ] **org.jboss.cdi.tck.tests.implementation.producer.field.lifecycle.ProducerFieldLifecycleTest**
-- [ ] **org.jboss.cdi.tck.tests.implementation.disposal.method.definition.invocation.DisposesMethodCalledOnceTest**
-- [ ] **org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.method.managed.NonPassivationCapableProducerMethodTest**
-- [ ] **org.jboss.cdi.tck.tests.implementation.producer.method.definition.ProducerMethodDefinitionTest**
-- [ ] **org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.multiple.MultipleDisposerMethodsForProducerMethodTest**
-- [ ] **org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.field.managed.dependent.ManagedBeanWithIllegalDependencyTest**
+- [x] **org.jboss.cdi.tck.tests.implementation.simple.definition.constructorHasDisposesParameter.ConstructorHasDisposesParameterTest**
+- [x] **org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedProducerMethodTest**
+- [x] **org.jboss.cdi.tck.tests.implementation.producer.field.lifecycle.ProducerFieldLifecycleTest**
+- [x] **org.jboss.cdi.tck.tests.implementation.disposal.method.definition.invocation.DisposesMethodCalledOnceTest**
+- [x] **org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.method.managed.NonPassivationCapableProducerMethodTest**
+- [x] **org.jboss.cdi.tck.tests.implementation.producer.method.definition.ProducerMethodDefinitionTest**
+- [x] **org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.multiple.MultipleDisposerMethodsForProducerMethodTest**
+- [x] **org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.field.managed.dependent.ManagedBeanWithIllegalDependencyTest**
 
 ### Interceptors (68)
 - [ ] **org.jboss.cdi.tck.interceptors.tests.order.lifecycleCallback.PostConstructOrderTest**
