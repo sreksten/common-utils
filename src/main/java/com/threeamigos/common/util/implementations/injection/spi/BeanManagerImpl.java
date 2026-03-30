@@ -3140,7 +3140,10 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
             @Override
             public Set<InjectionPoint> getInjectionPoints() {
-                return Collections.emptySet();
+                if (info.getDelegateInjectionPoint() == null) {
+                    return Collections.emptySet();
+                }
+                return Collections.<InjectionPoint>singleton(info.getDelegateInjectionPoint());
             }
 
             @Override

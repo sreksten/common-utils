@@ -89,14 +89,14 @@
 - [x] **org.jboss.cdi.tck.tests.alternative.selection.SelectedAlternative01Test**
 
 ### Contexts/scopes (33)
-- [ ] **org.jboss.cdi.tck.tests.full.context.passivating.dependency.builtin.BuiltinBeanPassivationDependencyTest**
-- [ ] **org.jboss.cdi.tck.tests.context.DestroyForSameCreationalContextTest**
-- [ ] **org.jboss.cdi.tck.tests.full.context.alterable.AlterableContextTest**
-- [ ] **org.jboss.cdi.tck.tests.context.DestroyedInstanceReturnedByGetTest**
-- [ ] **org.jboss.cdi.tck.tests.full.context.ContextDestroysBeansTest**
-- [ ] **org.jboss.cdi.tck.tests.full.context.passivating.PassivatingContextTest**
-- [ ] **org.jboss.cdi.tck.tests.full.decorators.builtin.conversation.BuiltinConversationDecoratorTest**
-- [ ] **org.jboss.cdi.tck.tests.full.context.ContextTest**
+- [x] **org.jboss.cdi.tck.tests.full.context.passivating.dependency.builtin.BuiltinBeanPassivationDependencyTest**
+- [x] **org.jboss.cdi.tck.tests.context.DestroyForSameCreationalContextTest**
+- [x] **org.jboss.cdi.tck.tests.full.context.alterable.AlterableContextTest**
+- [x] **org.jboss.cdi.tck.tests.context.DestroyedInstanceReturnedByGetTest**
+- [x] **org.jboss.cdi.tck.tests.full.context.ContextDestroysBeansTest**
+- [x] **org.jboss.cdi.tck.tests.full.context.passivating.PassivatingContextTest**
+- [x] **org.jboss.cdi.tck.tests.full.decorators.builtin.conversation.BuiltinConversationDecoratorTest**
+- [x] **org.jboss.cdi.tck.tests.full.context.ContextTest**
 
 ### Decorators (27)
 - [ ] **org.jboss.cdi.tck.tests.full.decorators.custom.broken.finalBeanClass.CustomDecoratorMatchingBeanWithFinalClassTest**

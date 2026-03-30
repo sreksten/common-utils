@@ -98,6 +98,21 @@ class BuiltinEventDecoratorTckParityTest {
     private Syringe newSyringe(Class<?>... classes) {
         Syringe syringe = new Syringe(new InMemoryMessageHandler(), classes);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        // Avoid cross-test pollution from other parity fixtures in the same package.
+        syringe.exclude(DecoratorTckParityTest.class);
+        for (Class<?> nested : DecoratorTckParityTest.class.getDeclaredClasses()) {
+            syringe.exclude(nested);
+        }
+        try {
+            Class<?> conversationParity = Class.forName(
+                    "com.threeamigos.common.util.implementations.injection.cdi41tests.chapter20.tckparity.conversation.BuiltinConversationDecoratorTckParityTest");
+            syringe.exclude(conversationParity);
+            for (Class<?> nested : conversationParity.getDeclaredClasses()) {
+                syringe.exclude(nested);
+            }
+        } catch (ClassNotFoundException ignored) {
+            // ignore when class is not present
+        }
         return syringe;
     }
 

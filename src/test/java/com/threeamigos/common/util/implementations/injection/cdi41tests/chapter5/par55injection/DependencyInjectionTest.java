@@ -615,6 +615,10 @@ public class DependencyInjectionTest {
         syringe.exclude(InvalidBeanMetadataTypeParameterConsumer.class);
         syringe.exclude(InvalidProducerBeanMetadataTypeParameterBean.class);
         syringe.exclude(InvalidDisposerBeanMetadataParameterBean.class);
+        // Exclude parity fixtures that intentionally violate 5.5.8 built-in metadata type parameter rules.
+        syringe.exclude(DecoratorBeanMetadataTypeParameterTckParityTest.InvalidDecoratorMetadataField.class);
+        syringe.exclude(DecoratorBeanMetadataTypeParameterTckParityTest.InvalidDecoratorMetadataConstructor.class);
+        syringe.exclude(DecoratorBeanMetadataTypeParameterTckParityTest.InvalidDecoratedBeanMetadataField.class);
     }
 
     private boolean containsCause(Throwable throwable, Class<? extends Throwable> type) {

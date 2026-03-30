@@ -1090,7 +1090,88 @@ public class BeanResolver implements DependencyResolver {
             return null;
         };
 
-        return new InstanceImpl<>(type, qualifiers, strategy, beanLookup, owningBeanManager);
+        Instance<T> baseInstance = new InstanceImpl<>(type, qualifiers, strategy, beanLookup, owningBeanManager);
+        if (owningBeanManager == null) {
+            return baseInstance;
+        }
+
+        Set<Annotation> normalizedQualifiers = new HashSet<Annotation>(qualifiers);
+        normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
+
+        Set<Type> instanceBeanTypes = new HashSet<Type>();
+        instanceBeanTypes.add(Instance.class);
+        instanceBeanTypes.add(Object.class);
+        instanceBeanTypes.add(parameterizedInstanceType(type));
+        instanceBeanTypes.add(parameterizedProviderType(type));
+        instanceBeanTypes.add(parameterizedIterableType(type));
+
+        List<DecoratorInfo> decorators = decoratorResolver.resolve(instanceBeanTypes, normalizedQualifiers);
+        if (decorators.isEmpty()) {
+            return baseInstance;
+        }
+
+        @SuppressWarnings("unchecked")
+        Instance<T> decoratedInstance = (Instance<T>) decoratorAwareProxyGenerator
+                .createDecoratorChain(baseInstance, decorators, owningBeanManager, new CreationalContextImpl<Object>())
+                .getOutermostInstance();
+        return decoratedInstance;
+    }
+
+    private ParameterizedType parameterizedInstanceType(final Type argumentType) {
+        return new ParameterizedType() {
+            @Override
+            public Type[] getActualTypeArguments() {
+                return new Type[]{argumentType};
+            }
+
+            @Override
+            public Type getRawType() {
+                return Instance.class;
+            }
+
+            @Override
+            public Type getOwnerType() {
+                return null;
+            }
+        };
+    }
+
+    private ParameterizedType parameterizedProviderType(final Type argumentType) {
+        return new ParameterizedType() {
+            @Override
+            public Type[] getActualTypeArguments() {
+                return new Type[]{argumentType};
+            }
+
+            @Override
+            public Type getRawType() {
+                return Provider.class;
+            }
+
+            @Override
+            public Type getOwnerType() {
+                return null;
+            }
+        };
+    }
+
+    private ParameterizedType parameterizedIterableType(final Type argumentType) {
+        return new ParameterizedType() {
+            @Override
+            public Type[] getActualTypeArguments() {
+                return new Type[]{argumentType};
+            }
+
+            @Override
+            public Type getRawType() {
+                return Iterable.class;
+            }
+
+            @Override
+            public Type getOwnerType() {
+                return null;
+            }
+        };
     }
 
     /**
