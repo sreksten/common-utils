@@ -15,6 +15,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.AnnotatedType;
+import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.Intercepted;
 import jakarta.enterprise.inject.spi.Prioritized;
@@ -2295,6 +2296,10 @@ public class CDI41BeanValidator {
      */
     private void validateManagedBeanPublicFieldScopeConstraint(Class<?> clazz,
                                                                Class<? extends Annotation> scopeAnnotation) {
+        if (declaresSingletonPseudoScope(clazz)) {
+            return;
+        }
+
         if (!isNormalScope(scopeAnnotation)) {
             return;
         }
@@ -2311,6 +2316,38 @@ public class CDI41BeanValidator {
                     " and non-static public field(s) " + String.join(", ", invalidFields) +
                     ". Such beans must declare a pseudo-scope (e.g. @Dependent or @Singleton).");
         }
+    }
+
+    private boolean declaresSingletonPseudoScope(Class<?> clazz) {
+        if (hasSingletonAnnotation(clazz)) {
+            return true;
+        }
+        for (Annotation annotation : annotationsOf(clazz)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (isStereotypeAnnotationType(annotationType) &&
+                    stereotypeDeclaresSingleton(annotationType, new HashSet<Class<? extends Annotation>>())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean stereotypeDeclaresSingleton(Class<? extends Annotation> stereotypeType,
+                                                Set<Class<? extends Annotation>> visited) {
+        if (stereotypeType == null || !visited.add(stereotypeType)) {
+            return false;
+        }
+        for (Annotation meta : stereotypeType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (hasSingletonAnnotation(metaType)) {
+                return true;
+            }
+            if (isStereotypeAnnotationType(metaType) &&
+                    stereotypeDeclaresSingleton(metaType, visited)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -2832,6 +2869,10 @@ public class CDI41BeanValidator {
 
     private boolean isCandidateBeanClass(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
         if (clazz == null || hasVetoedAnnotation(clazz) || beanArchiveMode == BeanArchiveMode.NONE) {
+            return false;
+        }
+
+        if (Extension.class.isAssignableFrom(clazz)) {
             return false;
         }
 

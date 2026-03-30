@@ -99,24 +99,24 @@
 - [x] **org.jboss.cdi.tck.tests.full.context.ContextTest**
 
 ### Decorators (27)
-- [ ] **org.jboss.cdi.tck.tests.full.decorators.custom.broken.finalBeanClass.CustomDecoratorMatchingBeanWithFinalClassTest**
-- [ ] **org.jboss.cdi.tck.tests.full.decorators.definition.broken.finalBeanClass.FinalBeanClassTest**
-- [ ] **org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratoredBeanTypeParamFieldTest**
-- [ ] **org.jboss.cdi.tck.tests.full.decorators.builtin.instance.BuiltinInstanceDecoratorTest**
-- [ ] **org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratorTypeParamFieldTest**
-- [ ] **org.jboss.cdi.tck.tests.full.decorators.definition.DecoratorDefinitionTest**
-- [ ] **org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonDependent.NonDependentDecoratorTest**
-- [ ] **org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratorTypeParamConstructorTest**
+- [x] **org.jboss.cdi.tck.tests.full.decorators.custom.broken.finalBeanClass.CustomDecoratorMatchingBeanWithFinalClassTest**
+- [x] **org.jboss.cdi.tck.tests.full.decorators.definition.broken.finalBeanClass.FinalBeanClassTest**
+- [x] **org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratoredBeanTypeParamFieldTest**
+- [x] **org.jboss.cdi.tck.tests.full.decorators.builtin.instance.BuiltinInstanceDecoratorTest**
+- [x] **org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratorTypeParamFieldTest**
+- [x] **org.jboss.cdi.tck.tests.full.decorators.definition.DecoratorDefinitionTest**
+- [x] **org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonDependent.NonDependentDecoratorTest**
+- [x] **org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratorTypeParamConstructorTest**
 
 ### Bean definition/typing (21)
-- [ ] **org.jboss.cdi.tck.tests.definition.scope.inOtherBda.ScopeDefinedInOtherBDATest**
-- [ ] **org.jboss.cdi.tck.tests.definition.bean.BeanDefinitionTest**
-- [ ] **org.jboss.cdi.tck.tests.definition.bean.genericbroken.GenericManagedBeanTest**
-- [ ] **org.jboss.cdi.tck.tests.implementation.simple.definition.constructorHasAsyncObservesParameter.ConstructorHasAsyncObservesParameterTest**
-- [ ] **org.jboss.cdi.tck.tests.implementation.simple.definition.normalScopedWithPublicField.NormalScopedWithPublicFieldTest**
-- [ ] **org.jboss.cdi.tck.tests.definition.qualifier.builtin.BuiltInQualifierDefinitionTest**
-- [ ] **org.jboss.cdi.tck.tests.implementation.simple.definition.SimpleBeanDefinitionTest**
-- [ ] **org.jboss.cdi.tck.tests.definition.scope.ScopeDefinitionTest**
+- [x] **org.jboss.cdi.tck.tests.definition.scope.inOtherBda.ScopeDefinedInOtherBDATest**
+- [x] **org.jboss.cdi.tck.tests.definition.bean.BeanDefinitionTest**
+- [x] **org.jboss.cdi.tck.tests.definition.bean.genericbroken.GenericManagedBeanTest**
+- [x] **org.jboss.cdi.tck.tests.implementation.simple.definition.constructorHasAsyncObservesParameter.ConstructorHasAsyncObservesParameterTest**
+- [x] **org.jboss.cdi.tck.tests.implementation.simple.definition.normalScopedWithPublicField.NormalScopedWithPublicFieldTest**
+- [x] **org.jboss.cdi.tck.tests.definition.qualifier.builtin.BuiltInQualifierDefinitionTest**
+- [x] **org.jboss.cdi.tck.tests.implementation.simple.definition.SimpleBeanDefinitionTest**
+- [x] **org.jboss.cdi.tck.tests.definition.scope.ScopeDefinitionTest**
 
 ### Unclassified (16)
 - [ ] **org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.injection.decorated.DecoratedBeanConstructorInjectionTest**
