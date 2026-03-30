@@ -31,22 +31,22 @@
 ### Core DI resolution & injection (139)
 - [x] **org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.array.ArrayTest**
 - [x] **org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.privateConstructor.PrivateConstructorTest**
-- [ ] **org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest**
-- [ ] **org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanWithLookup.SyntheticBeanWithLookupTest**
-- [ ] **org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupGreaterThanNumberOfParamsTest**
-- [ ] **org.jboss.cdi.tck.tests.invokers.basic.VarargsMethodInvokerTest**
-- [ ] **org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.ExpandedNamePrefixTest**
-- [ ] **org.jboss.cdi.tck.tests.lookup.circular.CircularDependencyTest**
+- [x] **org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest**
+- [x] **org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanWithLookup.SyntheticBeanWithLookupTest**
+- [x] **org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupGreaterThanNumberOfParamsTest**
+- [x] **org.jboss.cdi.tck.tests.invokers.basic.VarargsMethodInvokerTest**
+- [x] **org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.ExpandedNamePrefixTest**
+- [x] **org.jboss.cdi.tck.tests.lookup.circular.CircularDependencyTest**
 
 ### Extensions SPI & lifecycle (119)
 - [ ] **org.jboss.cdi.tck.tests.full.extensions.beanManager.el.WrapExpressionFactoryTest**
-- [ ] **org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.AddDefinitionErrorTest**
-- [ ] **org.jboss.cdi.tck.tests.full.extensions.beanManager.bean.SyntheticBeanTest**
-- [ ] **org.jboss.cdi.tck.tests.build.compatible.extensions.registration.RegistrationTest**
-- [ ] **org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.normalScope.AddingNormalScopeTest**
-- [ ] **org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementMultipleParams2Test**
-- [ ] **org.jboss.cdi.tck.tests.full.extensions.lifecycle.atd.AfterTypeDiscoveryTest**
-- [ ] **org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.BeforeBeanDiscoveryTest**
+- [x] **org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.AddDefinitionErrorTest**
+- [x] **org.jboss.cdi.tck.tests.full.extensions.beanManager.bean.SyntheticBeanTest**
+- [x] **org.jboss.cdi.tck.tests.build.compatible.extensions.registration.RegistrationTest**
+- [x] **org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.normalScope.AddingNormalScopeTest**
+- [x] **org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementMultipleParams2Test**
+- [x] **org.jboss.cdi.tck.tests.full.extensions.lifecycle.atd.AfterTypeDiscoveryTest**
+- [x] **org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.BeforeBeanDiscoveryTest**
 
 ### Producers/disposers/initializers (72)
 - [ ] **org.jboss.cdi.tck.tests.implementation.simple.definition.constructorHasDisposesParameter.ConstructorHasDisposesParameterTest**

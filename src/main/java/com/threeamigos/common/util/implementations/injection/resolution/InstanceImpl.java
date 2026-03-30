@@ -4,8 +4,10 @@ import com.threeamigos.common.util.implementations.injection.util.RawTypeExtract
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.annotation.Nonnull;
+import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.*;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
@@ -204,7 +206,9 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     public void destroy(T instance) {
         try {
             if (instance != null) {
-                strategy().invokePreDestroy(instance);
+                if (!destroyViaBeanManager(instance)) {
+                    strategy().invokePreDestroy(instance);
+                }
             }
         } catch (UnsupportedOperationException e) {
             throw e;
@@ -216,6 +220,33 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to invoke @PreDestroy on " + type.getName(), e);
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private boolean destroyViaBeanManager(T instance) {
+        BeanManager beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+        if (beanManager == null) {
+            return false;
+        }
+
+        try {
+            Annotation[] qualifierArray = qualifiers.toArray(new Annotation[qualifiers.size()]);
+            Set<Bean<?>> beans = beanManager.getBeans(type, qualifierArray);
+            if (beans == null || beans.isEmpty()) {
+                return false;
+            }
+
+            Bean<?> resolved = beanManager.resolve(beans);
+            if (resolved == null) {
+                return false;
+            }
+
+            CreationalContext creationalContext = beanManager.createCreationalContext((Bean) resolved);
+            ((Bean) resolved).destroy(instance, creationalContext);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 

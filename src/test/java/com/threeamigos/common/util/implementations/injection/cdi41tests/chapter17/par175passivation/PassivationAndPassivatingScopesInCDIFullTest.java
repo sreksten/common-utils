@@ -584,7 +584,29 @@ public class PassivationAndPassivatingScopesInCDIFullTest {
                 syringe.exclude(fixture);
             }
         }
+        // Exclude parity fixtures in sibling packages that otherwise leak into this deployment
+        // via package scanning in the Syringe(Class<?>...) constructor.
+        excludeIfPresent(syringe,
+                "com.threeamigos.common.util.implementations.injection.cdi41tests.chapter17.par175passivation.tckparity.PassivatingProducerTckParityTest$InvalidPassivatingProducerMethodHolder",
+                "com.threeamigos.common.util.implementations.injection.cdi41tests.chapter17.par175passivation.tckparity.PassivatingProducerTckParityTest$CowProducer",
+                "com.threeamigos.common.util.implementations.injection.cdi41tests.chapter17.par175passivation.tckparity.PassivatingProducerTckParityTest$FieldInjectionCorralBroken",
+                "com.threeamigos.common.util.implementations.injection.cdi41tests.chapter17.par175passivation.tckparity.PassivatingProducerTckParityTest$SetterInjectionCorralBroken",
+                "com.threeamigos.common.util.implementations.injection.cdi41tests.chapter17.par175passivation.tckparity.PassivatingProducerTckParityTest$ConstructorInjectionCorralBroken",
+                "com.threeamigos.common.util.implementations.injection.cdi41tests.chapter17.par175passivation.tckparity.PassivatingProducerTckParityTest$Corral",
+                "com.threeamigos.common.util.implementations.injection.cdi41tests.chapter17.par175passivation.tckparity.PassivatingProducerTckParityTest$Cow"
+        );
         return syringe;
+    }
+
+    private void excludeIfPresent(Syringe syringe, String... classNames) {
+        for (String className : classNames) {
+            try {
+                Class<?> clazz = Class.forName(className);
+                syringe.exclude(clazz);
+            } catch (ClassNotFoundException ignored) {
+                // Optional exclusion: class may not exist in every branch/test set.
+            }
+        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

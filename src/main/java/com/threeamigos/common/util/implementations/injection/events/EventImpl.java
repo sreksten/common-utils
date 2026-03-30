@@ -21,6 +21,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
+import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.NotificationOptions;
 import jakarta.enterprise.event.ObserverException;
@@ -1027,11 +1028,19 @@ public class EventImpl<T> implements Event<T> {
 
             // For static observer methods, invocation must not require declaring bean instance creation.
             Object beanInstance = null;
+            CreationalContext<?> observerCreationalContext = null;
+            boolean destroyDependentReceiverExplicitly = false;
             if (!Modifier.isStatic(method.getModifiers())) {
                 // Get the bean instance that declares this observer method
                 // For Reception.ALWAYS (default): This will create the bean if it doesn't exist
                 // For Reception.IF_EXISTS: This is only called after checking bean existence
-                if (declaringBean != null) {
+                if (declaringBean != null && AnnotationsEnum.hasDependentAnnotation(method.getDeclaringClass())) {
+                    BeanManager beanManager = CDI.current().getBeanManager();
+                    observerCreationalContext = beanManager.createCreationalContext(declaringBean);
+                    beanInstance = beanManager.getReference(declaringBean, declaringBean.getBeanClass(),
+                            observerCreationalContext);
+                    destroyDependentReceiverExplicitly = true;
+                } else if (declaringBean != null) {
                     beanInstance = beanResolver.resolveDeclaringBeanInstance(declaringBean.getBeanClass());
                 } else {
                     // If no bean metadata, try to resolve by method's declaring class
@@ -1049,7 +1058,13 @@ public class EventImpl<T> implements Event<T> {
                 }
             } finally {
                 destroyDependentInvocationParameters(parameters, args);
-                destroyDependentObserverReceiver(beanInstance, method);
+                if (destroyDependentReceiverExplicitly && declaringBean != null) {
+                    if (!destroyBeanInstance(declaringBean, beanInstance, observerCreationalContext)) {
+                        LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PRE_DESTROY);
+                    }
+                } else {
+                    destroyDependentObserverReceiver(beanInstance, method, declaringBean);
+                }
             }
 
         } catch (InvocationTargetException e) {
@@ -1091,8 +1106,88 @@ public class EventImpl<T> implements Event<T> {
             if (!isDependentParameter(parameter)) {
                 continue;
             }
-            LifecycleMethodHelper.invokeLifecycleMethod(arg, PRE_DESTROY);
+            if (!destroyDependentInstance(parameter.getType(), parameter.getAnnotations(), arg)) {
+                LifecycleMethodHelper.invokeLifecycleMethod(arg, PRE_DESTROY);
+            }
         }
+    }
+
+    private void destroyDependentObserverReceiver(Object beanInstance, Method method, Bean<?> declaringBean) throws Exception {
+        if (beanInstance == null || method == null || Modifier.isStatic(method.getModifiers())) {
+            return;
+        }
+
+        if (AnnotationsEnum.hasDependentAnnotation(method.getDeclaringClass())) {
+            if (declaringBean != null && destroyBeanInstance(declaringBean, beanInstance)) {
+                return;
+            }
+            if (destroyDependentInstance(method.getDeclaringClass(), method.getDeclaringClass().getAnnotations(),
+                    beanInstance)) {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PRE_DESTROY);
+    }
+
+    private boolean destroyDependentInstance(Class<?> requiredType, Annotation[] annotations, Object instance) {
+        try {
+            BeanManager beanManager = CDI.current().getBeanManager();
+            Set<Bean<?>> beans = beanManager.getBeans(requiredType, extractQualifiers(annotations));
+            if (beans == null || beans.isEmpty()) {
+                return false;
+            }
+
+            Bean<?> bean = beanManager.resolve(beans);
+            if (bean == null || !hasDependentAnnotation(bean.getScope())) {
+                return false;
+            }
+
+            return destroyBeanInstance(bean, instance);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private boolean destroyBeanInstance(Bean<?> bean, Object instance) {
+        return destroyBeanInstance(bean, instance, null);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private boolean destroyBeanInstance(Bean<?> bean, Object instance, CreationalContext<?> creationalContext) {
+        if (bean == null || instance == null) {
+            return false;
+        }
+        try {
+            CreationalContext context = creationalContext;
+            if (context == null) {
+                BeanManager beanManager = CDI.current().getBeanManager();
+                context = beanManager.createCreationalContext(bean);
+            }
+            ((Bean) bean).destroy(instance, context);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private Annotation[] extractQualifiers(Annotation[] annotations) {
+        if (annotations == null || annotations.length == 0) {
+            return new Annotation[0];
+        }
+        Set<Annotation> qualifierSet = new HashSet<Annotation>();
+        for (Annotation annotation : annotations) {
+            if (annotation == null) {
+                continue;
+            }
+            if (annotation.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)) {
+                qualifierSet.add(annotation);
+            }
+        }
+        return qualifierSet.toArray(new Annotation[qualifierSet.size()]);
     }
 
     private Object invokeOnRuntimeMethod(Object targetInstance, Method method, Object[] args) throws Exception {
@@ -1127,18 +1222,6 @@ public class EventImpl<T> implements Event<T> {
             return false;
         }
         return ((BeanImpl<?>) declaringBean).hasInterceptors();
-    }
-
-    private void destroyDependentObserverReceiver(Object beanInstance, Method method) throws Exception {
-        if (beanInstance == null || method == null || Modifier.isStatic(method.getModifiers())) {
-            return;
-        }
-
-        Class<?> declaringClass = method.getDeclaringClass();
-        if (AnnotationsEnum.hasDependentAnnotation(declaringClass)) {
-            LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PRE_DESTROY);
-            return;
-        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

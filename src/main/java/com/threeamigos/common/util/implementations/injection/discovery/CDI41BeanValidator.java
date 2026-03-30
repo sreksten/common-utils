@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.injection.*;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.ScopeMetadata;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
@@ -2331,6 +2332,11 @@ public class CDI41BeanValidator {
     private boolean isNormalScope(Class<? extends Annotation> scopeAnnotation) {
         if (scopeAnnotation == null) {
             return false;
+        }
+
+        ScopeMetadata registeredScope = knowledgeBase.getScopeMetadata(scopeAnnotation);
+        if (registeredScope != null) {
+            return registeredScope.isNormal();
         }
 
         String scopeName = scopeAnnotation.getName();

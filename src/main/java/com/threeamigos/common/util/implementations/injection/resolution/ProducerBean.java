@@ -10,6 +10,7 @@ import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.IllegalProductException;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -58,8 +59,8 @@ public class ProducerBean<T> implements Bean<T> {
 
     // Injection points (for producer method parameters)
     private final Set<InjectionPoint> injectionPoints = new HashSet<>();
-    private final Map<Object, List<Object>> producerMethodDependentArguments =
-            Collections.synchronizedMap(new IdentityHashMap<Object, List<Object>>());
+    private final Map<Object, List<TrackedDependentArgument>> producerMethodDependentArguments =
+            Collections.synchronizedMap(new IdentityHashMap<Object, List<TrackedDependentArgument>>());
 
     // Validation state
     private boolean hasValidationErrors = false;
@@ -531,7 +532,11 @@ public class ProducerBean<T> implements Bean<T> {
             if (!isDependentParameter(parameter)) {
                 continue;
             }
-            LifecycleMethodHelper.invokeLifecycleMethod(arg, PRE_DESTROY);
+            destroyDependentArgument(new TrackedDependentArgument(
+                    arg,
+                    parameter.getType(),
+                    parameter.getAnnotations()
+            ));
         }
     }
 
@@ -548,7 +553,7 @@ public class ProducerBean<T> implements Bean<T> {
             Object[] args,
             Object produced
     ) {
-        List<Object> tracked = new ArrayList<>();
+        List<TrackedDependentArgument> tracked = new ArrayList<TrackedDependentArgument>();
         for (int i = 0; i < parameters.length; i++) {
             Parameter parameter = parameters[i];
             Object arg = args[i];
@@ -558,7 +563,11 @@ public class ProducerBean<T> implements Bean<T> {
             if (!isDependentParameter(parameter)) {
                 continue;
             }
-            tracked.add(arg);
+            tracked.add(new TrackedDependentArgument(
+                    arg,
+                    parameter.getType(),
+                    parameter.getAnnotations()
+            ));
         }
         if (!tracked.isEmpty()) {
             producerMethodDependentArguments.put(produced, tracked);
@@ -566,15 +575,69 @@ public class ProducerBean<T> implements Bean<T> {
     }
 
     private void destroyTrackedProducerMethodDependentArguments(Object produced) throws Exception {
-        List<Object> tracked = producerMethodDependentArguments.remove(produced);
+        List<TrackedDependentArgument> tracked = producerMethodDependentArguments.remove(produced);
         if (tracked == null || tracked.isEmpty()) {
             return;
         }
-        for (Object dependent : tracked) {
-            if (dependent == null) {
+        for (TrackedDependentArgument dependent : tracked) {
+            if (dependent == null || dependent.instance == null) {
                 continue;
             }
-            LifecycleMethodHelper.invokeLifecycleMethod(dependent, PRE_DESTROY);
+            destroyDependentArgument(dependent);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void destroyDependentArgument(TrackedDependentArgument argument) throws Exception {
+        if (argument == null || argument.instance == null) {
+            return;
+        }
+
+        try {
+            BeanManager beanManager = jakarta.enterprise.inject.spi.CDI.current().getBeanManager();
+            Annotation[] qualifiers = extractQualifiers(argument.annotations);
+            Set<Bean<?>> beans = beanManager.getBeans(argument.type, qualifiers);
+            if (beans != null && !beans.isEmpty()) {
+                Bean<?> resolved = beanManager.resolve(beans);
+                if (resolved != null && hasDependentAnnotation(resolved.getScope())) {
+                    CreationalContext creationalContext = beanManager.createCreationalContext((Bean) resolved);
+                    ((Bean) resolved).destroy(argument.instance, creationalContext);
+                    return;
+                }
+            }
+        } catch (Throwable ignored) {
+            // Fallback below
+        }
+
+        LifecycleMethodHelper.invokeLifecycleMethod(argument.instance, PRE_DESTROY);
+    }
+
+    private Annotation[] extractQualifiers(Annotation[] annotations) {
+        if (annotations == null || annotations.length == 0) {
+            return new Annotation[0];
+        }
+
+        Set<Annotation> qualifiers = new HashSet<Annotation>();
+        for (Annotation annotation : annotations) {
+            if (annotation == null) {
+                continue;
+            }
+            if (annotation.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)) {
+                qualifiers.add(annotation);
+            }
+        }
+        return qualifiers.toArray(new Annotation[qualifiers.size()]);
+    }
+
+    private static final class TrackedDependentArgument {
+        private final Object instance;
+        private final Class<?> type;
+        private final Annotation[] annotations;
+
+        private TrackedDependentArgument(Object instance, Class<?> type, Annotation[] annotations) {
+            this.instance = instance;
+            this.type = type;
+            this.annotations = annotations == null ? new Annotation[0] : annotations.clone();
         }
     }
 

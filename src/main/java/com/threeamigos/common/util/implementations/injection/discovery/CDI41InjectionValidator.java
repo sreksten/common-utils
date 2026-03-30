@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
+import com.threeamigos.common.util.implementations.injection.knowledgebase.ScopeMetadata;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.LegacyNewBeanAdapter;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
@@ -728,14 +729,37 @@ public class CDI41InjectionValidator {
 
         // Track visited beans to avoid infinite recursion in circular dependencies
         Set<Bean<?>> visited = new HashSet<>();
+        Set<ProducerBean<?>> validatedProducerBeans =
+                Collections.newSetFromMap(new IdentityHashMap<ProducerBean<?>, Boolean>());
+
+        for (ProducerBean<?> producerBean : knowledgeBase.getProducerBeans()) {
+            if (producerBean == null) {
+                continue;
+            }
+            if (!knowledgeBase.isImplicitBeanArchiveScanningEnabled()) {
+                BeanArchiveMode archiveMode = knowledgeBase.getBeanArchiveMode(producerBean.getDeclaringClass());
+                if (archiveMode != BeanArchiveMode.EXPLICIT) {
+                    continue;
+                }
+            }
+            if (!isBeanEnabledForResolution(producerBean)) {
+                continue;
+            }
+            if (validatedProducerBeans.add(producerBean)) {
+                allValid &= validatePassivatingProducerDeclaration(producerBean);
+            }
+        }
 
         for (Bean<?> bean : validBeans) {
             Class<? extends Annotation> scopeAnnotation = bean.getScope();
 
             // Check if this is a passivation-capable scope
             if (isPassivationCapableScope(scopeAnnotation)) {
-                // Bean must be Serializable
-                if (!java.io.Serializable.class.isAssignableFrom(bean.getBeanClass())) {
+                // Producer beans in passivating scopes are validated via producer declaration/runtime checks.
+                // The declaring bean class itself does not need to be passivation-capable.
+                boolean producerBean = bean instanceof ProducerBean ||
+                        bean.getClass().getName().contains("ProducerBean");
+                if (!producerBean && !java.io.Serializable.class.isAssignableFrom(bean.getBeanClass())) {
                     knowledgeBase.addError(
                             "Bean " + bean.getBeanClass().getName() +
                             " has passivation-capable scope @" + scopeAnnotation.getSimpleName() +
@@ -749,9 +773,6 @@ public class CDI41InjectionValidator {
                 // Recursively validate all dependencies are passivation-capable
                 visited.clear();
                 allValid &= validateDependenciesPassivationCapable(bean, visited, validBeans);
-
-                // Producer members with passivating scope must have serializable final product types.
-                allValid &= validatePassivatingProducerDeclaration(bean);
 
                 // Interceptors and decorators attached to passivating beans must be passivation-capable.
                 allValid &= validateInterceptorsAndDecoratorsPassivation(bean, validBeans);
@@ -852,6 +873,12 @@ public class CDI41InjectionValidator {
 
             // @Dependent scoped dependencies must be Serializable themselves
             if (isDependentScope(dependencyScope)) {
+                // CDI 4.1 §17.5.5: @Dependent producers may still be legal at deployment time
+                // and validated at runtime based on produced instance passivation capability.
+                if (resolvedBean instanceof ProducerBean ||
+                        resolvedBean.getClass().getName().contains("ProducerBean")) {
+                    continue;
+                }
                 if (!java.io.Serializable.class.isAssignableFrom(resolvedBean.getBeanClass())) {
                     knowledgeBase.addError(
                             "Bean " + bean.getBeanClass().getName() +
@@ -915,6 +942,11 @@ public class CDI41InjectionValidator {
         }
 
         ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+        Class<? extends Annotation> declaredPassivatingScope = resolvePassivatingScopeDeclaredOnProducerMember(producerBean);
+        if (declaredPassivatingScope == null) {
+            return true;
+        }
+
         Method producerMethod = producerBean.getProducerMethod();
         if (producerMethod != null) {
             Class<?> returnType = producerMethod.getReturnType();
@@ -923,7 +955,7 @@ public class CDI41InjectionValidator {
                 knowledgeBase.addError(
                         "Producer method " + producerMethod.getName() + " of class " +
                                 producerBean.getDeclaringClass().getName() +
-                                " declares passivating scope @" + bean.getScope().getSimpleName() +
+                                " declares passivating scope @" + declaredPassivatingScope.getSimpleName() +
                                 " but has final non-serializable return type " + returnType.getName()
                 );
                 return false;
@@ -939,13 +971,34 @@ public class CDI41InjectionValidator {
                 knowledgeBase.addError(
                         "Producer field " + producerField.getName() + " of class " +
                                 producerBean.getDeclaringClass().getName() +
-                                " declares passivating scope @" + bean.getScope().getSimpleName() +
+                                " declares passivating scope @" + declaredPassivatingScope.getSimpleName() +
                                 " but has final non-serializable type " + fieldType.getName()
                 );
                 return false;
             }
         }
         return true;
+    }
+
+    private Class<? extends Annotation> resolvePassivatingScopeDeclaredOnProducerMember(ProducerBean<?> producerBean) {
+        Method producerMethod = producerBean.getProducerMethod();
+        if (producerMethod != null) {
+            for (Annotation annotation : producerMethod.getAnnotations()) {
+                if (isPassivationCapableScope(annotation.annotationType())) {
+                    return annotation.annotationType();
+                }
+            }
+        }
+
+        Field producerField = producerBean.getProducerField();
+        if (producerField != null) {
+            for (Annotation annotation : producerField.getAnnotations()) {
+                if (isPassivationCapableScope(annotation.annotationType())) {
+                    return annotation.annotationType();
+                }
+            }
+        }
+        return null;
     }
 
     private boolean validateInterceptorsAndDecoratorsPassivation(Bean<?> bean, Collection<Bean<?>> validBeans) {
@@ -1203,6 +1256,11 @@ public class CDI41InjectionValidator {
      * @return true if it's a normal scope
      */
     private boolean isNormalScope(Class<? extends Annotation> scopeAnnotation) {
+        ScopeMetadata registeredScope = knowledgeBase.getScopeMetadata(scopeAnnotation);
+        if (registeredScope != null) {
+            return registeredScope.isNormal();
+        }
+
         String scopeName = scopeAnnotation.getName();
         return scopeName.equals("jakarta.enterprise.context.ApplicationScoped") ||
                scopeName.equals("jakarta.enterprise.context.SessionScoped") ||
@@ -1917,7 +1975,10 @@ public class CDI41InjectionValidator {
         if (bean instanceof ProducerBean) {
             ProducerBean<?> producerBean = (ProducerBean<?>) bean;
             Bean<?> declaringBean = findDeclaringBean(producerBean.getDeclaringClass());
-            if (declaringBean != null && !isBeanEnabledForResolution(declaringBean)) {
+            if (declaringBean == null) {
+                return false;
+            }
+            if (!isBeanEnabledForResolution(declaringBean)) {
                 return false;
             }
             if (!bean.isAlternative()) {

@@ -748,7 +748,10 @@ public class BeanResolver implements DependencyResolver {
         if (bean instanceof ProducerBean) {
             ProducerBean<?> producerBean = (ProducerBean<?>) bean;
             Bean<?> declaringBean = findDeclaringBean(producerBean.getDeclaringClass());
-            if (declaringBean != null && !isBeanEnabledForResolution(declaringBean)) {
+            if (declaringBean == null) {
+                return false;
+            }
+            if (!isBeanEnabledForResolution(declaringBean)) {
                 return false;
             }
             if (!bean.isAlternative()) {

@@ -25,6 +25,8 @@ import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.interceptor.Interceptor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -49,6 +51,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Execution(ExecutionMode.SAME_THREAD)
 @Isolated
 public class BuildCompatibleExtensionInterfaceTest {
+
+    private CdiStateSnapshot cdiStateSnapshot;
+
+    @BeforeEach
+    void captureCdiState() throws Exception {
+        cdiStateSnapshot = CdiStateSnapshot.capture();
+    }
+
+    @AfterEach
+    void restoreCdiState() throws Exception {
+        if (cdiStateSnapshot != null) {
+            cdiStateSnapshot.restore();
+        }
+        SyringeCDIProvider.unregisterThreadLocalCDI();
+        SyringeCDIProvider.unregisterGlobalCDI();
+    }
 
     @Test
     @DisplayName("12.1 - BuildCompatibleExtension is an empty marker interface")

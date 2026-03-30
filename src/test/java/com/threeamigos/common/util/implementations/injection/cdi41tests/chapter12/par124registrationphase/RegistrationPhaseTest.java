@@ -85,6 +85,14 @@ public class RegistrationPhaseTest {
     }
 
     @Test
+    @DisplayName("12.4 - TCK parity (RegistrationTest): registration phase processes BeanInfo, ObserverInfo and interceptor registrations for matching types")
+    public void shouldMatchTckRegistrationTest() {
+        shouldInvokeBeanInfoForMatchingBeanTypes();
+        shouldInvokeObserverInfoForMatchingObservedEventTypes();
+        shouldInvokeInterceptorInfoForMatchingInterceptorTypes();
+    }
+
+    @Test
     @DisplayName("12.4 - Registration method with unsupported parameter type is a deployment problem")
     public void shouldFailDeploymentForUnsupportedRegistrationParameterType() {
         Syringe syringe = newSyringe();

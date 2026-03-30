@@ -1037,6 +1037,14 @@ public class BeanManagerTest {
     }
 
     @Test
+    @DisplayName("23.3 - TCK parity (full.extensions.beanManager.bean.SyntheticBeanTest): BeanManager synthetic bean creation APIs support class beans, producer-backed beans and passivation-capable beans")
+    void shouldMatchTckSyntheticBeanCreationScenarios() {
+        shouldCreateBeanFromInjectionTargetFactoryUsingProvidedMetadata();
+        shouldCreateBeanFromProducerFactoryUsingProvidedMetadata();
+        shouldReturnPassivationCapableBeanById();
+    }
+
+    @Test
     @DisplayName("23.3.18 - getExtension returns container instance of registered extension class")
     void shouldReturnContainerExtensionInstance() {
         Syringe syringe = newSyringe(BeanManagerConsumer.class);

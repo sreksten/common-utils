@@ -74,6 +74,7 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -384,6 +385,22 @@ public class ContainerLifecycleEventsTest {
     }
 
     @Test
+    @DisplayName("23.6 - TCK parity (full.extensions.lifecycle.bbd.BeforeBeanDiscoveryTest): BeforeBeanDiscovery supports metadata registration and annotated type addition")
+    void shouldMatchTckBeforeBeanDiscoveryTest() {
+        shouldSupportBeforeBeanDiscoveryMetadataRegistrationMethods();
+        shouldAddAnnotatedTypesDuringBeforeBeanDiscovery();
+    }
+
+    @Test
+    @DisplayName("23.6 - TCK parity (full.extensions.lifecycle.bbd.broken.normalScope.AddingNormalScopeTest): adding a normal scope for an unproxyable final bean causes deployment failure")
+    void shouldMatchTckAddingNormalScopeTest() {
+        Syringe syringe = newIsolatedSyringe(TckNormalScopeConsumer.class, TckNormalScopeFinalBean.class);
+        syringe.addExtension(TckAddingNormalScopeExtension.class.getName());
+
+        assertThrows(DeploymentException.class, syringe::setup);
+    }
+
+    @Test
     @DisplayName("23.6.1 - BeforeBeanDiscovery configurators can declare qualifier and interceptor binding types")
     void shouldSupportQualifierAndInterceptorBindingConfigurators() {
         ConfiguratorMetadataRecorder.reset();
@@ -526,6 +543,13 @@ public class ContainerLifecycleEventsTest {
 
         assertNotNull(syringe.inject(AddedByAfterTypeDiscovery.class));
         assertNotNull(syringe.inject(AddedByAfterTypeDiscoveryConfigurator.class));
+    }
+
+    @Test
+    @DisplayName("23.6 - TCK parity (full.extensions.lifecycle.atd.AfterTypeDiscoveryTest): AfterTypeDiscovery mutations and annotated type registration affect discovery outcome")
+    void shouldMatchTckAfterTypeDiscoveryTest() {
+        shouldUseFinalMutatedListsAfterAfterTypeDiscoveryObservers();
+        shouldAddAnnotatedTypesDuringAfterTypeDiscovery();
     }
 
     @Test
@@ -1367,6 +1391,12 @@ public class ContainerLifecycleEventsTest {
         syringe.addExtension(ProcessBeanAttributesAddDefinitionErrorExtension.class.getName());
 
         assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("23.6 - TCK parity (full.extensions.lifecycle.processBeanAttributes.broken.AddDefinitionErrorTest): addDefinitionError during ProcessBeanAttributes fails deployment")
+    void shouldMatchTckProcessBeanAttributesAddDefinitionErrorTest() {
+        shouldAbortDeploymentWhenProcessBeanAttributesAddsDefinitionError();
     }
 
     @Test
@@ -3522,6 +3552,27 @@ public class ContainerLifecycleEventsTest {
     }
 
     public static class AddedViaAnnotatedTypeConfigurator {
+    }
+
+    @Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD})
+    @Retention(RetentionPolicy.RUNTIME)
+    @Documented
+    public @interface TckAddedNormalScope {
+    }
+
+    @TckAddedNormalScope
+    public static final class TckNormalScopeFinalBean {
+    }
+
+    public static class TckNormalScopeConsumer {
+        @Inject
+        TckNormalScopeFinalBean bean;
+    }
+
+    public static class TckAddingNormalScopeExtension implements Extension {
+        public void before(@Observes BeforeBeanDiscovery event) {
+            event.addScope(TckAddedNormalScope.class, true, false);
+        }
     }
 
     @Retention(RetentionPolicy.RUNTIME)
