@@ -12,7 +12,6 @@ import com.threeamigos.common.util.implementations.injection.resolution.Producer
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
-import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
@@ -2531,10 +2530,6 @@ public class CDI41InjectionValidator {
                 knowledgeBase.isRegisteredQualifier(annotation.annotationType())) {
                 qualifiers.add(annotation);
             }
-        }
-        // Observer methods with no explicit qualifiers observe events with @Any.
-        if (qualifiers.isEmpty()) {
-            qualifiers.add(new AnyLiteral());
         }
         return qualifiers;
     }

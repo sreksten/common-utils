@@ -1321,8 +1321,10 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
+        boolean allowTypeVariableArguments =
+                hasDecoratorAnnotation(field.getDeclaringClass()) && hasDelegateAnnotation(field);
         try {
-            checkInjectionTypeValidity(field.getGenericType());
+            checkInjectionTypeValidity(field.getGenericType(), allowTypeVariableArguments);
         } catch (IllegalArgumentException e) {
             knowledgeBase.addInjectionError(fmtField(field) + ": " + e.getMessage());
             valid = false;
@@ -2737,6 +2739,10 @@ public class CDI41BeanValidator {
     }
 
     private void checkInjectionTypeValidity(Type type) {
+        checkInjectionTypeValidity(type, false);
+    }
+
+    private void checkInjectionTypeValidity(Type type, boolean allowTypeVariableArguments) {
         if (type instanceof Class && jakarta.enterprise.inject.Instance.class.equals(type)) {
             throw new DefinitionException("injection point of raw type Instance is not allowed");
         }
@@ -2772,7 +2778,7 @@ public class CDI41BeanValidator {
         if (type instanceof ParameterizedType) {
             ParameterizedType pt = (ParameterizedType) type;
             for (Type arg : pt.getActualTypeArguments()) {
-                if (arg instanceof TypeVariable) {
+                if (!allowTypeVariableArguments && arg instanceof TypeVariable) {
                     throw new DefinitionException("injection point may not contain type variable arguments (" + arg.getTypeName() + ")");
                 }
             }

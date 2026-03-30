@@ -40,7 +40,6 @@ import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
-import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -2314,9 +2313,6 @@ public class Syringe {
                 qualifiers.add(annotation);
             }
         }
-        if (qualifiers.isEmpty()) {
-            qualifiers.add(new AnyLiteral());
-        }
         return qualifiers;
     }
 
@@ -2333,7 +2329,10 @@ public class Syringe {
         }
         String eventType = String.valueOf(info.getEventType());
         String qualifiers = String.valueOf(info.getQualifiers());
-        return methodKey + "|" + eventType + "|" + qualifiers + "|" + info.isAsync();
+        String declaringBeanClass = info.getDeclaringBean() != null && info.getDeclaringBean().getBeanClass() != null
+                ? info.getDeclaringBean().getBeanClass().getName()
+                : "";
+        return methodKey + "|" + declaringBeanClass + "|" + eventType + "|" + qualifiers + "|" + info.isAsync();
     }
 
     /**

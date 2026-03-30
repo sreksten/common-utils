@@ -59,14 +59,14 @@
 - [x] **org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.field.managed.dependent.ManagedBeanWithIllegalDependencyTest**
 
 ### Interceptors (68)
-- [ ] **org.jboss.cdi.tck.interceptors.tests.order.lifecycleCallback.PostConstructOrderTest**
-- [ ] **org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.ManagedBeanWithNonSerializableInterceptorClassTest**
-- [ ] **org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorNotListedInBeansXml.InterceptorNotListedInBeansXmlNotEnabledTest**
-- [ ] **org.jboss.cdi.tck.interceptors.tests.contract.aroundInvoke.bindings.AroundInvokeInterceptorTest**
-- [ ] **org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.interceptor.ProducerFieldOnInterceptorTest**
-- [ ] **org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.field.PassivationCapableBeanWithNonPassivatingInterceptorTest**
-- [ ] **org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalMethodWithInheritedStereotypeInterceptorTest**
-- [ ] **org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.returnValueIgnored.AroundConstructInterceptorReturnValueTest**
+- [x] **org.jboss.cdi.tck.interceptors.tests.order.lifecycleCallback.PostConstructOrderTest**
+- [x] **org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.ManagedBeanWithNonSerializableInterceptorClassTest**
+- [x] **org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorNotListedInBeansXml.InterceptorNotListedInBeansXmlNotEnabledTest**
+- [x] **org.jboss.cdi.tck.interceptors.tests.contract.aroundInvoke.bindings.AroundInvokeInterceptorTest**
+- [x] **org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.interceptor.ProducerFieldOnInterceptorTest**
+- [x] **org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.field.PassivationCapableBeanWithNonPassivatingInterceptorTest**
+- [x] **org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalMethodWithInheritedStereotypeInterceptorTest**
+- [x] **org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.returnValueIgnored.AroundConstructInterceptorReturnValueTest**
 
 ### Events/observers (59)
 - [ ] **org.jboss.cdi.tck.tests.full.event.observer.extension.BeanManagerObserverNotificationTest**

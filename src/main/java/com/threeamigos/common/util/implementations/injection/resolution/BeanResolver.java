@@ -1139,8 +1139,52 @@ public class BeanResolver implements DependencyResolver {
         Set<Annotation> normalizedQualifiers = new HashSet<>(qualifiers);
         normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
         InjectionPoint ownerInjectionPoint = currentInjectionPoint.get();
-        return new EventImpl<>(eventType, normalizedQualifiers, knowledgeBase, this, contextManager,
+        Event<T> baseEvent = new EventImpl<>(eventType, normalizedQualifiers, knowledgeBase, this, contextManager,
                 transactionServices, contextTokenProvider, ownerInjectionPoint);
+
+        if (owningBeanManager == null) {
+            return baseEvent;
+        }
+
+        Set<Type> eventBeanTypes = new HashSet<Type>();
+        eventBeanTypes.add(Event.class);
+        eventBeanTypes.add(Object.class);
+        eventBeanTypes.add(parameterizedEventType(eventType));
+
+        List<DecoratorInfo> decorators = decoratorResolver.resolve(eventBeanTypes, normalizedQualifiers);
+        if (decorators.isEmpty()) {
+            return baseEvent;
+        }
+
+        @SuppressWarnings("unchecked")
+        Event<T> decoratedEvent = (Event<T>) decoratorAwareProxyGenerator
+                .createDecoratorChain(baseEvent, decorators, owningBeanManager, new CreationalContextImpl<Object>())
+                .getOutermostInstance();
+        return decoratedEvent;
+    }
+
+    private ParameterizedType parameterizedEventType(final Type eventType) {
+        return new ParameterizedType() {
+            @Override
+            public Type[] getActualTypeArguments() {
+                return new Type[]{eventType};
+            }
+
+            @Override
+            public Type getRawType() {
+                return Event.class;
+            }
+
+            @Override
+            public Type getOwnerType() {
+                return null;
+            }
+
+            @Override
+            public String getTypeName() {
+                return "jakarta.enterprise.event.Event<" + eventType.getTypeName() + ">";
+            }
+        };
     }
 
     private Object resolveWithDynamicInjectionPoint(Type dynamicType,

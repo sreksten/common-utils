@@ -925,7 +925,12 @@ public class EventImpl<T> implements Event<T> {
         } else {
             methodKey = "unknown";
         }
-        return methodKey + "|" + observerInfo.getEventType() + "|" + observerInfo.isAsync() + "|" + observerInfo.getTransactionPhase();
+        String declaringBeanClass = observerInfo.getDeclaringBean() != null &&
+                observerInfo.getDeclaringBean().getBeanClass() != null
+                ? observerInfo.getDeclaringBean().getBeanClass().getName()
+                : "";
+        return methodKey + "|" + declaringBeanClass + "|" + observerInfo.getEventType() + "|" +
+                observerInfo.isAsync() + "|" + observerInfo.getTransactionPhase();
     }
 
     /**
@@ -1272,6 +1277,12 @@ public class EventImpl<T> implements Event<T> {
      * the invocation is skipped and a warning is logged once per scope type.
      */
     private ContextActivation ensureObserverContext(ObserverMethodInfo observer) {
+        Method observerMethod = observer.getObserverMethod();
+        if (observerMethod != null && Modifier.isStatic(observerMethod.getModifiers())) {
+            // Static observer methods do not require a contextual instance.
+            return ContextActivation.NOOP;
+        }
+
         Bean<?> declaringBean = observer.getDeclaringBean();
         if (declaringBean == null) {
             return ContextActivation.NOOP; // Synthetic or unknown bean; proceed
