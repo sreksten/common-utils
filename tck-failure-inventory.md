@@ -69,14 +69,14 @@
 - [x] **org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.returnValueIgnored.AroundConstructInterceptorReturnValueTest**
 
 ### Events/observers (59)
-- [ ] **org.jboss.cdi.tck.tests.full.event.observer.extension.BeanManagerObserverNotificationTest**
-- [ ] **org.jboss.cdi.tck.tests.event.broken.observer.inject.DeploymentFailureTest**
-- [ ] **org.jboss.cdi.tck.tests.event.broken.observer.dependentIsConditionalObserver.DependentIsConditionalObserverTest**
-- [ ] **org.jboss.cdi.tck.tests.event.observer.param.modification.SyncEventModificationTest**
-- [ ] **org.jboss.cdi.tck.tests.event.EventTest**
-- [ ] **org.jboss.cdi.tck.tests.full.decorators.builtin.event.BuiltinEventDecoratorTest**
-- [ ] **org.jboss.cdi.tck.tests.event.resolve.typeWithParameters.ChecksEventTypeWhenResolvingTest**
-- [ ] **org.jboss.cdi.tck.tests.event.observer.method.ObserverMethodTest**
+- [x] **org.jboss.cdi.tck.tests.full.event.observer.extension.BeanManagerObserverNotificationTest**
+- [x] **org.jboss.cdi.tck.tests.event.broken.observer.inject.DeploymentFailureTest**
+- [x] **org.jboss.cdi.tck.tests.event.broken.observer.dependentIsConditionalObserver.DependentIsConditionalObserverTest**
+- [x] **org.jboss.cdi.tck.tests.event.observer.param.modification.SyncEventModificationTest**
+- [x] **org.jboss.cdi.tck.tests.event.EventTest**
+- [x] **org.jboss.cdi.tck.tests.full.decorators.builtin.event.BuiltinEventDecoratorTest**
+- [x] **org.jboss.cdi.tck.tests.event.resolve.typeWithParameters.ChecksEventTypeWhenResolvingTest**
+- [x] **org.jboss.cdi.tck.tests.event.observer.method.ObserverMethodTest**
 
 ### Alternatives/stereotypes/specialization (35)
 - [ ] **org.jboss.cdi.tck.tests.alternative.selection.stereotype.priority.StereotypeWithAlternativeSelectedByPriorityTest**

@@ -64,6 +64,7 @@ public class CDI41BeanValidator {
     private final BeanTypesExtractor beanTypesExtractor;
     private final TypeChecker typeChecker;
     private final boolean cdiFullLegacyInterceptionEnabled;
+    private final Map<Class<?>, Class<?>> specializingBeansBySuperclass = new HashMap<>();
     private Annotation[] overrideAnnotations;
     private Class<?> overrideAnnotationsClass;
 
@@ -2415,7 +2416,8 @@ public class CDI41BeanValidator {
         if (!isCandidateBeanClass(direct, directMode)
                 || Modifier.isAbstract(direct.getModifiers())
                 || hasInterceptorAnnotation(direct)
-                || hasDecoratorAnnotation(direct)) {
+                || hasDecoratorAnnotation(direct)
+                || !hasValidBeanConstructorSignature(direct)) {
             return ancestors;
         }
 
@@ -2433,7 +2435,8 @@ public class CDI41BeanValidator {
             if (!isCandidateBeanClass(parent, mode)
                     || Modifier.isAbstract(parent.getModifiers())
                     || hasInterceptorAnnotation(parent)
-                    || hasDecoratorAnnotation(parent)) {
+                    || hasDecoratorAnnotation(parent)
+                    || !hasValidBeanConstructorSignature(parent)) {
                 break;
             }
             ancestors.add(parent);
@@ -2459,6 +2462,9 @@ public class CDI41BeanValidator {
         if (!hasSpecializesAnnotation(clazz)) {
             return;
         }
+        if (!isSpecializingBeanEnabled(clazz)) {
+            return;
+        }
 
         Class<?> directSuperclass = clazz.getSuperclass();
         if (directSuperclass == null || Object.class.equals(directSuperclass)) {
@@ -2475,13 +2481,48 @@ public class CDI41BeanValidator {
         boolean managedBeanSuperclass = isCandidateBeanClass(directSuperclass, superMode)
                 && !Modifier.isAbstract(directSuperclass.getModifiers())
                 && !hasInterceptorAnnotation(directSuperclass)
-                && !hasDecoratorAnnotation(directSuperclass);
+                && !hasDecoratorAnnotation(directSuperclass)
+                && hasValidBeanConstructorSignature(directSuperclass);
 
         if (!managedBeanSuperclass) {
             knowledgeBase.addDefinitionError(clazz.getName() +
                     ": declares @Specializes but direct superclass " + directSuperclass.getName() +
                     " is not a managed bean");
+            return;
         }
+
+        Class<?> previousSpecializingClass = specializingBeansBySuperclass.putIfAbsent(directSuperclass, clazz);
+        if (previousSpecializingClass != null && !previousSpecializingClass.equals(clazz)) {
+            knowledgeBase.addError(clazz.getName() +
+                    ": inconsistent specialization. Both " + previousSpecializingClass.getName() +
+                    " and " + clazz.getName() + " specialize " + directSuperclass.getName());
+        }
+    }
+
+    private boolean isSpecializingBeanEnabled(Class<?> clazz) {
+        boolean alternativeDeclared = isAlternativeDeclared(clazz);
+        if (!alternativeDeclared) {
+            return true;
+        }
+        return isAlternativeEnabled(clazz, clazz, true);
+    }
+
+    private boolean hasValidBeanConstructorSignature(Class<?> clazz) {
+        List<Constructor<?>> injectConstructors = Arrays.stream(clazz.getDeclaredConstructors())
+                .filter(AnnotationsEnum::hasInjectAnnotation)
+                .collect(Collectors.toList());
+
+        if (injectConstructors.size() > 1) {
+            return false;
+        }
+
+        if (injectConstructors.size() == 1) {
+            return !Modifier.isPrivate(injectConstructors.get(0).getModifiers());
+        }
+
+        return Arrays.stream(clazz.getDeclaredConstructors())
+                .anyMatch(constructor ->
+                        constructor.getParameterCount() == 0 && !Modifier.isPrivate(constructor.getModifiers()));
     }
 
     private boolean isScopeAnnotationType(Class<? extends Annotation> at) {

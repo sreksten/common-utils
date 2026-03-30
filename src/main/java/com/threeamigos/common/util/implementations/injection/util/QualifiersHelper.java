@@ -74,9 +74,11 @@ public final class QualifiersHelper {
 
         boolean hasNonNamedNonAnyQualifier = qualifiers.stream()
                 .map(Annotation::annotationType)
-                .anyMatch(type -> !hasNamedAnnotation(type) && !hasAnyAnnotation(type));
+                .anyMatch(type -> !hasNamedAnnotation(type) && !hasAnyAnnotation(type) && !hasDefaultAnnotation(type));
 
-        if (!hasNonNamedNonAnyQualifier) {
+        if (hasNonNamedNonAnyQualifier) {
+            qualifiers.removeIf(q -> hasDefaultAnnotation(q.annotationType()));
+        } else {
             qualifiers.add(new DefaultLiteral());
         }
         qualifiers.add(new AnyLiteral());
