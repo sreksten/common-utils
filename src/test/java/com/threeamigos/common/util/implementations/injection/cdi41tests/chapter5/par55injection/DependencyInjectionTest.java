@@ -619,6 +619,19 @@ public class DependencyInjectionTest {
         syringe.exclude(DecoratorBeanMetadataTypeParameterTckParityTest.InvalidDecoratorMetadataField.class);
         syringe.exclude(DecoratorBeanMetadataTypeParameterTckParityTest.InvalidDecoratorMetadataConstructor.class);
         syringe.exclude(DecoratorBeanMetadataTypeParameterTckParityTest.InvalidDecoratedBeanMetadataField.class);
+        excludeParityClassAndNested(syringe,
+                "com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par55injection.par558.BuiltinMetadataAndInjectionParityTckTest");
+    }
+
+    private void excludeParityClassAndNested(Syringe syringe, String className) {
+        try {
+            Class<?> clazz = Class.forName(className);
+            syringe.exclude(clazz);
+            for (Class<?> nested : clazz.getDeclaredClasses()) {
+                syringe.exclude(nested);
+            }
+        } catch (ClassNotFoundException ignored) {
+        }
     }
 
     private boolean containsCause(Throwable throwable, Class<? extends Throwable> type) {

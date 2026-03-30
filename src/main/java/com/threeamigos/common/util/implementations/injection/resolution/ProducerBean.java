@@ -645,8 +645,7 @@ public class ProducerBean<T> implements Bean<T> {
     private Object resolveProducerParameter(Parameter parameter) {
         if (dependencyResolver instanceof BeanResolver) {
             BeanResolver beanResolver = (BeanResolver) dependencyResolver;
-            BeanImpl syntheticDeclaringBean = new BeanImpl(declaringClass, false);
-            beanResolver.setCurrentInjectionPoint(new InjectionPointImpl(parameter, syntheticDeclaringBean));
+            beanResolver.setCurrentInjectionPoint(new InjectionPointImpl(parameter, this));
             try {
                 return dependencyResolver.resolve(
                         parameter.getParameterizedType(),
@@ -673,8 +672,7 @@ public class ProducerBean<T> implements Bean<T> {
             }
         }
 
-        BeanImpl syntheticDeclaringBean = new BeanImpl(declaringClass, false);
-        return new InjectionPointImpl(parameter, syntheticDeclaringBean);
+        return new InjectionPointImpl(parameter, this);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
