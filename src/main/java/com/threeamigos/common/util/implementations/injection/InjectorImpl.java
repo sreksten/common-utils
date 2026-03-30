@@ -1519,6 +1519,11 @@ public class InjectorImpl implements Injector {
         scopeRegistry.clear();
         registerDefaultScopes();
         injectedStaticClasses.clear();
+        STACK_POOL.remove();
+    }
+
+    public static void clearThreadLocalState() {
+        STACK_POOL.remove();
     }
 
     /**
@@ -1544,5 +1549,6 @@ public class InjectorImpl implements Injector {
             }
         }
         classResolver.clearCaches();
+        STACK_POOL.remove();
     }
 }

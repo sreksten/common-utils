@@ -942,6 +942,7 @@ public class Syringe {
         ConversationPropagationRegistry.clear();
         DestroyedInstanceTracker.clear();
         EventImpl.clearStaticState();
+        InjectorImpl.clearThreadLocalState();
         SyringeCDIProvider.unregisterThreadLocalCDI();
         SyringeCDIProvider.unregisterGlobalCDI();
     }

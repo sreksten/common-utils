@@ -3,15 +3,20 @@ package com.threeamigos.common.util.implementations.injection;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.BeanManagerBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ConversationBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.InjectionPointBean;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorResolver;
+import com.threeamigos.common.util.implementations.injection.events.propagation.ConversationPropagationRegistry;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
+import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.scopes.ConversationImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.discovery.CDI41BeanValidator;
 import com.threeamigos.common.util.implementations.injection.discovery.CDI41InjectionValidator;
+import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
@@ -471,6 +476,39 @@ public class InjectorImpl2 implements Injector {
     public void shutdown() {
         // Destroy all contexts (calls @PreDestroy on beans)
         contextManager.destroyAll();
+
+        ClassLoader classLoader = beanManager != null ? beanManager.getRegistrationClassLoader() : null;
+        if (classLoader == null) {
+            classLoader = Thread.currentThread().getContextClassLoader();
+        }
+        if (classLoader == null) {
+            classLoader = InjectorImpl2.class.getClassLoader();
+        }
+
+        try {
+            beanManager.clearRuntimeState();
+        } catch (Exception ignored) {
+            // Best-effort cleanup.
+        }
+        try {
+            beanManager.unregisterFromGlobalRegistries();
+        } catch (Exception ignored) {
+            // Best-effort cleanup.
+        }
+
+        ClientProxyGenerator.unregisterContainer(classLoader);
+        InterceptorAwareProxyGenerator.clearTargetAroundInvokeCacheForClassLoader(classLoader);
+        InterceptorAwareProxyGenerator.clearTargetAroundInvokeCache();
+        BeansXmlParser.clearJaxbContextCacheForClassLoader(classLoader);
+        AnnotationsEnum.clearDynamicAnnotationsForClassLoader(classLoader);
+        ConversationImpl.clearAllGlobalState();
+        ConversationPropagationRegistry.clear();
+        DestroyedInstanceTracker.clear();
+        EventImpl.clearStaticState();
+        InjectorImpl.clearThreadLocalState();
+        SyringeCDIProvider.unregisterThreadLocalCDI();
+        SyringeCDIProvider.unregisterGlobalCDI();
+        knowledgeBase.clearAllState();
     }
 
     /**

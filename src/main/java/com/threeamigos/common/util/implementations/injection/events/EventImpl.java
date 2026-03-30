@@ -45,6 +45,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -105,16 +106,51 @@ public class EventImpl<T> implements Event<T> {
     private static final AtomicBoolean TRANSACTION_DOWNGRADE_WARNED = new AtomicBoolean(false);
     private static final ConcurrentHashMap<Class<? extends Annotation>, AtomicBoolean> INACTIVE_SCOPE_WARNED =
         new ConcurrentHashMap<>();
-    private static final Executor DEFAULT_ASYNC_EXECUTOR = Executors.newCachedThreadPool(new ThreadFactory() {
-        private final AtomicInteger counter = new AtomicInteger(1);
+    private static volatile ExecutorService defaultAsyncExecutor = createDefaultAsyncExecutor();
 
-        @Override
-        public Thread newThread(@Nonnull Runnable runnable) {
-            Thread thread = new Thread(runnable, "syringe-event-async-" + counter.getAndIncrement());
-            thread.setDaemon(true);
-            return thread;
+    private static ExecutorService createDefaultAsyncExecutor() {
+        return Executors.newCachedThreadPool(new ThreadFactory() {
+            private final AtomicInteger counter = new AtomicInteger(1);
+
+            @Override
+            public Thread newThread(@Nonnull Runnable runnable) {
+                Thread thread = new Thread(runnable, "syringe-event-async-" + counter.getAndIncrement());
+                thread.setDaemon(true);
+                try {
+                    thread.setContextClassLoader(EventImpl.class.getClassLoader());
+                } catch (SecurityException ignored) {
+                    // Best-effort only.
+                }
+                return thread;
+            }
+        });
+    }
+
+    private static ExecutorService getDefaultAsyncExecutor() {
+        ExecutorService executor = defaultAsyncExecutor;
+        if (executor != null && !executor.isShutdown() && !executor.isTerminated()) {
+            return executor;
         }
-    });
+        synchronized (EventImpl.class) {
+            executor = defaultAsyncExecutor;
+            if (executor == null || executor.isShutdown() || executor.isTerminated()) {
+                defaultAsyncExecutor = createDefaultAsyncExecutor();
+                executor = defaultAsyncExecutor;
+            }
+            return executor;
+        }
+    }
+
+    private static void shutdownDefaultAsyncExecutor() {
+        ExecutorService executor;
+        synchronized (EventImpl.class) {
+            executor = defaultAsyncExecutor;
+            defaultAsyncExecutor = null;
+        }
+        if (executor != null) {
+            executor.shutdownNow();
+        }
+    }
 
     /**
      * Creates an Event instance for firing events of a specific type with qualifiers.
@@ -346,7 +382,7 @@ public class EventImpl<T> implements Event<T> {
      */
     @Override
     public <U extends T> CompletionStage<U> fireAsync(U event) {
-        return fireAsync(event, NotificationOptions.ofExecutor(DEFAULT_ASYNC_EXECUTOR));
+        return fireAsync(event, NotificationOptions.ofExecutor(getDefaultAsyncExecutor()));
     }
 
     /**
@@ -387,7 +423,7 @@ public class EventImpl<T> implements Event<T> {
         // Get executor from options or use default
         Executor executor = options.getExecutor();
         if (executor == null) {
-            executor = DEFAULT_ASYNC_EXECUTOR;
+            executor = getDefaultAsyncExecutor();
         }
 
         // Create an async task
@@ -692,6 +728,7 @@ public class EventImpl<T> implements Event<T> {
     public static void clearStaticState() {
         TRANSACTION_DOWNGRADE_WARNED.set(false);
         INACTIVE_SCOPE_WARNED.clear();
+        shutdownDefaultAsyncExecutor();
     }
 
     private boolean containsUnresolvableTypeVariable(Type type) {

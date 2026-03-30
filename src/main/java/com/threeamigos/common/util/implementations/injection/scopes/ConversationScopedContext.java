@@ -60,6 +60,11 @@ public class ConversationScopedContext implements ScopeContext {
     private final ScheduledExecutorService timeoutScheduler = Executors.newScheduledThreadPool(1, r -> {
         Thread t = new Thread(r, "ConversationTimeout-Cleaner");
         t.setDaemon(true); // Don't prevent JVM shutdown
+        try {
+            t.setContextClassLoader(ConversationScopedContext.class.getClassLoader());
+        } catch (SecurityException ignored) {
+            // Best-effort only.
+        }
         return t;
     });
 

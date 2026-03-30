@@ -46,6 +46,7 @@ public class SyringeCDIProvider implements CDIProvider {
      * Global CDI instance (used when thread-local is not set).
      */
     private static volatile CDI<Object> globalCDI;
+    private static final SyringeCDIProvider PROVIDER_INSTANCE = new SyringeCDIProvider();
 
     /**
      * Returns the CDI instance for the current context.
@@ -142,7 +143,7 @@ public class SyringeCDIProvider implements CDIProvider {
      * In that case we best-effort replace the configured provider with Syringe provider.
      */
     public static void ensureProviderConfigured() {
-        SyringeCDIProvider provider = new SyringeCDIProvider();
+        SyringeCDIProvider provider = PROVIDER_INSTANCE;
         try {
             CDI.setCDIProvider(provider);
             return;
@@ -164,7 +165,11 @@ public class SyringeCDIProvider implements CDIProvider {
             Set<CDIProvider> discovered = (Set<CDIProvider>) discoveredProviders.get(null);
             Set<CDIProvider> updated = new HashSet<CDIProvider>();
             if (discovered != null) {
-                updated.addAll(discovered);
+                for (CDIProvider discoveredProvider : discovered) {
+                    if (!(discoveredProvider instanceof SyringeCDIProvider)) {
+                        updated.add(discoveredProvider);
+                    }
+                }
             }
             updated.add(provider);
             discoveredProviders.set(null, updated);

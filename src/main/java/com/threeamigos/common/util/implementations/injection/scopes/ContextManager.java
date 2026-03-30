@@ -12,6 +12,7 @@ import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -141,6 +142,7 @@ public class ContextManager {
             return;
         }
 
+        Map<ScopeContext, Boolean> destroyedContexts = new IdentityHashMap<ScopeContext, Boolean>();
         ScopeContext applicationScopeContext = contexts.get(ApplicationScoped.class);
         ApplicationContextLifecycleListener applicationListener = applicationContextLifecycleListener;
         if (applicationScopeContext != null) {
@@ -149,6 +151,7 @@ public class ContextManager {
                     applicationListener.onBeforeDestroyed();
                 }
                 applicationScopeContext.destroy();
+                destroyedContexts.put(applicationScopeContext, Boolean.TRUE);
                 if (applicationListener != null) {
                     applicationListener.onDestroyed();
                 }
@@ -157,16 +160,33 @@ public class ContextManager {
             }
         }
 
-        for (Map.Entry<Class<? extends Annotation>, ScopeContext> entry : contexts.entrySet()) {
+        // Destroy all registered contexts, including additional custom contexts per scope.
+        for (Map.Entry<Class<? extends Annotation>, List<ScopeContext>> entry : contextsByScope.entrySet()) {
             if (APPLICATION_SCOPED.matches(entry.getKey())) {
                 continue;
             }
-            try {
-                entry.getValue().destroy();
-            } catch (Exception e) {
-                messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
+            List<ScopeContext> registered = entry.getValue();
+            if (registered == null) {
+                continue;
+            }
+            for (ScopeContext scopeContext : registered) {
+                if (scopeContext == null || destroyedContexts.containsKey(scopeContext)) {
+                    continue;
+                }
+                try {
+                    scopeContext.destroy();
+                } catch (Exception e) {
+                    messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
+                } finally {
+                    destroyedContexts.put(scopeContext, Boolean.TRUE);
+                }
             }
         }
+
+        // If built-in contexts were replaced, ensure original built-in instances are also destroyed.
+        destroyContextIfNeeded(conversationContext, destroyedContexts);
+        destroyContextIfNeeded(sessionContext, destroyedContexts);
+        destroyContextIfNeeded(requestContext, destroyedContexts);
 
         // Ensure ThreadLocal state is released for the current thread at shutdown.
         try {
@@ -190,6 +210,19 @@ public class ContextManager {
         applicationContextLifecycleListener = null;
 
         destroyed = true;
+    }
+
+    private void destroyContextIfNeeded(ScopeContext context, Map<ScopeContext, Boolean> destroyedContexts) {
+        if (context == null || destroyedContexts.containsKey(context)) {
+            return;
+        }
+        try {
+            context.destroy();
+        } catch (Exception e) {
+            messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
+        } finally {
+            destroyedContexts.put(context, Boolean.TRUE);
+        }
     }
 
     // === Conversation Scope Management ===
@@ -362,11 +395,17 @@ public class ContextManager {
             throw new IllegalArgumentException("Context cannot be null");
         }
         if (isBuiltInScope(scopeAnnotation)) {
+            ScopeContext previousContext = contexts.get(scopeAnnotation);
+            List<ScopeContext> previousRegisteredContexts = contextsByScope.get(scopeAnnotation);
+
             // CDI allows extensions to replace built-in contexts; keep a single active mapping.
             CopyOnWriteArrayList<ScopeContext> replacement = new CopyOnWriteArrayList<ScopeContext>();
             replacement.add(context);
             contextsByScope.put(scopeAnnotation, replacement);
             contexts.put(scopeAnnotation, context);
+
+            // Avoid leaking replaced built-in contexts (especially conversation timeout schedulers).
+            destroyReplacedBuiltInContexts(previousContext, previousRegisteredContexts, context);
             return;
         }
         List<ScopeContext> registered =
@@ -379,6 +418,34 @@ public class ContextManager {
         registered.add(context);
         if (!contexts.containsKey(scopeAnnotation)) {
             contexts.put(scopeAnnotation, context);
+        }
+    }
+
+    private void destroyReplacedBuiltInContexts(ScopeContext previousContext,
+                                                List<ScopeContext> previousRegisteredContexts,
+                                                ScopeContext replacementContext) {
+        Map<ScopeContext, Boolean> destroyed = new IdentityHashMap<ScopeContext, Boolean>();
+        destroyContextIfReplaced(previousContext, replacementContext, destroyed);
+        if (previousRegisteredContexts == null) {
+            return;
+        }
+        for (ScopeContext scopeContext : previousRegisteredContexts) {
+            destroyContextIfReplaced(scopeContext, replacementContext, destroyed);
+        }
+    }
+
+    private void destroyContextIfReplaced(ScopeContext candidate,
+                                          ScopeContext replacementContext,
+                                          Map<ScopeContext, Boolean> destroyed) {
+        if (candidate == null || candidate == replacementContext || destroyed.containsKey(candidate)) {
+            return;
+        }
+        try {
+            candidate.destroy();
+        } catch (Exception e) {
+            messageHandler.handleErrorMessage("Error destroying replaced context: " + e.getMessage());
+        } finally {
+            destroyed.put(candidate, Boolean.TRUE);
         }
     }
 
