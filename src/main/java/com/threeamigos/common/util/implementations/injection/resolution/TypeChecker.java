@@ -430,28 +430,14 @@ public class TypeChecker {
             return true;
         }
 
-        // CDI 4.1 observer rule: raw event type is assignable to parameterized observed type
-        // when observed type parameters are only Object or unbounded type variables.
+        // Raw candidate types are assignable to parameterized targets when raw types are compatible.
+        // This mirrors Java raw-type assignment semantics and allows generic bean classes (e.g. Baz<T>)
+        // to satisfy parameterized injection points (e.g. Baz<List<Qux>>).
         if (target instanceof ParameterizedType && candidate instanceof Class<?>) {
-            ParameterizedType observed = (ParameterizedType) target;
-            Class<?> rawObserved = (Class<?>) observed.getRawType();
-            Class<?> rawEvent = (Class<?>) candidate;
-            if (rawObserved.equals(rawEvent)) {
-                for (Type arg : observed.getActualTypeArguments()) {
-                    if (Object.class.equals(arg)) {
-                        continue;
-                    }
-                    if (arg instanceof TypeVariable) {
-                        TypeVariable<?> tv = (TypeVariable<?>) arg;
-                        Type[] bounds = tv.getBounds();
-                        if (bounds == null || bounds.length == 0 || isOnlyObjectBound(bounds)) {
-                            continue;
-                        }
-                    }
-                    return false;
-                }
-                return true;
-            }
+            ParameterizedType targetParameterized = (ParameterizedType) target;
+            Class<?> rawTarget = (Class<?>) targetParameterized.getRawType();
+            Class<?> rawCandidate = (Class<?>) candidate;
+            return rawTarget.isAssignableFrom(rawCandidate);
         }
 
         if (target instanceof ParameterizedType && candidate instanceof ParameterizedType) {

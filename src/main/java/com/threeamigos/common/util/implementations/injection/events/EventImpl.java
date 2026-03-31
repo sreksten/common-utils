@@ -11,6 +11,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
+import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
@@ -22,6 +23,7 @@ import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.NotificationOptions;
 import jakarta.enterprise.event.ObserverException;
@@ -1063,6 +1065,13 @@ public class EventImpl<T> implements Event<T> {
                 } else {
                     // Other parameters are injection points - resolve them
                     Type paramType = param.getParameterizedType();
+                    if (declaringBean != null && declaringBean.getBeanClass() != null) {
+                        paramType = GenericTypeResolver.resolve(
+                                param.getParameterizedType(),
+                                declaringBean.getBeanClass(),
+                                method.getDeclaringClass()
+                        );
+                    }
                     Annotation[] paramAnnotations = param.getAnnotations();
                     args[i] = resolveObserverParameterWithContext(param, paramType, paramAnnotations, declaringBean);
                 }
@@ -1077,13 +1086,29 @@ public class EventImpl<T> implements Event<T> {
                 // For Reception.ALWAYS (default): This will create the bean if it doesn't exist
                 // For Reception.IF_EXISTS: This is only called after checking bean existence
                 if (declaringBean != null && AnnotationsEnum.hasDependentAnnotation(method.getDeclaringClass())) {
-                    BeanManager beanManager = CDI.current().getBeanManager();
+                    BeanManager beanManager = resolveBeanManager();
                     observerCreationalContext = beanManager.createCreationalContext(declaringBean);
                     beanInstance = beanManager.getReference(declaringBean, declaringBean.getBeanClass(),
                             observerCreationalContext);
                     destroyDependentReceiverExplicitly = true;
                 } else if (declaringBean != null) {
-                    beanInstance = beanResolver.resolveDeclaringBeanInstance(declaringBean.getBeanClass());
+                    // Observer receiver must be the current contextual instance, not a client proxy shell.
+                    if (contextManager != null
+                            && contextManager.isNormalScope(declaringBean.getScope())
+                            && REQUEST_SCOPED.matches(declaringBean.getScope())
+                            && !isContainerLifecycleEvent(event)) {
+                        @SuppressWarnings({"unchecked", "rawtypes"})
+                        CreationalContext<Object> context =
+                                (CreationalContext<Object>) resolveBeanManager()
+                                        .createCreationalContext((Contextual) declaringBean);
+                        @SuppressWarnings({"unchecked", "rawtypes"})
+                        ScopeContext scopeContext = contextManager.getContext(declaringBean.getScope());
+                        @SuppressWarnings({"unchecked", "rawtypes"})
+                        Object contextualInstance = scopeContext.get((Bean) declaringBean, context);
+                        beanInstance = contextualInstance;
+                    } else {
+                        beanInstance = beanResolver.resolveDeclaringBeanInstance(declaringBean.getBeanClass());
+                    }
                 } else {
                     // If no bean metadata, try to resolve by method's declaring class
                     beanInstance = beanResolver.resolveDeclaringBeanInstance(method.getDeclaringClass());
@@ -1176,7 +1201,7 @@ public class EventImpl<T> implements Event<T> {
 
     private boolean destroyDependentInstance(Class<?> requiredType, Annotation[] annotations, Object instance) {
         try {
-            BeanManager beanManager = CDI.current().getBeanManager();
+            BeanManager beanManager = resolveBeanManager();
             Set<Bean<?>> beans = beanManager.getBeans(requiredType, extractQualifiers(annotations));
             if (beans == null || beans.isEmpty()) {
                 return false;
@@ -1206,7 +1231,7 @@ public class EventImpl<T> implements Event<T> {
         try {
             CreationalContext context = creationalContext;
             if (context == null) {
-                BeanManager beanManager = CDI.current().getBeanManager();
+                BeanManager beanManager = resolveBeanManager();
                 context = beanManager.createCreationalContext(bean);
             }
             ((Bean) bean).destroy(instance, context);
@@ -1214,6 +1239,27 @@ public class EventImpl<T> implements Event<T> {
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    private BeanManager resolveBeanManager() {
+        if (beanResolver != null) {
+            BeanManager manager = beanResolver.getOwningBeanManager();
+            if (manager != null) {
+                return manager;
+            }
+        }
+        return CDI.current().getBeanManager();
+    }
+
+    private boolean isContainerLifecycleEvent(Object event) {
+        if (event == null) {
+            return false;
+        }
+        String eventClassName = event.getClass().getName();
+        return "jakarta.enterprise.event.Startup".equals(eventClassName)
+                || "jakarta.enterprise.event.Shutdown".equals(eventClassName)
+                || "javax.enterprise.event.Startup".equals(eventClassName)
+                || "javax.enterprise.event.Shutdown".equals(eventClassName);
     }
 
     private Annotation[] extractQualifiers(Annotation[] annotations) {

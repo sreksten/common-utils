@@ -870,8 +870,8 @@ public class BeanManagerTest {
     }
 
     @Test
-    @DisplayName("23.3.15 - createInjectionPoint throws IllegalArgumentException for field injection point definition error")
-    void shouldRejectFieldInjectionPointWithDefinitionError() {
+    @DisplayName("23.3.15 - createInjectionPoint(AnnotatedField) does not fail resolution-time checks for unresolved field dependencies")
+    void shouldCreateFieldInjectionPointEvenWhenUnresolved() {
         Syringe syringe = newSyringe(BeanManagerConsumer.class);
         syringe.setup();
         BeanManager beanManager = syringe.getBeanManager();
@@ -879,12 +879,14 @@ public class BeanManagerTest {
         AnnotatedType<UnsatisfiedCarrier> annotatedType = beanManager.createAnnotatedType(UnsatisfiedCarrier.class);
         AnnotatedField<?> missingField = findField(annotatedType, "missing");
 
-        assertThrows(IllegalArgumentException.class, () -> beanManager.createInjectionPoint(missingField));
+        InjectionPoint injectionPoint = beanManager.createInjectionPoint(missingField);
+        assertNotNull(injectionPoint);
+        assertEquals(MissingDependency.class, injectionPoint.getType());
     }
 
     @Test
-    @DisplayName("23.3.15 - createInjectionPoint throws IllegalArgumentException for parameter injection point definition error")
-    void shouldRejectParameterInjectionPointWithDefinitionError() {
+    @DisplayName("23.3.15 - createInjectionPoint(AnnotatedParameter) does not fail resolution-time checks for unresolved parameter dependencies")
+    void shouldCreateParameterInjectionPointEvenWhenUnresolved() {
         Syringe syringe = newSyringe(BeanManagerConsumer.class);
         syringe.setup();
         BeanManager beanManager = syringe.getBeanManager();
@@ -893,7 +895,9 @@ public class BeanManagerTest {
         AnnotatedConstructor<InvalidParameterCarrier> constructor = findInjectConstructor(annotatedType);
         AnnotatedParameter<?> parameter = constructor.getParameters().get(0);
 
-        assertThrows(IllegalArgumentException.class, () -> beanManager.createInjectionPoint(parameter));
+        InjectionPoint injectionPoint = beanManager.createInjectionPoint(parameter);
+        assertNotNull(injectionPoint);
+        assertEquals(MissingDependency.class, injectionPoint.getType());
     }
 
     @Test

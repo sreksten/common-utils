@@ -75,8 +75,9 @@ public class BeanResolver implements DependencyResolver {
     private final DecoratorAwareProxyGenerator decoratorAwareProxyGenerator;
     private volatile boolean legacyCdi10NewEnabled;
 
-    // ThreadLocal to pass injection point context during resolution
-    private final ThreadLocal<InjectionPoint> currentInjectionPoint = new ThreadLocal<>();
+    // ThreadLocal stack to pass nested injection point context during resolution
+    private final ThreadLocal<Deque<InjectionPoint>> currentInjectionPoint =
+            ThreadLocal.withInitial(ArrayDeque::new);
 
     public BeanResolver(KnowledgeBase knowledgeBase, ContextManager contextManager) {
         this(knowledgeBase, contextManager, new NoOpTransactionServices());
@@ -95,6 +96,10 @@ public class BeanResolver implements DependencyResolver {
         this.owningBeanManager = beanManager;
     }
 
+    public BeanManagerImpl getOwningBeanManager() {
+        return owningBeanManager;
+    }
+
     public void setLegacyCdi10NewEnabled(boolean enabled) {
         this.legacyCdi10NewEnabled = enabled;
     }
@@ -107,7 +112,7 @@ public class BeanResolver implements DependencyResolver {
         if (requiredType instanceof Class &&
             jakarta.enterprise.inject.spi.InjectionPoint.class.equals(requiredType)) {
             // Return the current injection point context
-            jakarta.enterprise.inject.spi.InjectionPoint ip = currentInjectionPoint.get();
+            jakarta.enterprise.inject.spi.InjectionPoint ip = resolveContextualInjectionPoint();
             if (ip == null) {
                 throw new IllegalStateException(
                     "InjectionPoint is not available in this context. " +
@@ -141,13 +146,13 @@ public class BeanResolver implements DependencyResolver {
             ParameterizedType parameterizedType = (ParameterizedType) requiredType;
             Type rawType = parameterizedType.getRawType();
             if (rawType instanceof Class && Decorator.class.equals(rawType)) {
-                jakarta.enterprise.inject.spi.InjectionPoint ip = currentInjectionPoint.get();
+                jakarta.enterprise.inject.spi.InjectionPoint ip = getCurrentInjectionPoint();
                 return resolveDecoratorMetadata(ip, parameterizedType);
             }
 
             if (rawType instanceof Class &&
                     (Bean.class.equals(rawType) || Interceptor.class.equals(rawType))) {
-                jakarta.enterprise.inject.spi.InjectionPoint ip = currentInjectionPoint.get();
+                jakarta.enterprise.inject.spi.InjectionPoint ip = getCurrentInjectionPoint();
                 if (ip == null || ip.getBean() == null) {
                     throw new IllegalStateException("Bean metadata is not available in this context");
                 }
@@ -229,7 +234,7 @@ public class BeanResolver implements DependencyResolver {
                     "InterceptionFactory is only available with @Default qualifier");
         }
 
-        InjectionPoint ip = currentInjectionPoint.get();
+        InjectionPoint ip = getCurrentInjectionPoint();
         if (ip == null || !(ip.getMember() instanceof Method) || !hasProducesAnnotation((Method) ip.getMember())) {
             throw new DefinitionException(
                     "Injection point of type InterceptionFactory with @Default must be a producer method parameter");
@@ -792,7 +797,7 @@ public class BeanResolver implements DependencyResolver {
         if (bean == null) {
             return false;
         }
-        InjectionPoint injectionPoint = currentInjectionPoint.get();
+        InjectionPoint injectionPoint = getCurrentInjectionPoint();
         Class<?> beanClass = bean.getBeanClass();
         if (injectionPoint == null) {
             return beanClass == null || !Modifier.isPrivate(beanClass.getModifiers());
@@ -900,7 +905,7 @@ public class BeanResolver implements DependencyResolver {
             .append(" with qualifiers ")
             .append(formatQualifiers(qualifiers));
 
-        InjectionPoint ip = currentInjectionPoint.get();
+        InjectionPoint ip = getCurrentInjectionPoint();
         if (ip != null) {
             message.append(" at ").append(describeInjectionPoint(ip));
         }
@@ -1045,7 +1050,7 @@ public class BeanResolver implements DependencyResolver {
      */
     @SuppressWarnings("unchecked")
     private <T> Instance<T> createProviderWrapper(Class<T> type, Collection<Annotation> qualifiers) {
-        InjectionPoint ownerInjectionPoint = currentInjectionPoint.get();
+        InjectionPoint ownerInjectionPoint = getCurrentInjectionPoint();
 
         // Create a resolution strategy that delegates to BeanResolver
         InstanceImpl.ResolutionStrategy<T> strategy = new InstanceImpl.ResolutionStrategy<T>() {
@@ -1254,7 +1259,7 @@ public class BeanResolver implements DependencyResolver {
     private <T> Event<T> createEventWrapper(Type eventType, Set<Annotation> qualifiers) {
         Set<Annotation> normalizedQualifiers = new HashSet<>(qualifiers);
         normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
-        InjectionPoint ownerInjectionPoint = currentInjectionPoint.get();
+        InjectionPoint ownerInjectionPoint = getCurrentInjectionPoint();
         Event<T> baseEvent = new EventImpl<>(eventType, normalizedQualifiers, knowledgeBase, this, contextManager,
                 transactionServices, contextTokenProvider, ownerInjectionPoint);
 
@@ -1379,7 +1384,10 @@ public class BeanResolver implements DependencyResolver {
      * @param injectionPoint the current injection point being resolved
      */
     public void setCurrentInjectionPoint(jakarta.enterprise.inject.spi.InjectionPoint injectionPoint) {
-        currentInjectionPoint.set(injectionPoint);
+        if (injectionPoint == null) {
+            return;
+        }
+        currentInjectionPoint.get().push(injectionPoint);
     }
 
     /**
@@ -1388,7 +1396,13 @@ public class BeanResolver implements DependencyResolver {
      * <p>This prevents memory leaks in thread pools and ensures clean state.
      */
     public void clearCurrentInjectionPoint() {
-        currentInjectionPoint.remove();
+        Deque<InjectionPoint> stack = currentInjectionPoint.get();
+        if (!stack.isEmpty()) {
+            stack.pop();
+        }
+        if (stack.isEmpty()) {
+            currentInjectionPoint.remove();
+        }
     }
 
     /**
@@ -1407,7 +1421,35 @@ public class BeanResolver implements DependencyResolver {
      * @return the current injection point, or null if not set
      */
     public jakarta.enterprise.inject.spi.InjectionPoint getCurrentInjectionPoint() {
-        return currentInjectionPoint.get();
+        Deque<InjectionPoint> stack = currentInjectionPoint.get();
+        return stack.isEmpty() ? null : stack.peek();
+    }
+
+    private jakarta.enterprise.inject.spi.InjectionPoint resolveContextualInjectionPoint() {
+        Deque<InjectionPoint> stack = currentInjectionPoint.get();
+        if (stack.isEmpty()) {
+            return null;
+        }
+
+        InjectionPoint fallback = null;
+        for (InjectionPoint injectionPoint : stack) {
+            if (fallback == null) {
+                fallback = injectionPoint;
+            }
+            if (!isInjectionPointMetadataType(injectionPoint.getType())) {
+                return injectionPoint;
+            }
+        }
+        return fallback;
+    }
+
+    private boolean isInjectionPointMetadataType(Type type) {
+        if (!(type instanceof Class<?>)) {
+            return false;
+        }
+        String typeName = ((Class<?>) type).getName();
+        return "jakarta.enterprise.inject.spi.InjectionPoint".equals(typeName) ||
+                "javax.enterprise.inject.spi.InjectionPoint".equals(typeName);
     }
 
     public ContextManager getContextManager() {

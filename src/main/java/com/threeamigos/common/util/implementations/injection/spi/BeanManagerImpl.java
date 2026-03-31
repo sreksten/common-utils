@@ -41,6 +41,9 @@ import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
@@ -311,6 +314,15 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     private boolean isBeanTypeInBeanTypes(Type requestedType, Set<Type> beanTypes) {
         if (beanTypes.contains(requestedType)) {
             return true;
+        }
+        for (Type beanType : beanTypes) {
+            try {
+                if (typeChecker.isAssignable(requestedType, beanType)) {
+                    return true;
+                }
+            } catch (RuntimeException ignored) {
+                // Fall through to primitive/wrapper exact checks.
+            }
         }
         if (!(requestedType instanceof Class<?>)) {
             return false;
@@ -1002,7 +1014,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             }
 
             // Check type compatibility
-            if (!typeChecker.isAssignable(eventType, observerInfo.getEventType())) {
+            if (!typeChecker.isEventTypeAssignable(observerInfo.getEventType(), eventType)) {
                 continue;
             }
 
@@ -1719,31 +1731,35 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         Set<Annotation> qualifiers = injectionPoint.getQualifiers();
         Annotation[] qualifierArray = qualifiers.toArray(new Annotation[0]);
 
-        // Special case for InjectionPoint built-in bean
-        if (requiredType instanceof Class &&
-                jakarta.enterprise.inject.spi.InjectionPoint.class.equals(requiredType)) {
-            if (isDefaultQualified(qualifiers)) {
-                Bean<?> owningBean = injectionPoint.getBean();
-                if (owningBean == null) {
-                    throw new jakarta.enterprise.inject.spi.DefinitionException(
-                            "InjectionPoint with qualifier @Default is not allowed for non-bean injection targets");
-                }
-
-                Class<? extends Annotation> owningScope = owningBean.getScope();
-                if (owningScope != null && !hasDependentAnnotation(owningScope)) {
-                    throw new jakarta.enterprise.inject.spi.DefinitionException(
-                            "Bean " + owningBean.getBeanClass().getName() +
-                                    " declares scope @" + owningScope.getSimpleName() +
-                                    " and may not inject InjectionPoint with qualifier @Default");
-                }
-            }
-            return injectionPoint;
-        }
-
         if (beanResolver != null) {
             beanResolver.setCurrentInjectionPoint(injectionPoint);
         }
         try {
+            // Special case for InjectionPoint built-in bean: resolve contextually, so nested
+            // @Inject InjectionPoint inside dependent beans sees the owning outer injection site.
+            if (requiredType instanceof Class &&
+                    jakarta.enterprise.inject.spi.InjectionPoint.class.equals(requiredType)) {
+                if (isDefaultQualified(qualifiers)) {
+                    Bean<?> owningBean = injectionPoint.getBean();
+                    if (owningBean == null) {
+                        throw new jakarta.enterprise.inject.spi.DefinitionException(
+                                "InjectionPoint with qualifier @Default is not allowed for non-bean injection targets");
+                    }
+
+                    Class<? extends Annotation> owningScope = owningBean.getScope();
+                    if (owningScope != null && !hasDependentAnnotation(owningScope)) {
+                        throw new jakarta.enterprise.inject.spi.DefinitionException(
+                                "Bean " + owningBean.getBeanClass().getName() +
+                                        " declares scope @" + owningScope.getSimpleName() +
+                                        " and may not inject InjectionPoint with qualifier @Default");
+                    }
+                }
+                if (beanResolver != null) {
+                    return beanResolver.resolve(requiredType, qualifierArray);
+                }
+                return injectionPoint;
+            }
+
             // Special case: inject Instance<T> handles for lazy/programmatic lookup.
             if (requiredType instanceof ParameterizedType) {
                 ParameterizedType parameterizedType = (ParameterizedType) requiredType;
@@ -2481,6 +2497,19 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         // Create the injection target from the factory
         InjectionTarget<T> injectionTarget = injectionTargetFactory.createInjectionTarget(null);
 
+        if (isDecoratorSyntheticBean(attributes, beanClass)) {
+            InjectionPoint delegateInjectionPoint = findDecoratorDelegateInjectionPoint(beanClass);
+            Set<Type> decoratedTypes = determineDecoratedTypes(attributes, beanClass, delegateInjectionPoint);
+            return new SyntheticDecoratorBeanImpl<>(
+                    attributes,
+                    beanClass,
+                    injectionTarget,
+                    delegateInjectionPoint.getType(),
+                    delegateInjectionPoint.getQualifiers(),
+                    decoratedTypes
+            );
+        }
+
         // Create a synthetic bean that uses the injection target for lifecycle management
         return new SyntheticBeanImpl<>(attributes, beanClass, injectionTarget);
     }
@@ -2534,15 +2563,19 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (field == null) {
             throw new IllegalArgumentException("field cannot be null");
         }
-
-        InjectionPoint injectionPoint = new InjectionPointImpl<>(field.getJavaMember(), null);
-        try {
-            validate(injectionPoint);
-        } catch (jakarta.enterprise.inject.InjectionException e) {
-            throw new IllegalArgumentException("Definition error associated with injection point field: " +
-                    field.getJavaMember().getName(), e);
+        Field javaField = field.getJavaMember();
+        if (javaField == null) {
+            throw new IllegalArgumentException("field.getJavaMember() cannot be null");
         }
-        return injectionPoint;
+
+        try {
+            InjectionPoint injectionPoint = new InjectionPointImpl<>(javaField, null);
+            validateInjectionPointDefinitionOnly(injectionPoint);
+            return injectionPoint;
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("Definition error associated with injection point field: " +
+                    javaField.getName(), e);
+        }
     }
 
     /**
@@ -2560,15 +2593,137 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (parameter == null) {
             throw new IllegalArgumentException("parameter cannot be null");
         }
-
-        InjectionPoint injectionPoint = new InjectionPointImpl<>(parameter.getJavaParameter(), null);
-        try {
-            validate(injectionPoint);
-        } catch (jakarta.enterprise.inject.InjectionException e) {
-            throw new IllegalArgumentException("Definition error associated with injection point parameter: " +
-                    parameter.getJavaParameter().getName(), e);
+        Parameter javaParameter = parameter.getJavaParameter();
+        if (javaParameter == null) {
+            throw new IllegalArgumentException("parameter.getJavaParameter() cannot be null");
         }
-        return injectionPoint;
+
+        try {
+            InjectionPoint injectionPoint = new InjectionPointImpl<>(javaParameter, null);
+            validateInjectionPointDefinitionOnly(injectionPoint);
+            return injectionPoint;
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("Definition error associated with injection point parameter: " +
+                    javaParameter.getName(), e);
+        }
+    }
+
+    private void validateInjectionPointDefinitionOnly(InjectionPoint injectionPoint) {
+        for (Annotation qualifier : injectionPoint.getQualifiers()) {
+            if (qualifier == null || qualifier.annotationType() == null) {
+                continue;
+            }
+            if (!hasNamedAnnotation(qualifier.annotationType())) {
+                continue;
+            }
+            String namedValue = getNamedValue(qualifier);
+            if (namedValue != null && !namedValue.trim().isEmpty()) {
+                continue;
+            }
+            if (!(injectionPoint.getMember() instanceof Field)) {
+                throw new IllegalArgumentException(
+                        "Empty @Named value is only valid for field injection points");
+            }
+        }
+    }
+
+    private String getNamedValue(Annotation qualifier) {
+        try {
+            Method valueMethod = qualifier.annotationType().getMethod("value");
+            Object value = valueMethod.invoke(qualifier);
+            return value == null ? "" : value.toString();
+        } catch (ReflectiveOperationException ignored) {
+            return "";
+        }
+    }
+
+    private <T> boolean isDecoratorSyntheticBean(BeanAttributes<T> attributes, Class<T> beanClass) {
+        if (beanClass != null && hasDecoratorAnnotation(beanClass)) {
+            return true;
+        }
+        if (attributes == null || attributes.getStereotypes() == null) {
+            return false;
+        }
+        for (Class<? extends Annotation> stereotype : attributes.getStereotypes()) {
+            if (stereotype == null) {
+                continue;
+            }
+            String name = stereotype.getName();
+            if ("jakarta.decorator.Decorator".equals(name) || "javax.decorator.Decorator".equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private InjectionPoint findDecoratorDelegateInjectionPoint(Class<?> beanClass) {
+        List<InjectionPoint> delegatePoints = new ArrayList<>();
+
+        for (Field field : beanClass.getDeclaredFields()) {
+            if (hasDelegateMarker(field.getAnnotations())) {
+                delegatePoints.add(new InjectionPointImpl<>(field, null));
+            }
+        }
+        for (Constructor<?> constructor : beanClass.getDeclaredConstructors()) {
+            Annotation[][] parameterAnnotations = constructor.getParameterAnnotations();
+            Parameter[] parameters = constructor.getParameters();
+            for (int i = 0; i < parameters.length; i++) {
+                if (hasDelegateMarker(parameterAnnotations[i])) {
+                    delegatePoints.add(new InjectionPointImpl<>(parameters[i], null));
+                }
+            }
+        }
+        for (Method method : beanClass.getDeclaredMethods()) {
+            Annotation[][] parameterAnnotations = method.getParameterAnnotations();
+            Parameter[] parameters = method.getParameters();
+            for (int i = 0; i < parameters.length; i++) {
+                if (hasDelegateMarker(parameterAnnotations[i])) {
+                    delegatePoints.add(new InjectionPointImpl<>(parameters[i], null));
+                }
+            }
+        }
+
+        if (delegatePoints.size() != 1) {
+            throw new IllegalArgumentException("Decorator synthetic bean " + beanClass.getName() +
+                    " must declare exactly one @Delegate injection point");
+        }
+        return delegatePoints.get(0);
+    }
+
+    private boolean hasDelegateMarker(Annotation[] annotations) {
+        if (annotations == null) {
+            return false;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation == null || annotation.annotationType() == null) {
+                continue;
+            }
+            if (hasDelegateAnnotation(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Set<Type> determineDecoratedTypes(BeanAttributes<?> attributes,
+                                              Class<?> beanClass,
+                                              InjectionPoint delegateInjectionPoint) {
+        Set<Type> decoratedTypes = new HashSet<>();
+        if (attributes != null && attributes.getTypes() != null) {
+            for (Type type : attributes.getTypes()) {
+                if (type == null || Object.class.equals(type) || beanClass.equals(type)) {
+                    continue;
+                }
+                decoratedTypes.add(type);
+            }
+        }
+        if (decoratedTypes.isEmpty()) {
+            Type delegateType = delegateInjectionPoint != null ? delegateInjectionPoint.getType() : null;
+            if (delegateType != null) {
+                decoratedTypes.add(delegateType);
+            }
+        }
+        return decoratedTypes;
     }
 
     /**

@@ -48,6 +48,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     private static final long serialVersionUID = 1L;
+    private static final ThreadLocal<Deque<InjectionPoint>> INJECTION_POINT_CONTEXT =
+            ThreadLocal.withInitial(ArrayDeque::new);
 
     /**
      * CDI 4.1 - 2.2 - A bean type defines a client-visible type of the bean. A bean may have multiple bean types.
@@ -150,6 +152,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
     // Extension veto state
     private boolean vetoed = false;
+    // ProcessBeanAttributes#ignoreFinalMethods marker
+    private boolean ignoreFinalMethods = false;
 
     // Injection metadata (set by validator)
     private Constructor<T> injectConstructor;
@@ -392,6 +396,14 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
     public void setAlternativeEnabled(boolean alternativeEnabled) {
         this.alternativeEnabled = alternativeEnabled;
+    }
+
+    public boolean isIgnoreFinalMethods() {
+        return ignoreFinalMethods;
+    }
+
+    public void setIgnoreFinalMethods(boolean ignoreFinalMethods) {
+        this.ignoreFinalMethods = ignoreFinalMethods;
     }
 
     public Integer getPriority() {
@@ -1040,24 +1052,57 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             );
         }
 
-        // Only set context if the resolver is BeanResolver (which supports InjectionPoint context)
-        if (dependencyResolver instanceof BeanResolver) {
-            BeanResolver beanResolver = (BeanResolver) dependencyResolver;
+        Deque<InjectionPoint> stack = INJECTION_POINT_CONTEXT.get();
+        stack.push(injectionPoint);
 
-            // Set the current injection point context
-            beanResolver.setCurrentInjectionPoint(injectionPoint);
-
-            try {
-                // Resolve the dependency with context set
-                return dependencyResolver.resolve(type, annotations);
-            } finally {
-                // Always clear the context to prevent memory leaks in thread pools
-                beanResolver.clearCurrentInjectionPoint();
+        try {
+            // InjectionPoint metadata must describe the owning injection site, not itself.
+            if (isInjectionPointMetadataType(type)) {
+                return resolveContextualInjectionPointFromStack(stack);
             }
-        } else {
-            // Fallback: resolver doesn't support InjectionPoint context
+
+            // Only set resolver context if the resolver supports it.
+            if (dependencyResolver instanceof BeanResolver) {
+                BeanResolver beanResolver = (BeanResolver) dependencyResolver;
+                beanResolver.setCurrentInjectionPoint(injectionPoint);
+                try {
+                    return dependencyResolver.resolve(type, annotations);
+                } finally {
+                    beanResolver.clearCurrentInjectionPoint();
+                }
+            }
+
             return dependencyResolver.resolve(type, annotations);
+        } finally {
+            if (!stack.isEmpty()) {
+                stack.pop();
+            }
+            if (stack.isEmpty()) {
+                INJECTION_POINT_CONTEXT.remove();
+            }
         }
+    }
+
+    private boolean isInjectionPointMetadataType(Type type) {
+        if (!(type instanceof Class<?>)) {
+            return false;
+        }
+        String typeName = ((Class<?>) type).getName();
+        return "jakarta.enterprise.inject.spi.InjectionPoint".equals(typeName) ||
+                "javax.enterprise.inject.spi.InjectionPoint".equals(typeName);
+    }
+
+    private InjectionPoint resolveContextualInjectionPointFromStack(Deque<InjectionPoint> stack) {
+        InjectionPoint fallback = null;
+        for (InjectionPoint candidate : stack) {
+            if (fallback == null) {
+                fallback = candidate;
+            }
+            if (!isInjectionPointMetadataType(candidate.getType())) {
+                return candidate;
+            }
+        }
+        return fallback;
     }
 
     /**

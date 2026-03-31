@@ -33,6 +33,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.Producer
 import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.scopes.ConversationImpl;
+import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.InjectionTargetFactoryImpl;
 import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
@@ -1531,6 +1532,7 @@ public class Syringe {
         for (Bean<?> bean : knowledgeBase.getBeans()) {
             try {
                 processInjectionPointsForBean(bean, bean.getInjectionPoints());
+                processLifecycleMethodInjectionPoints(bean);
             } catch (DefinitionException e) {
                 throw e;
             } catch (Exception e) {
@@ -1555,6 +1557,50 @@ public class Syringe {
                 if (updated != ip) {
                     updateInjectionPoint(bean, ip, updated);
                 }
+            }
+        }
+    }
+
+    private void processLifecycleMethodInjectionPoints(Bean<?> bean) {
+        if (bean == null || bean.getBeanClass() == null) {
+            return;
+        }
+
+        Map<String, Method> methodsBySignature = new LinkedHashMap<>();
+        Class<?> current = bean.getBeanClass();
+        while (current != null && current != Object.class) {
+            for (Method method : current.getDeclaredMethods()) {
+                String signature = method.getName() + Arrays.toString(method.getParameterTypes());
+                methodsBySignature.putIfAbsent(signature, method);
+            }
+            current = current.getSuperclass();
+        }
+
+        for (Method method : methodsBySignature.values()) {
+            boolean disposerMethod = false;
+            boolean observerMethod = false;
+            for (Parameter parameter : method.getParameters()) {
+                if (hasDisposesAnnotation(parameter)) {
+                    disposerMethod = true;
+                }
+                if (hasObservesAnnotation(parameter) || hasObservesAsyncAnnotation(parameter)) {
+                    observerMethod = true;
+                }
+            }
+            if (!disposerMethod && !observerMethod) {
+                continue;
+            }
+
+            for (Parameter parameter : method.getParameters()) {
+                if (hasDisposesAnnotation(parameter)
+                        || hasObservesAnnotation(parameter)
+                        || hasObservesAsyncAnnotation(parameter)) {
+                    continue;
+                }
+                InjectionPoint ip = new InjectionPointImpl(parameter, bean);
+                ProcessInjectionPointImpl<?, ?> event =
+                        new ProcessInjectionPointImpl<>(messageHandler, ip, knowledgeBase);
+                fireEventToExtensions(event);
             }
         }
     }
@@ -1697,6 +1743,9 @@ public class Syringe {
                     knowledgeBase.addWarning("ProcessBeanAttributes ignoreFinalMethods requested for " +
                                              bean.getBeanClass().getName());
                     knowledgeBase.markIgnoreFinalMethods(bean);
+                    if (bean instanceof BeanImpl<?>) {
+                        ((BeanImpl<?>) bean).setIgnoreFinalMethods(true);
+                    }
                 }
 
                 BeanAttributes<?> finalAttrs = event.getBeanAttributesInternal();

@@ -2,8 +2,8 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
-import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
+import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -23,6 +23,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -226,6 +227,7 @@ public class ClientProxyGenerator {
     @SuppressWarnings("unchecked")
     public <T> T createProxy(Bean<T> bean) {
         Class<?> beanClass = resolveProxyBaseClass(bean);
+        validateProxyableBeanType(bean, beanClass);
 
         // Get or generate the proxy class
         Class<?> proxyClass = proxyClassCache.computeIfAbsent(beanClass, this::generateProxyClass);
@@ -244,6 +246,53 @@ public class ClientProxyGenerator {
         } catch (Exception e) {
             throw new RuntimeException("Failed to create proxy for bean: " + beanClass.getName(), e);
         }
+    }
+
+    private void validateProxyableBeanType(Bean<?> bean, Class<?> beanClass) {
+        if (beanClass == null || beanClass.isInterface() || beanClass == Object.class) {
+            return;
+        }
+        boolean ignoreFinalMethods = bean instanceof BeanImpl<?> &&
+                ((BeanImpl<?>) bean).isIgnoreFinalMethods();
+
+        if (Modifier.isFinal(beanClass.getModifiers())) {
+            throw new jakarta.enterprise.inject.UnproxyableResolutionException(
+                    "Cannot proxy final class: " + beanClass.getName());
+        }
+
+        if (!hasNonPrivateNoArgConstructor(beanClass)) {
+            throw new jakarta.enterprise.inject.UnproxyableResolutionException(
+                    "Cannot proxy bean without non-private no-arg constructor: " + beanClass.getName());
+        }
+
+        if (!ignoreFinalMethods) {
+            Method finalBusinessMethod = findNonStaticFinalNonPrivateMethod(beanClass);
+            if (finalBusinessMethod != null) {
+                throw new jakarta.enterprise.inject.UnproxyableResolutionException(
+                        "Cannot proxy bean with non-static final non-private method " +
+                                finalBusinessMethod.getName() + " in " + beanClass.getName());
+            }
+        }
+    }
+
+    private boolean hasNonPrivateNoArgConstructor(Class<?> type) {
+        for (Constructor<?> constructor : type.getDeclaredConstructors()) {
+            if (!Modifier.isPrivate(constructor.getModifiers()) && constructor.getParameterCount() == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Method findNonStaticFinalNonPrivateMethod(Class<?> type) {
+        for (Method method : type.getDeclaredMethods()) {
+            int modifiers = method.getModifiers();
+            if (Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers) || Modifier.isPrivate(modifiers)) {
+                continue;
+            }
+            return method;
+        }
+        return null;
     }
 
     private Object instantiateProxy(Class<?> proxyClass) throws Exception {

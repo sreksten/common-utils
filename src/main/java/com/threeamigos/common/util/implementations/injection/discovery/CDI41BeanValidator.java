@@ -10,11 +10,14 @@ import com.threeamigos.common.util.implementations.injection.util.QualifiersHelp
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
+import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.AnnotatedType;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.Intercepted;
@@ -30,6 +33,7 @@ import jakarta.enterprise.inject.spi.InterceptionFactory;
 import jakarta.enterprise.inject.spi.Decorator;
 import jakarta.enterprise.inject.Stereotype;
 
+import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Target;
@@ -414,19 +418,32 @@ public class CDI41BeanValidator {
         // Populate injection metadata for bean creation
         populateInjectionMetadata(bean, clazz);
 
-        // Collect injection points with real metadata so CDI41InjectionValidator can resolve dependencies
-        for (Field field : clazz.getDeclaredFields()) {
-            if (hasInjectAnnotation(field)) {
-                InjectionPoint ip = tryCreateInjectionPoint(field, bean);
-                if (ip != null) {
-                    bean.addInjectionPoint(ip);
+        // Collect injection points with resolved generic metadata from superclass -> subclass.
+        List<Class<?>> hierarchy = collectClassHierarchy(clazz);
+        for (Class<?> declaringClass : hierarchy) {
+            for (Field field : declaringClass.getDeclaredFields()) {
+                if (hasInjectAnnotation(field)) {
+                    InjectionPoint ip = resolvedInjectionPoint(
+                            tryCreateInjectionPoint(field, bean),
+                            GenericTypeResolver.resolve(field.getGenericType(), clazz, field.getDeclaringClass()));
+                    if (ip != null) {
+                        bean.addInjectionPoint(ip);
+                    }
                 }
             }
         }
-        for (Method method : clazz.getDeclaredMethods()) {
-            if (hasInjectAnnotation(method)) {
+        for (Class<?> declaringClass : hierarchy) {
+            for (Method method : declaringClass.getDeclaredMethods()) {
+                if (!hasInjectAnnotation(method)) {
+                    continue;
+                }
+                if (isOverriddenForInjectionMetadata(method, clazz)) {
+                    continue;
+                }
                 for (Parameter p : method.getParameters()) {
-                    InjectionPoint ip = tryCreateInjectionPoint(p, bean);
+                    InjectionPoint ip = resolvedInjectionPoint(
+                            tryCreateInjectionPoint(p, bean),
+                            GenericTypeResolver.resolve(p.getParameterizedType(), clazz, method.getDeclaringClass()));
                     if (ip != null) {
                         bean.addInjectionPoint(ip);
                     }
@@ -436,54 +453,12 @@ public class CDI41BeanValidator {
         for (Constructor<?> c : clazz.getDeclaredConstructors()) {
             if (hasInjectAnnotation(c)) {
                 for (Parameter p : c.getParameters()) {
-                    InjectionPoint ip = tryCreateInjectionPoint(p, bean);
+                    InjectionPoint ip = resolvedInjectionPoint(
+                            tryCreateInjectionPoint(p, bean),
+                            GenericTypeResolver.resolve(p.getParameterizedType(), clazz, c.getDeclaringClass()));
                     if (ip != null) {
                         bean.addInjectionPoint(ip);
                     }
-                }
-            }
-        }
-        // Disposer method non-@Disposes parameters are injection points.
-        for (Method method : clazz.getDeclaredMethods()) {
-            boolean disposerMethod = false;
-            for (Parameter p : method.getParameters()) {
-                if (hasDisposesAnnotation(p)) {
-                    disposerMethod = true;
-                    break;
-                }
-            }
-            if (!disposerMethod) {
-                continue;
-            }
-            for (Parameter p : method.getParameters()) {
-                if (hasDisposesAnnotation(p)) {
-                    continue;
-                }
-                InjectionPoint ip = tryCreateInjectionPoint(p, bean);
-                if (ip != null) {
-                    bean.addInjectionPoint(ip);
-                }
-            }
-        }
-        // Observer method non-observer parameters are injection points.
-        for (Method method : clazz.getDeclaredMethods()) {
-            boolean observerMethod = false;
-            for (Parameter p : method.getParameters()) {
-                if (hasObservesAnnotation(p) || hasObservesAsyncAnnotation(p)) {
-                    observerMethod = true;
-                    break;
-                }
-            }
-            if (!observerMethod) {
-                continue;
-            }
-            for (Parameter p : method.getParameters()) {
-                if (hasObservesAnnotation(p) || hasObservesAsyncAnnotation(p)) {
-                    continue;
-                }
-                InjectionPoint ip = tryCreateInjectionPoint(p, bean);
-                if (ip != null) {
-                    bean.addInjectionPoint(ip);
                 }
             }
         }
@@ -2900,9 +2875,11 @@ public class CDI41BeanValidator {
         // - IMPLICIT: Bean-defining annotation is REQUIRED (annotated discovery mode)
         // - EXPLICIT: ALL classes with suitable constructors are beans (all discovery mode)
         if (beanArchiveMode == BeanArchiveMode.EXPLICIT) {
-            // In explicit bean archives, a class is a bean if it has a no-args constructor
-            // (or an @Inject-annotated constructor, but that's checked elsewhere)
-            return hasNoArgsConstructor(clazz);
+            // In explicit bean archives:
+            // - classes with no-arg constructors are candidates
+            // - classes with @Inject constructors are candidates only when constructor
+            //   dependencies are container-resolvable classpath types.
+            return hasNoArgsConstructor(clazz) || hasResolvableInjectConstructor(clazz);
         }
 
         // In implicit/trimmed mode, bean-defining annotation is required
@@ -2910,8 +2887,23 @@ public class CDI41BeanValidator {
     }
 
     private boolean hasBeanDefiningAnnotation(Class<?> clazz) {
+        Set<Class<? extends Annotation>> declaredTypes = new HashSet<>();
+        for (Annotation declared : clazz.getDeclaredAnnotations()) {
+            declaredTypes.add(declared.annotationType());
+        }
+
+        // Bean-defining annotations can be inherited via Java @Inherited semantics.
+        // Use the effective annotation view so inherited stereotype/scope metadata
+        // participates in candidate discovery.
         for (Annotation annotation : annotationsOf(clazz)) {
-            if (isBeanDefiningAnnotationType(annotation.annotationType())) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+
+            // Inherited @Dependent must not, by itself, turn a subtype into a discovered bean.
+            if (DEPENDENT.matches(annotationType) && !declaredTypes.contains(annotationType)) {
+                continue;
+            }
+
+            if (isBeanDefiningAnnotationType(annotationType)) {
                 return true;
             }
         }
@@ -2962,6 +2954,45 @@ public class CDI41BeanValidator {
             // If we can't access constructors due to security restrictions, assume no no-args constructor
             return false;
         }
+    }
+
+    private boolean hasInjectConstructor(Class<?> clazz) {
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            if (hasInjectAnnotation(constructor)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasResolvableInjectConstructor(Class<?> clazz) {
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            if (!hasInjectAnnotation(constructor)) {
+                continue;
+            }
+
+            boolean resolvable = true;
+            for (Parameter parameter : constructor.getParameters()) {
+                Class<?> rawType = RawTypeExtractor.getRawType(parameter.getParameterizedType());
+                if (rawType == null) {
+                    resolvable = false;
+                    break;
+                }
+                if (InjectionPoint.class.equals(rawType) || BeanManager.class.equals(rawType)) {
+                    continue;
+                }
+                if (knowledgeBase.getClasses().contains(rawType)) {
+                    continue;
+                }
+                resolvable = false;
+                break;
+            }
+
+            if (resolvable) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // -----------------------
@@ -3850,6 +3881,69 @@ public class CDI41BeanValidator {
         return sb.toString();
     }
 
+    private List<Class<?>> collectClassHierarchy(Class<?> leafClass) {
+        List<Class<?>> hierarchy = new ArrayList<>();
+        Class<?> current = leafClass;
+        while (current != null && current != Object.class) {
+            hierarchy.add(0, current);
+            current = current.getSuperclass();
+        }
+        return hierarchy;
+    }
+
+    private boolean isOverriddenForInjectionMetadata(Method superMethod, Class<?> leafClass) {
+        if (Modifier.isPrivate(superMethod.getModifiers())) {
+            return false;
+        }
+        if (superMethod.getDeclaringClass().equals(leafClass)) {
+            return false;
+        }
+
+        Class<?> current = leafClass;
+        while (current != null && current != superMethod.getDeclaringClass()) {
+            try {
+                Method subMethod = current.getDeclaredMethod(superMethod.getName(), superMethod.getParameterTypes());
+                if (!subMethod.equals(superMethod)) {
+                    if (Modifier.isStatic(subMethod.getModifiers())) {
+                        current = current.getSuperclass();
+                        continue;
+                    }
+                    boolean superPackagePrivate = !Modifier.isPublic(superMethod.getModifiers()) &&
+                            !Modifier.isProtected(superMethod.getModifiers()) &&
+                            !Modifier.isPrivate(superMethod.getModifiers());
+                    if (superPackagePrivate) {
+                        return packageName(superMethod.getDeclaringClass())
+                                .equals(packageName(subMethod.getDeclaringClass()));
+                    }
+                    return true;
+                }
+            } catch (NoSuchMethodException ignored) {
+                // continue climbing hierarchy
+            }
+            current = current.getSuperclass();
+        }
+        return false;
+    }
+
+    private InjectionPoint resolvedInjectionPoint(InjectionPoint delegate, Type resolvedType) {
+        if (delegate == null) {
+            return null;
+        }
+        return new ResolvedInjectionPoint(delegate, normalizeResolvedType(resolvedType));
+    }
+
+    private Type normalizeResolvedType(Type resolvedType) {
+        if (!(resolvedType instanceof GenericArrayType)) {
+            return resolvedType;
+        }
+
+        Type component = ((GenericArrayType) resolvedType).getGenericComponentType();
+        if (component instanceof Class<?>) {
+            return java.lang.reflect.Array.newInstance((Class<?>) component, 0).getClass();
+        }
+        return resolvedType;
+    }
+
     // InjectionPoint best-effort creation
     // -----------------------
 
@@ -3865,6 +3959,52 @@ public class CDI41BeanValidator {
             // Best-effort only. Bean can still be registered without concrete injection point objects.
         }
         return null;
+    }
+
+    private static final class ResolvedInjectionPoint implements InjectionPoint, Serializable {
+        private static final long serialVersionUID = 1L;
+        private final InjectionPoint delegate;
+        private final Type resolvedType;
+
+        private ResolvedInjectionPoint(InjectionPoint delegate, Type resolvedType) {
+            this.delegate = delegate;
+            this.resolvedType = resolvedType;
+        }
+
+        @Override
+        public Type getType() {
+            return resolvedType != null ? resolvedType : delegate.getType();
+        }
+
+        @Override
+        public Set<Annotation> getQualifiers() {
+            return delegate.getQualifiers();
+        }
+
+        @Override
+        public Bean<?> getBean() {
+            return delegate.getBean();
+        }
+
+        @Override
+        public Member getMember() {
+            return delegate.getMember();
+        }
+
+        @Override
+        public Annotated getAnnotated() {
+            return delegate.getAnnotated();
+        }
+
+        @Override
+        public boolean isDelegate() {
+            return delegate.isDelegate();
+        }
+
+        @Override
+        public boolean isTransient() {
+            return delegate.isTransient();
+        }
     }
 
     // -----------------------

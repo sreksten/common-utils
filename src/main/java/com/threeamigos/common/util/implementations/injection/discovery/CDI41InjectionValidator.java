@@ -243,21 +243,36 @@ public class CDI41InjectionValidator {
             }
         }
 
-        // CDI 4.1 §5.3.1: deployment problem when one name is x and another is x.y (y valid bean name).
+        // CDI 4.1 §5.3.1: deployment problem when one name is x and another is x.y
+        // where y is a valid bean name. This must apply recursively as well
+        // (e.g. "foo.bar" vs "foo.bar.baz").
         Set<String> names = new HashSet<>(beansByName.keySet());
-        for (String name : names) {
-            int dotIndex = name.indexOf('.');
-            if (dotIndex <= 0 || dotIndex >= name.length() - 1) {
+        Set<String> reportedConflicts = new HashSet<>();
+        for (String shorter : names) {
+            if (shorter == null || shorter.isEmpty()) {
                 continue;
             }
+            for (String longer : names) {
+                if (longer == null || longer.length() <= shorter.length()) {
+                    continue;
+                }
+                String prefix = shorter + ".";
+                if (!longer.startsWith(prefix)) {
+                    continue;
+                }
 
-            String x = name.substring(0, dotIndex);
-            String y = name.substring(dotIndex + 1);
-            if (names.contains(x) && isValidBeanName(y)) {
-                knowledgeBase.addDefinitionError(
-                        "Bean name conflict detected: '" + x + "' and '" + name + "'"
-                );
-                allValid = false;
+                String suffix = longer.substring(prefix.length());
+                if (!isValidBeanName(suffix)) {
+                    continue;
+                }
+
+                String conflictKey = shorter + "->" + longer;
+                if (reportedConflicts.add(conflictKey)) {
+                    knowledgeBase.addDefinitionError(
+                            "Bean name conflict detected: '" + shorter + "' and '" + longer + "'"
+                    );
+                    allValid = false;
+                }
             }
         }
 

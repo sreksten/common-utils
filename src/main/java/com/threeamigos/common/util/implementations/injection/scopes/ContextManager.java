@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
+import jakarta.enterprise.inject.UnproxyableResolutionException;
 import jakarta.enterprise.inject.spi.Bean;
 
 import java.lang.annotation.Annotation;
@@ -370,7 +371,14 @@ public class ContextManager {
      * @return a client proxy instance
      */
     public <T> T createClientProxy(Bean<T> bean) {
-        return proxyGenerator.createProxy(bean);
+        try {
+            return proxyGenerator.createProxy(bean);
+        } catch (UnproxyableResolutionException e) {
+            throw e;
+        } catch (RuntimeException | Error e) {
+            throw new UnproxyableResolutionException(
+                    "Cannot create client proxy for bean " + bean.getBeanClass().getName(), e);
+        }
     }
 
     /**

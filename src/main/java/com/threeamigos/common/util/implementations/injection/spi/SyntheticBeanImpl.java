@@ -5,10 +5,16 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanAttributes;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.InjectionTarget;
+import jakarta.enterprise.inject.spi.PassivationCapable;
+import jakarta.enterprise.inject.spi.Annotated;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Member;
 import java.lang.reflect.Type;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Implementation of Bean for programmatically created beans using InjectionTarget.
@@ -26,11 +32,13 @@ import java.util.Set;
  *
  * <p><b>CDI Spec Section 11.5.11:</b> Programmatic bean creation
  */
-public class SyntheticBeanImpl<T> implements Bean<T> {
+public class SyntheticBeanImpl<T> implements Bean<T>, PassivationCapable {
 
     private final BeanAttributes<T> attributes;
     private final Class<?> beanClass;
     private final InjectionTarget<T> injectionTarget;
+    private final String id;
+    private volatile Set<InjectionPoint> injectionPoints;
 
     /**
      * Creates a synthetic bean from attributes, class, and injection target.
@@ -43,6 +51,7 @@ public class SyntheticBeanImpl<T> implements Bean<T> {
         this.attributes = attributes;
         this.beanClass = beanClass;
         this.injectionTarget = injectionTarget;
+        this.id = beanClass.getName() + "#SyntheticBean#" + UUID.randomUUID();
     }
 
     @Override
@@ -68,7 +77,18 @@ public class SyntheticBeanImpl<T> implements Bean<T> {
 
     @Override
     public Set<InjectionPoint> getInjectionPoints() {
-        return injectionTarget.getInjectionPoints();
+        Set<InjectionPoint> cached = injectionPoints;
+        if (cached != null) {
+            return cached;
+        }
+
+        Set<InjectionPoint> adapted = new LinkedHashSet<>();
+        for (InjectionPoint injectionPoint : injectionTarget.getInjectionPoints()) {
+            adapted.add(new BeanBackedInjectionPoint(injectionPoint, this));
+        }
+        Set<InjectionPoint> immutable = Collections.unmodifiableSet(adapted);
+        injectionPoints = immutable;
+        return immutable;
     }
 
     // Delegate all BeanAttributes methods to the attributes
@@ -101,5 +121,55 @@ public class SyntheticBeanImpl<T> implements Bean<T> {
     @Override
     public boolean isAlternative() {
         return attributes.isAlternative();
+    }
+
+    @Override
+    public String getId() {
+        return id;
+    }
+
+    private static final class BeanBackedInjectionPoint implements InjectionPoint {
+        private final InjectionPoint delegate;
+        private final Bean<?> bean;
+
+        private BeanBackedInjectionPoint(InjectionPoint delegate, Bean<?> bean) {
+            this.delegate = delegate;
+            this.bean = bean;
+        }
+
+        @Override
+        public Type getType() {
+            return delegate.getType();
+        }
+
+        @Override
+        public Set<Annotation> getQualifiers() {
+            return delegate.getQualifiers();
+        }
+
+        @Override
+        public Bean<?> getBean() {
+            return bean;
+        }
+
+        @Override
+        public Member getMember() {
+            return delegate.getMember();
+        }
+
+        @Override
+        public Annotated getAnnotated() {
+            return delegate.getAnnotated();
+        }
+
+        @Override
+        public boolean isDelegate() {
+            return delegate.isDelegate();
+        }
+
+        @Override
+        public boolean isTransient() {
+            return delegate.isTransient();
+        }
     }
 }
