@@ -4,17 +4,22 @@ import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.inject.spi.CDIProvider;
+import jakarta.enterprise.inject.spi.BeanManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 
 import java.lang.reflect.Field;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Isolated
 class SyringeSetupActionTest {
@@ -35,12 +40,17 @@ class SyringeSetupActionTest {
             syringe.start();
 
             SyringeSetupAction action = new SyringeSetupAction(syringe);
-            action.setup(Collections.<String, Object>emptyMap());
+            Map<String, Object> setupProperties = new HashMap<String, Object>();
+            action.setup(setupProperties);
             try {
                 SetupActionBean bean = CDI.current().select(SetupActionBean.class).get();
                 assertNotNull(bean);
+
+                BeanManager beanManager = syringe.getBeanManager();
+                assertTrue(beanManager.getContext(RequestScoped.class).isActive(),
+                        "Request context should be active during setup action");
             } finally {
-                action.teardown(Collections.<String, Object>emptyMap());
+                action.teardown(setupProperties);
             }
         } finally {
             if (syringe != null) {

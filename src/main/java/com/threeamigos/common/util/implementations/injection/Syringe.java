@@ -3683,6 +3683,34 @@ public class Syringe {
     }
 
     /**
+     * Activates request context if currently inactive.
+     *
+     * @return true when this call activated the request context, false if it was already active
+     */
+    public boolean activateRequestContextIfNeeded() {
+        if (!initialized) {
+            throw new IllegalStateException("Container not initialized. Call setup() first.");
+        }
+        if (contextManager.getContext(RequestScoped.class).isActive()) {
+            return false;
+        }
+        contextManager.activateRequest();
+        return true;
+    }
+
+    /**
+     * Deactivates request context if currently active.
+     */
+    public void deactivateRequestContextIfActive() {
+        if (!initialized) {
+            throw new IllegalStateException("Container not initialized. Call setup() first.");
+        }
+        if (contextManager.getContext(RequestScoped.class).isActive()) {
+            contextManager.deactivateRequest();
+        }
+    }
+
+    /**
      * Programmatically get an injected instance of the given bean class.
      * Uses default qualifiers unless explicit qualifiers are provided.
      */

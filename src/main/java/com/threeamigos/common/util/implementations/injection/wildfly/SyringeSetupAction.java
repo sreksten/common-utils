@@ -17,6 +17,8 @@ import java.lang.reflect.Method;
  */
 public class SyringeSetupAction implements SetupAction {
 
+    private static final String REQUEST_ACTIVATED_PROPERTY = SyringeSetupAction.class.getName() + ".requestActivated";
+
     private final Syringe syringe;
 
     public SyringeSetupAction(Syringe syringe) {
@@ -31,10 +33,36 @@ public class SyringeSetupAction implements SetupAction {
         SyringeCDIProvider.registerGlobalCDI(syringe.getCDI());
         SyringeCDIProvider.registerThreadLocalCDI(syringe.getCDI());
         mirrorProviderStateToThreadContextClassLoader(syringe.getCDI(), true);
+
+        boolean activated = false;
+        try {
+            activated = syringe.activateRequestContextIfNeeded();
+        } catch (RuntimeException ignored) {
+            // Best effort - keep setup resilient if request context control is unavailable.
+        }
+        if (properties != null) {
+            properties.put(REQUEST_ACTIVATED_PROPERTY, activated);
+        }
     }
 
     @Override
     public void teardown(java.util.Map<String, Object> properties) {
+        if (properties != null) {
+            Object activated = properties.get(REQUEST_ACTIVATED_PROPERTY);
+            if (Boolean.TRUE.equals(activated)) {
+                try {
+                    syringe.deactivateRequestContextIfActive();
+                } catch (RuntimeException ignored) {
+                    // Best effort.
+                }
+            }
+            properties.remove(REQUEST_ACTIVATED_PROPERTY);
+        }
+        try {
+            syringe.deactivateRequestContextIfActive();
+        } catch (RuntimeException ignored) {
+            // Best effort cleanup for lazy activation fallback.
+        }
         SyringeCDIProvider.unregisterThreadLocalCDI();
         mirrorThreadLocalCleanupToThreadContextClassLoader();
     }
@@ -84,4 +112,5 @@ public class SyringeSetupAction implements SetupAction {
             // Best effort for classloader-isolated deployments.
         }
     }
+
 }
