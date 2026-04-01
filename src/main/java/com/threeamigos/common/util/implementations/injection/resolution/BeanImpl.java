@@ -10,6 +10,7 @@ import com.threeamigos.common.util.implementations.injection.interceptors.Invoca
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorResolver;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.RequestScopedContext;
@@ -534,6 +535,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 // 1. Call @PreDestroy if present
                 invokePreDestroy(instance);
             }
+            destroyDecorators(instance);
         } catch (Exception e) {
             ignored = e;
         } finally {
@@ -551,6 +553,17 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 // Syringe rejects this non-portable usage explicitly.
                 DestroyedInstanceTracker.markDestroyed(instance);
             }
+        }
+    }
+
+    private void destroyDecorators(T instance) {
+        if (instance == null || decoratorAwareProxyGenerator == null) {
+            return;
+        }
+        try {
+            decoratorAwareProxyGenerator.destroyDecoratorChain(instance);
+        } catch (RuntimeException ignored) {
+            // Bean destruction should continue even if decorator cleanup fails.
         }
     }
 
@@ -588,19 +601,23 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         Object[] args = new Object[parameters.length];
 
         for (int i = 0; i < parameters.length; i++) {
-            Type resolvedType = GenericTypeResolver.resolve(
-                    parameters[i].getParameterizedType(),
-                    beanClass,
-                    constructor.getDeclaringClass()
-            );
-
-            // Create InjectionPoint metadata for this constructor parameter
-            InjectionPoint injectionPoint = new InjectionPointImpl<>(parameters[i], this);
+            InjectionPoint injectionPoint = findInjectionPoint(parameters[i]);
+            if (injectionPoint == null) {
+                injectionPoint = new InjectionPointImpl<>(parameters[i], this);
+            }
+            Type resolvedType = injectionPoint.getType();
+            if (resolvedType == null) {
+                resolvedType = GenericTypeResolver.resolve(
+                        parameters[i].getParameterizedType(),
+                        beanClass,
+                        constructor.getDeclaringClass()
+                );
+            }
 
             // Resolve the parameter with InjectionPoint context set
             args[i] = resolveInjectionPointWithContext(
                 resolvedType,
-                parameters[i].getAnnotations(),
+                qualifiersAsArray(injectionPoint, parameters[i].getAnnotations()),
                 injectionPoint,
                 creationalContext
             );
@@ -645,18 +662,23 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
                 field.setAccessible(true);
 
-                // Create InjectionPoint metadata for this field
-                InjectionPoint injectionPoint = new InjectionPointImpl<>(field, this);
-                Type resolvedFieldType = GenericTypeResolver.resolve(
-                        field.getGenericType(),
-                        beanClass,
-                        field.getDeclaringClass()
-                );
+                InjectionPoint injectionPoint = findInjectionPoint(field);
+                if (injectionPoint == null) {
+                    injectionPoint = new InjectionPointImpl<>(field, this);
+                }
+                Type resolvedFieldType = injectionPoint.getType();
+                if (resolvedFieldType == null) {
+                    resolvedFieldType = GenericTypeResolver.resolve(
+                            field.getGenericType(),
+                            beanClass,
+                            field.getDeclaringClass()
+                    );
+                }
 
                 // Resolve the field with InjectionPoint context set
                 Object value = resolveInjectionPointWithContext(
                     resolvedFieldType,
-                    field.getAnnotations(),
+                    qualifiersAsArray(injectionPoint, field.getAnnotations()),
                     injectionPoint,
                     creationalContext
                 );
@@ -700,19 +722,23 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 Object[] args = new Object[parameters.length];
 
                 for (int i = 0; i < parameters.length; i++) {
-                    Type resolvedParameterType = GenericTypeResolver.resolve(
-                            parameters[i].getParameterizedType(),
-                            beanClass,
-                            method.getDeclaringClass()
-                    );
-
-                    // Create InjectionPoint metadata for this method parameter
-                    InjectionPoint injectionPoint = new InjectionPointImpl<>(parameters[i], this);
+                    InjectionPoint injectionPoint = findInjectionPoint(parameters[i]);
+                    if (injectionPoint == null) {
+                        injectionPoint = new InjectionPointImpl<>(parameters[i], this);
+                    }
+                    Type resolvedParameterType = injectionPoint.getType();
+                    if (resolvedParameterType == null) {
+                        resolvedParameterType = GenericTypeResolver.resolve(
+                                parameters[i].getParameterizedType(),
+                                beanClass,
+                                method.getDeclaringClass()
+                        );
+                    }
 
                     // Resolve the parameter with InjectionPoint context set
                     args[i] = resolveInjectionPointWithContext(
                         resolvedParameterType,
-                        parameters[i].getAnnotations(),
+                        qualifiersAsArray(injectionPoint, parameters[i].getAnnotations()),
                         injectionPoint,
                         creationalContext
                     );
@@ -724,6 +750,61 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 method.invoke(instance, args);
             }
         }
+    }
+
+    private Annotation[] qualifiersAsArray(InjectionPoint injectionPoint, Annotation[] fallbackAnnotations) {
+        if (injectionPoint == null || injectionPoint.getQualifiers() == null || injectionPoint.getQualifiers().isEmpty()) {
+            return fallbackAnnotations == null ? new Annotation[0] : fallbackAnnotations;
+        }
+        return injectionPoint.getQualifiers().toArray(new Annotation[0]);
+    }
+
+    private InjectionPoint findInjectionPoint(Field field) {
+        if (field == null) {
+            return null;
+        }
+        for (InjectionPoint injectionPoint : injectionPoints) {
+            if (injectionPoint == null) {
+                continue;
+            }
+            if (field.equals(injectionPoint.getMember())) {
+                return injectionPoint;
+            }
+        }
+        return null;
+    }
+
+    private InjectionPoint findInjectionPoint(Parameter parameter) {
+        if (parameter == null) {
+            return null;
+        }
+        Executable executable = parameter.getDeclaringExecutable();
+        int index = parameterIndex(parameter);
+        if (index < 0) {
+            return null;
+        }
+        for (InjectionPoint injectionPoint : injectionPoints) {
+            if (injectionPoint == null || !executable.equals(injectionPoint.getMember())) {
+                continue;
+            }
+            Annotated annotated = injectionPoint.getAnnotated();
+            if (annotated instanceof AnnotatedParameter<?>) {
+                if (((AnnotatedParameter<?>) annotated).getPosition() == index) {
+                    return injectionPoint;
+                }
+            }
+        }
+        return null;
+    }
+
+    private int parameterIndex(Parameter parameter) {
+        Parameter[] parameters = parameter.getDeclaringExecutable().getParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            if (parameter.equals(parameters[i])) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -820,6 +901,11 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     }
 
     private void invokePostConstructWithRequestContext(T instance) throws Exception {
+        if (!requiresRequestContextForPostConstruct()) {
+            invokePostConstruct(instance);
+            return;
+        }
+
         if (!(dependencyResolver instanceof BeanResolver)) {
             invokePostConstruct(instance);
             return;
@@ -846,6 +932,10 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 contextManager.deactivateRequest();
             }
         }
+    }
+
+    private boolean requiresRequestContextForPostConstruct() {
+        return !postConstructMethods.isEmpty() || postConstructInterceptorChain != null;
     }
 
     private void invokeCustomInjectionTargetPostConstructWithRequestContext(T instance) throws Exception {
@@ -1058,7 +1148,15 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         try {
             // InjectionPoint metadata must describe the owning injection site, not itself.
             if (isInjectionPointMetadataType(type)) {
-                return resolveContextualInjectionPointFromStack(stack);
+                InjectionPoint contextual = resolveContextualInjectionPointFromStack(stack);
+                if ((contextual == null || isInjectionPointMetadataType(contextual.getType()))
+                        && dependencyResolver instanceof BeanResolver) {
+                    InjectionPoint current = ((BeanResolver) dependencyResolver).getCurrentInjectionPoint();
+                    if (current != null && !isInjectionPointMetadataType(current.getType())) {
+                        return current;
+                    }
+                }
+                return contextual;
             }
 
             // Only set resolver context if the resolver supports it.
@@ -1066,6 +1164,15 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 BeanResolver beanResolver = (BeanResolver) dependencyResolver;
                 beanResolver.setCurrentInjectionPoint(injectionPoint);
                 try {
+                    BeanManagerImpl beanManager = beanResolver.getOwningBeanManager();
+                    if (beanManager != null && creationalContext != null) {
+                        try {
+                            return beanManager.getInjectableReference(injectionPoint, creationalContext);
+                        } catch (IllegalStateException beforeAfterDeploymentValidation) {
+                            // During bootstrap phases BeanManager SPI lookup can be lifecycle-guarded.
+                            // Fall back to direct resolver resolution in those phases.
+                        }
+                    }
                     return dependencyResolver.resolve(type, annotations);
                 } finally {
                     beanResolver.clearCurrentInjectionPoint();

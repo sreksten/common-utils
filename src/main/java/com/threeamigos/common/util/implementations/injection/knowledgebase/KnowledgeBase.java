@@ -147,6 +147,17 @@ public class KnowledgeBase {
         return classes;
     }
 
+    public void removeDiscoveredClass(Class<?> clazz) {
+        if (clazz == null) {
+            return;
+        }
+        classes.remove(clazz);
+        classArchiveModes.remove(clazz);
+        annotatedTypeOverrides.remove(clazz);
+        constructorsMap.remove(clazz);
+        vetoedTypes.remove(clazz);
+    }
+
     public boolean isImplicitBeanArchiveScanningEnabled() {
         return implicitBeanArchiveScanningEnabled;
     }

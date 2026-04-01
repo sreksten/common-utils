@@ -45,6 +45,7 @@ public class ProducerBean<T> implements Bean<T> {
 
     // The disposer method, if any (only for producer methods)
     private Method disposerMethod;
+    private final Set<Integer> disposerParameterPositions = new HashSet<>();
 
     // BeanAttributes
     private String name;
@@ -461,7 +462,7 @@ public class ProducerBean<T> implements Bean<T> {
 
         for (int i = 0; i < parameters.length; i++) {
             // The @Disposes parameter gets the instance being disposed
-            if (hasDisposesAnnotation(parameters[i])) {
+            if (isDisposerParameter(parameters[i])) {
                 args[i] = instance;
             } else {
                 // Other parameters are normal injection points
@@ -526,7 +527,7 @@ public class ProducerBean<T> implements Bean<T> {
             if (arg == null) {
                 continue;
             }
-            if (skipDisposesParameter && hasDisposesAnnotation(parameter)) {
+            if (skipDisposesParameter && isDisposerParameter(parameter)) {
                 continue;
             }
             if (!isDependentParameter(parameter)) {
@@ -643,23 +644,24 @@ public class ProducerBean<T> implements Bean<T> {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private Object resolveProducerParameter(Parameter parameter) {
+        InjectionPoint registeredInjectionPoint = findRegisteredInjectionPoint(parameter);
+        Type requiredType = registeredInjectionPoint != null ? registeredInjectionPoint.getType() : parameter.getParameterizedType();
+        Annotation[] qualifiers = registeredInjectionPoint != null
+                ? registeredInjectionPoint.getQualifiers().toArray(new Annotation[0])
+                : parameter.getAnnotations();
+
         if (dependencyResolver instanceof BeanResolver) {
             BeanResolver beanResolver = (BeanResolver) dependencyResolver;
-            beanResolver.setCurrentInjectionPoint(new InjectionPointImpl(parameter, this));
+            InjectionPoint ip = registeredInjectionPoint != null ? registeredInjectionPoint : new InjectionPointImpl(parameter, this);
+            beanResolver.setCurrentInjectionPoint(ip);
             try {
-                return dependencyResolver.resolve(
-                        parameter.getParameterizedType(),
-                        parameter.getAnnotations()
-                );
+                return dependencyResolver.resolve(requiredType, qualifiers);
             } finally {
                 beanResolver.clearCurrentInjectionPoint();
             }
         }
 
-        return dependencyResolver.resolve(
-                parameter.getParameterizedType(),
-                parameter.getAnnotations()
-        );
+        return dependencyResolver.resolve(requiredType, qualifiers);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -672,29 +674,70 @@ public class ProducerBean<T> implements Bean<T> {
             }
         }
 
+        InjectionPoint registeredInjectionPoint = findRegisteredInjectionPoint(parameter);
+        if (registeredInjectionPoint != null) {
+            return registeredInjectionPoint;
+        }
+
         return new InjectionPointImpl(parameter, this);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private Object resolveDisposerParameter(Parameter parameter) {
+        InjectionPoint registeredInjectionPoint = findRegisteredInjectionPoint(parameter);
+        Type requiredType = registeredInjectionPoint != null ? registeredInjectionPoint.getType() : parameter.getParameterizedType();
+        Annotation[] qualifiers = registeredInjectionPoint != null
+                ? registeredInjectionPoint.getQualifiers().toArray(new Annotation[0])
+                : parameter.getAnnotations();
+
         if (dependencyResolver instanceof BeanResolver) {
             BeanResolver beanResolver = (BeanResolver) dependencyResolver;
             BeanImpl syntheticDeclaringBean = new BeanImpl(declaringClass, false);
-            beanResolver.setCurrentInjectionPoint(new InjectionPointImpl(parameter, syntheticDeclaringBean));
+            InjectionPoint ip = registeredInjectionPoint != null
+                    ? registeredInjectionPoint
+                    : new InjectionPointImpl(parameter, syntheticDeclaringBean);
+            beanResolver.setCurrentInjectionPoint(ip);
             try {
-                return dependencyResolver.resolve(
-                        parameter.getParameterizedType(),
-                        parameter.getAnnotations()
-                );
+                return dependencyResolver.resolve(requiredType, qualifiers);
             } finally {
                 beanResolver.clearCurrentInjectionPoint();
             }
         }
 
-        return dependencyResolver.resolve(
-                parameter.getParameterizedType(),
-                parameter.getAnnotations()
-        );
+        return dependencyResolver.resolve(requiredType, qualifiers);
+    }
+
+    private InjectionPoint findRegisteredInjectionPoint(Parameter parameter) {
+        if (parameter == null) {
+            return null;
+        }
+        int index = parameterIndex(parameter);
+        if (index < 0) {
+            return null;
+        }
+        for (InjectionPoint injectionPoint : injectionPoints) {
+            if (injectionPoint == null || !parameter.getDeclaringExecutable().equals(injectionPoint.getMember())) {
+                continue;
+            }
+            if (injectionPoint.getAnnotated() instanceof jakarta.enterprise.inject.spi.AnnotatedParameter<?>) {
+                jakarta.enterprise.inject.spi.AnnotatedParameter<?> annotatedParameter =
+                        (jakarta.enterprise.inject.spi.AnnotatedParameter<?>) injectionPoint.getAnnotated();
+                if (annotatedParameter.getPosition() == index) {
+                    return injectionPoint;
+                }
+            }
+        }
+        return null;
+    }
+
+    private int parameterIndex(Parameter parameter) {
+        Parameter[] parameters = parameter.getDeclaringExecutable().getParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            if (parameter.equals(parameters[i])) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     // Getters and setters
@@ -727,6 +770,13 @@ public class ProducerBean<T> implements Bean<T> {
         this.disposerMethod = disposerMethod;
     }
 
+    public void setDisposerParameterPositions(Set<Integer> positions) {
+        disposerParameterPositions.clear();
+        if (positions != null) {
+            disposerParameterPositions.addAll(positions);
+        }
+    }
+
     public boolean hasValidationErrors() {
         return hasValidationErrors;
     }
@@ -748,5 +798,17 @@ public class ProducerBean<T> implements Bean<T> {
 
     public void setDependencyResolver(DependencyResolver dependencyResolver) {
         this.dependencyResolver = dependencyResolver;
+    }
+
+    private boolean isDisposerParameter(Parameter parameter) {
+        if (parameter == null) {
+            return false;
+        }
+
+        int index = parameterIndex(parameter);
+        if (index >= 0 && disposerParameterPositions.contains(index)) {
+            return true;
+        }
+        return hasDisposesAnnotation(parameter);
     }
 }

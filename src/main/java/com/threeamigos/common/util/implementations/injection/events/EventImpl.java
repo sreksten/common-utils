@@ -11,6 +11,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
+import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
@@ -41,6 +42,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.lang.reflect.WildcardType;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -866,26 +868,9 @@ public class EventImpl<T> implements Event<T> {
         if (observerMethod == null) {
             return false;
         }
-        return hasExactlyOneObservedParameterForMode(observerMethod, async);
-    }
-
-    private boolean hasExactlyOneObservedParameterForMode(Method method, boolean asyncMode) {
-        int observesCount = 0;
-        int observesAsyncCount = 0;
-        for (Parameter parameter : method.getParameters()) {
-            if (AnnotationsEnum.hasObservesAnnotation(parameter)) {
-                observesCount++;
-            }
-            if (AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
-                observesAsyncCount++;
-            }
-        }
-
-        int total = observesCount + observesAsyncCount;
-        if (total != 1) {
-            return false;
-        }
-        return asyncMode ? observesAsyncCount == 1 : observesCount == 1;
+        // Observer metadata is validated during discovery; avoid re-validating via reflection
+        // so ProcessAnnotatedType wrapper metadata stays effective at runtime.
+        return observerInfo.isAsync() == async;
     }
 
     private boolean isDeclaringBeanEnabledForObserver(Bean<?> declaringBean) {
@@ -1052,28 +1037,40 @@ public class EventImpl<T> implements Event<T> {
             // Resolve method parameters
             Parameter[] parameters = method.getParameters();
             Object[] args = new Object[parameters.length];
+            int observedParameterPosition = resolveObservedParameterPosition(observerInfo, parameters);
 
             for (int i = 0; i < parameters.length; i++) {
                 Parameter param = parameters[i];
 
                 // The @Observes or @ObservesAsync parameter gets the event
-                if (AnnotationsEnum.hasObservesAnnotation(param) ||
-                    AnnotationsEnum.hasObservesAsyncAnnotation(param)) {
+                if (i == observedParameterPosition) {
                     args[i] = event;
                 } else if (EventMetadata.class.equals(param.getType())) {
                     args[i] = new EventMetadataImpl(qualifiers, firingInjectionPoint, event.getClass());
                 } else {
                     // Other parameters are injection points - resolve them
-                    Type paramType = param.getParameterizedType();
+                    InjectionPoint registeredInjectionPoint =
+                            findRegisteredObserverInjectionPoint(declaringBean, method, i);
+                    Type paramType = registeredInjectionPoint != null
+                            ? registeredInjectionPoint.getType()
+                            : param.getParameterizedType();
                     if (declaringBean != null && declaringBean.getBeanClass() != null) {
                         paramType = GenericTypeResolver.resolve(
-                                param.getParameterizedType(),
+                                paramType,
                                 declaringBean.getBeanClass(),
                                 method.getDeclaringClass()
                         );
                     }
-                    Annotation[] paramAnnotations = param.getAnnotations();
-                    args[i] = resolveObserverParameterWithContext(param, paramType, paramAnnotations, declaringBean);
+                    Annotation[] paramAnnotations = registeredInjectionPoint != null
+                            ? registeredInjectionPoint.getQualifiers().toArray(new Annotation[0])
+                            : param.getAnnotations();
+                    args[i] = resolveObserverParameterWithContext(
+                            param,
+                            paramType,
+                            paramAnnotations,
+                            declaringBean,
+                            registeredInjectionPoint
+                    );
                 }
             }
 
@@ -1095,8 +1092,8 @@ public class EventImpl<T> implements Event<T> {
                     // Observer receiver must be the current contextual instance, not a client proxy shell.
                     if (contextManager != null
                             && contextManager.isNormalScope(declaringBean.getScope())
-                            && REQUEST_SCOPED.matches(declaringBean.getScope())
-                            && !isContainerLifecycleEvent(event)) {
+                            && !isContainerLifecycleEvent(event)
+                            && !isContextLifecycleEvent()) {
                         @SuppressWarnings({"unchecked", "rawtypes"})
                         CreationalContext<Object> context =
                                 (CreationalContext<Object>) resolveBeanManager()
@@ -1124,7 +1121,7 @@ public class EventImpl<T> implements Event<T> {
                     method.invoke(beanInstance, args);
                 }
             } finally {
-                destroyDependentInvocationParameters(parameters, args);
+                destroyDependentInvocationParameters(parameters, args, observedParameterPosition);
                 if (destroyDependentReceiverExplicitly && declaringBean != null) {
                     if (!destroyBeanInstance(declaringBean, beanInstance, observerCreationalContext)) {
                         LifecycleMethodHelper.invokeLifecycleMethod(beanInstance, PRE_DESTROY);
@@ -1135,16 +1132,52 @@ public class EventImpl<T> implements Event<T> {
             }
 
         } catch (InvocationTargetException e) {
-            Throwable cause = e.getCause() == null ? e : e.getCause();
-            if (cause instanceof RuntimeException) {
-                throw (RuntimeException) cause;
-            }
-            throw new ObserverException(cause);
+            throw toRuntimeObserverFailure(e);
         } catch (RuntimeException e) {
-            throw e;
+            throw toRuntimeObserverFailure(e);
         } catch (Exception e) {
-            throw new ObserverException(e);
+            throw toRuntimeObserverFailure(e);
         }
+    }
+
+    private RuntimeException toRuntimeObserverFailure(Throwable throwable) {
+        Throwable cause = unwrapObserverInvocationThrowable(throwable);
+        if (cause instanceof RuntimeException) {
+            return (RuntimeException) cause;
+        }
+        if (cause instanceof Error) {
+            throw (Error) cause;
+        }
+        return new ObserverException(cause);
+    }
+
+    private Throwable unwrapObserverInvocationThrowable(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof InvocationTargetException) {
+                Throwable target = ((InvocationTargetException) current).getTargetException();
+                if (target == null || target == current) {
+                    return current;
+                }
+                current = target;
+                continue;
+            }
+            if (current instanceof UndeclaredThrowableException) {
+                Throwable undeclared = ((UndeclaredThrowableException) current).getUndeclaredThrowable();
+                if (undeclared == null || undeclared == current) {
+                    return current;
+                }
+                current = undeclared;
+                continue;
+            }
+            Throwable nested = current.getCause();
+            if (nested instanceof InvocationTargetException || nested instanceof UndeclaredThrowableException) {
+                current = nested;
+                continue;
+            }
+            return current;
+        }
+        return throwable;
     }
 
     private void invokeObserverWithContextCheck(ObserverMethodInfo observerInfo, Object event) {
@@ -1159,15 +1192,16 @@ public class EventImpl<T> implements Event<T> {
         }
     }
 
-    private void destroyDependentInvocationParameters(Parameter[] parameters, Object[] args) throws Exception {
+    private void destroyDependentInvocationParameters(Parameter[] parameters,
+                                                      Object[] args,
+                                                      int observedParameterPosition) throws Exception {
         for (int i = 0; i < parameters.length; i++) {
             Parameter parameter = parameters[i];
             Object arg = args[i];
             if (arg == null) {
                 continue;
             }
-            if (AnnotationsEnum.hasObservesAnnotation(parameter) ||
-                AnnotationsEnum.hasObservesAsyncAnnotation(parameter)) {
+            if (i == observedParameterPosition) {
                 continue;
             }
             if (!isDependentParameter(parameter)) {
@@ -1262,6 +1296,25 @@ public class EventImpl<T> implements Event<T> {
                 || "javax.enterprise.event.Shutdown".equals(eventClassName);
     }
 
+    private boolean isContextLifecycleEvent() {
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            return false;
+        }
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null || qualifier.annotationType() == null) {
+                continue;
+            }
+            String qualifierTypeName = qualifier.annotationType().getName();
+            if ("jakarta.enterprise.context.Initialized".equals(qualifierTypeName)
+                    || "jakarta.enterprise.context.Destroyed".equals(qualifierTypeName)
+                    || "javax.enterprise.context.Initialized".equals(qualifierTypeName)
+                    || "javax.enterprise.context.Destroyed".equals(qualifierTypeName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Annotation[] extractQualifiers(Annotation[] annotations) {
         if (annotations == null || annotations.length == 0) {
             return new Annotation[0];
@@ -1316,14 +1369,86 @@ public class EventImpl<T> implements Event<T> {
     private Object resolveObserverParameterWithContext(Parameter parameter,
                                                        Type parameterType,
                                                        Annotation[] parameterAnnotations,
-                                                       Bean<?> declaringBean) {
-        InjectionPoint injectionPoint = new InjectionPointImpl(parameter, declaringBean);
+                                                       Bean<?> declaringBean,
+                                                       InjectionPoint registeredInjectionPoint) {
+        InjectionPoint injectionPoint = registeredInjectionPoint != null
+                ? registeredInjectionPoint
+                : new InjectionPointImpl(parameter, declaringBean);
         beanResolver.setCurrentInjectionPoint(injectionPoint);
         try {
             return beanResolver.resolve(parameterType, parameterAnnotations);
         } finally {
             beanResolver.clearCurrentInjectionPoint();
         }
+    }
+
+    private int resolveObservedParameterPosition(ObserverMethodInfo observerInfo, Parameter[] parameters) {
+        int position = observerInfo.getObservedParameterPosition();
+        if (position >= 0 && position < parameters.length) {
+            return position;
+        }
+
+        Method method = observerInfo.getObserverMethod();
+        if (method == null) {
+            return -1;
+        }
+
+        int discovered = -1;
+        for (int i = 0; i < parameters.length; i++) {
+            if (AnnotationsEnum.hasObservesAnnotation(parameters[i]) ||
+                    AnnotationsEnum.hasObservesAsyncAnnotation(parameters[i])) {
+                if (discovered >= 0) {
+                    return -1;
+                }
+                discovered = i;
+            }
+        }
+        return discovered;
+    }
+
+    private InjectionPoint findRegisteredObserverInjectionPoint(Bean<?> declaringBean, Method method, int parameterIndex) {
+        if (declaringBean == null || method == null || parameterIndex < 0) {
+            return null;
+        }
+
+        if (declaringBean instanceof BeanImpl<?>) {
+            for (InjectionPoint injectionPoint : declaringBean.getInjectionPoints()) {
+                if (injectionPoint == null || !method.equals(injectionPoint.getMember())) {
+                    continue;
+                }
+
+                Annotated annotated = injectionPoint.getAnnotated();
+                if (annotated instanceof AnnotatedParameter<?>) {
+                    AnnotatedParameter<?> annotatedParameter = (AnnotatedParameter<?>) annotated;
+                    if (annotatedParameter.getPosition() == parameterIndex) {
+                        return injectionPoint;
+                    }
+                }
+            }
+        }
+
+        Parameter[] parameters = method.getParameters();
+        if (parameterIndex >= parameters.length) {
+            return null;
+        }
+
+        Class<?> beanClass = declaringBean.getBeanClass();
+        AnnotatedType<?> override = beanClass != null ? knowledgeBase.getAnnotatedTypeOverride(beanClass) : null;
+        if (override != null) {
+            Parameter parameter = parameters[parameterIndex];
+            AnnotatedParameter<?> annotatedParameter = AnnotatedMetadataHelper.findAnnotatedParameter(override, parameter);
+            if (annotatedParameter != null) {
+                return new InjectionPointImpl(
+                        parameter,
+                        declaringBean,
+                        annotatedParameter.getBaseType(),
+                        annotatedParameter.getAnnotations().toArray(new Annotation[0]),
+                        annotatedParameter
+                );
+            }
+        }
+
+        return null;
     }
 
     private boolean isDependentParameter(Parameter parameter) {

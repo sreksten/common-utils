@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.decorators;
 
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
+import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
@@ -30,11 +31,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDelegateAnnotation;
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasInjectAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
 
 /**
  * Generates decorator proxies that wrap bean instances with decorator chains.
@@ -109,9 +113,12 @@ public class DecoratorAwareProxyGenerator {
     // Key: Decorator class
     // Value: Generated proxy class (if needed for decoration)
     private final ConcurrentHashMap<Class<?>, Class<?>> decoratorProxyCache = new ConcurrentHashMap<>();
+    private final Map<Object, DecoratorChain> activeChains =
+            Collections.synchronizedMap(new WeakHashMap<Object, DecoratorChain>());
 
     public void clearCache() {
         decoratorProxyCache.clear();
+        activeChains.clear();
     }
 
     /**
@@ -205,7 +212,33 @@ public class DecoratorAwareProxyGenerator {
 
         // Set target and build
         chainBuilder.setTarget(targetInstance);
-        return chainBuilder.build();
+        DecoratorChain chain = chainBuilder.build();
+        activeChains.put(chain.getOutermostInstance(), chain);
+        return chain;
+    }
+
+    public void destroyDecoratorChain(Object outermostInstance) {
+        if (outermostInstance == null) {
+            return;
+        }
+
+        DecoratorChain chain;
+        synchronized (activeChains) {
+            chain = activeChains.remove(outermostInstance);
+        }
+        if (chain == null || chain.isEmpty()) {
+            return;
+        }
+
+        List<DecoratorInstance> decorators = chain.getDecorators();
+        for (int i = decorators.size() - 1; i >= 0; i--) {
+            Object decoratorInstance = decorators.get(i).getDecoratorInstance();
+            try {
+                LifecycleMethodHelper.invokeLifecycleMethod(decoratorInstance, PRE_DESTROY);
+            } catch (Exception ignored) {
+                // Continue destroying remaining decorators.
+            }
+        }
     }
 
     /**

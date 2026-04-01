@@ -151,11 +151,11 @@ public class ContextManager {
                 if (applicationListener != null) {
                     applicationListener.onBeforeDestroyed();
                 }
-                applicationScopeContext.destroy();
-                destroyedContexts.put(applicationScopeContext, Boolean.TRUE);
                 if (applicationListener != null) {
                     applicationListener.onDestroyed();
                 }
+                applicationScopeContext.destroy();
+                destroyedContexts.put(applicationScopeContext, Boolean.TRUE);
             } catch (Exception e) {
                 messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
             }

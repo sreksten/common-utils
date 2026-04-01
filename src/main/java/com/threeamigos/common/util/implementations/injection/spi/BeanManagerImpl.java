@@ -19,6 +19,7 @@ import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
 import jakarta.el.ELResolver;
@@ -317,6 +318,9 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
         for (Type beanType : beanTypes) {
             try {
+                if (!sameRawType(requestedType, beanType)) {
+                    continue;
+                }
                 if (typeChecker.isAssignable(requestedType, beanType)) {
                     return true;
                 }
@@ -331,6 +335,45 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         Class<?> requestedClass = (Class<?>) requestedType;
         Class<?> alternate = requestedClass.isPrimitive() ? boxPrimitive(requestedClass) : unboxWrapper(requestedClass);
         return alternate != null && beanTypes.contains(alternate);
+    }
+
+    private boolean sameRawType(Type requiredType, Type beanType) {
+        if (requiredType == null || beanType == null) {
+            return false;
+        }
+        if (requiredType instanceof TypeVariable || requiredType instanceof WildcardType) {
+            return true;
+        }
+
+        Class<?> requiredRaw;
+        Class<?> beanRaw;
+        try {
+            requiredRaw = normalizePrimitiveType(RawTypeExtractor.getRawType(requiredType));
+            beanRaw = normalizePrimitiveType(RawTypeExtractor.getRawType(beanType));
+        } catch (RuntimeException e) {
+            return true;
+        }
+
+        if (requiredRaw == null || beanRaw == null) {
+            return true;
+        }
+        return requiredRaw.equals(beanRaw);
+    }
+
+    private Class<?> normalizePrimitiveType(Class<?> type) {
+        if (type == null || !type.isPrimitive()) {
+            return type;
+        }
+        if (type == int.class) return Integer.class;
+        if (type == long.class) return Long.class;
+        if (type == double.class) return Double.class;
+        if (type == float.class) return Float.class;
+        if (type == boolean.class) return Boolean.class;
+        if (type == char.class) return Character.class;
+        if (type == byte.class) return Byte.class;
+        if (type == short.class) return Short.class;
+        if (type == void.class) return Void.class;
+        return type;
     }
 
     private Class<?> boxPrimitive(Class<?> type) {
@@ -448,6 +491,9 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             // Check type compatibility
             boolean typeMatches = false;
             for (Type type : bean.getTypes()) {
+                if (!sameRawType(beanType, type)) {
+                    continue;
+                }
                 if (typeChecker.isLookupTypeAssignable(beanType, type)) {
                     typeMatches = true;
                     break;
@@ -487,6 +533,9 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
             boolean typeMatches = false;
             for (Type type : bean.getTypes()) {
+                if (!sameRawType(beanType, type)) {
+                    continue;
+                }
                 if (typeChecker.isLookupTypeAssignable(beanType, type)) {
                     typeMatches = true;
                     break;

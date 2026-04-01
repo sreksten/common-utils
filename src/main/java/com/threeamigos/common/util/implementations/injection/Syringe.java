@@ -40,9 +40,11 @@ import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvi
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
+import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.BeforeDestroyed;
 import jakarta.enterprise.context.Destroyed;
@@ -75,8 +77,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -140,6 +144,12 @@ public class Syringe {
      * Package names to scan for beans.
      */
     private final String[] packageNames;
+    /**
+     * If true, keep only classes declared directly in the requested packages.
+     * This is used by class-based convenience bootstrap to avoid accidental
+     * pickup from sibling subpackages that contain unrelated test fixtures.
+     */
+    private final boolean exactPackageMatchOnly;
 
     /**
      * Knowledge base containing all discovered beans, interceptors, decorators, observers.
@@ -235,6 +245,7 @@ public class Syringe {
     public Syringe() {
         this.messageHandler = new ConsoleMessageHandler();
         this.packageNames = new String[0];
+        this.exactPackageMatchOnly = false;
         knowledgeBase = new KnowledgeBase(messageHandler);
         contextManager = new ContextManager(messageHandler);
     }
@@ -242,6 +253,7 @@ public class Syringe {
     public Syringe(String... packageNames) {
         this.messageHandler = new ConsoleMessageHandler();
         this.packageNames = packageNames != null ? packageNames : new String[0];
+        this.exactPackageMatchOnly = false;
         knowledgeBase = new KnowledgeBase(messageHandler);
         contextManager = new ContextManager(messageHandler);
     }
@@ -252,6 +264,7 @@ public class Syringe {
         for (int i = 0; i < classes.length; i++) {
             this.packageNames[i] = classes[i].getPackage().getName();
         }
+        this.exactPackageMatchOnly = true;
         knowledgeBase = new KnowledgeBase(messageHandler);
         contextManager = new ContextManager(messageHandler);
     }
@@ -573,6 +586,7 @@ public class Syringe {
         info("Discovering beans in packages: " + Arrays.toString(packageNames));
 
         ParallelClasspathScanner scanner;
+        Set<Class<?>> preexistingDiscoveredClasses = new HashSet<Class<?>>(knowledgeBase.getClasses());
         try (ParallelTaskExecutor parallelTaskExecutor = ParallelTaskExecutor.createExecutor()) {
             ClassProcessor classProcessor = new ClassProcessor(parallelTaskExecutor, knowledgeBase);
             scanner = new ParallelClasspathScanner(
@@ -582,6 +596,7 @@ public class Syringe {
                     packageNames
             );
             parallelTaskExecutor.awaitCompletion();
+            filterDiscoveredClassesToRequestedPackages(preexistingDiscoveredClasses);
         } catch (Exception e) {
             throw new DeploymentException("Bean discovery failed", e);
         }
@@ -595,6 +610,31 @@ public class Syringe {
 
         // Process registered AnnotatedTypes (added programmatically via BeforeBeanDiscovery)
         processRegisteredAnnotatedTypes();
+    }
+
+    private void filterDiscoveredClassesToRequestedPackages(Set<Class<?>> preexistingDiscoveredClasses) {
+        if (!exactPackageMatchOnly || packageNames == null || packageNames.length == 0) {
+            return;
+        }
+        Set<String> allowedPackages = new HashSet<String>();
+        for (String packageName : packageNames) {
+            if (packageName != null && !packageName.isEmpty()) {
+                allowedPackages.add(packageName);
+            }
+        }
+        if (allowedPackages.isEmpty()) {
+            return;
+        }
+        for (Class<?> discovered : new ArrayList<Class<?>>(knowledgeBase.getClasses())) {
+            if (preexistingDiscoveredClasses != null && preexistingDiscoveredClasses.contains(discovered)) {
+                continue;
+            }
+            Package discoveredPackage = discovered.getPackage();
+            String discoveredPackageName = discoveredPackage != null ? discoveredPackage.getName() : "";
+            if (!allowedPackages.contains(discoveredPackageName)) {
+                knowledgeBase.removeDiscoveredClass(discovered);
+            }
+        }
     }
 
     /**
@@ -1746,7 +1786,10 @@ public class Syringe {
                 Class<?> beanClass = managedBean.getBeanClass();
 
                 try {
-                    AnnotatedType<?> annotatedType = new SimpleAnnotatedType<>(beanClass);
+                    AnnotatedType<?> annotatedType = knowledgeBase.getAnnotatedTypeOverride(beanClass);
+                    if (annotatedType == null) {
+                        annotatedType = new SimpleAnnotatedType<>(beanClass);
+                    }
                     InjectionTargetFactory<?> factory = new InjectionTargetFactoryImpl<>(annotatedType, beanManager);
 
                     @SuppressWarnings("unchecked")
@@ -1761,7 +1804,11 @@ public class Syringe {
                     fireEventToExtensions(event);
 
                     InjectionTarget<?> finalTarget = event.getInjectionTargetInternal();
-                    managedBean.setCustomInjectionTarget((InjectionTarget) finalTarget);
+                    if (finalTarget != null && finalTarget != injectionTarget) {
+                        managedBean.setCustomInjectionTarget((InjectionTarget) finalTarget);
+                    } else {
+                        managedBean.setCustomInjectionTarget(null);
+                    }
                 } catch (DefinitionException e) {
                     throw e;
                 } catch (Exception e) {
@@ -2398,15 +2445,43 @@ public class Syringe {
         int observesCount = 0;
         int observesAsyncCount = 0;
         Parameter observedParameter = null;
+        Annotation[] observedParameterAnnotations = null;
+        Type observedParameterBaseType = null;
+        int observedParameterPosition = -1;
+        AnnotatedMethod<?> annotatedMethod = null;
+        AnnotatedType<?> override = declaringBean != null
+                ? knowledgeBase.getAnnotatedTypeOverride(declaringBean.getBeanClass())
+                : null;
+        if (override != null) {
+            annotatedMethod = AnnotatedMetadataHelper.findAnnotatedMethod(override, method);
+        }
 
-        for (Parameter parameter : method.getParameters()) {
-            if (hasObservesAnnotation(parameter)) {
+        Parameter[] parameters = method.getParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter parameter = parameters[i];
+            AnnotatedParameter<?> annotatedParameter = annotatedMethod != null
+                    ? findAnnotatedParameter(annotatedMethod, i)
+                    : null;
+            Annotation[] parameterAnnotations = annotatedParameter != null
+                    ? annotatedParameter.getAnnotations().toArray(new Annotation[0])
+                    : parameter.getAnnotations();
+            Type parameterBaseType = annotatedParameter != null
+                    ? annotatedParameter.getBaseType()
+                    : parameter.getParameterizedType();
+
+            if (hasObservesAnnotationIn(parameterAnnotations)) {
                 observesCount++;
                 observedParameter = parameter;
+                observedParameterAnnotations = parameterAnnotations;
+                observedParameterBaseType = parameterBaseType;
+                observedParameterPosition = i;
             }
-            if (hasObservesAsyncAnnotation(parameter)) {
+            if (hasObservesAsyncAnnotationIn(parameterAnnotations)) {
                 observesAsyncCount++;
                 observedParameter = parameter;
+                observedParameterAnnotations = parameterAnnotations;
+                observedParameterBaseType = parameterBaseType;
+                observedParameterPosition = i;
             }
         }
 
@@ -2419,27 +2494,31 @@ public class Syringe {
 
         boolean async = observesAsyncCount > 0;
         Type eventType = GenericTypeResolver.resolve(
-                observedParameter.getParameterizedType(),
+                observedParameterBaseType != null ? observedParameterBaseType : observedParameter.getParameterizedType(),
                 declaringBean.getBeanClass(),
                 method.getDeclaringClass()
         );
-        Set<Annotation> qualifiers = extractObserverQualifiers(observedParameter);
+        Set<Annotation> qualifiers = extractObserverQualifiers(
+                observedParameterAnnotations != null ? observedParameterAnnotations : observedParameter.getAnnotations());
         Reception reception = Reception.ALWAYS;
         TransactionPhase transactionPhase = TransactionPhase.IN_PROGRESS;
         int priority = jakarta.interceptor.Interceptor.Priority.APPLICATION + 500;
 
         if (async) {
-            jakarta.enterprise.event.ObservesAsync observesAsync = getObservesAsyncAnnotation(observedParameter);
+            jakarta.enterprise.event.ObservesAsync observesAsync = getObservesAsyncAnnotationFrom(
+                    observedParameterAnnotations != null ? observedParameterAnnotations : observedParameter.getAnnotations());
             if (observesAsync != null) {
                 reception = observesAsync.notifyObserver();
             }
         } else {
-            jakarta.enterprise.event.Observes observes = getObservesAnnotation(observedParameter);
+            jakarta.enterprise.event.Observes observes = getObservesAnnotationFrom(
+                    observedParameterAnnotations != null ? observedParameterAnnotations : observedParameter.getAnnotations());
             if (observes != null) {
                 reception = observes.notifyObserver();
                 transactionPhase = observes.during();
             }
-            Integer paramPriority = getPriorityValue(observedParameter);
+            Integer paramPriority = getPriorityValueFromAnnotations(
+                    observedParameterAnnotations != null ? observedParameterAnnotations : observedParameter.getAnnotations());
             if (paramPriority != null) {
                 priority = paramPriority;
             } else {
@@ -2451,18 +2530,89 @@ public class Syringe {
         }
 
         return new ObserverMethodInfo(
-                method, eventType, qualifiers, reception, transactionPhase, async, declaringBean, priority
+                method,
+                eventType,
+                qualifiers,
+                reception,
+                transactionPhase,
+                async,
+                declaringBean,
+                priority,
+                observedParameterPosition
         );
     }
 
-    private Set<Annotation> extractObserverQualifiers(Parameter observedParameter) {
+    private Set<Annotation> extractObserverQualifiers(Annotation[] observedParameterAnnotations) {
         Set<Annotation> qualifiers = new HashSet<Annotation>();
-        for (Annotation annotation : observedParameter.getAnnotations()) {
+        for (Annotation annotation : observedParameterAnnotations) {
             if (hasQualifierAnnotation(annotation.annotationType())) {
                 qualifiers.add(annotation);
             }
         }
         return qualifiers;
+    }
+
+    private AnnotatedParameter<?> findAnnotatedParameter(AnnotatedMethod<?> annotatedMethod, int position) {
+        if (annotatedMethod == null) {
+            return null;
+        }
+        for (AnnotatedParameter<?> parameter : annotatedMethod.getParameters()) {
+            if (parameter.getPosition() == position) {
+                return parameter;
+            }
+        }
+        return null;
+    }
+
+    private boolean hasObservesAnnotationIn(Annotation[] annotations) {
+        return getObservesAnnotationFrom(annotations) != null;
+    }
+
+    private boolean hasObservesAsyncAnnotationIn(Annotation[] annotations) {
+        return getObservesAsyncAnnotationFrom(annotations) != null;
+    }
+
+    private jakarta.enterprise.event.Observes getObservesAnnotationFrom(Annotation[] annotations) {
+        for (Annotation annotation : annotations) {
+            if (annotation instanceof jakarta.enterprise.event.Observes) {
+                return (jakarta.enterprise.event.Observes) annotation;
+            }
+        }
+        return null;
+    }
+
+    private jakarta.enterprise.event.ObservesAsync getObservesAsyncAnnotationFrom(Annotation[] annotations) {
+        for (Annotation annotation : annotations) {
+            if (annotation instanceof jakarta.enterprise.event.ObservesAsync) {
+                return (jakarta.enterprise.event.ObservesAsync) annotation;
+            }
+        }
+        return null;
+    }
+
+    private Integer getPriorityValueFromAnnotations(Annotation[] annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation == null) {
+                continue;
+            }
+            String annotationTypeName = annotation.annotationType().getName();
+            if (Priority.class.getName().equals(annotationTypeName) ||
+                    "javax.annotation.Priority".equals(annotationTypeName)) {
+                try {
+                    Method valueMethod = annotation.annotationType().getMethod("value");
+                    Object value = valueMethod.invoke(annotation);
+                    if (value instanceof Integer) {
+                        return (Integer) value;
+                    }
+                } catch (ReflectiveOperationException ignored) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     private String observerInfoKey(ObserverMethodInfo info) {
@@ -3180,7 +3330,7 @@ public class Syringe {
 
         // Collect all matching observer methods across all extensions, with priority
         for (Extension extension : extensions) {
-            collectExtensionObserverMethods(extension, eventType, invocations);
+            collectExtensionObserverMethods(extension, event, invocations);
         }
 
         // Sort by @Priority (ascending). Methods without @Priority run last.
@@ -3298,8 +3448,9 @@ public class Syringe {
     }
 
     private void collectExtensionObserverMethods(Extension extension,
-                                                 Class<?> eventType,
+                                                 Object event,
                                                  List<ExtensionObserverInvocation> sink) {
+        Class<?> eventType = event != null ? event.getClass() : Object.class;
         for (Method method : extension.getClass().getMethods()) {
             Parameter[] parameters = method.getParameters();
             int observesParameterIndex = -1;
@@ -3321,7 +3472,8 @@ public class Syringe {
                 if (hasObservesAnnotation(parameter)) {
                     Class<?> observedType = parameter.getType();
                     validateExtensionObserverStaticMethod(method, parameter, observedType);
-                    if (observedType.isAssignableFrom(eventType)) {
+                    if (observedType.isAssignableFrom(eventType) &&
+                            matchesObservedGenericEventType(parameter, event)) {
                         int priority = resolvePriority(method, parameter);
                         Set<Class<? extends Annotation>> withAnnotationsFilter =
                                 resolveWithAnnotationsFilter(parameter);
@@ -3335,6 +3487,87 @@ public class Syringe {
                     }
                 }
             }
+        }
+    }
+
+    private boolean matchesObservedGenericEventType(Parameter observerParameter, Object event) {
+        if (event == null) {
+            return true;
+        }
+
+        Type parameterizedObservedType = observerParameter.getParameterizedType();
+        if (!(parameterizedObservedType instanceof ParameterizedType)) {
+            return true;
+        }
+
+        ParameterizedType observedParameterizedType = (ParameterizedType) parameterizedObservedType;
+        Type rawType = observedParameterizedType.getRawType();
+        if (!(rawType instanceof Class) ||
+                !ProcessAnnotatedType.class.isAssignableFrom((Class<?>) rawType) ||
+                !(event instanceof ProcessAnnotatedType<?>)) {
+            return true;
+        }
+
+        Type[] observedTypeArguments = observedParameterizedType.getActualTypeArguments();
+        if (observedTypeArguments.length != 1) {
+            return true;
+        }
+
+        AnnotatedType<?> annotatedType = extractAnnotatedTypeFromPatEvent(event);
+        if (annotatedType == null || annotatedType.getJavaClass() == null) {
+            return true;
+        }
+
+        return matchesObservedTypeArgument(observedTypeArguments[0], annotatedType.getJavaClass());
+    }
+
+    private boolean matchesObservedTypeArgument(Type observedTypeArgument, Class<?> discoveredType) {
+        if (observedTypeArgument instanceof Class<?>) {
+            Class<?> observedClass = (Class<?>) observedTypeArgument;
+            return observedClass.isAssignableFrom(discoveredType);
+        }
+
+        if (observedTypeArgument instanceof ParameterizedType) {
+            Type rawObservedType = ((ParameterizedType) observedTypeArgument).getRawType();
+            return rawObservedType instanceof Class<?> &&
+                    ((Class<?>) rawObservedType).isAssignableFrom(discoveredType);
+        }
+
+        if (observedTypeArgument instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) observedTypeArgument;
+
+            Type[] upperBounds = wildcardType.getUpperBounds();
+            for (Type upperBound : upperBounds) {
+                if (upperBound instanceof Class<?> &&
+                        !((Class<?>) upperBound).isAssignableFrom(discoveredType)) {
+                    return false;
+                }
+            }
+
+            Type[] lowerBounds = wildcardType.getLowerBounds();
+            for (Type lowerBound : lowerBounds) {
+                if (lowerBound instanceof Class<?> &&
+                        !discoveredType.isAssignableFrom((Class<?>) lowerBound)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // TypeVariable and other reflective forms are treated as unrestricted for PAT matching.
+        return true;
+    }
+
+    private AnnotatedType<?> extractAnnotatedTypeFromPatEvent(Object event) {
+        if (event instanceof ProcessAnnotatedTypeImpl<?>) {
+            return ((ProcessAnnotatedTypeImpl<?>) event).getAnnotatedTypeInternal();
+        }
+        try {
+            return ((ProcessAnnotatedType<?>) event).getAnnotatedType();
+        } catch (IllegalStateException ignored) {
+            // Guarded lifecycle event implementations may reject access outside invocation.
+            return null;
         }
     }
 

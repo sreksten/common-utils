@@ -3,7 +3,9 @@ package com.threeamigos.common.util.implementations.injection.interceptors;
 import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import jakarta.enterprise.inject.spi.InterceptionType;
+import jakarta.enterprise.inject.spi.AnnotatedType;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
@@ -91,7 +93,7 @@ public class InterceptorResolver {
 
         Set<Annotation> classBindings = extractInterceptorBindings(targetClass);
         Set<Annotation> targetBindings = method != null
-                ? mergeBindings(classBindings, extractInterceptorBindings(method))
+                ? mergeBindings(classBindings, extractInterceptorBindings(method, targetClass))
                 : classBindings;
 
         // If no bindings, no interceptors apply
@@ -133,7 +135,7 @@ public class InterceptorResolver {
 
         Set<Annotation> classBindings = extractInterceptorBindings(targetClass);
         Set<Annotation> constructorBindings = constructor != null
-                ? extractInterceptorBindings(constructor)
+                ? extractInterceptorBindings(constructor, targetClass)
                 : Collections.emptySet();
         Set<Annotation> targetBindings = mergeBindings(classBindings, constructorBindings);
 
@@ -159,8 +161,32 @@ public class InterceptorResolver {
             return extractInterceptorBindingsFromHierarchy((Class<?>) element);
         }
 
+        Annotation[] annotations = annotationsOf(element, null);
+        if (annotations == null || annotations.length == 0) {
+            return Collections.emptySet();
+        }
+
         Map<Class<? extends Annotation>, Annotation> bindings = new LinkedHashMap<>();
-        for (Annotation annotation : element.getAnnotations()) {
+        for (Annotation annotation : annotations) {
+            if (isInterceptorBinding(annotation.annotationType())) {
+                addBindingWithTransitives(annotation, bindings, new HashSet<>(), true);
+            }
+        }
+        return new HashSet<>(bindings.values());
+    }
+
+    private Set<Annotation> extractInterceptorBindings(AnnotatedElement element, Class<?> targetClass) {
+        if (element instanceof Class<?>) {
+            return extractInterceptorBindings((Class<?>) element);
+        }
+
+        Annotation[] annotations = annotationsOf(element, targetClass);
+        if (annotations == null || annotations.length == 0) {
+            return Collections.emptySet();
+        }
+
+        Map<Class<? extends Annotation>, Annotation> bindings = new LinkedHashMap<>();
+        for (Annotation annotation : annotations) {
             if (isInterceptorBinding(annotation.annotationType())) {
                 addBindingWithTransitives(annotation, bindings, new HashSet<>(), true);
             }
@@ -209,9 +235,11 @@ public class InterceptorResolver {
             return new HashSet<>();
         }
 
+        Annotation[] classAnnotations = annotationsOf(type, type);
+
         // 1) Direct class-level interceptor bindings (including inherited Java @Inherited ones)
         // take precedence over bindings declared on stereotypes.
-        for (Annotation annotation : type.getAnnotations()) {
+        for (Annotation annotation : classAnnotations) {
             if (isInterceptorBinding(annotation.annotationType())) {
                 addBindingWithTransitives(annotation, bindingsByType, new HashSet<>(), true);
             }
@@ -219,7 +247,7 @@ public class InterceptorResolver {
 
         // 2) Add stereotype-declared bindings only when the bean class doesn't already
         // declare the same interceptor binding type.
-        for (Annotation annotation : type.getAnnotations()) {
+        for (Annotation annotation : classAnnotations) {
             if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
                 Set<Annotation> stereotypeBindings = extractInterceptorBindingsFromStereotype(annotation.annotationType());
                 for (Annotation stereotypeBinding : stereotypeBindings) {
@@ -231,6 +259,28 @@ public class InterceptorResolver {
         }
 
         return new HashSet<>(bindingsByType.values());
+    }
+
+    private Annotation[] annotationsOf(AnnotatedElement element, Class<?> targetClass) {
+        if (element instanceof Class<?>) {
+            Class<?> clazz = (Class<?>) element;
+            AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(clazz);
+            if (override != null) {
+                return override.getAnnotations().toArray(new Annotation[0]);
+            }
+            return clazz.getAnnotations();
+        }
+
+        Class<?> declaringClass = targetClass;
+        if (declaringClass == null) {
+            if (element instanceof Method) {
+                declaringClass = ((Method) element).getDeclaringClass();
+            } else if (element instanceof Constructor<?>) {
+                declaringClass = ((Constructor<?>) element).getDeclaringClass();
+            }
+        }
+        AnnotatedType<?> override = declaringClass != null ? knowledgeBase.getAnnotatedTypeOverride(declaringClass) : null;
+        return AnnotatedMetadataHelper.annotationsOf(override, element);
     }
 
     private Set<Annotation> mergeBindings(Set<Annotation> inheritedBindings, Set<Annotation> overridingBindings) {

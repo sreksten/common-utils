@@ -12,6 +12,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.Producer
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
@@ -25,6 +26,8 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InterceptionFactory;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.enterprise.inject.spi.AnnotatedMethod;
+import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.inject.Provider;
 
@@ -38,6 +41,8 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -1552,9 +1557,25 @@ public class CDI41InjectionValidator {
             return false;
         }
         Method method = (Method) injectionPoint.getMember();
-        for (Parameter parameter : method.getParameters()) {
-            if (hasObservesAnnotation(parameter) ||
-                hasObservesAsyncAnnotation(parameter)) {
+        Class<?> beanClass = injectionPoint.getBean() != null ? injectionPoint.getBean().getBeanClass() : null;
+        AnnotatedType<?> override = beanClass != null ? knowledgeBase.getAnnotatedTypeOverride(beanClass) : null;
+        if (override == null) {
+            for (Parameter parameter : method.getParameters()) {
+                if (hasObservesAnnotation(parameter) ||
+                    hasObservesAsyncAnnotation(parameter)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        AnnotatedMethod<?> annotatedMethod = AnnotatedMetadataHelper.findAnnotatedMethod(override, method);
+        if (annotatedMethod == null) {
+            return false;
+        }
+        for (AnnotatedParameter<?> parameter : annotatedMethod.getParameters()) {
+            Annotation[] annotations = parameter.getAnnotations().toArray(new Annotation[0]);
+            if (hasObservesAnnotationIn(annotations) || hasObservesAsyncAnnotationIn(annotations)) {
                 return true;
             }
         }
@@ -2158,6 +2179,9 @@ public class CDI41InjectionValidator {
     private boolean isTypeCompatible(Type requiredType, Set<Type> beanTypes) {
         for (Type beanType : beanTypes) {
             try {
+                if (!sameRawType(requiredType, beanType)) {
+                    continue;
+                }
                 // Use TypeChecker for proper type matching with generic support
                 if (typeChecker.isAssignable(requiredType, beanType)) {
                     return true;
@@ -2168,6 +2192,45 @@ public class CDI41InjectionValidator {
         }
 
         return false;
+    }
+
+    private boolean sameRawType(Type requiredType, Type beanType) {
+        if (requiredType == null || beanType == null) {
+            return false;
+        }
+        if (requiredType instanceof TypeVariable || requiredType instanceof WildcardType) {
+            return true;
+        }
+
+        Class<?> requiredRaw;
+        Class<?> beanRaw;
+        try {
+            requiredRaw = normalizePrimitiveType(RawTypeExtractor.getRawType(requiredType));
+            beanRaw = normalizePrimitiveType(RawTypeExtractor.getRawType(beanType));
+        } catch (RuntimeException e) {
+            return true;
+        }
+
+        if (requiredRaw == null || beanRaw == null) {
+            return true;
+        }
+        return requiredRaw.equals(beanRaw);
+    }
+
+    private Class<?> normalizePrimitiveType(Class<?> type) {
+        if (type == null || !type.isPrimitive()) {
+            return type;
+        }
+        if (type == int.class) return Integer.class;
+        if (type == long.class) return Long.class;
+        if (type == double.class) return Double.class;
+        if (type == float.class) return Float.class;
+        if (type == boolean.class) return Boolean.class;
+        if (type == char.class) return Character.class;
+        if (type == byte.class) return Byte.class;
+        if (type == short.class) return Short.class;
+        if (type == void.class) return Void.class;
+        return type;
     }
 
     /**
@@ -2395,10 +2458,13 @@ public class CDI41InjectionValidator {
 
             BeanImpl<?> beanImpl = (BeanImpl<?>) bean;
             Class<?> beanClass = beanImpl.getBeanClass();
+            @SuppressWarnings("unchecked")
+            AnnotatedType<?> annotatedTypeOverride =
+                    knowledgeBase.getAnnotatedTypeOverride(beanClass);
 
             // Scan all methods for @Observes and @ObservesAsync
-            for (java.lang.reflect.Method method : collectObserverCandidateMethods(beanClass)) {
-                boolean valid = validateObserverMethod(method, bean, registerObserverInfos);
+            for (ObserverMethodCandidate candidate : collectObserverCandidateMethods(beanClass, annotatedTypeOverride)) {
+                boolean valid = validateObserverMethod(candidate, beanImpl, registerObserverInfos);
                 allValid &= valid;
             }
         }
@@ -2414,19 +2480,24 @@ public class CDI41InjectionValidator {
      * @param declaringBean the bean that declares this method
      * @return true if valid
      */
-    private boolean validateObserverMethod(java.lang.reflect.Method method, Bean<?> declaringBean,
+    private boolean validateObserverMethod(ObserverMethodCandidate candidate,
+                                           BeanImpl<?> declaringBean,
                                            boolean registerObserverInfo) {
+        Method method = candidate.method;
+        List<ObserverParameterMetadata> parameters =
+                resolveObserverParameterMetadata(method, candidate.annotatedMethod, declaringBean.getBeanClass());
+
         // Count @Observes and @ObservesAsync parameters
         int observesCount = 0;
         int observesAsyncCount = 0;
-        java.lang.reflect.Parameter observedParameter = null;
+        ObserverParameterMetadata observedParameter = null;
 
-        for (java.lang.reflect.Parameter parameter : method.getParameters()) {
-            if (hasObservesAnnotation(parameter)) {
+        for (ObserverParameterMetadata parameter : parameters) {
+            if (hasObservesAnnotationIn(parameter.annotations)) {
                 observesCount++;
                 observedParameter = parameter;
             }
-            if (hasObservesAsyncAnnotation(parameter)) {
+            if (hasObservesAsyncAnnotationIn(parameter.annotations)) {
                 observesAsyncCount++;
                 observedParameter = parameter;
             }
@@ -2459,11 +2530,11 @@ public class CDI41InjectionValidator {
         // Extract observer metadata
         boolean async = observesAsyncCount > 0;
         Type eventType = GenericTypeResolver.resolve(
-                observedParameter.getParameterizedType(),
+                observedParameter.baseType,
                 declaringBean.getBeanClass(),
                 method.getDeclaringClass()
         );
-        Set<Annotation> qualifiers = extractQualifiers(observedParameter);
+        Set<Annotation> qualifiers = extractQualifiers(observedParameter.annotations);
 
         // Extract reception and transaction phase
         jakarta.enterprise.event.Reception reception;
@@ -2472,12 +2543,12 @@ public class CDI41InjectionValidator {
         if (async) {
             // Extract from @ObservesAsync
             jakarta.enterprise.event.ObservesAsync observesAsync =
-                getObservesAsyncAnnotation(observedParameter);
+                getObservesAsyncAnnotationFrom(observedParameter.annotations);
             reception = observesAsync.notifyObserver();
         } else {
             // Extract from @Observes
             jakarta.enterprise.event.Observes observes =
-                getObservesAnnotation(observedParameter);
+                getObservesAnnotationFrom(observedParameter.annotations);
             reception = observes.notifyObserver();
             transactionPhase = observes.during();
         }
@@ -2499,7 +2570,7 @@ public class CDI41InjectionValidator {
         // - Default is Interceptor.Priority.APPLICATION + 500
         // - @Priority on async observed parameter is non-portable
         int priority = jakarta.interceptor.Interceptor.Priority.APPLICATION + 500;
-        Integer parameterPriority = getPriorityValue(observedParameter);
+        Integer parameterPriority = getPriorityValueFromAnnotations(observedParameter.annotations);
         if (parameterPriority != null) {
             if (async) {
                 throw new NonPortableBehaviourException(
@@ -2527,7 +2598,8 @@ public class CDI41InjectionValidator {
                 transactionPhase,
                 async,
                 declaringBean,
-                priority
+                priority,
+                observedParameter.position
             );
             knowledgeBase.addObserverMethodInfo(observerMethodInfo);
         }
@@ -2538,9 +2610,9 @@ public class CDI41InjectionValidator {
      * Extracts qualifiers from a parameter.
      * Qualifiers are annotations annotated with @Qualifier.
      */
-    private Set<Annotation> extractQualifiers(java.lang.reflect.Parameter parameter) {
+    private Set<Annotation> extractQualifiers(Annotation[] annotations) {
         Set<Annotation> qualifiers = new HashSet<>();
-        for (Annotation annotation : parameter.getAnnotations()) {
+        for (Annotation annotation : annotations) {
             if (hasQualifierAnnotation(annotation.annotationType()) ||
                 knowledgeBase.isRegisteredQualifier(annotation.annotationType())) {
                 qualifiers.add(annotation);
@@ -2552,7 +2624,17 @@ public class CDI41InjectionValidator {
     /**
      * Collects methods from superclass to subclass and keeps overriding methods from subclasses.
      */
-    private List<Method> collectObserverCandidateMethods(Class<?> beanClass) {
+    private List<ObserverMethodCandidate> collectObserverCandidateMethods(Class<?> beanClass,
+                                                                          AnnotatedType<?> annotatedTypeOverride) {
+        if (annotatedTypeOverride != null) {
+            Map<String, ObserverMethodCandidate> bySignature = new LinkedHashMap<>();
+            for (AnnotatedMethod<?> annotatedMethod : annotatedTypeOverride.getMethods()) {
+                Method method = annotatedMethod.getJavaMember();
+                bySignature.put(methodSignature(method), new ObserverMethodCandidate(method, annotatedMethod));
+            }
+            return new ArrayList<>(bySignature.values());
+        }
+
         List<Class<?>> hierarchy = new ArrayList<>();
         Class<?> current = beanClass;
         while (current != null && !Object.class.equals(current)) {
@@ -2560,10 +2642,10 @@ public class CDI41InjectionValidator {
             current = current.getSuperclass();
         }
 
-        Map<String, Method> bySignature = new LinkedHashMap<>();
+        Map<String, ObserverMethodCandidate> bySignature = new LinkedHashMap<>();
         for (Class<?> type : hierarchy) {
             for (Method method : type.getDeclaredMethods()) {
-                bySignature.put(methodSignature(method), method);
+                bySignature.put(methodSignature(method), new ObserverMethodCandidate(method, null));
             }
         }
         return new ArrayList<>(bySignature.values());
@@ -2580,6 +2662,123 @@ public class CDI41InjectionValidator {
         }
         builder.append(")");
         return builder.toString();
+    }
+
+    private List<ObserverParameterMetadata> resolveObserverParameterMetadata(Method method,
+                                                                             AnnotatedMethod<?> annotatedMethod,
+                                                                             Class<?> beanClass) {
+        List<ObserverParameterMetadata> result = new ArrayList<>();
+        Parameter[] reflectionParameters = method.getParameters();
+        AnnotatedType<?> annotatedTypeOverride = knowledgeBase.getAnnotatedTypeOverride(beanClass);
+
+        for (int i = 0; i < reflectionParameters.length; i++) {
+            Parameter parameter = reflectionParameters[i];
+            AnnotatedParameter<?> annotatedParameter = annotatedMethod != null
+                    ? annotatedParameterAt(annotatedMethod, i)
+                    : null;
+            if (annotatedParameter == null && annotatedTypeOverride != null) {
+                annotatedParameter = AnnotatedMetadataHelper.findAnnotatedParameter(annotatedTypeOverride, parameter);
+            }
+
+            Type baseType = annotatedParameter != null
+                    ? annotatedParameter.getBaseType()
+                    : parameter.getParameterizedType();
+            Annotation[] annotations = annotatedParameter != null
+                    ? annotatedParameter.getAnnotations().toArray(new Annotation[0])
+                    : parameter.getAnnotations();
+            result.add(new ObserverParameterMetadata(parameter, annotatedParameter, baseType, annotations, i));
+        }
+        return result;
+    }
+
+    private AnnotatedParameter<?> annotatedParameterAt(AnnotatedMethod<?> method, int position) {
+        if (method == null) {
+            return null;
+        }
+        for (AnnotatedParameter<?> parameter : method.getParameters()) {
+            if (parameter.getPosition() == position) {
+                return parameter;
+            }
+        }
+        return null;
+    }
+
+    private boolean hasObservesAnnotationIn(Annotation[] annotations) {
+        return getObservesAnnotationFrom(annotations) != null;
+    }
+
+    private boolean hasObservesAsyncAnnotationIn(Annotation[] annotations) {
+        return getObservesAsyncAnnotationFrom(annotations) != null;
+    }
+
+    private jakarta.enterprise.event.Observes getObservesAnnotationFrom(Annotation[] annotations) {
+        for (Annotation annotation : annotations) {
+            if (annotation instanceof jakarta.enterprise.event.Observes) {
+                return (jakarta.enterprise.event.Observes) annotation;
+            }
+        }
+        return null;
+    }
+
+    private jakarta.enterprise.event.ObservesAsync getObservesAsyncAnnotationFrom(Annotation[] annotations) {
+        for (Annotation annotation : annotations) {
+            if (annotation instanceof jakarta.enterprise.event.ObservesAsync) {
+                return (jakarta.enterprise.event.ObservesAsync) annotation;
+            }
+        }
+        return null;
+    }
+
+    private Integer getPriorityValueFromAnnotations(Annotation[] annotations) {
+        for (Annotation annotation : annotations) {
+            if (annotation == null) {
+                continue;
+            }
+            String annotationTypeName = annotation.annotationType().getName();
+            if (Priority.class.getName().equals(annotationTypeName) ||
+                    "javax.annotation.Priority".equals(annotationTypeName)) {
+                try {
+                    Method valueMethod = annotation.annotationType().getMethod("value");
+                    Object value = valueMethod.invoke(annotation);
+                    if (value instanceof Integer) {
+                        return (Integer) value;
+                    }
+                } catch (ReflectiveOperationException ignored) {
+                    // Ignore malformed annotation implementation and treat as absent.
+                }
+            }
+        }
+        return null;
+    }
+
+    private static final class ObserverMethodCandidate {
+        private final Method method;
+        private final AnnotatedMethod<?> annotatedMethod;
+
+        private ObserverMethodCandidate(Method method, AnnotatedMethod<?> annotatedMethod) {
+            this.method = method;
+            this.annotatedMethod = annotatedMethod;
+        }
+    }
+
+    private static final class ObserverParameterMetadata {
+        private final Parameter parameter;
+        private final AnnotatedParameter<?> annotatedParameter;
+        private final Type baseType;
+        private final Annotation[] annotations;
+        private final int position;
+
+        private ObserverParameterMetadata(Parameter parameter,
+                                          AnnotatedParameter<?> annotatedParameter,
+                                          Type baseType,
+                                          Annotation[] annotations,
+                                          int position) {
+            this.parameter = parameter;
+            this.annotatedParameter = annotatedParameter;
+            this.baseType = baseType;
+            this.annotations = annotations == null ? new Annotation[0] : annotations;
+            this.position = position;
+        }
     }
 
     /**

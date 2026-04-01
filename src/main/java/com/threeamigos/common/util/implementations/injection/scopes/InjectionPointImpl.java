@@ -78,18 +78,24 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
      * @param bean the bean that declares this injection point
      */
     public InjectionPointImpl(Field field, Bean<T> bean) {
+        this(field, bean, null, null, null);
+    }
+
+    public InjectionPointImpl(Field field,
+                              Bean<T> bean,
+                              Type typeOverride,
+                              Annotation[] annotationsOverride,
+                              Annotated annotatedOverride) {
         this.member = field;
         this.bean = bean;
-        this.type = field.getGenericType();
+        this.type = typeOverride != null ? typeOverride : field.getGenericType();
         this.isTransient = java.lang.reflect.Modifier.isTransient(field.getModifiers());
-        this.isDelegate = checkForDelegateAnnotation(field.getAnnotations());
+        Annotation[] annotations = annotationsOverride != null ? annotationsOverride : field.getAnnotations();
+        this.isDelegate = checkForDelegateAnnotation(annotations);
 
-        // Create Annotated wrapper for the field
-        // Note: We pass null for AnnotatedType since we don't have it in this context
-        // This is acceptable - the wrapper will still provide annotation access
-        this.annotated = new AnnotatedFieldWrapper<>(field, null);
+        this.annotated = annotatedOverride != null ? annotatedOverride : new AnnotatedFieldWrapper<>(field, null);
 
-        collectQualifiers(field.getAnnotations());
+        collectQualifiers(annotations);
     }
 
     /**
@@ -101,18 +107,23 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
      * @param bean the bean that declares this injection point
      */
     public InjectionPointImpl(Parameter parameter, Bean<T> bean) {
+        this(parameter, bean, null, null, null);
+    }
+
+    public InjectionPointImpl(Parameter parameter,
+                              Bean<T> bean,
+                              Type typeOverride,
+                              Annotation[] annotationsOverride,
+                              Annotated annotatedOverride) {
         this.member = parameter.getDeclaringExecutable();
         this.bean = bean;
-        this.type = parameter.getParameterizedType();
+        this.type = typeOverride != null ? typeOverride : parameter.getParameterizedType();
         this.isTransient = false; // Parameters cannot be transient
-        this.isDelegate = checkForDelegateAnnotation(parameter.getAnnotations());
+        Annotation[] annotations = annotationsOverride != null ? annotationsOverride : parameter.getAnnotations();
+        this.isDelegate = checkForDelegateAnnotation(annotations);
+        this.annotated = annotatedOverride != null ? annotatedOverride : new AnnotatedParameterWrapper<>(parameter, null);
 
-        // Create Annotated wrapper for the parameter
-        // Note: We pass null for AnnotatedCallable since we don't have it in this context
-        // This is acceptable - the wrapper will still provide annotation access
-        this.annotated = new AnnotatedParameterWrapper<>(parameter, null);
-
-        collectQualifiers(parameter.getAnnotations());
+        collectQualifiers(annotations);
     }
 
     /**

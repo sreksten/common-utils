@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import org.junit.jupiter.api.Test;
 
@@ -109,7 +110,8 @@ public class SyringeBootstrapTest {
         try {
             SyringeBootstrap bootstrap = new SyringeBootstrap(classes, isolatedLoader);
 
-            assertThrows(DeploymentException.class, bootstrap::bootstrap);
+            // Bootstrap should fail because of invalid scope stereotype.
+            assertThrows(DefinitionException.class, bootstrap::bootstrap);
 
             // Regression for failed bootstrap leak: BeanManager registry must not retain classloader.
             assertNull(BeanManagerImpl.getRegisteredBeanManager(isolatedLoader));

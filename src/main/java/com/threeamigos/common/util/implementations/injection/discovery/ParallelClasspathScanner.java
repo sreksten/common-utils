@@ -6,6 +6,7 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Knowl
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
@@ -81,10 +82,61 @@ public class ParallelClasspathScanner {
         for (String packageName : packageList) {
             String path = packageName.replace('.', '/');
             Enumeration<URL> resources = classLoader.getResources(path);
+            boolean foundAny = false;
             while (resources.hasMoreElements()) {
+                foundAny = true;
                 URL resource = resources.nextElement();
                 getClassesFromResource(classLoader, resource, packageName, sink);
             }
+            if (!foundAny && ROOT_PACKAGE.equals(packageName)) {
+                scanRootUrlsFallback(classLoader, sink);
+            }
+        }
+    }
+
+    private void scanRootUrlsFallback(ClassLoader classLoader, ClassConsumer sink) throws IOException {
+        if (!(classLoader instanceof URLClassLoader)) {
+            return;
+        }
+
+        URL[] urls = ((URLClassLoader) classLoader).getURLs();
+        if (urls == null || urls.length == 0) {
+            return;
+        }
+
+        for (URL url : urls) {
+            if (url == null) {
+                continue;
+            }
+
+            String protocol = url.getProtocol();
+            if (FILE_PROTOCOL.equals(protocol)) {
+                File file = toFile(url);
+                if (file.isDirectory()) {
+                    findClassesInDirectory(classLoader, file, ROOT_PACKAGE, sink);
+                } else if (file.isFile() && file.getName().endsWith(".jar")) {
+                    scanJarFile(classLoader, file, sink);
+                }
+            } else if (JAR_PROTOCOL.equals(protocol)) {
+                findClassesInJar(classLoader, url, ROOT_PACKAGE, sink);
+            }
+        }
+    }
+
+    private void scanJarFile(ClassLoader classLoader, File jarFile, ClassConsumer sink) throws IOException {
+        try {
+            URL jarUrl = new URL("jar:" + jarFile.toURI().toURL().toExternalForm() + "!/");
+            findClassesInJar(classLoader, jarUrl, ROOT_PACKAGE, sink);
+        } catch (Exception e) {
+            throw new IOException("Failed to scan JAR file " + jarFile.getAbsolutePath(), e);
+        }
+    }
+
+    private File toFile(URL url) {
+        try {
+            return new File(url.toURI());
+        } catch (Exception ignored) {
+            return new File(url.getPath());
         }
     }
 
@@ -121,6 +173,12 @@ public class ParallelClasspathScanner {
 
     public void findClassesInDirectory(ClassLoader classLoader, File directory, String packageName,
                                        ClassConsumer sink) {
+        // Package scans are recursive: requesting "com.example" includes subpackages.
+        findClassesInDirectory(classLoader, directory, packageName, sink, true);
+    }
+
+    private void findClassesInDirectory(ClassLoader classLoader, File directory, String packageName,
+                                        ClassConsumer sink, boolean recursive) {
         if (!directory.exists() || !directory.isDirectory()) {
             return;
         }
@@ -153,7 +211,10 @@ public class ParallelClasspathScanner {
         for (File file : files) {
             String prefix = packageName.isEmpty() ? "" : packageName + ".";
             if (file.isDirectory()) {
-                findClassesInDirectory(classLoader, file, prefix + file.getName(), sink);
+                if (recursive) {
+                    // Root scans are intentionally recursive over the whole classpath.
+                    findClassesInDirectory(classLoader, file, prefix + file.getName(), sink, true);
+                }
             } else if (file.getName().endsWith(CLASS_EXTENSION) && !file.getName().equals(PACKAGE_INFO_CLASS)) {
                 String className = prefix + file.getName().substring(0, file.getName().length() - CLASS_EXTENSION_LENGTH);
                 // Only process if we haven't seen this class before (avoid duplicates from multiple JARs)
@@ -228,7 +289,7 @@ public class ParallelClasspathScanner {
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
                 String name = entry.getName();
-                if (!name.startsWith(META_INF) && name.startsWith(packagePath) &&
+                if (!name.startsWith(META_INF) && isClassInScannedPackage(name, packagePath) &&
                         name.endsWith(CLASS_EXTENSION) && !name.endsWith(MODULE_INFO_CLASS) &&
                         !name.endsWith(PACKAGE_INFO_CLASS)) {
                     String className = name.replace('/', '.').substring(0, name.length() - CLASS_EXTENSION_LENGTH);
@@ -257,6 +318,17 @@ public class ParallelClasspathScanner {
         } catch (Exception e) {
             throw new IOException("Failed to read JAR file: " + jarFilePath, e);
         }
+    }
+
+    private boolean isClassInScannedPackage(String entryName, String packagePath) {
+        if (entryName == null) {
+            return false;
+        }
+        if (packagePath == null || packagePath.isEmpty()) {
+            return true;
+        }
+        // Package scans are recursive, so all classes under packagePath are eligible.
+        return entryName.startsWith(packagePath + "/");
     }
 
     /**

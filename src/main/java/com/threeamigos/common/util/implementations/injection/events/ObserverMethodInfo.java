@@ -43,6 +43,7 @@ public class ObserverMethodInfo {
     private final boolean async;                   // true if @ObservesAsync, false if @Observes
     private final Bean<?> declaringBean;           // The bean that declares this observer method
     private final int priority;                    // Observer priority (lower = earlier)
+    private final int observedParameterPosition;   // Position of @Observes/@ObservesAsync parameter (-1 if unknown)
     private final jakarta.enterprise.inject.spi.ObserverMethod<?> syntheticObserver; // Synthetic observer (for programmatically registered observers)
 
     /**
@@ -66,6 +67,19 @@ public class ObserverMethodInfo {
             boolean async,
             Bean<?> declaringBean,
             int priority) {
+        this(observerMethod, eventType, qualifiers, reception, transactionPhase, async, declaringBean, priority, -1);
+    }
+
+    public ObserverMethodInfo(
+            Method observerMethod,
+            Type eventType,
+            Set<Annotation> qualifiers,
+            Reception reception,
+            TransactionPhase transactionPhase,
+            boolean async,
+            Bean<?> declaringBean,
+            int priority,
+            int observedParameterPosition) {
 
         this.observerMethod = Objects.requireNonNull(observerMethod, "observerMethod cannot be null");
         this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
@@ -75,6 +89,7 @@ public class ObserverMethodInfo {
         this.async = async;
         this.declaringBean = declaringBean; // Can be null during validation phase
         this.priority = priority;
+        this.observedParameterPosition = observedParameterPosition;
         this.syntheticObserver = null;
     }
 
@@ -108,6 +123,7 @@ public class ObserverMethodInfo {
         this.async = async;
         this.declaringBean = declaringBean;
         this.priority = priority;
+        this.observedParameterPosition = -1;
         this.syntheticObserver = Objects.requireNonNull(syntheticObserver, "syntheticObserver cannot be null");
     }
 
@@ -143,6 +159,10 @@ public class ObserverMethodInfo {
         return priority;
     }
 
+    public int getObservedParameterPosition() {
+        return observedParameterPosition;
+    }
+
     public jakarta.enterprise.inject.spi.ObserverMethod<?> getSyntheticObserver() {
         return syntheticObserver;
     }
@@ -170,14 +190,18 @@ public class ObserverMethodInfo {
 
     @Override
     public String toString() {
+        String methodText = observerMethod != null
+                ? observerMethod.getDeclaringClass().getSimpleName() + "." + observerMethod.getName()
+                : "synthetic";
         return "ObserverMethodInfo{" +
-                "method=" + observerMethod.getDeclaringClass().getSimpleName() + "." + observerMethod.getName() +
+                "method=" + methodText +
                 ", eventType=" + eventType.getTypeName() +
                 ", qualifiers=" + qualifiers +
                 ", async=" + async +
                 ", reception=" + reception +
                 ", transactionPhase=" + transactionPhase +
                 ", priority=" + priority +
+                ", observedParameterPosition=" + observedParameterPosition +
                 '}';
     }
 }
