@@ -1067,15 +1067,15 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Should accept parameterized target with raw implementation at nested level")
+        @DisplayName("Should reject parameterized target with raw implementation at nested level")
         void testParameterizedTargetRawImplNested() {
             // Tests the fix for: Map<String, List<String>> vs HashMap<String, ArrayList> (raw ArrayList)
-            // List<String> should accept ArrayList (raw)
+            // List<String> should NOT accept ArrayList (raw)
             Type fullyParameterized = new TypeLiteral<Map<String, List<String>>>() {}.getType();
             Type partiallyRaw = new TypeLiteral<HashMap<String, ArrayList>>() {}.getType();
 
             assertDoesNotThrow(() -> sut.validateInjectionPoint(fullyParameterized));
-            assertTrue(sut.isAssignable(fullyParameterized, partiallyRaw));
+            assertFalse(sut.isAssignable(fullyParameterized, partiallyRaw));
         }
 
         @Test
@@ -2022,14 +2022,14 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("typeArgsMatch: t1 is ParameterizedType and t2 is Class (param vs raw)")
+        @DisplayName("typeArgsMatch: t1 is ParameterizedType and t2 is Class (param vs raw, non-Object args)")
         void testT1IsParameterizedAndT2IsClass() {
             // Tests the branch where t1 is a ParameterizedType and t2 is a raw Class
             // Map<String, List<String>> vs HashMap<String, ArrayList>
             Type target = new TypeLiteral<Map<String, List<String>>>() {}.getType();
             Type impl = new TypeLiteral<HashMap<String, ArrayList>>() {}.getType();
 
-            assertTrue(sut.isAssignable(target, impl));
+            assertFalse(sut.isAssignable(target, impl));
         }
 
         @Test
@@ -2115,7 +2115,7 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("typeArgsMatch: t1 not ParameterizedType and t2 is Class at line 184")
+        @DisplayName("typeArgsMatch: t1 parameterized and t2 is raw Class at line 184")
         void testT1NotParameterizedAndT2IsClass() {
             // Tests lines 184-189: if (t1 instanceof ParameterizedType && t2 instanceof Class<?>)
             // When t1 is ParameterizedType and t2 is raw Class, should check if raw1.isAssignableFrom(raw2)
@@ -2128,8 +2128,8 @@ class TypeCheckerClaudeUnitTest {
             Type impl = new TypeLiteral<HashMap<String, ArrayList>>() {}.getType();
 
             assertDoesNotThrow(() -> sut.validateInjectionPoint(target));
-            // This should return true because ArrayList (raw) is assignable to List<String>
-            assertTrue(sut.isAssignable(target, impl));
+            // This should return false because List<String> cannot be satisfied by raw ArrayList.
+            assertFalse(sut.isAssignable(target, impl));
         }
     }
 
@@ -2237,12 +2237,12 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Line 184-189: t1 is ParameterizedType, t2 is Class, assignable")
+        @DisplayName("Line 184-189: t1 is ParameterizedType, t2 is Class, non-Object argument not assignable")
         void testT1ParameterizedT2ClassAssignable() {
             Type t1 = new TypeLiteral<List<String>>() {}.getType(); // List<String>
             Type t2 = ArrayList.class; // raw ArrayList
 
-            assertTrue(sut.typeArgsMatch(t1, t2));
+            assertFalse(sut.typeArgsMatch(t1, t2));
         }
 
         @Test

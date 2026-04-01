@@ -11,6 +11,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
+import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.spi.Bean;
@@ -411,6 +412,7 @@ public class CDI41BeanValidator {
             valid = false;
         }
         bean.setTypes(managedBeanTypes.getTypes());
+        addGenericSelfTypeForManagedBean(bean, clazz);
         applySpecializationInheritance(bean, clazz, beanArchiveMode);
 
         bean.setStereotypes(extractBeanStereotypes(clazz));
@@ -473,6 +475,18 @@ public class CDI41BeanValidator {
             overrideAnnotations = null;
             overrideAnnotationsClass = null;
         }
+    }
+
+    private void addGenericSelfTypeForManagedBean(BeanImpl<?> bean, Class<?> beanClass) {
+        if (bean == null || beanClass == null) {
+            return;
+        }
+        if (beanClass.getTypeParameters().length == 0) {
+            return;
+        }
+        // Keep extractor chapter-2 expectations (raw class in type closure) while still
+        // exposing the generic declaration at runtime for typesafe resolution.
+        bean.addType(TypeClosureHelper.parameterizedDeclarationOf(beanClass));
     }
 
     @SuppressWarnings("unchecked")

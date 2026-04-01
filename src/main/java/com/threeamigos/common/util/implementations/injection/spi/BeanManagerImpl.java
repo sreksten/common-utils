@@ -448,7 +448,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             // Check type compatibility
             boolean typeMatches = false;
             for (Type type : bean.getTypes()) {
-                if (typeChecker.isAssignable(beanType, type)) {
+                if (typeChecker.isLookupTypeAssignable(beanType, type)) {
                     typeMatches = true;
                     break;
                 }
@@ -487,7 +487,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
             boolean typeMatches = false;
             for (Type type : bean.getTypes()) {
-                if (typeChecker.isAssignable(beanType, type)) {
+                if (typeChecker.isLookupTypeAssignable(beanType, type)) {
                     typeMatches = true;
                     break;
                 }

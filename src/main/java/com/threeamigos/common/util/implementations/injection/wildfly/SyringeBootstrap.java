@@ -49,6 +49,9 @@ public class SyringeBootstrap {
      * @throws DeploymentException if initialization fails
      */
     public Syringe bootstrap() {
+        Thread currentThread = Thread.currentThread();
+        ClassLoader previousTccl = currentThread.getContextClassLoader();
+        currentThread.setContextClassLoader(classLoader);
         try {
             // Managed WildFly runner targets CDI Full behavior.
             // Keep this explicit to avoid accidental mode drift from future defaults.
@@ -83,6 +86,8 @@ public class SyringeBootstrap {
                 // Best-effort cleanup.
             }
             throw new DeploymentException("Failed to bootstrap Syringe", e);
+        } finally {
+            currentThread.setContextClassLoader(previousTccl);
         }
     }
 

@@ -579,13 +579,6 @@ public class BuildCompatibleExtensionRunner {
             return;
         }
 
-        if (isBeanInfo(modelType)) {
-            List<BeanInfo> beans = collectBeanInfosForPhase(phaseMethod, phase);
-            for (BeanInfo beanInfo : beans) {
-                invokeRegistrationOrValidationForModel(invocation, phase, beanInfo, null, null, null, null, null, null);
-            }
-            return;
-        }
         if (isObserverInfo(modelType)) {
             List<ObserverInfo> observers = collectObserverInfosForPhase(phaseMethod, phase);
             for (ObserverInfo observerInfo : observers) {
@@ -597,6 +590,13 @@ public class BuildCompatibleExtensionRunner {
             List<InterceptorInfo> interceptors = collectInterceptorInfosForPhase(phaseMethod, phase);
             for (InterceptorInfo interceptorInfo : interceptors) {
                 invokeRegistrationOrValidationForModel(invocation, phase, null, null, interceptorInfo, null, null, null, null);
+            }
+            return;
+        }
+        if (isBeanInfo(modelType)) {
+            List<BeanInfo> beans = collectBeanInfosForPhase(phaseMethod, phase);
+            for (BeanInfo beanInfo : beans) {
+                invokeRegistrationOrValidationForModel(invocation, phase, beanInfo, null, null, null, null, null, null);
             }
             return;
         }
@@ -890,12 +890,16 @@ public class BuildCompatibleExtensionRunner {
                     args[i] = interceptorInfo;
                     continue;
                 }
-                if (isBeanInfo(parameterType)) {
-                    args[i] = beanInfo;
-                    continue;
-                }
                 if (isObserverInfo(parameterType)) {
                     args[i] = observerInfo;
+                    continue;
+                }
+                if (isInterceptorInfo(parameterType)) {
+                    args[i] = interceptorInfo;
+                    continue;
+                }
+                if (isBeanInfo(parameterType)) {
+                    args[i] = beanInfo;
                     continue;
                 }
                 if (isInvokerFactory(parameterType)) {

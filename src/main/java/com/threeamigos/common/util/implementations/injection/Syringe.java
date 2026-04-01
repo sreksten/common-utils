@@ -61,6 +61,11 @@ import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.spi.*;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
@@ -1052,10 +1057,11 @@ public class Syringe {
     private void loadBuildCompatibleExtensions() {
         info("Loading build compatible extensions");
         Set<String> loadedBceClassNames = new HashSet<String>();
+        final ClassLoader tccl = Thread.currentThread().getContextClassLoader();
 
         ServiceLoader<BuildCompatibleExtension> serviceLoader = ServiceLoader.load(
             BuildCompatibleExtension.class,
-            Thread.currentThread().getContextClassLoader()
+            tccl
         );
 
         for (BuildCompatibleExtension extension : serviceLoader) {
@@ -1070,11 +1076,13 @@ public class Syringe {
             }
         }
 
+        discoverBuildCompatibleExtensionsFromServiceResources(loadedBceClassNames, tccl);
+
         int loadedCount = buildCompatibleExtensions.size();
 
         for (String className : buildCompatibleExtensionClassNames) {
             try {
-                Class<?> extensionClass = Class.forName(className);
+                Class<?> extensionClass = loadClassWithTcclFallback(className, tccl);
                 if (!BuildCompatibleExtension.class.isAssignableFrom(extensionClass)) {
                     knowledgeBase.addDefinitionError("Build compatible extension class " + className +
                         " does not implement jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension");
@@ -1100,6 +1108,96 @@ public class Syringe {
         }
 
         info("Loaded " + loadedCount + " build compatible extension(s)");
+    }
+
+    private void discoverBuildCompatibleExtensionsFromServiceResources(Set<String> loadedBceClassNames,
+                                                                       ClassLoader tccl) {
+        final String servicePath = "META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension";
+        try {
+            Enumeration<URL> resources = (tccl != null)
+                ? tccl.getResources(servicePath)
+                : Syringe.class.getClassLoader().getResources(servicePath);
+            while (resources.hasMoreElements()) {
+                URL url = resources.nextElement();
+                List<String> providerClassNames = readServiceProviderClassNames(url);
+                for (String providerClassName : providerClassNames) {
+                    if (!loadedBceClassNames.add(providerClassName)) {
+                        continue;
+                    }
+                    try {
+                        Class<?> providerClass = loadClassWithTcclFallback(providerClassName, tccl);
+                        if (!BuildCompatibleExtension.class.isAssignableFrom(providerClass)) {
+                            knowledgeBase.addDefinitionError("Build compatible extension class " + providerClassName +
+                                " from " + servicePath + " does not implement " +
+                                "jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension");
+                            continue;
+                        }
+                        if (shouldSkipBuildCompatibleExtension(providerClass)) {
+                            info("Skipped build compatible extension due to @SkipIfPortableExtensionPresent: " + providerClassName);
+                            continue;
+                        }
+                        BuildCompatibleExtension extension =
+                            (BuildCompatibleExtension) providerClass.getDeclaredConstructor().newInstance();
+                        buildCompatibleExtensions.add(extension);
+                        info("Loaded build compatible extension from service resource: " + providerClassName);
+                    } catch (Exception e) {
+                        knowledgeBase.addDefinitionError("Failed to load build compatible extension from service resource: " +
+                            providerClassName);
+                        log("Failed to load build compatible extension from service resource: " + providerClassName, e);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log("Failed to scan build compatible extension service resources", e);
+        }
+    }
+
+    private List<String> readServiceProviderClassNames(URL url) {
+        List<String> classNames = new ArrayList<String>();
+        InputStream stream = null;
+        BufferedReader reader = null;
+        try {
+            stream = url.openStream();
+            reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                int commentIdx = trimmed.indexOf('#');
+                if (commentIdx >= 0) {
+                    trimmed = trimmed.substring(0, commentIdx).trim();
+                }
+                if (!trimmed.isEmpty()) {
+                    classNames.add(trimmed);
+                }
+            }
+        } catch (Exception e) {
+            log("Failed to read build compatible extension service resource: " + url, e);
+        } finally {
+            try {
+                if (reader != null) {
+                    reader.close();
+                } else if (stream != null) {
+                    stream.close();
+                }
+            } catch (Exception ignored) {
+                // Best effort.
+            }
+        }
+        return classNames;
+    }
+
+    private Class<?> loadClassWithTcclFallback(String className, ClassLoader tccl) throws ClassNotFoundException {
+        if (tccl != null) {
+            try {
+                return Class.forName(className, true, tccl);
+            } catch (ClassNotFoundException ignored) {
+                // Fallback below.
+            }
+        }
+        return Class.forName(className);
     }
 
     private boolean shouldSkipBuildCompatibleExtension(Class<?> extensionClass) {

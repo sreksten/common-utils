@@ -176,6 +176,14 @@ public class TypeChecker {
     }
 
     /**
+     * Checks assignability for programmatic type lookup (for example {@code BeanManager#getBeans(Type)}),
+     * where required types may legally contain type variables.
+     */
+    public boolean isLookupTypeAssignable(Type requiredType, Type beanType) {
+        return isAssignableInternal(requiredType, beanType, false);
+    }
+
+    /**
      * Internal implementation of type assignability checking (not cached).
      *
      * <p>This method performs the actual type checking logic:
@@ -430,14 +438,16 @@ public class TypeChecker {
             return true;
         }
 
-        // Raw candidate types are assignable to parameterized targets when raw types are compatible.
-        // This mirrors Java raw-type assignment semantics and allows generic bean classes (e.g. Baz<T>)
-        // to satisfy parameterized injection points (e.g. Baz<List<Qux>>).
+        // CDI assignability for raw bean type -> parameterized required type is restricted:
+        // every required type parameter must be Object or an unbounded type variable.
         if (target instanceof ParameterizedType && candidate instanceof Class<?>) {
             ParameterizedType targetParameterized = (ParameterizedType) target;
             Class<?> rawTarget = (Class<?>) targetParameterized.getRawType();
             Class<?> rawCandidate = (Class<?>) candidate;
-            return rawTarget.isAssignableFrom(rawCandidate);
+            if (!rawTarget.isAssignableFrom(rawCandidate)) {
+                return false;
+            }
+            return isRawBeanTypeAssignableToParameterizedRequiredType(targetParameterized);
         }
 
         if (target instanceof ParameterizedType && candidate instanceof ParameterizedType) {
@@ -581,12 +591,13 @@ public class TypeChecker {
         }
 
         // Handle ParameterizedType in t1 vs raw type (Class) in t2
-        // Example: List<String> vs ArrayList (raw)
+        // Example: List<Object> vs ArrayList (raw)
         if (t1 instanceof ParameterizedType && t2 instanceof Class<?>) {
             ParameterizedType pt1 = (ParameterizedType) t1;
             Class<?> raw1 = (Class<?>) pt1.getRawType();
             Class<?> raw2 = (Class<?>) t2;
-            return raw1.isAssignableFrom(raw2);
+            return raw1.isAssignableFrom(raw2)
+                    && isRawBeanTypeAssignableToParameterizedRequiredType(pt1);
         }
 
         // Handle GenericArrayType cases (arrays of generics like T[] or List<String>[])
@@ -794,6 +805,25 @@ public class TypeChecker {
             if (!typeArgsMatch(args1[i], args2[i])) {
                 return false;
             }
+        }
+        return true;
+    }
+
+    private boolean isRawBeanTypeAssignableToParameterizedRequiredType(ParameterizedType requiredType) {
+        for (Type typeArgument : requiredType.getActualTypeArguments()) {
+            if (typeArgument instanceof Class<?>) {
+                if (!Object.class.equals(typeArgument)) {
+                    return false;
+                }
+                continue;
+            }
+            if (typeArgument instanceof TypeVariable<?>) {
+                if (!isOnlyObjectBound(((TypeVariable<?>) typeArgument).getBounds())) {
+                    return false;
+                }
+                continue;
+            }
+            return false;
         }
         return true;
     }
