@@ -6,6 +6,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.Destroye
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
 import jakarta.enterprise.inject.spi.Bean;
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
 import net.bytebuddy.implementation.FieldAccessor;
 import net.bytebuddy.implementation.MethodDelegation;
@@ -267,7 +268,7 @@ public class InterceptorAwareProxyGenerator {
 
                 // Load the class into the same classloader as the target class
                 .make()
-                .load(beanClass.getClassLoader())
+                .load(beanClass.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate interceptor-aware proxy class for: " +

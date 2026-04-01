@@ -9,6 +9,7 @@ import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
 import net.bytebuddy.implementation.FieldAccessor;
 import net.bytebuddy.implementation.MethodDelegation;
@@ -495,7 +496,7 @@ public class ClientProxyGenerator {
 
                 // Load the class into the same classloader as the target class
                 .make()
-                .load(beanClass.getClassLoader())
+                .load(beanClass.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate proxy class for: " + beanClass.getName(), e);
