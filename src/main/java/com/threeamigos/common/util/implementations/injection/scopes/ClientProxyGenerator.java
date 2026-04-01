@@ -567,12 +567,6 @@ public class ClientProxyGenerator {
             // The context maintains the actual bean instances for the current scope
             // (current request, current session, etc.)
             ScopeContext context = contextManager.getContext(scopeType);
-            if (RequestScoped.class.equals(scopeType) && !context.isActive()) {
-                // Managed-runtime fallback: some servlet invocation paths may invoke client
-                // proxies before deployment setup actions activate request context.
-                contextManager.activateRequest();
-                context = contextManager.getContext(scopeType);
-            }
 
             // Step 4: Get the current contextual instance from the context
             // This is THE KEY STEP that makes proxies work:

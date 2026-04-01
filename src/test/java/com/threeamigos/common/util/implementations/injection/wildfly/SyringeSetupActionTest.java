@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.injection.discovery.BeanArchi
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.inject.spi.CDIProvider;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -17,6 +18,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,9 +52,44 @@ class SyringeSetupActionTest {
                 BeanManager beanManager = syringe.getBeanManager();
                 assertTrue(beanManager.getContext(RequestScoped.class).isActive(),
                         "Request context should be active during setup action");
+                assertTrue(beanManager.getContext(SessionScoped.class).isActive(),
+                        "Session context should be active during setup action");
             } finally {
                 action.teardown(setupProperties);
             }
+        } finally {
+            if (syringe != null) {
+                syringe.shutdown();
+            }
+            snapshot.restore();
+        }
+    }
+
+    @Test
+    void shouldHandleImmutableSetupPropertiesMap() throws Exception {
+        CdiStateSnapshot snapshot = CdiStateSnapshot.capture();
+        Syringe syringe = null;
+        try {
+            setConfiguredProvider(null);
+            setDiscoveredProviders(Collections.<CDIProvider>emptySet());
+
+            syringe = new Syringe(new InMemoryMessageHandler());
+            syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+            syringe.initialize();
+            syringe.addDiscoveredClass(SetupActionBean.class, BeanArchiveMode.EXPLICIT);
+            syringe.start();
+
+            SyringeSetupAction action = new SyringeSetupAction(syringe);
+            Map<String, Object> immutableProperties = Collections.emptyMap();
+
+            assertDoesNotThrow(() -> action.setup(immutableProperties));
+            BeanManager beanManager = syringe.getBeanManager();
+            assertTrue(beanManager.getContext(RequestScoped.class).isActive());
+            assertTrue(beanManager.getContext(SessionScoped.class).isActive());
+
+            assertDoesNotThrow(() -> action.teardown(immutableProperties));
+            assertFalse(beanManager.getContext(RequestScoped.class).isActive());
+            assertFalse(beanManager.getContext(SessionScoped.class).isActive());
         } finally {
             if (syringe != null) {
                 syringe.shutdown();

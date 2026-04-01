@@ -6,11 +6,14 @@ import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
 import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.DeploymentUnitProcessor;
+import org.jboss.as.server.deployment.AttachmentKey;
 import org.jboss.as.server.deployment.module.ResourceRoot;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.Index;
 import org.jboss.as.server.deployment.annotation.CompositeIndex;
 import org.jboss.modules.Module;
+import org.jboss.modules.ModuleLoader;
+import org.jboss.modules.ModuleLoadException;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -100,8 +103,10 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             // 3. Attach Syringe to the deployment unit for later use (e.g., in Setup Actions)
             deploymentUnit.putAttachment(SyringeAttachments.SYRINGE_CONTAINER, syringe);
 
-            // 4. Register SetupAction for CDI.current() support
-            deploymentUnit.addToAttachmentList(org.jboss.as.server.deployment.Attachments.SETUP_ACTIONS, new SyringeSetupAction(syringe));
+            // 4. Register SetupAction for CDI.current() support and context activation.
+            SyringeSetupAction setupAction = new SyringeSetupAction(syringe);
+            deploymentUnit.addToAttachmentList(org.jboss.as.server.deployment.Attachments.SETUP_ACTIONS, setupAction);
+            registerEeSetupActionAttachments(deploymentUnit, setupAction);
         } catch (RuntimeException e) {
             // Defensive cleanup on deployment failure before attachment is established.
             try {
@@ -110,6 +115,46 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
                 // Best-effort cleanup.
             }
             throw e;
+        }
+    }
+
+    private static void registerEeSetupActionAttachments(DeploymentUnit deploymentUnit, SyringeSetupAction setupAction) {
+        ModuleLoader moduleLoader = deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
+        if (moduleLoader == null) {
+            return;
+        }
+        try {
+            Module eeModule = moduleLoader.loadModule("org.jboss.as.ee");
+            if (eeModule == null) {
+                return;
+            }
+            ClassLoader eeClassLoader = eeModule.getClassLoader();
+            Class<?> eeAttachments = Class.forName("org.jboss.as.ee.component.Attachments", false, eeClassLoader);
+            addSetupActionToAttachmentList(deploymentUnit, eeAttachments, "WEB_SETUP_ACTIONS", setupAction);
+            addSetupActionToAttachmentList(deploymentUnit, eeAttachments, "OTHER_EE_SETUP_ACTIONS", setupAction);
+        } catch (ModuleLoadException ignored) {
+            // Best effort: registration in generic SETUP_ACTIONS remains available.
+        } catch (ClassNotFoundException ignored) {
+            // Best effort for WildFly variants without EE attachments API exposed.
+        } catch (NoSuchFieldException ignored) {
+            // Best effort for version-specific attachment naming differences.
+        } catch (IllegalAccessException ignored) {
+            // Best effort if reflective field access is restricted.
+        } catch (RuntimeException ignored) {
+            // Keep deployment resilient; generic setup action is already registered.
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void addSetupActionToAttachmentList(DeploymentUnit deploymentUnit,
+                                                       Class<?> attachmentsClass,
+                                                       String fieldName,
+                                                       SyringeSetupAction setupAction)
+            throws NoSuchFieldException, IllegalAccessException {
+        java.lang.reflect.Field field = attachmentsClass.getField(fieldName);
+        Object key = field.get(null);
+        if (key instanceof AttachmentKey) {
+            deploymentUnit.addToAttachmentList((AttachmentKey) key, setupAction);
         }
     }
 

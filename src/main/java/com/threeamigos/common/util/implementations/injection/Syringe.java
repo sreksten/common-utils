@@ -48,6 +48,7 @@ import jakarta.enterprise.context.BeforeDestroyed;
 import jakarta.enterprise.context.Destroyed;
 import jakarta.enterprise.context.Initialized;
 import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -3708,6 +3709,52 @@ public class Syringe {
         if (contextManager.getContext(RequestScoped.class).isActive()) {
             contextManager.deactivateRequest();
         }
+    }
+
+    /**
+     * Activates a synthetic session context when no session is currently associated
+     * with the current thread.
+     *
+     * @return synthetic session id if activated by this call, otherwise null
+     */
+    public String activateSyntheticSessionContextIfNeeded() {
+        if (!initialized) {
+            throw new IllegalStateException("Container not initialized. Call setup() first.");
+        }
+        String currentSessionId = contextManager.getCurrentSessionId();
+        if (currentSessionId != null) {
+            return null;
+        }
+        String syntheticSessionId = "syringe-auto-session-" + java.util.UUID.randomUUID();
+        contextManager.activateSession(syntheticSessionId);
+        return syntheticSessionId;
+    }
+
+    /**
+     * Deactivates session context for the current thread, when active.
+     */
+    public void deactivateSessionContextIfActive() {
+        if (!initialized) {
+            throw new IllegalStateException("Container not initialized. Call setup() first.");
+        }
+        if (contextManager.getCurrentSessionId() != null) {
+            contextManager.deactivateSession();
+        }
+    }
+
+    /**
+     * Invalidates and destroys a specific session context.
+     *
+     * @param sessionId id of the session to invalidate
+     */
+    public void invalidateSessionContext(String sessionId) {
+        if (!initialized) {
+            throw new IllegalStateException("Container not initialized. Call setup() first.");
+        }
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return;
+        }
+        contextManager.invalidateSession(sessionId);
     }
 
     /**
