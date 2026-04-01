@@ -28,6 +28,9 @@ import java.net.InetAddress;
  */
 public class SyringeWildFlyArquillianContainer implements DeployableContainer<SyringeWildFlyConfiguration> {
 
+    private static final SyringeDeploymentExceptionTransformer DEPLOYMENT_EXCEPTION_TRANSFORMER =
+            new SyringeDeploymentExceptionTransformer();
+
     private SyringeWildFlyConfiguration configuration;
     private ModelControllerClient client;
 
@@ -78,6 +81,12 @@ public class SyringeWildFlyArquillianContainer implements DeployableContainer<Sy
         try {
             helper.deploy(runtimeName, new ByteArrayInputStream(content));
         } catch (Exception e) {
+            Throwable transformed = DEPLOYMENT_EXCEPTION_TRANSFORMER.transform(e);
+            if (transformed instanceof RuntimeException
+                    && (transformed instanceof jakarta.enterprise.inject.spi.DefinitionException
+                    || transformed instanceof jakarta.enterprise.inject.spi.DeploymentException)) {
+                throw (RuntimeException) transformed;
+            }
             throw new DeploymentException("Could not deploy archive " + runtimeName, e);
         }
 

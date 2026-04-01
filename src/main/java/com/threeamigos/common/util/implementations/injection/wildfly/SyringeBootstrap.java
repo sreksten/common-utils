@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
 import jakarta.enterprise.inject.spi.CDI;
+import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -84,6 +85,13 @@ public class SyringeBootstrap {
                 syringe.shutdown();
             } catch (Exception ignored) {
                 // Best-effort cleanup.
+            }
+            // Preserve CDI exception type semantics expected by TCK deployment tests.
+            if (e instanceof DefinitionException) {
+                throw (DefinitionException) e;
+            }
+            if (e instanceof DeploymentException) {
+                throw (DeploymentException) e;
             }
             throw new DeploymentException("Failed to bootstrap Syringe", e);
         } finally {
