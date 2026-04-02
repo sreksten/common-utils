@@ -462,7 +462,25 @@ public class BeanManagerImpl implements BeanManager, Serializable {
      */
     @Override
     public Set<Bean<?>> getBeans(Type beanType, Annotation... qualifiers) {
-        requireAfterBeanDiscovery("getBeans(Type, Annotation...)");
+        return getBeansInternal(beanType, qualifiers, true);
+    }
+
+    /**
+     * Internal container lookup used by invoker construction during BCE registration.
+     *
+     * <p>This bypasses lifecycle gating for {@link #getBeans(Type, Annotation...)} while
+     * preserving the same type/qualifier resolution semantics.
+     */
+    public Set<Bean<?>> getBeansForInvokerLookup(Type beanType, Annotation... qualifiers) {
+        return getBeansInternal(beanType, qualifiers, false);
+    }
+
+    private Set<Bean<?>> getBeansInternal(Type beanType,
+                                          Annotation[] qualifiers,
+                                          boolean enforceAfterBeanDiscoveryGate) {
+        if (enforceAfterBeanDiscoveryGate) {
+            requireAfterBeanDiscovery("getBeans(Type, Annotation...)");
+        }
         if (beanType == null) {
             throw new IllegalArgumentException("beanType cannot be null");
         }
@@ -659,7 +677,24 @@ public class BeanManagerImpl implements BeanManager, Serializable {
      */
     @Override
     public <X> Bean<? extends X> resolve(Set<Bean<? extends X>> beans) {
-        requireAfterBeanDiscovery("resolve(Set)");
+        return resolveInternal(beans, true);
+    }
+
+    /**
+     * Internal container resolution used by invoker construction during BCE registration.
+     *
+     * <p>This bypasses lifecycle gating for {@link #resolve(Set)} while preserving
+     * standard ambiguity handling and alternative-priority resolution.
+     */
+    public <X> Bean<? extends X> resolveForInvokerLookup(Set<Bean<? extends X>> beans) {
+        return resolveInternal(beans, false);
+    }
+
+    private <X> Bean<? extends X> resolveInternal(Set<Bean<? extends X>> beans,
+                                                  boolean enforceAfterBeanDiscoveryGate) {
+        if (enforceAfterBeanDiscoveryGate) {
+            requireAfterBeanDiscovery("resolve(Set)");
+        }
         if (beans == null || beans.isEmpty()) {
             return null;
         }

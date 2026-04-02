@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -322,13 +323,13 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
         }
 
         private Bean<?> resolveUniqueBean(Type requiredType, Annotation[] qualifiers) {
-            Set<Bean<?>> beans = beanManager.getBeans(requiredType, qualifiers);
+            Set<Bean<?>> beans = lookupBeans(requiredType, qualifiers);
             if (beans == null || beans.isEmpty()) {
                 throw new DefinitionException("Unsatisfied looked up bean for type " + requiredType);
             }
             Bean<?> resolved;
             try {
-                resolved = beanManager.resolve(beans);
+                resolved = resolveBean(beans);
             } catch (AmbiguousResolutionException e) {
                 throw new DefinitionException("Ambiguous looked up bean for type " + requiredType, e);
             }
@@ -336,6 +337,21 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
                 throw new DefinitionException("Ambiguous looked up bean for type " + requiredType);
             }
             return resolved;
+        }
+
+        private Set<Bean<?>> lookupBeans(Type requiredType, Annotation[] qualifiers) {
+            if (beanManager instanceof BeanManagerImpl) {
+                return ((BeanManagerImpl) beanManager).getBeansForInvokerLookup(requiredType, qualifiers);
+            }
+            return beanManager.getBeans(requiredType, qualifiers);
+        }
+
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        private Bean<?> resolveBean(Set<Bean<?>> beans) {
+            if (beanManager instanceof BeanManagerImpl) {
+                return (Bean<?>) ((BeanManagerImpl) beanManager).resolveForInvokerLookup((Set) beans);
+            }
+            return (Bean<?>) beanManager.resolve((Set) beans);
         }
 
         private void ensureNotAsyncTargetMethod() {
