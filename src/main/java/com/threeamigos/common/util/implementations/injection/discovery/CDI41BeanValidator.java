@@ -2891,9 +2891,6 @@ public class CDI41BeanValidator {
 
         Class<?> raw = RawTypeExtractor.getRawType(type);
 
-        if (raw.isArray()) {
-            throw new IllegalArgumentException("cannot inject arrays directly");
-        }
         if (raw.isEnum()) {
             throw new IllegalArgumentException("cannot inject an enum");
         }

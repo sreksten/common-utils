@@ -43,7 +43,13 @@ public class SyringeDeploymentExceptionTransformer implements DeploymentExceptio
                     return new jakarta.enterprise.inject.spi.DeploymentException(message);
                 }
                 if (containsDefinitionExceptionMarker(message)) {
-                    return new jakarta.enterprise.inject.spi.DefinitionException(message);
+                    // Deployment-phase failures may expose DefinitionException in server messages.
+                    // Return DeploymentException while preserving the DefinitionException cause so
+                    // Arquillian expected-exception checks can match both views.
+                    return new jakarta.enterprise.inject.spi.DeploymentException(
+                            message,
+                            new jakarta.enterprise.inject.spi.DefinitionException(message)
+                    );
                 }
             }
 
