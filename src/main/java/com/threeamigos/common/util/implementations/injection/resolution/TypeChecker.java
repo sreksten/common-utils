@@ -542,16 +542,6 @@ public class TypeChecker {
             return true;
         }
 
-        // Wildcards can appear both at injection points (t1) and candidate bean types (t2).
-        if (t1 instanceof WildcardType) {
-            return isInjectionWildcardCompatible((WildcardType) t1, t2);
-        }
-
-        // Handle wildcards in producer bean types (t2)
-        if (t2 instanceof WildcardType) {
-            return isWildcardCompatible(t1, (WildcardType) t2);
-        }
-
         // TypeVariables in t2: target argument must be assignable to ALL bounds (t2 represents unknown within bounds)
         if (t2 instanceof TypeVariable) {
             TypeVariable<?> tv = (TypeVariable<?>) t2;
@@ -573,6 +563,16 @@ public class TypeChecker {
                 }
             }
             return true;
+        }
+
+        // Wildcards can appear both at injection points (t1) and candidate bean types (t2).
+        if (t1 instanceof WildcardType) {
+            return isInjectionWildcardCompatible((WildcardType) t1, t2);
+        }
+
+        // Handle wildcards in producer bean types (t2)
+        if (t2 instanceof WildcardType) {
+            return isWildcardCompatible(t1, (WildcardType) t2);
         }
 
         // For nested parameterized types, we need to resolve t2 to t1's raw type structure
