@@ -1089,7 +1089,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         Type eventType = event.getClass();
         Set<Annotation> eventQualifiers = new HashSet<>(Arrays.asList(qualifiers));
 
-        Set<ObserverMethod<? super T>> observerMethods = new HashSet<>();
+        List<ObserverMethodInfo> matchingObserverInfos = new ArrayList<>();
 
         for (ObserverMethodInfo observerInfo : knowledgeBase.getObserverMethodInfos()) {
             // Check if the observer is synchronous (@Observes, not @ObservesAsync)
@@ -1104,11 +1104,29 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
             // Check qualifier match
             if (observerQualifiersMatch(eventQualifiers, observerInfo.getQualifiers())) {
-                // Create ObserverMethod wrapper
-                observerMethods.add(createObserverMethod(observerInfo));
+                matchingObserverInfos.add(observerInfo);
             }
         }
 
+        matchingObserverInfos.sort(
+                Comparator.comparingInt(ObserverMethodInfo::getPriority)
+                        .thenComparing(info -> {
+                            Method observerMethod = info.getObserverMethod();
+                            if (observerMethod != null) {
+                                return observerMethod.toGenericString();
+                            }
+                            Bean<?> declaringBean = info.getDeclaringBean();
+                            if (declaringBean != null && declaringBean.getBeanClass() != null) {
+                                return declaringBean.getBeanClass().getName();
+                            }
+                            return "";
+                        })
+        );
+
+        Set<ObserverMethod<? super T>> observerMethods = new LinkedHashSet<>();
+        for (ObserverMethodInfo observerInfo : matchingObserverInfos) {
+            observerMethods.add(createObserverMethod(observerInfo));
+        }
         return observerMethods;
     }
 
@@ -1978,6 +1996,15 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         Type requiredType = injectionPoint.getType();
         Set<Annotation> qualifiers = injectionPoint.getQualifiers();
 
+        // Built-in bean types such as Event<T> are not represented by discoverable beans and
+        // are resolved contextually at injection time.
+        if (isBuiltInInjectionType(requiredType)) {
+            if (beanResolver != null) {
+                beanResolver.resolve(requiredType, qualifiers.toArray(new Annotation[0]));
+            }
+            return;
+        }
+
         Set<Bean<?>> beans = getBeans(requiredType, qualifiers.toArray(new Annotation[0]));
 
         if (beans.isEmpty()) {
@@ -1993,6 +2020,23 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                     .map(b -> b.getBeanClass().getName())
                     .collect(Collectors.joining(", ")));
         }
+    }
+
+    private boolean isBuiltInInjectionType(Type requiredType) {
+        if (!(requiredType instanceof ParameterizedType)) {
+            return false;
+        }
+        Type rawType = ((ParameterizedType) requiredType).getRawType();
+        if (!(rawType instanceof Class<?>)) {
+            return false;
+        }
+        Class<?> rawClass = (Class<?>) rawType;
+        return Event.class.isAssignableFrom(rawClass)
+                || Instance.class.isAssignableFrom(rawClass)
+                || jakarta.inject.Provider.class.isAssignableFrom(rawClass)
+                || Decorator.class.equals(rawClass)
+                || Bean.class.equals(rawClass)
+                || Interceptor.class.equals(rawClass);
     }
 
     /**

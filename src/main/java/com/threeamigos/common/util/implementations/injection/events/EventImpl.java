@@ -15,6 +15,8 @@ import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetad
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
+import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionSynchronizationCallbacks;
@@ -651,9 +653,11 @@ public class EventImpl<T> implements Event<T> {
     private void validateEventObject(Object event) {
         Class<?> runtimeType = event.getClass();
         if (runtimeType.getTypeParameters().length > 0) {
-            throw new IllegalArgumentException(
-                    "Runtime type of event object contains unresolvable type variable(s): " +
-                            runtimeType.getName());
+            if (!areRuntimeTypeVariablesResolvable(runtimeType, eventType)) {
+                throw new IllegalArgumentException(
+                        "Runtime type of event object contains unresolvable type variable(s): " +
+                                runtimeType.getName());
+            }
         }
 
         if (("jakarta.enterprise.event.Startup".equals(runtimeType.getName()) ||
@@ -667,6 +671,224 @@ public class EventImpl<T> implements Event<T> {
                     "Runtime type of event object is assignable to a container lifecycle event type: " +
                             runtimeType.getName());
         }
+    }
+
+    private boolean areRuntimeTypeVariablesResolvable(Class<?> runtimeType, Type selectedEventType) {
+        Set<Type> runtimeTypeClosure = TypeClosureHelper.extractTypesFromClass(runtimeType, true);
+        Map<TypeVariable<?>, Type> resolvedTypeVariables =
+                resolveRuntimeTypeVariables(selectedEventType, runtimeTypeClosure);
+
+        for (TypeVariable<?> runtimeTypeVariable : runtimeType.getTypeParameters()) {
+            Type resolvedType = resolveTypeVariable(runtimeTypeVariable, resolvedTypeVariables, new HashSet<TypeVariable<?>>());
+            if (resolvedType == null || containsUnresolvableTypeVariable(resolvedType)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private Map<TypeVariable<?>, Type> resolveRuntimeTypeVariables(Type selectedEventType, Set<Type> runtimeTypeClosure) {
+        Map<TypeVariable<?>, Type> resolvedTypeVariables = new HashMap<>();
+        Class<?> selectedRawType = RawTypeExtractor.getRawType(selectedEventType);
+        if (selectedRawType == null) {
+            return resolvedTypeVariables;
+        }
+
+        Type selectedTemplate = null;
+        for (Type candidate : runtimeTypeClosure) {
+            Class<?> candidateRawType = RawTypeExtractor.getRawType(candidate);
+            if (selectedRawType.equals(candidateRawType)) {
+                selectedTemplate = candidate;
+                break;
+            }
+        }
+
+        if (selectedTemplate != null) {
+            unifyTypeTemplates(selectedTemplate, selectedEventType, resolvedTypeVariables);
+        }
+        return resolvedTypeVariables;
+    }
+
+    private void unifyTypeTemplates(Type templateType, Type selectedType, Map<TypeVariable<?>, Type> resolvedTypeVariables) {
+        if (templateType instanceof TypeVariable<?>) {
+            resolvedTypeVariables.put((TypeVariable<?>) templateType, selectedType);
+            return;
+        }
+
+        if (templateType instanceof ParameterizedType && selectedType instanceof ParameterizedType) {
+            ParameterizedType templateParameterizedType = (ParameterizedType) templateType;
+            ParameterizedType selectedParameterizedType = (ParameterizedType) selectedType;
+            Type templateRawType = templateParameterizedType.getRawType();
+            Type selectedRawType = selectedParameterizedType.getRawType();
+            if (!Objects.equals(templateRawType, selectedRawType)) {
+                return;
+            }
+            Type[] templateArguments = templateParameterizedType.getActualTypeArguments();
+            Type[] selectedArguments = selectedParameterizedType.getActualTypeArguments();
+            for (int i = 0; i < templateArguments.length && i < selectedArguments.length; i++) {
+                unifyTypeTemplates(templateArguments[i], selectedArguments[i], resolvedTypeVariables);
+            }
+            return;
+        }
+
+        if (templateType instanceof GenericArrayType && selectedType instanceof GenericArrayType) {
+            GenericArrayType templateArrayType = (GenericArrayType) templateType;
+            GenericArrayType selectedArrayType = (GenericArrayType) selectedType;
+            unifyTypeTemplates(
+                    templateArrayType.getGenericComponentType(),
+                    selectedArrayType.getGenericComponentType(),
+                    resolvedTypeVariables
+            );
+            return;
+        }
+
+        if (templateType instanceof GenericArrayType
+                && selectedType instanceof Class<?>
+                && ((Class<?>) selectedType).isArray()) {
+            unifyTypeTemplates(
+                    ((GenericArrayType) templateType).getGenericComponentType(),
+                    ((Class<?>) selectedType).getComponentType(),
+                    resolvedTypeVariables
+            );
+        }
+    }
+
+    private Type resolveTypeVariable(TypeVariable<?> typeVariable,
+                                     Map<TypeVariable<?>, Type> resolvedTypeVariables,
+                                     Set<TypeVariable<?>> visited) {
+        if (!visited.add(typeVariable)) {
+            return null;
+        }
+
+        Type resolved = resolvedTypeVariables.get(typeVariable);
+        if (resolved == null) {
+            return null;
+        }
+        if (resolved instanceof TypeVariable<?>) {
+            return resolveTypeVariable((TypeVariable<?>) resolved, resolvedTypeVariables, visited);
+        }
+        return resolved;
+    }
+
+    private Type resolveTypeVariables(Type type, Map<TypeVariable<?>, Type> resolvedTypeVariables) {
+        if (type instanceof TypeVariable<?>) {
+            Type resolved = resolveTypeVariable((TypeVariable<?>) type, resolvedTypeVariables, new HashSet<TypeVariable<?>>());
+            return resolved != null ? resolved : type;
+        }
+
+        if (type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+            Type[] originalArguments = parameterizedType.getActualTypeArguments();
+            Type[] resolvedArguments = new Type[originalArguments.length];
+            boolean changed = false;
+            for (int i = 0; i < originalArguments.length; i++) {
+                Type resolvedArgument = resolveTypeVariables(originalArguments[i], resolvedTypeVariables);
+                resolvedArguments[i] = resolvedArgument;
+                if (!Objects.equals(resolvedArgument, originalArguments[i])) {
+                    changed = true;
+                }
+            }
+            Type ownerType = parameterizedType.getOwnerType();
+            Type resolvedOwnerType = ownerType == null ? null : resolveTypeVariables(ownerType, resolvedTypeVariables);
+            if (!Objects.equals(ownerType, resolvedOwnerType)) {
+                changed = true;
+            }
+            if (!changed) {
+                return type;
+            }
+            return new ParameterizedType() {
+                @Override
+                public Type[] getActualTypeArguments() {
+                    return resolvedArguments.clone();
+                }
+
+                @Override
+                public Type getRawType() {
+                    return parameterizedType.getRawType();
+                }
+
+                @Override
+                public Type getOwnerType() {
+                    return resolvedOwnerType;
+                }
+            };
+        }
+
+        if (type instanceof GenericArrayType) {
+            GenericArrayType arrayType = (GenericArrayType) type;
+            Type componentType = arrayType.getGenericComponentType();
+            Type resolvedComponentType = resolveTypeVariables(componentType, resolvedTypeVariables);
+            if (Objects.equals(componentType, resolvedComponentType)) {
+                return type;
+            }
+            return new GenericArrayType() {
+                @Override
+                public Type getGenericComponentType() {
+                    return resolvedComponentType;
+                }
+            };
+        }
+
+        if (type instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) type;
+            Type[] upperBounds = wildcardType.getUpperBounds();
+            Type[] lowerBounds = wildcardType.getLowerBounds();
+            Type[] resolvedUpperBounds = new Type[upperBounds.length];
+            Type[] resolvedLowerBounds = new Type[lowerBounds.length];
+            boolean changed = false;
+
+            for (int i = 0; i < upperBounds.length; i++) {
+                resolvedUpperBounds[i] = resolveTypeVariables(upperBounds[i], resolvedTypeVariables);
+                if (!Objects.equals(upperBounds[i], resolvedUpperBounds[i])) {
+                    changed = true;
+                }
+            }
+            for (int i = 0; i < lowerBounds.length; i++) {
+                resolvedLowerBounds[i] = resolveTypeVariables(lowerBounds[i], resolvedTypeVariables);
+                if (!Objects.equals(lowerBounds[i], resolvedLowerBounds[i])) {
+                    changed = true;
+                }
+            }
+
+            if (!changed) {
+                return type;
+            }
+            return new WildcardType() {
+                @Override
+                public Type[] getUpperBounds() {
+                    return resolvedUpperBounds.clone();
+                }
+
+                @Override
+                public Type[] getLowerBounds() {
+                    return resolvedLowerBounds.clone();
+                }
+            };
+        }
+
+        return type;
+    }
+
+    private Set<Type> getResolvedEventDispatchTypes(Object event) {
+        Class<?> runtimeType = event.getClass();
+        Set<Type> runtimeTypeClosure = TypeClosureHelper.extractTypesFromClass(runtimeType, true);
+        Map<TypeVariable<?>, Type> resolvedTypeVariables =
+                resolveRuntimeTypeVariables(eventType, runtimeTypeClosure);
+
+        Set<Type> resolvedDispatchTypes = new LinkedHashSet<>();
+        for (Type candidate : runtimeTypeClosure) {
+            resolvedDispatchTypes.add(resolveTypeVariables(candidate, resolvedTypeVariables));
+        }
+        return resolvedDispatchTypes;
+    }
+
+    private boolean matchesObservedType(Type observedType, Set<Type> eventDispatchTypes) {
+        for (Type dispatchType : eventDispatchTypes) {
+            if (typeChecker.isEventTypeAssignable(observedType, dispatchType)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isContainerLifecycleEventType(Class<?> type) {
@@ -794,7 +1016,7 @@ public class EventImpl<T> implements Event<T> {
      */
     private List<ObserverMethodInfo> findMatchingObservers(Object event, boolean async) {
         List<ObserverMethodInfo> matching = new ArrayList<>();
-        Type eventRuntimeType = event.getClass();
+        Set<Type> eventDispatchTypes = getResolvedEventDispatchTypes(event);
 
         // Find matching reflection-based observers (from @Observes/@ObservesAsync methods)
         for (ObserverMethodInfo observerInfo : knowledgeBase.getObserverMethodInfos()) {
@@ -807,8 +1029,8 @@ public class EventImpl<T> implements Event<T> {
                 continue;
             }
 
-            // Check if observer event type is assignable from the runtime type
-            if (!typeChecker.isEventTypeAssignable(observerInfo.getEventType(), eventRuntimeType)) {
+            // Check if observer event type is assignable from at least one resolved dispatch type.
+            if (!matchesObservedType(observerInfo.getEventType(), eventDispatchTypes)) {
                 continue;
             }
 
@@ -827,8 +1049,8 @@ public class EventImpl<T> implements Event<T> {
                 continue;
             }
 
-            // Check if observer event type is assignable from the runtime type
-            if (!typeChecker.isEventTypeAssignable(syntheticObserver.getObservedType(), eventRuntimeType)) {
+            // Check if observer event type is assignable from at least one resolved dispatch type.
+            if (!matchesObservedType(syntheticObserver.getObservedType(), eventDispatchTypes)) {
                 continue;
             }
 
