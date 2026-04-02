@@ -108,7 +108,18 @@ public class InterceptorChain {
                 invocableMethod = invocationTarget.getClass().getMethod(method.getName(), method.getParameterTypes());
             }
             invocableMethod.setAccessible(true);
-            return invocableMethod.invoke(invocationTarget, ctx.getParameters());
+            try {
+                return invocableMethod.invoke(invocationTarget, ctx.getParameters());
+            } catch (InvocationTargetException e) {
+                Throwable cause = e.getTargetException();
+                if (cause instanceof Exception) {
+                    throw (Exception) cause;
+                }
+                if (cause instanceof Error) {
+                    throw (Error) cause;
+                }
+                throw new RuntimeException(cause);
+            }
         };
 
         // Create invocation context
@@ -184,7 +195,18 @@ public class InterceptorChain {
         InvocationContextImpl.TargetInvocation targetInvocation = ctx -> {
             if (lifecycleCallback != null) {
                 lifecycleCallback.setAccessible(true);
-                lifecycleCallback.invoke(target);
+                try {
+                    lifecycleCallback.invoke(target);
+                } catch (InvocationTargetException e) {
+                    Throwable cause = e.getTargetException();
+                    if (cause instanceof Exception) {
+                        throw (Exception) cause;
+                    }
+                    if (cause instanceof Error) {
+                        throw (Error) cause;
+                    }
+                    throw new RuntimeException(cause);
+                }
             }
             return null; // Lifecycle callbacks return void
         };
@@ -217,7 +239,18 @@ public class InterceptorChain {
             if (lifecycleCallbacks != null && !lifecycleCallbacks.isEmpty()) {
                 for (java.lang.reflect.Method callback : lifecycleCallbacks) {
                     callback.setAccessible(true);
-                    callback.invoke(target);
+                    try {
+                        callback.invoke(target);
+                    } catch (InvocationTargetException e) {
+                        Throwable cause = e.getTargetException();
+                        if (cause instanceof Exception) {
+                            throw (Exception) cause;
+                        }
+                        if (cause instanceof Error) {
+                            throw (Error) cause;
+                        }
+                        throw new RuntimeException(cause);
+                    }
                 }
             }
             return null; // Lifecycle callbacks return void
@@ -284,7 +317,18 @@ public class InterceptorChain {
 
             InterceptorInvocation invocation = ctx -> {
                 interceptorMethod.setAccessible(true);
-                return interceptorMethod.invoke(interceptorInstance, ctx);
+                try {
+                    return interceptorMethod.invoke(interceptorInstance, ctx);
+                } catch (InvocationTargetException e) {
+                    Throwable cause = e.getTargetException();
+                    if (cause instanceof Exception) {
+                        throw (Exception) cause;
+                    }
+                    if (cause instanceof Error) {
+                        throw (Error) cause;
+                    }
+                    throw new RuntimeException(cause);
+                }
             };
 
             invocations.add(invocation);

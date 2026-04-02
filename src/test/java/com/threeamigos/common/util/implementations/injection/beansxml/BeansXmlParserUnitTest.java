@@ -95,6 +95,26 @@ class BeansXmlParserUnitTest {
     }
 
     @Test
+    void parseNamespaceLessShrinkwrapBeansXml() {
+        String xml = "<beans version=\"3.0\" bean-discovery-mode=\"annotated\">" +
+                "<alternatives><class>com.example.MockService</class></alternatives>" +
+                "<interceptors><class>com.example.TransactionalInterceptor</class></interceptors>" +
+                "<decorators><class>com.example.LoggingDecorator</class></decorators>" +
+                "</beans>";
+
+        BeansXml beansXml = new BeansXmlParser().parse(stream(xml));
+
+        assertEquals("annotated", beansXml.getBeanDiscoveryMode());
+        assertEquals("3.0", beansXml.getVersion());
+        assertEquals(java.util.Collections.singletonList("com.example.MockService"),
+                beansXml.getAlternatives().getClasses());
+        assertEquals(java.util.Collections.singletonList("com.example.TransactionalInterceptor"),
+                beansXml.getInterceptors().getClasses());
+        assertEquals(java.util.Collections.singletonList("com.example.LoggingDecorator"),
+                beansXml.getDecorators().getClasses());
+    }
+
+    @Test
     void parseWithValidationStripsScanAndValidates(@TempDir Path tempDir) throws Exception {
         URL schemaUrl = writeSchema(tempDir.resolve("beans.xsd"));
         String xml = "<beans xmlns=\"http://java.sun.com/xml/ns/javaee\" bean-discovery-mode=\"annotated\" version=\"4.1\">" +

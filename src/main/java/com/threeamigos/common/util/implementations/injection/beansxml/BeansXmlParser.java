@@ -13,6 +13,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.net.URL;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Parser for CDI 4.1 beans.xml files using JAXB.
@@ -53,6 +55,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * @see BeansXml
  */
 public class BeansXmlParser {
+
+    private static final String JAKARTA_NAMESPACE = "https://jakarta.ee/xml/ns/jakartaee";
+    private static final Pattern ROOT_BEANS_TAG_PATTERN =
+            Pattern.compile("(?is)<beans\\b([^>]*)>");
 
     /**
      * JAXB context cache for performance.
@@ -230,12 +236,33 @@ public class BeansXmlParser {
         }
         String xml = new String(baos.toByteArray(), StandardCharsets.UTF_8);
         String normalized = xml
-            .replace("http://xmlns.jcp.org/xml/ns/javaee", "https://jakarta.ee/xml/ns/jakartaee")
-            .replace("http://java.sun.com/xml/ns/javaee", "https://jakarta.ee/xml/ns/jakartaee");
+            .replace("http://xmlns.jcp.org/xml/ns/javaee", JAKARTA_NAMESPACE)
+            .replace("http://java.sun.com/xml/ns/javaee", JAKARTA_NAMESPACE);
+        normalized = ensureRootNamespace(normalized);
         if (stripVendorScan) {
             normalized = normalized.replaceAll("(?s)<scan>.*?</scan>", "");
         }
         return new ByteArrayInputStream(normalized.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String ensureRootNamespace(String xml) {
+        if (xml == null || xml.isEmpty()) {
+            return xml;
+        }
+
+        Matcher matcher = ROOT_BEANS_TAG_PATTERN.matcher(xml);
+        if (!matcher.find()) {
+            return xml;
+        }
+
+        String attributes = matcher.group(1);
+        if (attributes != null && attributes.matches("(?is).*\\bxmlns\\s*=.*")) {
+            return xml;
+        }
+
+        String replacement = "<beans" + (attributes == null ? "" : attributes)
+                + " xmlns=\"" + JAKARTA_NAMESPACE + "\">";
+        return matcher.replaceFirst(Matcher.quoteReplacement(replacement));
     }
 
     /**
