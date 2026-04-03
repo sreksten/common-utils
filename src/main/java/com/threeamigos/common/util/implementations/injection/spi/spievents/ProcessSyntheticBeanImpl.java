@@ -30,6 +30,7 @@ public class ProcessSyntheticBeanImpl<T> extends PhaseAware
         implements ProcessSyntheticBean<T>, ObserverInvocationLifecycle {
 
     private final Bean<T> bean;
+    private final Annotated annotated;
     private final Extension source;
     private final KnowledgeBase knowledgeBase;
     private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
@@ -46,6 +47,7 @@ public class ProcessSyntheticBeanImpl<T> extends PhaseAware
         super(messageHandler);
         this.knowledgeBase = knowledgeBase;
         this.bean = bean;
+        this.annotated = resolveAnnotated(bean);
         this.source = source;
     }
 
@@ -58,9 +60,7 @@ public class ProcessSyntheticBeanImpl<T> extends PhaseAware
     @Override
     public Annotated getAnnotated() {
         assertObserverInvocationActive();
-        // Synthetic beans don't have an Annotated representation since they
-        // weren't discovered via reflection
-        return null;
+        return annotated;
     }
 
     @Override
@@ -100,5 +100,14 @@ public class ProcessSyntheticBeanImpl<T> extends PhaseAware
                ", types=" + bean.getTypes() +
                ", qualifiers=" + bean.getQualifiers() +
                '}';
+    }
+
+    @SuppressWarnings("unchecked")
+    private Annotated resolveAnnotated(Bean<T> bean) {
+        Class<?> beanClass = bean != null ? bean.getBeanClass() : null;
+        if (beanClass == null) {
+            beanClass = Object.class;
+        }
+        return new SimpleAnnotatedType<>((Class<T>) beanClass);
     }
 }

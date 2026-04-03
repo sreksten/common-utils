@@ -39,17 +39,13 @@ public class SyringeDeploymentExceptionTransformer implements DeploymentExceptio
 
             String message = current.getMessage();
             if (message != null) {
-                if (containsDeploymentExceptionMarker(message)) {
-                    return new jakarta.enterprise.inject.spi.DeploymentException(message);
-                }
                 if (containsDefinitionExceptionMarker(message)) {
-                    // Deployment-phase failures may expose DefinitionException in server messages.
-                    // Return DeploymentException while preserving the DefinitionException cause so
-                    // Arquillian expected-exception checks can match both views.
-                    return new jakarta.enterprise.inject.spi.DeploymentException(
-                            message,
-                            new jakarta.enterprise.inject.spi.DefinitionException(message)
-                    );
+                    // Broken-definition TCK tests use @ShouldThrowException(DefinitionException.class),
+                    // so map DefinitionException markers directly to DefinitionException.
+                    return new jakarta.enterprise.inject.spi.DefinitionException(message, current);
+                }
+                if (containsDeploymentExceptionMarker(message)) {
+                    return new jakarta.enterprise.inject.spi.DeploymentException(message, current);
                 }
             }
 

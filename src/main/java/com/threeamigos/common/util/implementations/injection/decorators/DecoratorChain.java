@@ -67,6 +67,7 @@ public class DecoratorChain {
 
     private final List<DecoratorInstance> decorators;
     private final Object targetInstance;
+    private final Object outermostInstance;
 
     /**
      * Creates a decorator chain.
@@ -74,9 +75,10 @@ public class DecoratorChain {
      * @param decorators ordered list of decorator instances (outermost first)
      * @param targetInstance the actual bean instance (innermost)
      */
-    DecoratorChain(List<DecoratorInstance> decorators, @Nonnull Object targetInstance) {
+    DecoratorChain(List<DecoratorInstance> decorators, @Nonnull Object targetInstance, Object outermostInstance) {
         this.decorators = Collections.unmodifiableList(new ArrayList<>(decorators));
         this.targetInstance = targetInstance;
+        this.outermostInstance = outermostInstance;
     }
 
     /**
@@ -105,10 +107,7 @@ public class DecoratorChain {
      * @return the outermost decorator instance or target if no decorators
      */
     public Object getOutermostInstance() {
-        if (decorators.isEmpty()) {
-            return targetInstance;
-        }
-        return decorators.get(0).getDecoratorInstance();
+        return outermostInstance;
     }
 
     /**

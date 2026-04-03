@@ -3451,7 +3451,7 @@ public class Syringe {
                                                  Object event,
                                                  List<ExtensionObserverInvocation> sink) {
         Class<?> eventType = event != null ? event.getClass() : Object.class;
-        for (Method method : extension.getClass().getMethods()) {
+        for (Method method : getExtensionObserverCandidateMethods(extension.getClass())) {
             Parameter[] parameters = method.getParameters();
             int observesParameterIndex = -1;
 
@@ -3488,6 +3488,19 @@ public class Syringe {
                 }
             }
         }
+    }
+
+    private Collection<Method> getExtensionObserverCandidateMethods(Class<?> extensionClass) {
+        Map<String, Method> methodsBySignature = new LinkedHashMap<String, Method>();
+        Class<?> current = extensionClass;
+        while (current != null && current != Object.class) {
+            for (Method method : current.getDeclaredMethods()) {
+                String signature = method.getName() + Arrays.toString(method.getParameterTypes());
+                methodsBySignature.putIfAbsent(signature, method);
+            }
+            current = current.getSuperclass();
+        }
+        return methodsBySignature.values();
     }
 
     private boolean matchesObservedGenericEventType(Parameter observerParameter, Object event) {

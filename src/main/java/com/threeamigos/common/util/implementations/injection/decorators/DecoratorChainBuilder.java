@@ -20,6 +20,7 @@ import java.util.List;
 public class DecoratorChainBuilder {
     private final List<DecoratorInstance> decorators = new ArrayList<>();
     private Object targetInstance;
+    private Object outermostInstance;
 
     /**
      * Adds a decorator to the chain.
@@ -52,6 +53,11 @@ public class DecoratorChainBuilder {
         return this;
     }
 
+    public DecoratorChainBuilder setOutermostInstance(Object outermostInstance) {
+        this.outermostInstance = outermostInstance;
+        return this;
+    }
+
     /**
      * Builds the decorator chain.
      *
@@ -62,6 +68,10 @@ public class DecoratorChainBuilder {
         if (targetInstance == null) {
             throw new IllegalStateException("Target instance must be set");
         }
-        return new DecoratorChain(decorators, targetInstance);
+        Object exposedInstance = outermostInstance;
+        if (exposedInstance == null) {
+            exposedInstance = decorators.isEmpty() ? targetInstance : decorators.get(0).getDecoratorInstance();
+        }
+        return new DecoratorChain(decorators, targetInstance, exposedInstance);
     }
 }

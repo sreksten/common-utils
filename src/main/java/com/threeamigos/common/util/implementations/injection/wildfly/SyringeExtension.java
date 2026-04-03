@@ -95,7 +95,8 @@ public class SyringeExtension implements Extension {
                     // Use provider-neutral phase anchors to avoid hard coupling to Weld.
                     processorTarget.addDeploymentProcessor(SUBSYSTEM_NAME, Phase.DEPENDENCIES, Phase.DEPENDENCIES_MODULE, new SyringeDependencyProcessor());
                     processorTarget.addDeploymentProcessor(SUBSYSTEM_NAME, Phase.POST_MODULE, Phase.POST_MODULE_REFLECTION_INDEX, new SyringeDeploymentProcessor());
-                    processorTarget.addDeploymentProcessor(SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_MODULE_JNDI_BINDINGS, new SyringeJndiBinderProcessor());
+                    // WildFly's CDI integration already binds java:module/BeanManager during INSTALL.
+                    // Registering a second binder here causes DuplicateServiceException.
                 }
             }, OperationContext.Stage.RUNTIME);
         }

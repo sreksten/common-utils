@@ -9,9 +9,12 @@ import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.net.URL;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.lang.reflect.Method;
@@ -29,6 +32,7 @@ public class SyringeBootstrap {
     private final Syringe syringe;
     private final Set<Class<?>> discoveredClasses;
     private final ClassLoader classLoader;
+    private final List<BeansXml> preDiscoveredBeansXmlConfigurations;
 
     /**
      * Creates a new SyringeBootstrap with pre-discovered classes.
@@ -38,9 +42,31 @@ public class SyringeBootstrap {
      * @throws IllegalArgumentException if any parameter is null
      */
     public SyringeBootstrap(Set<Class<?>> discoveredClasses, ClassLoader classLoader) {
+        this(discoveredClasses, classLoader, null);
+    }
+
+    /**
+     * Creates a new SyringeBootstrap with pre-discovered classes and beans.xml metadata.
+     *
+     * @param discoveredClasses the set of classes discovered by the application server
+     * @param classLoader the class loader for the deployment
+     * @param preDiscoveredBeansXmlConfigurations beans.xml configurations parsed from deployment VFS metadata
+     * @throws IllegalArgumentException if discoveredClasses or classLoader is null
+     */
+    public SyringeBootstrap(Set<Class<?>> discoveredClasses,
+                            ClassLoader classLoader,
+                            Collection<BeansXml> preDiscoveredBeansXmlConfigurations) {
         this.discoveredClasses = Objects.requireNonNull(discoveredClasses, "discoveredClasses cannot be null");
         this.classLoader = Objects.requireNonNull(classLoader, "classLoader cannot be null");
         this.syringe = new Syringe(); // Use no-args constructor for managed bootstrap
+        this.preDiscoveredBeansXmlConfigurations = new ArrayList<BeansXml>();
+        if (preDiscoveredBeansXmlConfigurations != null) {
+            for (BeansXml beansXml : preDiscoveredBeansXmlConfigurations) {
+                if (beansXml != null) {
+                    this.preDiscoveredBeansXmlConfigurations.add(beansXml);
+                }
+            }
+        }
     }
 
     /**
@@ -108,6 +134,13 @@ public class SyringeBootstrap {
     }
 
     private void registerBeansXmlConfigurations() throws IOException {
+        System.out.println("[Syringe][WildFly] Pre-discovered beans.xml count: "
+                + preDiscoveredBeansXmlConfigurations.size());
+        for (BeansXml beansXml : preDiscoveredBeansXmlConfigurations) {
+            System.out.println("[Syringe][WildFly] Registering pre-discovered beans.xml: " + beansXml);
+            syringe.addBeansXmlConfiguration(beansXml);
+        }
+
         BeansXmlParser parser = new BeansXmlParser();
         Set<String> seenUrls = new HashSet<String>();
         loadBeansXmlFromPath(parser, seenUrls, "META-INF/beans.xml");
@@ -128,6 +161,8 @@ public class SyringeBootstrap {
             try {
                 stream = url.openStream();
                 BeansXml beansXml = parser.parse(stream);
+                System.out.println("[Syringe][WildFly] Parsed beans.xml from classloader resource "
+                        + external + " => " + beansXml);
                 syringe.addBeansXmlConfiguration(beansXml);
             } finally {
                 if (stream != null) {

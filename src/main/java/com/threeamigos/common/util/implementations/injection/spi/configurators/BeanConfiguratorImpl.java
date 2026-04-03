@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -397,7 +398,7 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
     public void complete() {
         // Validate required fields
         if (beanClass == null) {
-            throw new IllegalStateException("beanClass must be set for synthetic bean");
+            beanClass = inferBeanClassFromTypes();
         }
 
         if (createCallback == null) {
@@ -440,5 +441,25 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
         messageHandler.handleInfoMessage("[BeanConfigurator] Created synthetic bean: " +
                           beanClass.getSimpleName() +
                           " with scope @" + scope.getSimpleName());
+    }
+
+    private Class<?> inferBeanClassFromTypes() {
+        Class<?> fallback = null;
+        for (Type type : types) {
+            Class<?> rawType = RawTypeExtractor.getRawType(type);
+            if (rawType == null) {
+                continue;
+            }
+            if (fallback == null) {
+                fallback = rawType;
+            }
+            if (!rawType.isInterface() && !Object.class.equals(rawType)) {
+                return rawType;
+            }
+        }
+        if (fallback != null) {
+            return fallback;
+        }
+        return Object.class;
     }
 }

@@ -1,6 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.wildfly;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
@@ -15,8 +17,13 @@ import org.jboss.modules.Module;
 import org.jboss.modules.ModuleLoader;
 import org.jboss.modules.ModuleLoadException;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -94,8 +101,18 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             return;
         }
 
+        List<BeansXml> deploymentBeansXmlConfigurations = collectDeploymentBeansXmlConfigurations(deploymentUnit);
+        System.out.println("[Syringe][WildFly] Deployment beans.xml configurations for "
+                + deploymentUnit.getName() + ": " + deploymentBeansXmlConfigurations.size());
+        for (BeansXml beansXml : deploymentBeansXmlConfigurations) {
+            System.out.println("[Syringe][WildFly]  - " + beansXml);
+        }
+
         // 2. Initialize Syringe via Bootstrap
-        SyringeBootstrap bootstrap = new SyringeBootstrap(discoveredClasses, module.getClassLoader());
+        SyringeBootstrap bootstrap = new SyringeBootstrap(
+                discoveredClasses,
+                module.getClassLoader(),
+                deploymentBeansXmlConfigurations);
         Syringe syringe = null;
         try {
             syringe = bootstrap.bootstrap();
@@ -379,5 +396,111 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         }
 
         return classNames;
+    }
+
+    static List<BeansXml> collectDeploymentBeansXmlConfigurations(DeploymentUnit deploymentUnit) {
+        List<BeansXml> configurations = new ArrayList<BeansXml>();
+        if (deploymentUnit == null) {
+            return configurations;
+        }
+
+        BeansXmlParser parser = new BeansXmlParser();
+        Set<String> seenPaths = new HashSet<String>();
+
+        ResourceRoot deploymentRoot = deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+        if (deploymentRoot != null && deploymentRoot.getRoot() != null) {
+            collectBeansXmlFromVirtualRoot(deploymentRoot.getRoot(), parser, seenPaths, configurations);
+        }
+
+        List<ResourceRoot> resourceRoots = deploymentUnit.getAttachmentList(Attachments.RESOURCE_ROOTS);
+        if (resourceRoots != null) {
+            for (ResourceRoot resourceRoot : resourceRoots) {
+                if (resourceRoot == null || resourceRoot.getRoot() == null) {
+                    continue;
+                }
+                collectBeansXmlFromVirtualRoot(resourceRoot.getRoot(), parser, seenPaths, configurations);
+            }
+        }
+
+        return configurations;
+    }
+
+    private static void collectBeansXmlFromVirtualRoot(Object root,
+                                                       BeansXmlParser parser,
+                                                       Set<String> seenPaths,
+                                                       List<BeansXml> sink) {
+        try {
+            Method getChildrenRecursively = root.getClass().getMethod("getChildrenRecursively");
+            @SuppressWarnings("unchecked")
+            List<Object> files = (List<Object>) getChildrenRecursively.invoke(root);
+
+            for (Object file : files) {
+                if (file == null) {
+                    continue;
+                }
+
+                String path = null;
+                try {
+                    Method pathName = file.getClass().getMethod("getPathName");
+                    Object value = pathName.invoke(file);
+                    if (value instanceof String) {
+                        path = (String) value;
+                    }
+                } catch (Exception ignored) {
+                    // Best effort only.
+                }
+
+                if (path == null || path.isEmpty()) {
+                    continue;
+                }
+
+                String normalizedPath = path.replace('\\', '/');
+                if (!normalizedPath.endsWith("/META-INF/beans.xml")
+                        && !normalizedPath.endsWith("/WEB-INF/beans.xml")
+                        && !"META-INF/beans.xml".equals(normalizedPath)
+                        && !"WEB-INF/beans.xml".equals(normalizedPath)) {
+                    continue;
+                }
+
+                if (!seenPaths.add(normalizedPath)) {
+                    continue;
+                }
+
+                Method openStream = file.getClass().getMethod("openStream");
+                InputStream inputStream = null;
+                try {
+                    inputStream = (InputStream) openStream.invoke(file);
+                    if (inputStream != null) {
+                        byte[] rawBytes = readBytes(inputStream);
+                        String rawXml = new String(rawBytes, StandardCharsets.UTF_8);
+                        String preview = rawXml.replace('\n', ' ').replace('\r', ' ');
+                        if (preview.length() > 400) {
+                            preview = preview.substring(0, 400) + "...";
+                        }
+                        System.out.println("[Syringe][WildFly] Raw beans.xml preview from " + normalizedPath + ": " + preview);
+                        BeansXml beansXml = parser.parse(new ByteArrayInputStream(rawBytes));
+                        sink.add(beansXml);
+                        System.out.println("[Syringe][WildFly] Parsed beans.xml from VFS path: "
+                                + normalizedPath + " => " + beansXml);
+                    }
+                } finally {
+                    if (inputStream != null) {
+                        inputStream.close();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Best effort; beans.xml may be unavailable for some roots.
+        }
+    }
+
+    private static byte[] readBytes(InputStream inputStream) throws Exception {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        byte[] buffer = new byte[4096];
+        int read;
+        while ((read = inputStream.read(buffer)) != -1) {
+            outputStream.write(buffer, 0, read);
+        }
+        return outputStream.toByteArray();
     }
 }

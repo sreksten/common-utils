@@ -3,15 +3,22 @@ package com.threeamigos.common.util.implementations.injection.beansxml;
 import jakarta.xml.bind.JAXBContext;
 import jakarta.xml.bind.JAXBException;
 import jakarta.xml.bind.Unmarshaller;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -128,9 +135,27 @@ public class BeansXmlParser {
             return createDefault();
         }
 
+        byte[] rawBytes;
         try {
-            return parseInternal(inputStream);
+            rawBytes = readBytes(inputStream);
         } catch (Exception e) {
+            System.err.println("[Syringe][BeansXmlParser] Failed to read beans.xml stream: "
+                    + e.getClass().getName() + ": " + e.getMessage());
+            e.printStackTrace(System.err);
+            return createDefault();
+        }
+
+        try {
+            return parseInternal(new ByteArrayInputStream(rawBytes));
+        } catch (Exception primaryFailure) {
+            try {
+                return parseWithDomFallback(rawBytes, false, null);
+            } catch (Exception domFailure) {
+                if (!(primaryFailure instanceof BeansXmlParseException
+                        && domFailure instanceof BeansXmlParseException)) {
+                    logParseFailure(primaryFailure, domFailure, rawBytes);
+                }
+            }
             return createDefault();
         }
     }
@@ -148,11 +173,24 @@ public class BeansXmlParser {
      */
     public BeansXml parseWithValidation(InputStream inputStream, URL schemaUrl)
             throws BeansXmlParseException {
+        byte[] rawBytes;
+        try {
+            rawBytes = readBytes(inputStream);
+        } catch (Exception e) {
+            throw new BeansXmlParseException("Failed to read beans.xml for validation", e);
+        }
+
         try {
             setSchemaUrl(schemaUrl);
-            return parseInternal(inputStream);
-        } catch (Exception e) {
-            throw new BeansXmlParseException("Failed to parse and validate beans.xml", e);
+            return parseInternal(new ByteArrayInputStream(rawBytes));
+        } catch (Exception primaryFailure) {
+            try {
+                Schema schema = createSchema(schemaUrl);
+                return parseWithDomFallback(rawBytes, true, schema);
+            } catch (Exception domFailure) {
+                primaryFailure.addSuppressed(domFailure);
+                throw new BeansXmlParseException("Failed to parse and validate beans.xml", primaryFailure);
+            }
         }
     }
 
@@ -227,14 +265,232 @@ public class BeansXmlParser {
         }
     }
 
-    private InputStream normalizeNamespaces(InputStream inputStream, boolean stripVendorScan) throws Exception {
+    private BeansXml parseWithDomFallback(byte[] rawBytes, boolean stripVendorScan, Schema schema) throws Exception {
+        byte[] normalizedBytes = normalizeBytes(rawBytes, stripVendorScan);
+
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        setFeatureIfSupported(factory, "http://apache.org/xml/features/disallow-doctype-decl", true);
+        setFeatureIfSupported(factory, "http://xml.org/sax/features/external-general-entities", false);
+        setFeatureIfSupported(factory, "http://xml.org/sax/features/external-parameter-entities", false);
+        setAttributeIfSupported(factory, XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        setAttributeIfSupported(factory, XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        if (schema != null) {
+            factory.setSchema(schema);
+        }
+
+        Document document;
+        try (InputStream normalized = new ByteArrayInputStream(normalizedBytes)) {
+            document = factory.newDocumentBuilder().parse(normalized);
+        }
+
+        BeansXml beansXml = populateBeansXmlFromDom(document);
+        ensureValidDiscoveryMode(beansXml);
+        return beansXml;
+    }
+
+    private byte[] normalizeBytes(byte[] rawBytes, boolean stripVendorScan) throws Exception {
+        try (InputStream normalized = normalizeNamespaces(new ByteArrayInputStream(rawBytes), stripVendorScan)) {
+            return readBytes(normalized);
+        }
+    }
+
+    private BeansXml populateBeansXmlFromDom(Document document) throws Exception {
+        BeansXml beansXml = new BeansXml();
+        Element root = document.getDocumentElement();
+        if (root == null || !"beans".equals(localName(root))) {
+            return beansXml;
+        }
+
+        String mode = trimToNull(root.getAttribute("bean-discovery-mode"));
+        if (mode != null) {
+            setFieldValue(beansXml, "beanDiscoveryMode", mode);
+        }
+        String version = trimToNull(root.getAttribute("version"));
+        if (version != null) {
+            setFieldValue(beansXml, "version", version);
+        }
+
+        Element alternativesElement = findDirectChild(root, "alternatives");
+        if (alternativesElement != null) {
+            setFieldValue(beansXml, "alternatives", buildAlternatives(alternativesElement));
+        }
+        Element interceptorsElement = findDirectChild(root, "interceptors");
+        if (interceptorsElement != null) {
+            setFieldValue(beansXml, "interceptors", buildInterceptors(interceptorsElement));
+        }
+        Element decoratorsElement = findDirectChild(root, "decorators");
+        if (decoratorsElement != null) {
+            setFieldValue(beansXml, "decorators", buildDecorators(decoratorsElement));
+        }
+        Element scanElement = findDirectChild(root, "scan");
+        if (scanElement != null) {
+            setFieldValue(beansXml, "scan", buildScan(scanElement));
+        }
+        if (findDirectChild(root, "trim") != null) {
+            setFieldValue(beansXml, "trim", new Trim());
+        }
+
+        return beansXml;
+    }
+
+    private Alternatives buildAlternatives(Element alternativesElement) throws Exception {
+        Alternatives alternatives = new Alternatives();
+        setFieldValue(alternatives, "classes", collectDirectChildText(alternativesElement, "class"));
+        setFieldValue(alternatives, "stereotypes", collectDirectChildText(alternativesElement, "stereotype"));
+        return alternatives;
+    }
+
+    private Interceptors buildInterceptors(Element interceptorsElement) throws Exception {
+        Interceptors interceptors = new Interceptors();
+        setFieldValue(interceptors, "classes", collectDirectChildText(interceptorsElement, "class"));
+        return interceptors;
+    }
+
+    private Decorators buildDecorators(Element decoratorsElement) throws Exception {
+        Decorators decorators = new Decorators();
+        setFieldValue(decorators, "classes", collectDirectChildText(decoratorsElement, "class"));
+        return decorators;
+    }
+
+    private Scan buildScan(Element scanElement) throws Exception {
+        Scan scan = new Scan();
+        List<Exclude> excludes = new ArrayList<Exclude>();
+        for (Element excludeElement : directChildren(scanElement, "exclude")) {
+            excludes.add(buildExclude(excludeElement));
+        }
+        setFieldValue(scan, "excludes", excludes);
+        return scan;
+    }
+
+    private Exclude buildExclude(Element excludeElement) throws Exception {
+        Exclude exclude = new Exclude();
+        String name = trimToNull(excludeElement.getAttribute("name"));
+        setFieldValue(exclude, "name", name);
+
+        List<IfClassAvailable> ifClassAvailable = new ArrayList<IfClassAvailable>();
+        for (Element element : directChildren(excludeElement, "if-class-available")) {
+            IfClassAvailable condition = new IfClassAvailable();
+            setFieldValue(condition, "name", trimToNull(element.getAttribute("name")));
+            ifClassAvailable.add(condition);
+        }
+        setFieldValue(exclude, "ifClassAvailable", ifClassAvailable);
+
+        List<IfClassNotAvailable> ifClassNotAvailable = new ArrayList<IfClassNotAvailable>();
+        for (Element element : directChildren(excludeElement, "if-class-not-available")) {
+            IfClassNotAvailable condition = new IfClassNotAvailable();
+            setFieldValue(condition, "name", trimToNull(element.getAttribute("name")));
+            ifClassNotAvailable.add(condition);
+        }
+        setFieldValue(exclude, "ifClassNotAvailable", ifClassNotAvailable);
+
+        List<IfSystemProperty> ifSystemProperty = new ArrayList<IfSystemProperty>();
+        for (Element element : directChildren(excludeElement, "if-system-property")) {
+            IfSystemProperty condition = new IfSystemProperty();
+            setFieldValue(condition, "name", trimToNull(element.getAttribute("name")));
+            setFieldValue(condition, "value", trimToNull(element.getAttribute("value")));
+            ifSystemProperty.add(condition);
+        }
+        setFieldValue(exclude, "ifSystemProperty", ifSystemProperty);
+
+        return exclude;
+    }
+
+    private List<String> collectDirectChildText(Element parent, String childName) {
+        List<String> values = new ArrayList<String>();
+        for (Element element : directChildren(parent, childName)) {
+            String value = trimToNull(element.getTextContent());
+            if (value != null) {
+                values.add(value);
+            }
+        }
+        return values;
+    }
+
+    private List<Element> directChildren(Element parent, String childName) {
+        List<Element> elements = new ArrayList<Element>();
+        for (Node child = parent.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (!(child instanceof Element)) {
+                continue;
+            }
+            if (childName.equals(localName(child))) {
+                elements.add((Element) child);
+            }
+        }
+        return elements;
+    }
+
+    private Element findDirectChild(Element parent, String childName) {
+        for (Node child = parent.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (!(child instanceof Element)) {
+                continue;
+            }
+            if (childName.equals(localName(child))) {
+                return (Element) child;
+            }
+        }
+        return null;
+    }
+
+    private String localName(Node node) {
+        String localName = node.getLocalName();
+        if (localName != null) {
+            return localName;
+        }
+        String nodeName = node.getNodeName();
+        if (nodeName == null) {
+            return null;
+        }
+        int colon = nodeName.indexOf(':');
+        if (colon >= 0 && colon + 1 < nodeName.length()) {
+            return nodeName.substring(colon + 1);
+        }
+        return nodeName;
+    }
+
+    private void setFieldValue(Object target, String fieldName, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void setFeatureIfSupported(DocumentBuilderFactory factory, String feature, boolean value) {
+        try {
+            factory.setFeature(feature, value);
+        } catch (Exception ignored) {
+            // Best effort across XML parser implementations.
+        }
+    }
+
+    private void setAttributeIfSupported(DocumentBuilderFactory factory, String attribute, String value) {
+        try {
+            factory.setAttribute(attribute, value);
+        } catch (Exception ignored) {
+            // Best effort across XML parser implementations.
+        }
+    }
+
+    private byte[] readBytes(InputStream inputStream) throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         byte[] buffer = new byte[4096];
         int read;
         while ((read = inputStream.read(buffer)) != -1) {
             baos.write(buffer, 0, read);
         }
-        String xml = new String(baos.toByteArray(), StandardCharsets.UTF_8);
+        return baos.toByteArray();
+    }
+
+    private InputStream normalizeNamespaces(InputStream inputStream, boolean stripVendorScan) throws Exception {
+        String xml = new String(readBytes(inputStream), StandardCharsets.UTF_8);
         String normalized = xml
             .replace("http://xmlns.jcp.org/xml/ns/javaee", JAKARTA_NAMESPACE)
             .replace("http://java.sun.com/xml/ns/javaee", JAKARTA_NAMESPACE);
@@ -263,6 +519,21 @@ public class BeansXmlParser {
         String replacement = "<beans" + (attributes == null ? "" : attributes)
                 + " xmlns=\"" + JAKARTA_NAMESPACE + "\">";
         return matcher.replaceFirst(Matcher.quoteReplacement(replacement));
+    }
+
+    private void logParseFailure(Exception primaryFailure, Exception domFailure, byte[] rawBytes) {
+        String xml = new String(rawBytes, StandardCharsets.UTF_8);
+        String normalized = xml.replace('\n', ' ').replace('\r', ' ');
+        if (normalized.length() > 500) {
+            normalized = normalized.substring(0, 500) + "...";
+        }
+        System.err.println("[Syringe][BeansXmlParser] Failed to parse beans.xml: "
+                + primaryFailure.getClass().getName() + ": " + primaryFailure.getMessage());
+        System.err.println("[Syringe][BeansXmlParser] DOM fallback also failed: "
+                + domFailure.getClass().getName() + ": " + domFailure.getMessage());
+        System.err.println("[Syringe][BeansXmlParser] beans.xml preview: " + normalized);
+        primaryFailure.printStackTrace(System.err);
+        domFailure.printStackTrace(System.err);
     }
 
     /**

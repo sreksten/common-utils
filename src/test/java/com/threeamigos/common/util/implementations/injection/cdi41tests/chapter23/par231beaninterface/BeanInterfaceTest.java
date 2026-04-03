@@ -37,6 +37,8 @@ import jakarta.interceptor.InterceptorBinding;
 import jakarta.interceptor.InvocationContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
@@ -65,6 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("23.1 The Bean Interface")
+@Execution(ExecutionMode.SAME_THREAD)
 public class BeanInterfaceTest {
 
     private static final Class<?>[] FIXTURE_CLASSES = new Class<?>[]{

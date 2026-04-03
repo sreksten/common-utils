@@ -814,7 +814,13 @@ public class CDI41InjectionValidator {
                 // The declaring bean class itself does not need to be passivation-capable.
                 boolean producerBean = bean instanceof ProducerBean ||
                         bean.getClass().getName().contains("ProducerBean");
-                if (!producerBean && !java.io.Serializable.class.isAssignableFrom(bean.getBeanClass())) {
+                // Custom Bean implementations (including synthetic beans) may be passivation-capable
+                // via PassivationCapable#getId() even when beanClass itself is not Serializable.
+                boolean customPassivationCapableBean = bean instanceof PassivationCapable &&
+                        !(bean instanceof BeanImpl) &&
+                        !producerBean;
+                if (!producerBean && !customPassivationCapableBean &&
+                        !java.io.Serializable.class.isAssignableFrom(bean.getBeanClass())) {
                     knowledgeBase.addError(
                             "Bean " + bean.getBeanClass().getName() +
                             " has passivation-capable scope @" + scopeAnnotation.getSimpleName() +

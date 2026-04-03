@@ -293,6 +293,7 @@
                             <classifier>arquillian</classifier>
                             <includes>
                                 <include>com/threeamigos/common/util/implementations/injection/arquillian/**</include>
+                                <include>org/jboss/weld/exceptions/**</include>
                                 <include>META-INF/cdi-tck.properties</include>
                                 <include>META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension</include>
                                 <include>META-INF/services/org.jboss.arquillian.container.spi.client.container.DeployableContainer</include>

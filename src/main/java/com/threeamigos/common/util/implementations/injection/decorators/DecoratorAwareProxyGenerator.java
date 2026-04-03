@@ -12,9 +12,12 @@ import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
 import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
+import net.bytebuddy.implementation.FieldAccessor;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.implementation.bind.annotation.AllArguments;
+import net.bytebuddy.implementation.bind.annotation.FieldValue;
 import net.bytebuddy.implementation.bind.annotation.Origin;
 import net.bytebuddy.implementation.bind.annotation.RuntimeType;
 import net.bytebuddy.implementation.bind.annotation.This;
@@ -23,6 +26,7 @@ import net.bytebuddy.matcher.ElementMatchers;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
@@ -113,11 +117,13 @@ public class DecoratorAwareProxyGenerator {
     // Key: Decorator class
     // Value: Generated proxy class (if needed for decoration)
     private final ConcurrentHashMap<Class<?>, Class<?>> decoratorProxyCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Class<?>, Class<?>> decoratedTypeBridgeProxyCache = new ConcurrentHashMap<>();
     private final Map<Object, DecoratorChain> activeChains =
             Collections.synchronizedMap(new WeakHashMap<Object, DecoratorChain>());
 
     public void clearCache() {
         decoratorProxyCache.clear();
+        decoratedTypeBridgeProxyCache.clear();
         activeChains.clear();
     }
 
@@ -210,10 +216,16 @@ public class DecoratorAwareProxyGenerator {
             chainBuilder.addDecorator(decoratorInfos.get(i), decoratorInstances.get(i));
         }
 
+        Object rawOutermost = decoratorInstances.isEmpty() ? targetInstance : decoratorInstances.get(0);
+        Object exposedOutermost = adaptDecoratedReference(targetInstance, rawOutermost);
+
         // Set target and build
-        chainBuilder.setTarget(targetInstance);
+        chainBuilder.setTarget(targetInstance).setOutermostInstance(exposedOutermost);
         DecoratorChain chain = chainBuilder.build();
         activeChains.put(chain.getOutermostInstance(), chain);
+        if (rawOutermost != chain.getOutermostInstance()) {
+            activeChains.put(rawOutermost, chain);
+        }
         return chain;
     }
 
@@ -239,6 +251,151 @@ public class DecoratorAwareProxyGenerator {
                 // Continue destroying remaining decorators.
             }
         }
+    }
+
+    private Object adaptDecoratedReference(Object targetInstance, Object decoratedReference) {
+        if (targetInstance == null || decoratedReference == null) {
+            return decoratedReference;
+        }
+
+        Class<?> targetClass = targetInstance.getClass();
+        if (targetClass.isInstance(decoratedReference) || targetClass.isInterface()) {
+            return decoratedReference;
+        }
+        if (Modifier.isFinal(targetClass.getModifiers())) {
+            return decoratedReference;
+        }
+
+        try {
+            Class<?> bridgeClass = decoratedTypeBridgeProxyCache.computeIfAbsent(
+                    targetClass, this::generateDecoratedTypeBridgeProxyClass);
+            Object bridgeProxy = instantiateBridgeProxy(bridgeClass);
+            if (bridgeProxy instanceof DecoratedTypeBridgeProxyState) {
+                ((DecoratedTypeBridgeProxyState) bridgeProxy).$$_setDecoratedTypeBridgeState(
+                        targetInstance,
+                        decoratedReference
+                );
+            }
+            return bridgeProxy;
+        } catch (Exception e) {
+            return decoratedReference;
+        }
+    }
+
+    private Class<?> generateDecoratedTypeBridgeProxyClass(Class<?> targetClass) {
+        try {
+            return new ByteBuddy()
+                    .subclass(targetClass, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
+                    .defineField("$$_decoratorTargetInstance", Object.class,
+                            net.bytebuddy.description.modifier.Visibility.PRIVATE)
+                    .defineField("$$_decoratorDelegateInstance", Object.class,
+                            net.bytebuddy.description.modifier.Visibility.PRIVATE)
+                    .implement(DecoratedTypeBridgeProxyState.class)
+                    .method(ElementMatchers.named("$$_setDecoratedTypeBridgeState"))
+                    .intercept(FieldAccessor.ofField("$$_decoratorTargetInstance").setsArgumentAt(0)
+                            .andThen(FieldAccessor.ofField("$$_decoratorDelegateInstance").setsArgumentAt(1)))
+                    .method(ElementMatchers.named("$$_getDecoratedTypeBridgeTarget"))
+                    .intercept(FieldAccessor.ofField("$$_decoratorTargetInstance"))
+                    .method(ElementMatchers.named("$$_getDecoratedTypeBridgeDelegate"))
+                    .intercept(FieldAccessor.ofField("$$_decoratorDelegateInstance"))
+                    .method(ElementMatchers.any()
+                            .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class)))
+                            .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(DecoratedTypeBridgeProxyState.class)))
+                            .and(ElementMatchers.not(ElementMatchers.isPrivate()))
+                            .and(ElementMatchers.not(ElementMatchers.isStatic())))
+                    .intercept(MethodDelegation.to(DecoratedTypeBridgeMethodInterceptor.class))
+                    .make()
+                    .load(targetClass.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                    .getLoaded();
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Failed to generate decorated-type bridge proxy for " + targetClass.getName(), e);
+        }
+    }
+
+    private Object instantiateBridgeProxy(Class<?> bridgeClass) throws Exception {
+        try {
+            Constructor<?> noArg = bridgeClass.getDeclaredConstructor();
+            noArg.setAccessible(true);
+            return noArg.newInstance();
+        } catch (NoSuchMethodException ignored) {
+            // Fall back to constructors with default values.
+        } catch (Exception e) {
+            Object allocated = allocateWithoutConstructor(bridgeClass);
+            if (allocated != null) {
+                return allocated;
+            }
+            throw e;
+        }
+
+        Constructor<?>[] constructors = bridgeClass.getDeclaredConstructors();
+        Exception lastError = null;
+        for (Constructor<?> constructor : constructors) {
+            try {
+                constructor.setAccessible(true);
+                Class<?>[] parameterTypes = constructor.getParameterTypes();
+                Object[] args = new Object[parameterTypes.length];
+                for (int i = 0; i < parameterTypes.length; i++) {
+                    args[i] = defaultValue(parameterTypes[i]);
+                }
+                return constructor.newInstance(args);
+            } catch (Exception e) {
+                lastError = e;
+            }
+        }
+
+        Object allocated = allocateWithoutConstructor(bridgeClass);
+        if (allocated != null) {
+            return allocated;
+        }
+        if (lastError != null) {
+            throw lastError;
+        }
+        throw new IllegalStateException("Failed to instantiate decorated-type bridge proxy: " + bridgeClass.getName());
+    }
+
+    private Object allocateWithoutConstructor(Class<?> proxyClass) {
+        try {
+            Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+            Field theUnsafe = unsafeClass.getDeclaredField("theUnsafe");
+            theUnsafe.setAccessible(true);
+            Object unsafe = theUnsafe.get(null);
+            Method allocateInstance = unsafeClass.getMethod("allocateInstance", Class.class);
+            return allocateInstance.invoke(unsafe, proxyClass);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Object defaultValue(Class<?> type) {
+        if (!type.isPrimitive()) {
+            return null;
+        }
+        if (type == boolean.class) {
+            return false;
+        }
+        if (type == byte.class) {
+            return (byte) 0;
+        }
+        if (type == short.class) {
+            return (short) 0;
+        }
+        if (type == int.class) {
+            return 0;
+        }
+        if (type == long.class) {
+            return 0L;
+        }
+        if (type == float.class) {
+            return 0f;
+        }
+        if (type == double.class) {
+            return 0d;
+        }
+        if (type == char.class) {
+            return '\0';
+        }
+        return null;
     }
 
     /**
@@ -576,6 +733,98 @@ public class DecoratorAwareProxyGenerator {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to generate concrete decorator proxy for "
                     + decoratorClass.getName(), e);
+        }
+    }
+
+    public interface DecoratedTypeBridgeProxyState {
+        void $$_setDecoratedTypeBridgeState(Object targetInstance, Object delegateInstance);
+
+        Object $$_getDecoratedTypeBridgeTarget();
+
+        Object $$_getDecoratedTypeBridgeDelegate();
+    }
+
+    public static class DecoratedTypeBridgeMethodInterceptor {
+
+        @RuntimeType
+        public static Object intercept(
+                @FieldValue("$$_decoratorTargetInstance") Object targetInstance,
+                @FieldValue("$$_decoratorDelegateInstance") Object delegateInstance,
+                @Origin Method method,
+                @AllArguments Object[] args) throws Throwable {
+
+            Method delegateMethod = findCompatibleMethod(delegateInstance, method);
+            if (delegateMethod != null) {
+                return invoke(delegateMethod, delegateInstance, args);
+            }
+
+            Method targetMethod = findCompatibleMethod(targetInstance, method);
+            if (targetMethod != null) {
+                return invoke(targetMethod, targetInstance, args);
+            }
+
+            throw new IllegalStateException(
+                    "No compatible method '" + method.getName() + "' found for decorator bridge delegate.");
+        }
+
+        private static Method findCompatibleMethod(Object instance, Method referenceMethod) {
+            if (instance == null || referenceMethod == null) {
+                return null;
+            }
+            Class<?> type = instance.getClass();
+
+            try {
+                return type.getMethod(referenceMethod.getName(), referenceMethod.getParameterTypes());
+            } catch (NoSuchMethodException ignored) {
+                // Fallback to signature matching by type names for cross-loader compatibility.
+            }
+
+            Class<?> current = type;
+            while (current != null && current != Object.class) {
+                for (Method candidate : current.getDeclaredMethods()) {
+                    if (!candidate.getName().equals(referenceMethod.getName())) {
+                        continue;
+                    }
+                    if (!parameterTypesCompatible(candidate.getParameterTypes(), referenceMethod.getParameterTypes())) {
+                        continue;
+                    }
+                    return candidate;
+                }
+                current = current.getSuperclass();
+            }
+            return null;
+        }
+
+        private static boolean parameterTypesCompatible(Class<?>[] candidate, Class<?>[] reference) {
+            if (candidate.length != reference.length) {
+                return false;
+            }
+            for (int i = 0; i < candidate.length; i++) {
+                if (candidate[i] == reference[i]) {
+                    continue;
+                }
+                if (candidate[i].isPrimitive() || reference[i].isPrimitive()) {
+                    return false;
+                }
+                if (candidate[i].getName().equals(reference[i].getName())) {
+                    continue;
+                }
+                if (candidate[i].isAssignableFrom(reference[i]) || reference[i].isAssignableFrom(candidate[i])) {
+                    continue;
+                }
+                return false;
+            }
+            return true;
+        }
+
+        private static Object invoke(Method method, Object instance, Object[] args) throws Throwable {
+            try {
+                method.setAccessible(true);
+                return method.invoke(instance, args);
+            } catch (InvocationTargetException e) {
+                Throwable cause = e.getTargetException();
+                throw cause != null ? cause : e;
+            }
         }
     }
 
