@@ -266,6 +266,9 @@ public class TypeChecker {
         }
 
         if (targetType instanceof Class<?>) {
+            if (implementationType instanceof ParameterizedType) {
+                return isParameterizedBeanTypeAssignableToRawRequiredType((ParameterizedType) implementationType);
+            }
             // Raw class types rely on Java assignability (already checked above).
             // Additional bean-type closure constraints are handled by higher-level resolvers.
             return true;
@@ -529,9 +532,14 @@ public class TypeChecker {
 
         // Observed type argument may be a type variable: event type argument must satisfy bounds.
         if (t1 instanceof TypeVariable) {
-            TypeVariable<?> tv = (TypeVariable<?>) t1;
-            Type[] bounds = tv.getBounds();
-            if (bounds.length == 0 || isOnlyObjectBound(bounds)) {
+            TypeVariable<?> requiredTypeVariable = (TypeVariable<?>) t1;
+            if (t2 instanceof TypeVariable) {
+                return isRequiredTypeVariableAssignableToBeanTypeVariable(
+                        requiredTypeVariable,
+                        (TypeVariable<?>) t2);
+            }
+            Type[] bounds = effectiveBounds(requiredTypeVariable.getBounds());
+            if (isOnlyObjectBound(bounds)) {
                 return true;
             }
             for (Type bound : bounds) {
@@ -542,27 +550,10 @@ public class TypeChecker {
             return true;
         }
 
-        // TypeVariables in t2: target argument must be assignable to ALL bounds (t2 represents unknown within bounds)
+        // TypeVariables in bean type represent an unknown constrained by upper bounds.
+        // For programmatic lookup, required type arguments must be compatible with those bounds.
         if (t2 instanceof TypeVariable) {
-            TypeVariable<?> tv = (TypeVariable<?>) t2;
-            Type[] bounds = tv.getBounds();
-            if (bounds.length == 0) {
-                bounds = new Type[] { Object.class };
-            }
-
-            if (isOnlyObjectBound(bounds)) {
-                return true; // erased type variable, accept target argument
-            }
-
-            for (Type bound : bounds) {
-                Class<?> boundRaw = RawTypeExtractor.getRawType(bound);
-                Class<?> targetRaw = RawTypeExtractor.getRawType(t1);
-                boolean overlap = boundRaw.isAssignableFrom(targetRaw) || targetRaw.isAssignableFrom(boundRaw);
-                if (!overlap) {
-                    return false;
-                }
-            }
-            return true;
+            return isRequiredTypeArgumentAssignableToBeanTypeVariable(t1, (TypeVariable<?>) t2);
         }
 
         // Wildcards can appear both at injection points (t1) and candidate bean types (t2).
@@ -609,6 +600,128 @@ public class TypeChecker {
 
         // For non-parameterized types, use exact equality (invariance)
         return t1.equals(t2);
+    }
+
+    private boolean isRequiredTypeVariableAssignableToBeanTypeVariable(TypeVariable<?> requiredTypeVariable,
+                                                                       TypeVariable<?> beanTypeVariable) {
+        Type[] requiredBounds = effectiveBounds(requiredTypeVariable.getBounds());
+        Type[] beanBounds = effectiveBounds(beanTypeVariable.getBounds());
+
+        for (Type beanBound : beanBounds) {
+            boolean covered = false;
+            for (Type requiredBound : requiredBounds) {
+                if (isSubtypeOf(requiredBound, beanBound)) {
+                    covered = true;
+                    break;
+                }
+            }
+            if (!covered) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isRequiredTypeArgumentAssignableToBeanTypeVariable(Type requiredTypeArgument,
+                                                                       TypeVariable<?> beanTypeVariable) {
+        Type[] beanBounds = effectiveBounds(beanTypeVariable.getBounds());
+        if (isOnlyObjectBound(beanBounds)) {
+            return true;
+        }
+
+        if (requiredTypeArgument instanceof TypeVariable) {
+            return isRequiredTypeVariableAssignableToBeanTypeVariable(
+                    (TypeVariable<?>) requiredTypeArgument,
+                    beanTypeVariable);
+        }
+
+        if (requiredTypeArgument instanceof WildcardType) {
+            WildcardType wildcard = (WildcardType) requiredTypeArgument;
+            Type[] lowerBounds = wildcard.getLowerBounds();
+            if (lowerBounds.length > 0) {
+                return satisfiesAllBeanBounds(lowerBounds[0], beanBounds);
+            }
+
+            Type[] upperBounds = effectiveBounds(wildcard.getUpperBounds());
+            if (isOnlyObjectBound(upperBounds)) {
+                return true;
+            }
+            for (Type beanBound : beanBounds) {
+                boolean overlaps = false;
+                for (Type upperBound : upperBounds) {
+                    if (hasPotentialOverlap(upperBound, beanBound)) {
+                        overlaps = true;
+                        break;
+                    }
+                }
+                if (!overlaps) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        return satisfiesAllBeanBounds(requiredTypeArgument, beanBounds);
+    }
+
+    private boolean satisfiesAllBeanBounds(Type requiredTypeArgument, Type[] beanBounds) {
+        for (Type beanBound : beanBounds) {
+            if (!isSubtypeOf(requiredTypeArgument, beanBound)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean hasPotentialOverlap(Type left, Type right) {
+        if (left instanceof TypeVariable<?>) {
+            for (Type bound : effectiveBounds(((TypeVariable<?>) left).getBounds())) {
+                if (hasPotentialOverlap(bound, right)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (right instanceof TypeVariable<?>) {
+            for (Type bound : effectiveBounds(((TypeVariable<?>) right).getBounds())) {
+                if (hasPotentialOverlap(left, bound)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        Class<?> leftRaw = normalizePrimitive(RawTypeExtractor.getRawType(left));
+        Class<?> rightRaw = normalizePrimitive(RawTypeExtractor.getRawType(right));
+        if (leftRaw.isAssignableFrom(rightRaw) || rightRaw.isAssignableFrom(leftRaw)) {
+            return true;
+        }
+
+        // Interface hierarchies can still overlap through an implementing type.
+        return leftRaw.isInterface() && rightRaw.isInterface();
+    }
+
+    private boolean isSubtypeOf(Type candidate, Type superType) {
+        if (superType instanceof TypeVariable<?>) {
+            for (Type bound : effectiveBounds(((TypeVariable<?>) superType).getBounds())) {
+                if (!isSubtypeOf(candidate, bound)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (candidate instanceof TypeVariable<?>) {
+            for (Type bound : effectiveBounds(((TypeVariable<?>) candidate).getBounds())) {
+                if (isSubtypeOf(bound, superType)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        Class<?> candidateRaw = normalizePrimitive(RawTypeExtractor.getRawType(candidate));
+        Class<?> superRaw = normalizePrimitive(RawTypeExtractor.getRawType(superType));
+        return superRaw.isAssignableFrom(candidateRaw);
     }
 
     /**
@@ -826,6 +939,41 @@ public class TypeChecker {
             return false;
         }
         return true;
+    }
+
+    private boolean isParameterizedBeanTypeAssignableToRawRequiredType(ParameterizedType beanType) {
+        for (Type typeArgument : beanType.getActualTypeArguments()) {
+            if (typeArgument instanceof Class<?>) {
+                if (!Object.class.equals(typeArgument)) {
+                    return false;
+                }
+                continue;
+            }
+            if (typeArgument instanceof TypeVariable<?>) {
+                if (!isOnlyObjectBound(effectiveBounds(((TypeVariable<?>) typeArgument).getBounds()))) {
+                    return false;
+                }
+                continue;
+            }
+            if (typeArgument instanceof WildcardType) {
+                WildcardType wildcardType = (WildcardType) typeArgument;
+                Type[] lowerBounds = wildcardType.getLowerBounds();
+                Type[] upperBounds = effectiveBounds(wildcardType.getUpperBounds());
+                if (lowerBounds.length != 0 || !isOnlyObjectBound(upperBounds)) {
+                    return false;
+                }
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private Type[] effectiveBounds(Type[] bounds) {
+        if (bounds == null || bounds.length == 0) {
+            return new Type[] { Object.class };
+        }
+        return bounds;
     }
 
     /**

@@ -8,11 +8,13 @@ import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @DisplayName("5.2.3 - TCK parity for LegalRequiredTypeTest")
+@Isolated
 class LegalRequiredTypeTckParityTest {
 
     @Test

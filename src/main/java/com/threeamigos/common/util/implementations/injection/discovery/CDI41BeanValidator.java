@@ -202,9 +202,6 @@ public class CDI41BeanValidator {
         // 4) Validate producers and injection points on fields/methods
         boolean hasInjectionPoints = false;
 
-        // Track producers to detect ambiguous overloads (same qualifiers + same raw/boxed type)
-        Map<String, String> producerSignatureOwners = new HashMap<>();
-
         for (Field field : clazz.getDeclaredFields()) {
             boolean inject = hasInjectAnnotation(field);
             boolean produces = hasProducesAnnotation(field);
@@ -225,17 +222,6 @@ public class CDI41BeanValidator {
                     valid = false;
                 } else {
                     valid &= validateProducerField(field);
-
-                    // Ambiguity check for overloaded producers
-                    String signatureKey = producerSignatureKey(baseTypeOf(field), extractQualifiers(field));
-                    if (producerSignatureOwners.containsKey(signatureKey)) {
-                        knowledgeBase.addDefinitionError(fmtField(field) +
-                            ": producer conflicts with " + producerSignatureOwners.get(signatureKey) +
-                            " (same bean type/qualifiers). Overloaded producers for the same bean are not allowed.");
-                        valid = false;
-                    } else {
-                        producerSignatureOwners.put(signatureKey, fmtField(field));
-                    }
 
                     // Create and register ProducerBean for this producer field
                     createAndRegisterProducerBean(clazz, null, field);
@@ -270,17 +256,6 @@ public class CDI41BeanValidator {
                     valid = false;
                 } else {
                     valid &= validateProducerMethod(method);
-
-                    // Ambiguity check for overloaded producers
-                    String signatureKey = producerSignatureKey(baseTypeOf(method), extractQualifiers(method));
-                    if (producerSignatureOwners.containsKey(signatureKey)) {
-                        knowledgeBase.addDefinitionError(fmtMethod(method) +
-                            ": producer conflicts with " + producerSignatureOwners.get(signatureKey) +
-                            " (same bean type/qualifiers). Overloaded producers for the same bean are not allowed.");
-                        valid = false;
-                    } else {
-                        producerSignatureOwners.put(signatureKey, fmtMethod(method));
-                    }
 
                     // Create and register ProducerBean for this producer method
                     createAndRegisterProducerBean(clazz, method, null);
@@ -405,7 +380,8 @@ public class CDI41BeanValidator {
         }
 
         // Populate BeanAttributes (now that BeanImpl supports it)
-        bean.setName(extractBeanName(clazz));
+        String beanName = extractBeanName(clazz);
+        bean.setName(beanName);
         bean.setQualifiers(extractBeanQualifiers(clazz));
         Class<? extends Annotation> effectiveBeanScope = extractBeanScope(clazz, beanScope);
         validateManagedBeanPublicFieldScopeConstraint(clazz, effectiveBeanScope);
@@ -3286,7 +3262,8 @@ public class CDI41BeanValidator {
             producerBean.setAlternativeEnabled(alternativeEnabled);
 
             // Set bean attributes from producer method annotations
-            producerBean.setName(extractProducerName(producerMethod));
+            String producerName = extractProducerName(producerMethod);
+            producerBean.setName(producerName);
             producerBean.setQualifiers(extractQualifiers(producerMethod));
             producerBean.setScope(extractScope(producerMethod));
             producerBean.setStereotypes(extractStereotypes(producerMethod));
@@ -3314,7 +3291,8 @@ public class CDI41BeanValidator {
             producerBean.setAlternativeEnabled(alternativeEnabled);
 
             // Set bean attributes from producer field annotations
-            producerBean.setName(extractProducerName(producerField));
+            String producerName = extractProducerName(producerField);
+            producerBean.setName(producerName);
             producerBean.setQualifiers(extractQualifiers(producerField));
             producerBean.setScope(extractScope(producerField));
             producerBean.setStereotypes(extractStereotypes(producerField));

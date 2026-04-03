@@ -347,7 +347,7 @@ public class BeanResolver implements DependencyResolver {
             }
 
             // Check qualifier match
-            if (qualifiersMatch(requiredQualifiers, bean.getQualifiers())) {
+            if (qualifiersMatchIncludingBeanName(requiredQualifiers, bean)) {
                 if (!isBeanClassAccessibleFromCurrentInjectionPoint(bean)) {
                     continue;
                 }
@@ -406,6 +406,56 @@ public class BeanResolver implements DependencyResolver {
         }
 
         return applySpecializationFiltering(matches);
+    }
+
+    private boolean qualifiersMatchIncludingBeanName(Set<Annotation> requiredQualifiers, Bean<?> bean) {
+        Set<Annotation> beanQualifiers = bean.getQualifiers();
+        if (qualifiersMatch(requiredQualifiers, beanQualifiers)) {
+            return true;
+        }
+
+        String requiredNamed = extractNonEmptyRequiredNamedValue(requiredQualifiers);
+        if (requiredNamed == null) {
+            return false;
+        }
+
+        String beanName = bean.getName();
+        if (beanName == null || beanName.isEmpty() || !beanName.equals(requiredNamed)) {
+            return false;
+        }
+
+        Set<Annotation> requiredWithoutNamed = removeNamedQualifiers(requiredQualifiers);
+        return qualifiersMatch(requiredWithoutNamed, beanQualifiers);
+    }
+
+    private String extractNonEmptyRequiredNamedValue(Set<Annotation> requiredQualifiers) {
+        if (requiredQualifiers == null) {
+            return null;
+        }
+        for (Annotation qualifier : requiredQualifiers) {
+            if (qualifier != null && hasNamedAnnotation(qualifier.annotationType())) {
+                String value = getNamedValue(qualifier);
+                if (value == null) {
+                    return null;
+                }
+                String trimmed = value.trim();
+                return trimmed.isEmpty() ? null : trimmed;
+            }
+        }
+        return null;
+    }
+
+    private Set<Annotation> removeNamedQualifiers(Set<Annotation> qualifiers) {
+        Set<Annotation> withoutNamed = new LinkedHashSet<>();
+        if (qualifiers == null) {
+            return withoutNamed;
+        }
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null || !hasNamedAnnotation(qualifier.annotationType())) {
+                withoutNamed.add(qualifier);
+            }
+        }
+        return withoutNamed;
     }
 
     /**
@@ -1109,12 +1159,31 @@ public class BeanResolver implements DependencyResolver {
             }
 
             @Override
+            public T resolveInstance(Type typeToResolve, Collection<Annotation> quals) {
+                Annotation[] qualArray = quals.toArray(new Annotation[0]);
+                Object resolved = resolveWithDynamicInjectionPoint(typeToResolve, qualArray, ownerInjectionPoint);
+                return (T) resolved;
+            }
+
+            @Override
             public Collection<Class<? extends T>> resolveImplementations(Class<T> typeToResolve, Collection<Annotation> quals) {
                 // Find all matching beans
                 Annotation[] qualArray = quals.toArray(new Annotation[0]);
                 Collection<Bean<?>> beans = findMatchingBeansForIterator(typeToResolve, qualArray);
 
                 // Extract bean classes
+                List<Class<? extends T>> implementations = new ArrayList<>();
+                for (Bean<?> bean : beans) {
+                    implementations.add((Class<? extends T>) bean.getBeanClass());
+                }
+                return implementations;
+            }
+
+            @Override
+            public Collection<Class<? extends T>> resolveImplementations(Type typeToResolve, Collection<Annotation> quals) {
+                Annotation[] qualArray = quals.toArray(new Annotation[0]);
+                Collection<Bean<?>> beans = findMatchingBeansForIterator(typeToResolve, qualArray);
+
                 List<Class<? extends T>> implementations = new ArrayList<>();
                 for (Bean<?> bean : beans) {
                     implementations.add((Class<? extends T>) bean.getBeanClass());

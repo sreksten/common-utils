@@ -12,6 +12,7 @@ import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Type;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
@@ -50,6 +51,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     private static final long serialVersionUID = 1L;
 
     private final Class<T> type;
+    private final Type requiredType;
     private final Collection<Annotation> qualifiers;
     private final String beanManagerId;
     private transient ResolutionStrategy<T> resolutionStrategy;
@@ -85,6 +87,15 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         T resolveInstance(Class<T> type, Collection<Annotation> qualifiers) throws Exception;
 
         /**
+         * Resolves and creates a single instance using a possibly parameterized type.
+         * Default implementation falls back to raw type resolution.
+         */
+        @SuppressWarnings("unchecked")
+        default T resolveInstance(Type type, Collection<Annotation> qualifiers) throws Exception {
+            return resolveInstance((Class<T>) RawTypeExtractor.getRawType(type), qualifiers);
+        }
+
+        /**
          * Resolves all implementation classes that match the type and qualifiers.
          *
          * @param type the type to resolve
@@ -93,6 +104,16 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
          * @throws Exception if resolution fails
          */
         Collection<Class<? extends T>> resolveImplementations(Class<T> type, Collection<Annotation> qualifiers) throws Exception;
+
+        /**
+         * Resolves all implementation classes using a possibly parameterized type.
+         * Default implementation falls back to raw type resolution.
+         */
+        @SuppressWarnings("unchecked")
+        default Collection<Class<? extends T>> resolveImplementations(Type type,
+                                                                      Collection<Annotation> qualifiers) throws Exception {
+            return resolveImplementations((Class<T>) RawTypeExtractor.getRawType(type), qualifiers);
+        }
 
         /**
          * Invokes @PreDestroy lifecycle methods on the given instance.
@@ -114,14 +135,14 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     public InstanceImpl(Class<T> type,
                  Collection<Annotation> qualifiers,
                  ResolutionStrategy<T> resolutionStrategy) {
-        this(type, qualifiers, resolutionStrategy, null, null);
+        this(type, type, qualifiers, resolutionStrategy, null, null);
     }
 
     public InstanceImpl(Class<T> type,
                  Collection<Annotation> qualifiers,
                  ResolutionStrategy<T> resolutionStrategy,
                  Function<Class<? extends T>, Bean<? extends T>> beanLookup) {
-        this(type, qualifiers, resolutionStrategy, beanLookup, null);
+        this(type, type, qualifiers, resolutionStrategy, beanLookup, null);
     }
 
     public InstanceImpl(Class<T> type,
@@ -129,7 +150,17 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                  ResolutionStrategy<T> resolutionStrategy,
                  Function<Class<? extends T>, Bean<? extends T>> beanLookup,
                  BeanManagerImpl owningBeanManager) {
+        this(type, type, qualifiers, resolutionStrategy, beanLookup, owningBeanManager);
+    }
+
+    public InstanceImpl(Class<T> type,
+                 Type requiredType,
+                 Collection<Annotation> qualifiers,
+                 ResolutionStrategy<T> resolutionStrategy,
+                 Function<Class<? extends T>, Bean<? extends T>> beanLookup,
+                 BeanManagerImpl owningBeanManager) {
         this.type = Objects.requireNonNull(type, "type cannot be null");
+        this.requiredType = Objects.requireNonNull(requiredType, "requiredType cannot be null");
         this.qualifiers = new ArrayList<>(Objects.requireNonNull(qualifiers, "qualifiers cannot be null"));
         this.resolutionStrategy = Objects.requireNonNull(resolutionStrategy, "resolutionStrategy cannot be null");
         this.beanLookup = beanLookup;
@@ -139,7 +170,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     @Override
     public T get() {
         try {
-            return strategy().resolveInstance(type, qualifiers);
+            return resolveInstanceWithRequiredType();
         } catch (UnsatisfiedResolutionException | AmbiguousResolutionException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -159,7 +190,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     @Override
     public Instance<T> select(Annotation... annotations) {
         validateSelectAnnotations(annotations);
-        return new InstanceImpl<>(type, mergeQualifiers(qualifiers, annotations), strategy(), beanLookup,
+        return new InstanceImpl<>(type, requiredType, mergeQualifiers(qualifiers, annotations), strategy(), beanLookup,
                 BeanManagerImpl.getRegisteredBeanManager(beanManagerId));
     }
 
@@ -168,7 +199,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         validateSelectAnnotations(annotations);
         @SuppressWarnings("unchecked")
         ResolutionStrategy<U> castStrategy = (ResolutionStrategy<U>) strategy();
-        return new InstanceImpl<>(subtype, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup(),
+        return new InstanceImpl<>(subtype, subtype, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup(),
                 BeanManagerImpl.getRegisteredBeanManager(beanManagerId));
     }
 
@@ -180,14 +211,14 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         Class<U> rawType = (Class<U>) RawTypeExtractor.getRawType(subtype.getType());
         @SuppressWarnings("unchecked")
         ResolutionStrategy<U> castStrategy = (ResolutionStrategy<U>) strategy();
-        return new InstanceImpl<>(rawType, mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup(),
+        return new InstanceImpl<>(rawType, subtype.getType(), mergeQualifiers(qualifiers, annotations), castStrategy, adaptBeanLookup(),
                 BeanManagerImpl.getRegisteredBeanManager(beanManagerId));
     }
 
     @Override
     public boolean isUnsatisfied() {
         try {
-            return strategy().resolveImplementations(type, qualifiers).isEmpty();
+            return resolveImplementationsWithRequiredType().isEmpty();
         } catch (Exception e) {
             return true; // treating an Exception as unsatisfied
         }
@@ -196,7 +227,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     @Override
     public boolean isAmbiguous() {
         try {
-            return strategy().resolveImplementations(type, qualifiers).size() > 1;
+            return resolveImplementationsWithRequiredType().size() > 1;
         } catch (Exception e) {
             return false; // If we can't resolve the class, it's not ambiguous (it's unsatisfied)
         }
@@ -232,7 +263,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
         try {
             Annotation[] qualifierArray = qualifiers.toArray(new Annotation[qualifiers.size()]);
-            Set<Bean<?>> beans = beanManager.getBeans(type, qualifierArray);
+            Set<Bean<?>> beans = beanManager.getBeans(requiredType, qualifierArray);
             if (beans == null || beans.isEmpty()) {
                 return false;
             }
@@ -254,7 +285,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     public Handle<T> getHandle() {
         // Per CDI spec: get the single bean or throw exception if ambiguous/unsatisfied
         try {
-            Collection<Class<? extends T>> implementations = strategy().resolveImplementations(type, qualifiers);
+            Collection<Class<? extends T>> implementations = resolveImplementationsWithRequiredType();
             
 
             if (implementations.isEmpty()) {
@@ -284,8 +315,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             @Override
             public @Nonnull Iterator<Handle<T>> iterator() {
                 try {
-                    Collection<Class<? extends T>> implementations =
-                            strategy().resolveImplementations(type, qualifiers);
+                    Collection<Class<? extends T>> implementations = resolveImplementationsWithRequiredType();
 
                     List<Handle<T>> handleList = new ArrayList<>();
                     for (Class<? extends T> implClass : implementations) {
@@ -391,7 +421,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     @Override
     public @Nonnull Iterator<T> iterator() {
         try {
-            Collection<Class<? extends T>> classes = strategy().resolveImplementations(type, qualifiers);
+            Collection<Class<? extends T>> classes = resolveImplementationsWithRequiredType();
 
             List<T> instances = new ArrayList<>();
             for (Class<? extends T> clazz : classes) {
@@ -401,6 +431,22 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         } catch (Exception e) {
             throw new RuntimeException("Failed to resolve implementations", e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private T resolveInstanceWithRequiredType() throws Exception {
+        if (requiredType instanceof Class<?>) {
+            return strategy().resolveInstance((Class<T>) requiredType, qualifiers);
+        }
+        return strategy().resolveInstance(requiredType, qualifiers);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Collection<Class<? extends T>> resolveImplementationsWithRequiredType() throws Exception {
+        if (requiredType instanceof Class<?>) {
+            return strategy().resolveImplementations((Class<T>) requiredType, qualifiers);
+        }
+        return strategy().resolveImplementations(requiredType, qualifiers);
     }
 
     /**

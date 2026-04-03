@@ -2098,7 +2098,7 @@ public class CDI41InjectionValidator {
             if (isTypeCompatible(requiredType, bean.getTypes()) &&
                 // Check if bean's qualifiers match the required qualifiers
                 // Handles @Default, @Any, and custom qualifiers per CDI 4.1 spec
-                areQualifiersCompatible(qualifiers, bean.getQualifiers())) {
+                areQualifiersCompatible(qualifiers, bean.getQualifiers(), bean.getName())) {
                 matches.add(bean);
             }
         }
@@ -2253,7 +2253,7 @@ public class CDI41InjectionValidator {
      * @param provided the bean's qualifiers
      * @return true if qualifiers are compatible
      */
-    private boolean areQualifiersCompatible(Set<Annotation> required, Set<Annotation> provided) {
+    private boolean areQualifiersCompatible(Set<Annotation> required, Set<Annotation> provided, String beanName) {
         // If no specific qualifiers required, match @Default
         if (required.isEmpty()) {
             return hasDefault(provided);
@@ -2275,9 +2275,16 @@ public class CDI41InjectionValidator {
             if (hasAnyAnnotation(reqQualifier.annotationType())) {
                 continue;
             }
-            if (isQualifier(reqQualifier) && !hasMatchingQualifier(reqQualifier, provided)) {
-                return false;
+            if (!isQualifier(reqQualifier)) {
+                continue;
             }
+            if (hasMatchingQualifier(reqQualifier, provided)) {
+                continue;
+            }
+            if (matchesNamedQualifierByBeanName(reqQualifier, beanName)) {
+                continue;
+            }
+            return false;
         }
 
         return true;
@@ -2297,6 +2304,30 @@ public class CDI41InjectionValidator {
             }
         }
         return false;
+    }
+
+    private boolean matchesNamedQualifierByBeanName(Annotation requiredQualifier, String beanName) {
+        if (requiredQualifier == null || !hasNamedAnnotation(requiredQualifier.annotationType())) {
+            return false;
+        }
+        if (beanName == null || beanName.isEmpty()) {
+            return false;
+        }
+        String requiredNamedValue = extractNamedValue(requiredQualifier).trim();
+        if (requiredNamedValue.isEmpty()) {
+            return false;
+        }
+        return requiredNamedValue.equals(beanName);
+    }
+
+    private String extractNamedValue(Annotation namedQualifier) {
+        try {
+            Method valueMethod = namedQualifier.annotationType().getMethod("value");
+            Object value = valueMethod.invoke(namedQualifier);
+            return value == null ? "" : value.toString();
+        } catch (ReflectiveOperationException ignored) {
+            return "";
+        }
     }
 
     /**

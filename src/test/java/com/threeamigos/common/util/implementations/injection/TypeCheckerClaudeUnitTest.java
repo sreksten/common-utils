@@ -1030,14 +1030,15 @@ class TypeCheckerClaudeUnitTest {
         }
 
         @Test
-        @DisplayName("Should reject raw target for specific parameterized implementation")
+        @DisplayName("Should reject raw target for parameterized implementation with concrete type arguments")
         void testRawTargetWithParameterizedImpl() {
-            // If injection point is raw List, any List implementation should work
+            // CDI assignability: raw required type is not satisfied by parameterized bean types
+            // with concrete arguments (e.g. List<String>).
             Type rawTarget = List.class;
             Type paramImpl = new TypeLiteral<ArrayList<String>>() {}.getType();
 
             assertDoesNotThrow(() -> sut.validateInjectionPoint(rawTarget));
-            assertTrue(sut.isAssignable(rawTarget, paramImpl));
+            assertFalse(sut.isAssignable(rawTarget, paramImpl));
         }
 
         @Test

@@ -523,7 +523,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             }
 
             // Check qualifier match
-            if (qualifiersMatch(requiredQualifiers, bean.getQualifiers())) {
+            if (qualifiersMatchIncludingBeanName(requiredQualifiers, bean)) {
                 if (!isBeanAccessibleFromCurrentInjectionPoint(bean)) {
                     continue;
                 }
@@ -532,6 +532,57 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
 
         return applySpecializationFiltering(matchingBeans);
+    }
+
+    private boolean qualifiersMatchIncludingBeanName(Set<Annotation> requiredQualifiers, Bean<?> bean) {
+        Set<Annotation> beanQualifiers = bean.getQualifiers();
+        if (qualifiersMatch(requiredQualifiers, beanQualifiers)) {
+            return true;
+        }
+
+        String requiredNamed = extractNonEmptyRequiredNamedValue(requiredQualifiers);
+        if (requiredNamed == null) {
+            return false;
+        }
+
+        String beanName = bean.getName();
+        if (beanName == null || beanName.isEmpty() || !beanName.equals(requiredNamed)) {
+            return false;
+        }
+
+        Set<Annotation> requiredWithoutNamed = removeNamedQualifiers(requiredQualifiers);
+        return qualifiersMatch(requiredWithoutNamed, beanQualifiers);
+    }
+
+    private String extractNonEmptyRequiredNamedValue(Set<Annotation> qualifiers) {
+        if (qualifiers == null) {
+            return null;
+        }
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null || !hasNamedAnnotation(qualifier.annotationType())) {
+                continue;
+            }
+            String value = getNamedValue(qualifier);
+            if (value == null) {
+                return null;
+            }
+            String trimmed = value.trim();
+            return trimmed.isEmpty() ? null : trimmed;
+        }
+        return null;
+    }
+
+    private Set<Annotation> removeNamedQualifiers(Set<Annotation> qualifiers) {
+        Set<Annotation> withoutNamed = new LinkedHashSet<>();
+        if (qualifiers == null) {
+            return withoutNamed;
+        }
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null || !hasNamedAnnotation(qualifier.annotationType())) {
+                withoutNamed.add(qualifier);
+            }
+        }
+        return withoutNamed;
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -1653,12 +1704,27 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             }
 
             @Override
+            public Object resolveInstance(Type type, Collection<Annotation> quals) {
+                Annotation[] qualArray = quals.toArray(new Annotation[0]);
+                return beanResolver.resolve(type, qualArray);
+            }
+
+            @Override
             public Collection<Class<?>> resolveImplementations(Class<Object> type, Collection<Annotation> quals) {
                 Annotation[] qualArray = quals.toArray(new Annotation[0]);
                 Set<Bean<?>> beans = getBeans(type, qualArray);
                 return beans.stream()
                     .map(bean -> (Class<?>) bean.getBeanClass())
                     .collect(Collectors.toList());
+            }
+
+            @Override
+            public Collection<Class<?>> resolveImplementations(Type type, Collection<Annotation> quals) {
+                Annotation[] qualArray = quals.toArray(new Annotation[0]);
+                Set<Bean<?>> beans = getBeans(type, qualArray);
+                return beans.stream()
+                        .map(bean -> (Class<?>) bean.getBeanClass())
+                        .collect(Collectors.toList());
             }
 
             @Override
