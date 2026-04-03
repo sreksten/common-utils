@@ -37,15 +37,15 @@ public class SyringeDeploymentExceptionTransformer implements DeploymentExceptio
                 return new jakarta.enterprise.inject.spi.DeploymentException(buildMessage(current, exception));
             }
 
-            String message = current.getMessage();
+            String message = safeGetMessage(current);
             if (message != null) {
                 if (containsDefinitionExceptionMarker(message)) {
                     // Broken-definition TCK tests use @ShouldThrowException(DefinitionException.class),
                     // so map DefinitionException markers directly to DefinitionException.
-                    return new jakarta.enterprise.inject.spi.DefinitionException(message, current);
+                    return new jakarta.enterprise.inject.spi.DefinitionException(message);
                 }
                 if (containsDeploymentExceptionMarker(message)) {
-                    return new jakarta.enterprise.inject.spi.DeploymentException(message, current);
+                    return new jakarta.enterprise.inject.spi.DeploymentException(message);
                 }
             }
 
@@ -84,11 +84,24 @@ public class SyringeDeploymentExceptionTransformer implements DeploymentExceptio
     }
 
     private static String buildMessage(Throwable current, Throwable original) {
-        String message = current.getMessage();
+        String message = safeGetMessage(current);
         if (message != null && !message.trim().isEmpty()) {
             return message;
         }
-        String fallback = original.getMessage();
+        String fallback = safeGetMessage(original);
         return fallback != null ? fallback : current.getClass().getName();
+    }
+
+    private static String safeGetMessage(Throwable throwable) {
+        if (throwable == null) {
+            return null;
+        }
+        try {
+            return throwable.getMessage();
+        } catch (StackOverflowError e) {
+            return throwable.getClass().getName();
+        } catch (Throwable ignored) {
+            return throwable.getClass().getName();
+        }
     }
 }

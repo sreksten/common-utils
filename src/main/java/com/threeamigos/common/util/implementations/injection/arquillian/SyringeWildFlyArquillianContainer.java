@@ -81,7 +81,12 @@ public class SyringeWildFlyArquillianContainer implements DeployableContainer<Sy
         try {
             helper.deploy(runtimeName, new ByteArrayInputStream(content));
         } catch (Exception e) {
-            Throwable transformed = DEPLOYMENT_EXCEPTION_TRANSFORMER.transform(e);
+            Throwable transformed;
+            try {
+                transformed = DEPLOYMENT_EXCEPTION_TRANSFORMER.transform(e);
+            } catch (Throwable transformError) {
+                throw new DeploymentException("Could not deploy archive " + runtimeName, e);
+            }
             if (transformed instanceof RuntimeException
                     && (transformed instanceof jakarta.enterprise.inject.spi.DefinitionException
                     || transformed instanceof jakarta.enterprise.inject.spi.DeploymentException)) {
