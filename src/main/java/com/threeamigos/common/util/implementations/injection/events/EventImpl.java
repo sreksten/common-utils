@@ -38,6 +38,8 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -640,6 +642,10 @@ public class EventImpl<T> implements Event<T> {
                 throw new IllegalArgumentException(
                         "Annotation is not a qualifier type: " + qualifierType.getName());
             }
+            if (!hasRuntimeRetention(qualifierType)) {
+                throw new IllegalArgumentException(
+                        "Qualifier annotation must have @Retention(RUNTIME): " + qualifierType.getName());
+            }
 
             if (!isRepeatableQualifier(qualifierType) && !seenNonRepeatableQualifiers.add(qualifierType)) {
                 throw new IllegalArgumentException(
@@ -650,6 +656,11 @@ public class EventImpl<T> implements Event<T> {
 
     private boolean isRepeatableQualifier(Class<? extends Annotation> qualifierType) {
         return AnnotationsEnum.hasRepeatableAnnotation(qualifierType);
+    }
+
+    private boolean hasRuntimeRetention(Class<? extends Annotation> annotationType) {
+        Retention retention = annotationType.getAnnotation(Retention.class);
+        return retention != null && RetentionPolicy.RUNTIME.equals(retention.value());
     }
 
     private void validateEventObject(Object event) {

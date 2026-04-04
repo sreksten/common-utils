@@ -31,6 +31,7 @@ import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.inject.Singleton;
@@ -565,6 +566,10 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             throw new IllegalArgumentException("beanType cannot be a type variable: " + beanType);
         }
         validateRequiredQualifiers(qualifiers);
+        Set<Bean<?>> builtInLookupBeans = resolveBuiltInLookupBeans(beanType, qualifiers);
+        if (!builtInLookupBeans.isEmpty()) {
+            return builtInLookupBeans;
+        }
 
         LegacyNewQualifierHelper.LegacyNewSelection legacyNewSelection =
                 LegacyNewQualifierHelper.extractSelection(beanType, qualifiers);
@@ -609,6 +614,31 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
 
         return applySpecializationFiltering(matchingBeans);
+    }
+
+    private Set<Bean<?>> resolveBuiltInLookupBeans(Type beanType, Annotation[] qualifiers) {
+        if (!(beanType instanceof ParameterizedType)) {
+            return Collections.emptySet();
+        }
+        ParameterizedType parameterizedType = (ParameterizedType) beanType;
+        Type rawType = parameterizedType.getRawType();
+        if (!(rawType instanceof Class<?>)) {
+            return Collections.emptySet();
+        }
+        Class<?> rawClass = (Class<?>) rawType;
+        if (!Event.class.equals(rawClass)) {
+            return Collections.emptySet();
+        }
+
+        Type[] typeArguments = parameterizedType.getActualTypeArguments();
+        if (typeArguments.length != 1) {
+            return Collections.emptySet();
+        }
+        Set<Annotation> eventBeanQualifiers = normalizeBeanQualifiers(Arrays.asList(
+                qualifiers == null ? new Annotation[0] : qualifiers));
+        Set<Bean<?>> builtInBeans = new LinkedHashSet<Bean<?>>();
+        builtInBeans.add(new BuiltInEventBean(typeArguments[0], beanType, eventBeanQualifiers, this));
+        return builtInBeans;
     }
 
     private boolean qualifiersMatchIncludingBeanName(Set<Annotation> requiredQualifiers, Bean<?> bean) {
@@ -3905,6 +3935,92 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             this.beanManagerId = beanManagerId;
             this.bean = bean;
             this.creationalContext = creationalContext;
+        }
+    }
+
+    private static final class BuiltInEventBean implements Bean<Event<?>> {
+        private final Type eventPayloadType;
+        private final Set<Type> types;
+        private final Set<Annotation> qualifiers;
+        private final BeanManagerImpl beanManager;
+
+        private BuiltInEventBean(Type eventPayloadType,
+                                 Type requestedBeanType,
+                                 Set<Annotation> qualifiers,
+                                 BeanManagerImpl beanManager) {
+            this.eventPayloadType = eventPayloadType;
+            this.beanManager = beanManager;
+
+            Set<Type> resolvedTypes = new LinkedHashSet<Type>();
+            resolvedTypes.add(Event.class);
+            resolvedTypes.add(Object.class);
+            resolvedTypes.add(requestedBeanType);
+            this.types = Collections.unmodifiableSet(resolvedTypes);
+
+            Set<Annotation> resolvedQualifiers = new LinkedHashSet<Annotation>();
+            if (qualifiers != null) {
+                resolvedQualifiers.addAll(qualifiers);
+            }
+            resolvedQualifiers.add(Any.Literal.INSTANCE);
+            this.qualifiers = Collections.unmodifiableSet(resolvedQualifiers);
+        }
+
+        @Override
+        public Class<?> getBeanClass() {
+            return Event.class;
+        }
+
+        @Override
+        public Set<InjectionPoint> getInjectionPoints() {
+            return Collections.emptySet();
+        }
+
+        @Override
+        public Event<?> create(CreationalContext<Event<?>> context) {
+            return new EventImpl<Object>(
+                    eventPayloadType,
+                    new LinkedHashSet<Annotation>(qualifiers),
+                    beanManager.knowledgeBase,
+                    beanManager.beanResolver,
+                    beanManager.contextManager,
+                    beanManager.beanResolver.getTransactionServices());
+        }
+
+        @Override
+        public void destroy(Event<?> instance, CreationalContext<Event<?>> context) {
+            if (context != null) {
+                context.release();
+            }
+        }
+
+        @Override
+        public Set<Type> getTypes() {
+            return types;
+        }
+
+        @Override
+        public Set<Annotation> getQualifiers() {
+            return qualifiers;
+        }
+
+        @Override
+        public Class<? extends Annotation> getScope() {
+            return Dependent.class;
+        }
+
+        @Override
+        public String getName() {
+            return null;
+        }
+
+        @Override
+        public Set<Class<? extends Annotation>> getStereotypes() {
+            return Collections.emptySet();
+        }
+
+        @Override
+        public boolean isAlternative() {
+            return false;
         }
     }
 

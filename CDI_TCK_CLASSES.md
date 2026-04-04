@@ -87,22 +87,22 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.tooManyScopes.TooManyScopeTypesTest
 - [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.withBindingType.StereoTypeWithBindingTypesTest
 - [x] org.jboss.cdi.tck.tests.definition.stereotype.inheritance.StereotypeInheritenceTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.interceptor.StereotypeWithMultipleInterceptorBindingsTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.named.DefaultNamedTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.priority.StereotypeWithPriorityTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.priority.inherited.StereotypeInheritedPriorityTest
-- [ ] org.jboss.cdi.tck.tests.deployment.discovery.EmptyBeansXmlDiscoveryTest
-- [ ] org.jboss.cdi.tck.tests.event.EventTest
-- [ ] org.jboss.cdi.tck.tests.event.bindingTypes.EventBindingTypesTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.observer.beanNotManaged.ObserverMethodOnIncorrectBeanTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.observer.bothObservesAnnotations.ObserverMethodParameterAnnotatedAsSyncAndAsyncTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.observer.dependentIsConditionalObserver.DependentIsConditionalObserverTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.observer.inject.DeploymentFailureTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.observer.isDisposer.ObserverMethodAnnotatedDisposesTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.observer.isProducer.ObserverMethodAnnotatedProducesTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.observer.tooManyParameters.ObserverMethodWithObservesAndObservesAsyncParametersTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.observer.tooManyParameters.ObserverMethodWithTwoEventParametersTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.raw.RawEventConstructorInjectionTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.interceptor.StereotypeWithMultipleInterceptorBindingsTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.named.DefaultNamedTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.priority.StereotypeWithPriorityTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.priority.inherited.StereotypeInheritedPriorityTest
+- [x] org.jboss.cdi.tck.tests.deployment.discovery.EmptyBeansXmlDiscoveryTest
+- [x] org.jboss.cdi.tck.tests.event.EventTest
+- [x] org.jboss.cdi.tck.tests.event.bindingTypes.EventBindingTypesTest
+- [x] org.jboss.cdi.tck.tests.event.broken.observer.beanNotManaged.ObserverMethodOnIncorrectBeanTest
+- [x] org.jboss.cdi.tck.tests.event.broken.observer.bothObservesAnnotations.ObserverMethodParameterAnnotatedAsSyncAndAsyncTest
+- [x] org.jboss.cdi.tck.tests.event.broken.observer.dependentIsConditionalObserver.DependentIsConditionalObserverTest
+- [x] org.jboss.cdi.tck.tests.event.broken.observer.inject.DeploymentFailureTest
+- [x] org.jboss.cdi.tck.tests.event.broken.observer.isDisposer.ObserverMethodAnnotatedDisposesTest
+- [x] org.jboss.cdi.tck.tests.event.broken.observer.isProducer.ObserverMethodAnnotatedProducesTest
+- [x] org.jboss.cdi.tck.tests.event.broken.observer.tooManyParameters.ObserverMethodWithObservesAndObservesAsyncParametersTest
+- [x] org.jboss.cdi.tck.tests.event.broken.observer.tooManyParameters.ObserverMethodWithTwoEventParametersTest
+- [x] org.jboss.cdi.tck.tests.event.broken.raw.RawEventConstructorInjectionTest
 - [ ] org.jboss.cdi.tck.tests.event.broken.raw.RawEventDisposerInjectionTest
 - [ ] org.jboss.cdi.tck.tests.event.broken.raw.RawEventFieldInjectionTest
 - [ ] org.jboss.cdi.tck.tests.event.broken.raw.RawEventInitMethodInjectionTest
