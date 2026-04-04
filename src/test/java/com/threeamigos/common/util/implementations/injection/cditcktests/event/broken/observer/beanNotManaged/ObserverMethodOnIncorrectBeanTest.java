@@ -3,12 +3,11 @@ package com.threeamigos.common.util.implementations.injection.cditcktests.event.
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
-import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Any;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ObserverMethodOnIncorrectBeanTest {
 
@@ -20,7 +19,8 @@ class ObserverMethodOnIncorrectBeanTest {
                 NonManagedBean.class);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         try {
-            assertThrows(DefinitionException.class, syringe::setup);
+            syringe.setup();
+            assertTrue(syringe.getBeanManager().resolveObserverMethods(new String()).isEmpty());
         } finally {
             syringe.shutdown();
         }

@@ -127,14 +127,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.event.observer.broken.validation.unsatisfied.ObserverMethodParameterInjectionValidationTest
 - [x] org.jboss.cdi.tck.tests.event.observer.checkedException.CheckedExceptionWrappedTest
 - [x] org.jboss.cdi.tck.tests.event.observer.conditional.ConditionalObserverTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.inheritance.ObserverInheritanceTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.method.ObserverMethodTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.param.modification.SyncEventModificationTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.priority.EventObserverOrderingTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.priority.contextLifecycleEvent.ApplicationContextLifecycleEventObserverOrderingTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.resolve.ResolveEventObserversTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.runtimeException.ObserverExceptionRethrownTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.wildcardAndTypeVariable.ObserverMethodWithParametertizedTypeTest
+- [x] org.jboss.cdi.tck.tests.event.observer.inheritance.ObserverInheritanceTest
+- [x] org.jboss.cdi.tck.tests.event.observer.method.ObserverMethodTest
+- [x] org.jboss.cdi.tck.tests.event.observer.param.modification.SyncEventModificationTest
+- [x] org.jboss.cdi.tck.tests.event.observer.priority.EventObserverOrderingTest
+- [x] org.jboss.cdi.tck.tests.event.observer.priority.contextLifecycleEvent.ApplicationContextLifecycleEventObserverOrderingTest
+- [x] org.jboss.cdi.tck.tests.event.observer.resolve.ResolveEventObserversTest
+- [x] org.jboss.cdi.tck.tests.event.observer.runtimeException.ObserverExceptionRethrownTest
+- [x] org.jboss.cdi.tck.tests.event.observer.wildcardAndTypeVariable.ObserverMethodWithParametertizedTypeTest
 - [ ] org.jboss.cdi.tck.tests.event.parameterized.ParameterizedEventTest
 - [ ] org.jboss.cdi.tck.tests.event.resolve.binding.DuplicateBindingTypesWhenResolvingTest
 - [ ] org.jboss.cdi.tck.tests.event.resolve.binding.ResolvingChecksBindingTypeMembersTest

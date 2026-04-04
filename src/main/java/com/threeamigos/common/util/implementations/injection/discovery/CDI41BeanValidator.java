@@ -153,15 +153,29 @@ public class CDI41BeanValidator {
 
         boolean isDecorator = hasDecoratorAnnotation(clazz);
         if (Modifier.isAbstract(clazz.getModifiers()) && !isDecorator) {
-            knowledgeBase.addDefinitionError(clazz.getName() + ": bean class must not be abstract");
-            // Abstract classes are not managed beans, but abstract producer/disposer methods are still definition errors.
+            // In explicit archives, abstract helper superclasses can be discovered while still not being beans.
+            // Only report an abstract bean-class definition error when the class is explicitly bean-defining.
+            boolean explicitlyBeanDefining = hasBeanDefiningAnnotation(clazz)
+                    || hasAlternativeAnnotation(clazz)
+                    || hasInterceptorAnnotation(clazz);
+            boolean abstractProducerOrDisposerFound = false;
             for (Method method : clazz.getDeclaredMethods()) {
-                if (hasProducesAnnotation(method) && Modifier.isAbstract(method.getModifiers())) {
+                if (!Modifier.isAbstract(method.getModifiers())) {
+                    continue;
+                }
+                if (hasProducesAnnotation(method)) {
                     knowledgeBase.addDefinitionError(fmtMethod(method) + ": producer method must not be abstract");
+                    abstractProducerOrDisposerFound = true;
                 }
-                if (hasDisposesParameter(method) && Modifier.isAbstract(method.getModifiers())) {
+                if (hasDisposesParameter(method)) {
                     knowledgeBase.addDefinitionError(fmtMethod(method) + ": disposer method must not be abstract");
+                    abstractProducerOrDisposerFound = true;
                 }
+            }
+            if (explicitlyBeanDefining) {
+                knowledgeBase.addDefinitionError(clazz.getName() + ": bean class must not be abstract");
+            } else if (!abstractProducerOrDisposerFound) {
+                return null;
             }
             return null;
         }

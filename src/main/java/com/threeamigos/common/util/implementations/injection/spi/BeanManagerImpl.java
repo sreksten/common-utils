@@ -1197,13 +1197,13 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     /**
-     * Finds all synchronous observer methods matching the event and qualifiers.
+     * Finds all observer methods matching the event and qualifiers.
      *
      * <p>Observer methods are matched by:
      * <ul>
      *   <li>Event type assignability</li>
      *   <li>Qualifier matching (all observer qualifiers must be in event qualifiers)</li>
-     *   <li>Synchronous only (@Observes, not @ObservesAsync)</li>
+     *   <li>Synchronous and asynchronous observer methods are both included</li>
      * </ul>
      *
      * <p><b>Example:</b>
@@ -1250,11 +1250,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         List<ObserverMethodInfo> matchingObserverInfos = new ArrayList<>();
 
         for (ObserverMethodInfo observerInfo : knowledgeBase.getObserverMethodInfos()) {
-            // Check if the observer is synchronous (@Observes, not @ObservesAsync)
-            if (observerInfo.isAsync()) {
-                continue;
-            }
-
             // Check type compatibility
             if (!typeChecker.isEventTypeAssignable(observerInfo.getEventType(), eventType)) {
                 continue;
