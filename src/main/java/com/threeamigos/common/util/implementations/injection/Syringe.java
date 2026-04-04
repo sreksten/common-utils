@@ -2186,6 +2186,13 @@ public class Syringe {
         info("Found " + producers.size() + " producers");
 
         for (ProducerBean<?> producerBean : producers) {
+            if (producerBean == null || producerBean.isVetoed() || producerBean.hasValidationErrors()) {
+                continue;
+            }
+            if (!knowledgeBase.getBeans().contains(producerBean)) {
+                // Skip producer beans previously removed from resolvable beans (e.g. PBA veto).
+                continue;
+            }
             try {
                 // Get the declaring class
                 Class<?> declaringClass = producerBean.getDeclaringClass();
@@ -3600,9 +3607,7 @@ public class Syringe {
 
         ParameterizedType observedParameterizedType = (ParameterizedType) parameterizedObservedType;
         Type rawType = observedParameterizedType.getRawType();
-        if (!(rawType instanceof Class) ||
-                !ProcessAnnotatedType.class.isAssignableFrom((Class<?>) rawType) ||
-                !(event instanceof ProcessAnnotatedType<?>)) {
+        if (!(rawType instanceof Class)) {
             return true;
         }
 
@@ -3611,12 +3616,34 @@ public class Syringe {
             return true;
         }
 
-        AnnotatedType<?> annotatedType = extractAnnotatedTypeFromPatEvent(event);
-        if (annotatedType == null || annotatedType.getJavaClass() == null) {
+        Class<?> discoveredType = extractObservedTypeForGenericEventMatch((Class<?>) rawType, event);
+        if (discoveredType == null) {
             return true;
         }
 
-        return matchesObservedTypeArgument(observedTypeArguments[0], annotatedType.getJavaClass());
+        return matchesObservedTypeArgument(observedTypeArguments[0], discoveredType);
+    }
+
+    private Class<?> extractObservedTypeForGenericEventMatch(Class<?> observedRawType, Object event) {
+        if (ProcessAnnotatedType.class.isAssignableFrom(observedRawType) &&
+                event instanceof ProcessAnnotatedType<?>) {
+            AnnotatedType<?> annotatedType = extractAnnotatedTypeFromPatEvent(event);
+            return annotatedType != null ? annotatedType.getJavaClass() : null;
+        }
+
+        if (ProcessBeanAttributes.class.isAssignableFrom(observedRawType) &&
+                event instanceof ProcessBeanAttributes<?>) {
+            Annotated annotated = extractAnnotatedFromPbaEvent(event);
+            if (annotated instanceof AnnotatedType<?>) {
+                return ((AnnotatedType<?>) annotated).getJavaClass();
+            }
+            if (annotated instanceof AnnotatedMember<?>) {
+                AnnotatedType<?> declaringType = ((AnnotatedMember<?>) annotated).getDeclaringType();
+                return declaringType != null ? declaringType.getJavaClass() : null;
+            }
+        }
+
+        return null;
     }
 
     private boolean matchesObservedTypeArgument(Type observedTypeArgument, Class<?> discoveredType) {
@@ -3663,6 +3690,18 @@ public class Syringe {
         }
         try {
             return ((ProcessAnnotatedType<?>) event).getAnnotatedType();
+        } catch (IllegalStateException ignored) {
+            // Guarded lifecycle event implementations may reject access outside invocation.
+            return null;
+        }
+    }
+
+    private Annotated extractAnnotatedFromPbaEvent(Object event) {
+        if (event instanceof ProcessBeanAttributesImpl<?>) {
+            return ((ProcessBeanAttributesImpl<?>) event).getAnnotatedInternal();
+        }
+        try {
+            return ((ProcessBeanAttributes<?>) event).getAnnotated();
         } catch (IllegalStateException ignored) {
             // Guarded lifecycle event implementations may reject access outside invocation.
             return null;

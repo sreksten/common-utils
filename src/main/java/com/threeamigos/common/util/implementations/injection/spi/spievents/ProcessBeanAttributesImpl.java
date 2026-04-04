@@ -42,6 +42,10 @@ public class ProcessBeanAttributesImpl<T> extends PhaseAware
         return annotated;
     }
 
+    public Annotated getAnnotatedInternal() {
+        return annotated;
+    }
+
     @Override
     public BeanAttributes<T> getBeanAttributes() {
         assertObserverInvocationActive();

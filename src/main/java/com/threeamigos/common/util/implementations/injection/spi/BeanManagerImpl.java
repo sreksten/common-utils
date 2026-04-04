@@ -584,7 +584,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         Set<Bean<?>> matchingBeans = new HashSet<>();
 
         for (Bean<?> bean : knowledgeBase.getValidBeans()) {
-            if (!isBeanEnabledForResolution(bean)) {
+            if (!isBeanUsableForResolution(bean)) {
                 continue;
             }
 
@@ -700,7 +700,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         Class<?> targetClass = selection.getTargetClass();
 
         for (Bean<?> bean : knowledgeBase.getValidBeans()) {
-            if (!isBeanEnabledForResolution(bean)) {
+            if (!isBeanUsableForResolution(bean)) {
                 continue;
             }
             if (!targetClass.equals(bean.getBeanClass())) {
@@ -786,7 +786,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         Set<Bean<?>> namedBeans = new HashSet<>();
 
         for (Bean<?> bean : knowledgeBase.getValidBeans()) {
-            if (!isBeanEnabledForResolution(bean)) {
+            if (!isBeanUsableForResolution(bean)) {
                 continue;
             }
             if (name.equals(bean.getName())) {
@@ -864,7 +864,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
         List<Bean<? extends X>> enabledBeans = new ArrayList<>();
         for (Bean<? extends X> bean : filteredBeans) {
-            if (isBeanEnabledForResolution(bean)) {
+            if (isBeanUsableForResolution(bean)) {
                 enabledBeans.add(bean);
             }
         }
@@ -1008,6 +1008,21 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return ((BeanImpl<?>) bean).isAlternativeEnabled();
         }
         return isAlternativeSelectedByClassOrStereotype(bean);
+    }
+
+    private boolean isBeanUsableForResolution(Bean<?> bean) {
+        if (!isBeanEnabledForResolution(bean)) {
+            return false;
+        }
+        if (bean instanceof BeanImpl<?>) {
+            BeanImpl<?> managedBean = (BeanImpl<?>) bean;
+            return !managedBean.hasValidationErrors() && !managedBean.isVetoed();
+        }
+        if (bean instanceof ProducerBean<?>) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            return !producerBean.hasValidationErrors() && !producerBean.isVetoed();
+        }
+        return true;
     }
 
     private Bean<?> findDeclaringBean(Class<?> declaringClass) {

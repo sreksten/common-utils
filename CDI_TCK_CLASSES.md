@@ -143,22 +143,22 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.event.resolve.typeWithParameters.ChecksEventTypeWhenResolvingTest
 - [x] org.jboss.cdi.tck.tests.event.select.SelectEventTest
 - [x] org.jboss.cdi.tck.tests.full.alternative.AlternativeAvailabilityTest
-- [ ] org.jboss.cdi.tck.tests.full.alternative.broken.incorrect.name.NoClassWithSpecifiedNameTest
-- [ ] org.jboss.cdi.tck.tests.full.alternative.broken.incorrect.name.stereotype.NoAnnotationWithSpecifiedNameTest
-- [ ] org.jboss.cdi.tck.tests.full.alternative.broken.not.alternative.ClassIsNotAlternativeTest
-- [ ] org.jboss.cdi.tck.tests.full.alternative.broken.not.alternative.stereotype.ClassIsNotAlternativeTest
-- [ ] org.jboss.cdi.tck.tests.full.alternative.broken.same.type.twice.SameTypeListedTwiceTest
-- [ ] org.jboss.cdi.tck.tests.full.alternative.selection.stereotype.SelectedBeanWithUnselectedStereotypeTest
-- [ ] org.jboss.cdi.tck.tests.full.alternative.veto.VetoedAlternativeTest
-- [ ] org.jboss.cdi.tck.tests.full.context.ContextDestroysBeansTest
-- [ ] org.jboss.cdi.tck.tests.full.context.ContextTest
-- [ ] org.jboss.cdi.tck.tests.full.context.DestroyForSameCreationalContext2Test
-- [ ] org.jboss.cdi.tck.tests.full.context.DestroyForSameCreationalContextTest
-- [ ] org.jboss.cdi.tck.tests.full.context.DestroyedInstanceReturnedByGetTest
-- [ ] org.jboss.cdi.tck.tests.full.context.GetFromContextualTest
-- [ ] org.jboss.cdi.tck.tests.full.context.GetOnInactiveContextTest
-- [ ] org.jboss.cdi.tck.tests.full.context.GetWithNoCreationalContextTest
-- [ ] org.jboss.cdi.tck.tests.full.context.NormalContextTest
+- [x] org.jboss.cdi.tck.tests.full.alternative.broken.incorrect.name.NoClassWithSpecifiedNameTest
+- [x] org.jboss.cdi.tck.tests.full.alternative.broken.incorrect.name.stereotype.NoAnnotationWithSpecifiedNameTest
+- [x] org.jboss.cdi.tck.tests.full.alternative.broken.not.alternative.ClassIsNotAlternativeTest
+- [x] org.jboss.cdi.tck.tests.full.alternative.broken.not.alternative.stereotype.ClassIsNotAlternativeTest
+- [x] org.jboss.cdi.tck.tests.full.alternative.broken.same.type.twice.SameTypeListedTwiceTest
+- [x] org.jboss.cdi.tck.tests.full.alternative.selection.stereotype.SelectedBeanWithUnselectedStereotypeTest
+- [x] org.jboss.cdi.tck.tests.full.alternative.veto.VetoedAlternativeTest
+- [x] org.jboss.cdi.tck.tests.full.context.ContextDestroysBeansTest
+- [x] org.jboss.cdi.tck.tests.full.context.ContextTest
+- [x] org.jboss.cdi.tck.tests.full.context.DestroyForSameCreationalContext2Test
+- [x] org.jboss.cdi.tck.tests.full.context.DestroyForSameCreationalContextTest
+- [x] org.jboss.cdi.tck.tests.full.context.DestroyedInstanceReturnedByGetTest
+- [x] org.jboss.cdi.tck.tests.full.context.GetFromContextualTest
+- [x] org.jboss.cdi.tck.tests.full.context.GetOnInactiveContextTest
+- [x] org.jboss.cdi.tck.tests.full.context.GetWithNoCreationalContextTest
+- [x] org.jboss.cdi.tck.tests.full.context.NormalContextTest
 - [ ] org.jboss.cdi.tck.tests.full.context.alterable.AlterableContextTest
 - [ ] org.jboss.cdi.tck.tests.full.context.dependent.DependentContextTest
 - [ ] org.jboss.cdi.tck.tests.full.context.passivating.PassivatingContextTest
