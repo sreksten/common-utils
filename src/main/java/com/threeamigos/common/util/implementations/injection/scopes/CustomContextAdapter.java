@@ -4,7 +4,11 @@ import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.AlterableContext;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.context.NormalScope;
 import jakarta.enterprise.inject.spi.Bean;
+
+import java.io.Serializable;
+import java.lang.annotation.Annotation;
 
 /**
  * Adapter that wraps a Jakarta CDI Context to work with our internal ScopeContext interface.
@@ -82,8 +86,9 @@ public class CustomContextAdapter implements ScopeContext {
             );
         }
 
-        // Bean extends Contextual, so we can pass it directly
-        return wrappedContext.get(bean, creationalContext);
+        Contextual<T> contextual = adaptContextual(bean);
+        CreationalContext<T> adaptedCreationalContext = adaptCreationalContext(creationalContext);
+        return wrappedContext.get(contextual, adaptedCreationalContext);
     }
 
     /**
@@ -101,8 +106,7 @@ public class CustomContextAdapter implements ScopeContext {
             return null;
         }
 
-        // Bean extends Contextual, so we can pass it directly
-        return wrappedContext.get(bean);
+        return wrappedContext.get(adaptContextual(bean));
     }
 
     /**
@@ -136,7 +140,7 @@ public class CustomContextAdapter implements ScopeContext {
         if (!isActive()) {
             return;
         }
-        ((AlterableContext) wrappedContext).destroy(contextual);
+        ((AlterableContext) wrappedContext).destroy(adaptContextual(contextual));
     }
 
     /**
@@ -165,10 +169,12 @@ public class CustomContextAdapter implements ScopeContext {
      */
     @Override
     public boolean isPassivationCapable() {
-        // Conservative default: custom contexts are not passivating unless explicitly marked.
-        // A more sophisticated implementation could inspect the scope annotation for
-        // @NormalScope(passivating=true) or check if the context implements AlterableContext.
-        return false;
+        Class<? extends Annotation> scope = wrappedContext.getScope();
+        if (scope == null) {
+            return false;
+        }
+        NormalScope normalScope = scope.getAnnotation(NormalScope.class);
+        return normalScope != null && normalScope.passivating();
     }
 
     /**
@@ -189,5 +195,86 @@ public class CustomContextAdapter implements ScopeContext {
                ", active=" + isActive() +
                ", wrapped=" + wrappedContext.getClass().getName() +
                '}';
+    }
+
+    private boolean requiresSerializableParameters() {
+        return isPassivationCapable();
+    }
+
+    private <T> Contextual<T> adaptContextual(Contextual<T> contextual) {
+        if (contextual == null || !requiresSerializableParameters()) {
+            return contextual;
+        }
+        if (contextual instanceof Serializable) {
+            return contextual;
+        }
+        return new SerializableContextualAdapter<T>(contextual);
+    }
+
+    private <T> CreationalContext<T> adaptCreationalContext(CreationalContext<T> creationalContext) {
+        if (creationalContext == null || !requiresSerializableParameters()) {
+            return creationalContext;
+        }
+        if (creationalContext instanceof Serializable) {
+            return creationalContext;
+        }
+        return new SerializableCreationalContextAdapter<T>(creationalContext);
+    }
+
+    private static final class SerializableContextualAdapter<T> implements Contextual<T>, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final Contextual<T> delegate;
+
+        private SerializableContextualAdapter(Contextual<T> delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public T create(CreationalContext<T> creationalContext) {
+            return delegate.create(creationalContext);
+        }
+
+        @Override
+        public void destroy(T instance, CreationalContext<T> creationalContext) {
+            delegate.destroy(instance, creationalContext);
+        }
+
+        @Override
+        public int hashCode() {
+            return System.identityHashCode(delegate);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof SerializableContextualAdapter)) {
+                return false;
+            }
+            SerializableContextualAdapter<?> other = (SerializableContextualAdapter<?>) obj;
+            return delegate == other.delegate;
+        }
+    }
+
+    private static final class SerializableCreationalContextAdapter<T> implements CreationalContext<T>, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final CreationalContext<T> delegate;
+
+        private SerializableCreationalContextAdapter(CreationalContext<T> delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void push(T incompleteInstance) {
+            delegate.push(incompleteInstance);
+        }
+
+        @Override
+        public void release() {
+            delegate.release();
+        }
     }
 }

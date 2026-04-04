@@ -167,14 +167,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.decorator.ManagedBeanWithNonPassivatingDecoratorTest
 - [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.decorator.field.DecoratorWithNonPassivatingInjectedFieldTest
 - [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.field.NonPassivatingInjectedFieldTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.initializer.NonPassivatingInitParamTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.ManagedBeanWithNonSerializableInterceptorClassTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.field.PassivationCapableBeanWithNonPassivatingInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.field.managed.NonPassivationCapableProducerFieldTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.field.managed.dependent.ManagedBeanWithIllegalDependencyTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.method.managed.NonPassivationCapableProducerMethodTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.method.managed.dependent.ManagedBeanWithIllegalDependencyTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.custom.CustomPassivatingScopeCalledWithSerializableParametersTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.initializer.NonPassivatingInitParamTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.ManagedBeanWithNonSerializableInterceptorClassTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.field.PassivationCapableBeanWithNonPassivatingInterceptorTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.field.managed.NonPassivationCapableProducerFieldTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.field.managed.dependent.ManagedBeanWithIllegalDependencyTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.method.managed.NonPassivationCapableProducerMethodTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.method.managed.dependent.ManagedBeanWithIllegalDependencyTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.custom.CustomPassivatingScopeCalledWithSerializableParametersTest
 - [ ] org.jboss.cdi.tck.tests.full.context.passivating.dependency.builtin.BuiltinBeanPassivationDependencyTest
 - [ ] org.jboss.cdi.tck.tests.full.context.passivating.injection.point.PassivationCapableInjectionPointTest
 - [ ] org.jboss.cdi.tck.tests.full.context.passivating.producer.ProducerMethodWithPrimitiveReturnTypePassivationTest
