@@ -103,14 +103,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.event.broken.observer.tooManyParameters.ObserverMethodWithObservesAndObservesAsyncParametersTest
 - [x] org.jboss.cdi.tck.tests.event.broken.observer.tooManyParameters.ObserverMethodWithTwoEventParametersTest
 - [x] org.jboss.cdi.tck.tests.event.broken.raw.RawEventConstructorInjectionTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.raw.RawEventDisposerInjectionTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.raw.RawEventFieldInjectionTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.raw.RawEventInitMethodInjectionTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.raw.RawEventObserverInjectionTest
-- [ ] org.jboss.cdi.tck.tests.event.broken.raw.RawEventProducerMethodInjectionTest
-- [ ] org.jboss.cdi.tck.tests.event.eventTypes.EventTypesTest
-- [ ] org.jboss.cdi.tck.tests.event.fires.FireEventTest
-- [ ] org.jboss.cdi.tck.tests.event.fires.nonbinding.NonBindingTypePassedToFireTest
+- [x] org.jboss.cdi.tck.tests.event.broken.raw.RawEventDisposerInjectionTest
+- [x] org.jboss.cdi.tck.tests.event.broken.raw.RawEventFieldInjectionTest
+- [x] org.jboss.cdi.tck.tests.event.broken.raw.RawEventInitMethodInjectionTest
+- [x] org.jboss.cdi.tck.tests.event.broken.raw.RawEventObserverInjectionTest
+- [x] org.jboss.cdi.tck.tests.event.broken.raw.RawEventProducerMethodInjectionTest
+- [x] org.jboss.cdi.tck.tests.event.eventTypes.EventTypesTest
+- [x] org.jboss.cdi.tck.tests.event.fires.FireEventTest
+- [x] org.jboss.cdi.tck.tests.event.fires.nonbinding.NonBindingTypePassedToFireTest
 - [ ] org.jboss.cdi.tck.tests.event.fires.sync.FireSyncEventTest
 - [ ] org.jboss.cdi.tck.tests.event.implicit.ImplicitEventTest
 - [ ] org.jboss.cdi.tck.tests.event.lifecycle.StartupShutdownTest

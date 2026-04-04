@@ -174,7 +174,7 @@ public class EventImpl<T> implements Event<T> {
     public EventImpl(Type eventType, Set<Annotation> qualifiers, KnowledgeBase knowledgeBase,
                     BeanResolver beanResolver, ContextManager contextManager, TransactionServices transactionServices) {
         this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
-        validateEventType(this.eventType);
+        validateEventType(this.eventType, false);
         this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
@@ -190,7 +190,7 @@ public class EventImpl<T> implements Event<T> {
                      BeanResolver beanResolver, ContextManager contextManager,
                      TransactionServices transactionServices, ContextTokenProvider tokenProvider) {
         this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
-        validateEventType(this.eventType);
+        validateEventType(this.eventType, false);
         this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
@@ -207,7 +207,7 @@ public class EventImpl<T> implements Event<T> {
                      TransactionServices transactionServices, ContextTokenProvider tokenProvider,
                      InjectionPoint firingInjectionPoint) {
         this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
-        validateEventType(this.eventType);
+        validateEventType(this.eventType, firingInjectionPoint != null);
         this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
@@ -224,7 +224,7 @@ public class EventImpl<T> implements Event<T> {
                      TransactionServices transactionServices, ContextTokenProvider tokenProvider,
                      InjectionPoint firingInjectionPoint, boolean allowStartupEventDispatch) {
         this.eventType = Objects.requireNonNull(eventType, "eventType cannot be null");
-        validateEventType(this.eventType);
+        validateEventType(this.eventType, firingInjectionPoint != null);
         this.qualifiers = Objects.requireNonNull(qualifiers, "qualifiers cannot be null");
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.beanResolver = Objects.requireNonNull(beanResolver, "beanResolver cannot be null");
@@ -620,7 +620,11 @@ public class EventImpl<T> implements Event<T> {
     }
 
     private void validateEventType(Type type) {
-        if (containsUnresolvableTypeVariable(type)) {
+        validateEventType(type, false);
+    }
+
+    private void validateEventType(Type type, boolean allowUnresolvableTypeVariables) {
+        if (!allowUnresolvableTypeVariables && containsUnresolvableTypeVariable(type)) {
             throw new IllegalArgumentException(
                     "Event type may not contain an unresolvable type variable: " + type.getTypeName());
         }
