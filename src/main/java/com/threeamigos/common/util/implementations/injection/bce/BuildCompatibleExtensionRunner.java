@@ -1339,8 +1339,67 @@ public class BuildCompatibleExtensionRunner {
         if (requiredAnnotations == null || requiredAnnotations.length == 0) {
             return true;
         }
+        return hasRequiredEnhancementAnnotation(element, requiredAnnotations);
+    }
+
+    private boolean hasRequiredEnhancementAnnotation(java.lang.reflect.AnnotatedElement element,
+                                                     Class<? extends Annotation>[] requiredAnnotations) {
+        if (element == null) {
+            return false;
+        }
+
+        if (hasAnyRequiredAnnotation(element, requiredAnnotations)) {
+            return true;
+        }
+
+        if (!(element instanceof Class<?>)) {
+            return false;
+        }
+
+        Class<?> clazz = (Class<?>) element;
+        for (Field field : clazz.getDeclaredFields()) {
+            if (hasAnyRequiredAnnotation(field, requiredAnnotations)) {
+                return true;
+            }
+        }
+
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            if (hasAnyRequiredAnnotation(constructor, requiredAnnotations) ||
+                    parametersHaveAnyRequiredAnnotation(constructor.getParameters(), requiredAnnotations)) {
+                return true;
+            }
+        }
+
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (hasAnyRequiredAnnotation(method, requiredAnnotations) ||
+                    parametersHaveAnyRequiredAnnotation(method.getParameters(), requiredAnnotations)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean hasAnyRequiredAnnotation(java.lang.reflect.AnnotatedElement element,
+                                             Class<? extends Annotation>[] requiredAnnotations) {
+        if (element == null || requiredAnnotations == null) {
+            return false;
+        }
         for (Class<? extends Annotation> annotation : requiredAnnotations) {
-            if (element.isAnnotationPresent(annotation)) {
+            if (annotation != null && element.isAnnotationPresent(annotation)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean parametersHaveAnyRequiredAnnotation(java.lang.reflect.Parameter[] parameters,
+                                                        Class<? extends Annotation>[] requiredAnnotations) {
+        if (parameters == null || requiredAnnotations == null) {
+            return false;
+        }
+        for (java.lang.reflect.Parameter parameter : parameters) {
+            if (hasAnyRequiredAnnotation(parameter, requiredAnnotations)) {
                 return true;
             }
         }

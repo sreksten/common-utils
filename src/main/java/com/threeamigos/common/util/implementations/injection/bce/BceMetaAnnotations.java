@@ -18,13 +18,22 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 
 final class BceMetaAnnotations implements MetaAnnotations {
 
     private final KnowledgeBase knowledgeBase;
     private final MessageHandler messageHandler;
+    private final BceAnnotationBuilderFactory annotationBuilderFactory = new BceAnnotationBuilderFactory();
+
+    private enum DynamicAnnotationKind {
+        QUALIFIER,
+        INTERCEPTOR_BINDING,
+        STEREOTYPE
+    }
 
     BceMetaAnnotations(KnowledgeBase knowledgeBase, MessageHandler messageHandler) {
         this.knowledgeBase = knowledgeBase;
@@ -34,19 +43,19 @@ final class BceMetaAnnotations implements MetaAnnotations {
     @Override
     public ClassConfig addQualifier(Class<? extends Annotation> qualifierAnnotation) {
         knowledgeBase.addQualifier(qualifierAnnotation);
-        return new DynamicClassConfig(qualifierAnnotation);
+        return new DynamicClassConfig(qualifierAnnotation, DynamicAnnotationKind.QUALIFIER);
     }
 
     @Override
     public ClassConfig addInterceptorBinding(Class<? extends Annotation> interceptorBindingAnnotation) {
         knowledgeBase.addInterceptorBinding(interceptorBindingAnnotation);
-        return new DynamicClassConfig(interceptorBindingAnnotation);
+        return new DynamicClassConfig(interceptorBindingAnnotation, DynamicAnnotationKind.INTERCEPTOR_BINDING);
     }
 
     @Override
     public ClassConfig addStereotype(Class<? extends Annotation> stereotypeAnnotation) {
         knowledgeBase.addStereotype(stereotypeAnnotation);
-        return new DynamicClassConfig(stereotypeAnnotation);
+        return new DynamicClassConfig(stereotypeAnnotation, DynamicAnnotationKind.STEREOTYPE);
     }
 
     @Override
@@ -66,13 +75,15 @@ final class BceMetaAnnotations implements MetaAnnotations {
             scopeAnnotation.getName() + " using " + contextImplementation.getName());
     }
 
-    private static final class DynamicClassConfig implements ClassConfig {
+    private final class DynamicClassConfig implements ClassConfig {
         private final Class<? extends Annotation> annotationType;
+        private final DynamicAnnotationKind kind;
         private final ClassInfo classInfo;
         private final Collection<MethodConfig> methods;
 
-        private DynamicClassConfig(Class<? extends Annotation> annotationType) {
+        private DynamicClassConfig(Class<? extends Annotation> annotationType, DynamicAnnotationKind kind) {
             this.annotationType = annotationType;
+            this.kind = kind;
             this.classInfo = BceMetadata.classInfo(annotationType);
             this.methods = buildMethodConfigs(annotationType);
         }
@@ -84,16 +95,21 @@ final class BceMetaAnnotations implements MetaAnnotations {
 
         @Override
         public ClassConfig addAnnotation(Class<? extends Annotation> annotationType) {
+            registerClassLevelMetaAnnotation(materializeAnnotation(annotationType));
             return this;
         }
 
         @Override
         public ClassConfig addAnnotation(AnnotationInfo annotation) {
+            if (annotation != null) {
+                registerClassLevelMetaAnnotation(BceMetadata.unwrapAnnotationInfo(annotation));
+            }
             return this;
         }
 
         @Override
         public ClassConfig addAnnotation(Annotation annotation) {
+            registerClassLevelMetaAnnotation(annotation);
             return this;
         }
 
@@ -129,6 +145,13 @@ final class BceMetaAnnotations implements MetaAnnotations {
                 configs.add(new DynamicMethodConfig(this.annotationType, declaredMethod));
             }
             return Collections.unmodifiableList(configs);
+        }
+
+        private void registerClassLevelMetaAnnotation(Annotation metaAnnotation) {
+            if (metaAnnotation == null) {
+                return;
+            }
+            registerMetaAnnotation(kind, annotationType, metaAnnotation);
         }
     }
 
@@ -199,5 +222,58 @@ final class BceMetaAnnotations implements MetaAnnotations {
             }
         }
         return false;
+    }
+
+    private Annotation materializeAnnotation(Class<? extends Annotation> annotationType) {
+        if (annotationType == null) {
+            return null;
+        }
+        try {
+            return BceMetadata.unwrapAnnotationInfo(annotationBuilderFactory.create(annotationType).build());
+        } catch (RuntimeException ex) {
+            messageHandler.handleWarnMessage("[BCE] Unable to materialize annotation @" +
+                    annotationType.getName() + " for dynamic meta-annotation registration: " + ex.getMessage());
+            return null;
+        }
+    }
+
+    private void registerMetaAnnotation(DynamicAnnotationKind kind,
+                                        Class<? extends Annotation> declarationType,
+                                        Annotation metaAnnotation) {
+        if (declarationType == null || metaAnnotation == null) {
+            return;
+        }
+
+        switch (kind) {
+            case STEREOTYPE:
+                mergeStereotypeDefinition(declarationType, metaAnnotation);
+                break;
+            case INTERCEPTOR_BINDING:
+                mergeInterceptorBindingDefinition(declarationType, metaAnnotation);
+                break;
+            case QUALIFIER:
+            default:
+                break;
+        }
+    }
+
+    private void mergeStereotypeDefinition(Class<? extends Annotation> stereotypeType, Annotation metaAnnotation) {
+        Set<Annotation> merged = new LinkedHashSet<>();
+        Set<Annotation> existing = knowledgeBase.getStereotypeDefinition(stereotypeType);
+        if (existing != null) {
+            merged.addAll(existing);
+        }
+        merged.add(metaAnnotation);
+        knowledgeBase.addStereotype(stereotypeType, merged.toArray(new Annotation[0]));
+    }
+
+    private void mergeInterceptorBindingDefinition(Class<? extends Annotation> bindingType, Annotation metaAnnotation) {
+        Set<Annotation> merged = new LinkedHashSet<>();
+        Set<Annotation> existing = knowledgeBase.getInterceptorBindingDefinition(bindingType);
+        if (existing != null) {
+            merged.addAll(existing);
+        }
+        merged.add(metaAnnotation);
+        knowledgeBase.addInterceptorBinding(bindingType, merged.toArray(new Annotation[0]));
     }
 }

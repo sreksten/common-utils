@@ -105,8 +105,14 @@ Low-cost preflight checklist (before considering Syringe core changes):
 Execution model:
 - No Arquillian, no WildFly/container adapters, no deployment archives.
 - Standalone Syringe tests only.
-- Do NOT run tests automatically after conversion; user will run them manually.
-- Do not invoke Maven test goals unless explicitly requested by the user.
+- After each batch migration, automatically run only the newly ported test classes via a targeted Maven run:
+  - `mvn -q -Dtest=<FQCN1>,<FQCN2>,... test`
+- Do not run full-suite Maven goals for migration verification.
+
+Automatic completion rule:
+- If all newly ported tests pass in the targeted batch run, mark those classes as `[x]` in `CDI_TCK_CLASSES.md`.
+- If any newly ported test fails, keep that class as `[ ]`, fix minimally, and rerun only the still-failing classes.
+- Never mark `[x]` for classes that were not executed in the targeted batch run.
 
 Parity rules:
 - Preserve original TCK intent, assertions, and expected exceptions.
@@ -119,6 +125,13 @@ Failure triage rules (if user reports a failing migrated test):
   - Ambiguous/unsatisfied resolution: verify isolation boundaries and qualifiers before changing core resolution logic.
 - Prefer fixing parity fixture mistakes before changing Syringe core.
 - If you change Syringe core, document why fixture-level fixes were insufficient.
+- Low-credit debug workflow:
+  - Run only the exact failing test:
+    - `mvn -q -Dtest=<fully-qualified-test-class> test`
+  - Inspect `target/surefire-reports` for that class before broader code exploration.
+  - Apply the smallest viable patch (fixture/test wiring first; Syringe core only if fixture fixes are insufficient).
+  - Rerun only the same failing test class once for verification.
+  - Report concise root cause and changed files.
 
 Report-truth rule:
 - If class-level textual summaries and observed behavior disagree, use XML reports in `target/surefire-reports/TEST-*.xml` as canonical evidence of executed testcases.
@@ -127,6 +140,6 @@ Report-truth rule:
 Output required each run:
 1) Classes processed in the batch
 2) Files created/modified
-3) Migration status per class (`ported-awaiting-manual-run` / `incomplete`)
-4) Classes marked `[x]` (mark only after explicit user confirmation that manual run passed)
+3) Migration status per class (`ported-verified` / `incomplete`)
+4) Classes marked `[x]` (mark automatically only when the targeted batch run passed)
 5) Remaining pending count

@@ -24,16 +24,16 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.beanContainer.bytype.BeanByTypeTest
 - [x] org.jboss.cdi.tck.tests.beanContainer.injection.BeanContainerInjectionTest
 - [x] org.jboss.cdi.tck.tests.build.compatible.extensions.changeBeanQualifier.ChangeBeanQualifierTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.changeInjectionPoint.ChangeInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.changeInterceptorBinding.ChangeInterceptorBindingTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.changeObserverQualifier.ChangeObserverQualifierTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.customInterceptorBinding.CustomInterceptorBindingTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.customNormalScope.CustomNormalScopeTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.customPseudoScope.CustomPseudoScopeTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.customQualifier.CustomQualifierTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.customStereotype.CustomStereotypeTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.inspectAnnotatedSubtypes.InspectAnnotatedSubtypesTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementMultipleParams2Test
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.changeInjectionPoint.ChangeInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.changeInterceptorBinding.ChangeInterceptorBindingTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.changeObserverQualifier.ChangeObserverQualifierTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.customInterceptorBinding.CustomInterceptorBindingTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.customNormalScope.CustomNormalScopeTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.customPseudoScope.CustomPseudoScopeTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.customQualifier.CustomQualifierTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.customStereotype.CustomStereotypeTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.inspectAnnotatedSubtypes.InspectAnnotatedSubtypesTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementMultipleParams2Test
 - [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementMultipleParamsTest
 - [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementNoParamTest
 - [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementOnlyMessagesTest
