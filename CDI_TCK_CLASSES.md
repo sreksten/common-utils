@@ -159,14 +159,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.context.GetOnInactiveContextTest
 - [x] org.jboss.cdi.tck.tests.full.context.GetWithNoCreationalContextTest
 - [x] org.jboss.cdi.tck.tests.full.context.NormalContextTest
-- [ ] org.jboss.cdi.tck.tests.full.context.alterable.AlterableContextTest
-- [ ] org.jboss.cdi.tck.tests.full.context.dependent.DependentContextTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.PassivatingContextTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.NonPassivationManagedBeanHasPassivatingScopeTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.constructor.NonPassivatingConstructorParamTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.decorator.ManagedBeanWithNonPassivatingDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.decorator.field.DecoratorWithNonPassivatingInjectedFieldTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.field.NonPassivatingInjectedFieldTest
+- [x] org.jboss.cdi.tck.tests.full.context.alterable.AlterableContextTest
+- [x] org.jboss.cdi.tck.tests.full.context.dependent.DependentContextTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.PassivatingContextTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.NonPassivationManagedBeanHasPassivatingScopeTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.constructor.NonPassivatingConstructorParamTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.decorator.ManagedBeanWithNonPassivatingDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.decorator.field.DecoratorWithNonPassivatingInjectedFieldTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.field.NonPassivatingInjectedFieldTest
 - [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.initializer.NonPassivatingInitParamTest
 - [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.ManagedBeanWithNonSerializableInterceptorClassTest
 - [ ] org.jboss.cdi.tck.tests.full.context.passivating.broken.interceptor.field.PassivationCapableBeanWithNonPassivatingInterceptorTest

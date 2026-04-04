@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.injection.interceptors.Interc
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -491,7 +492,8 @@ public class ClientProxyGenerator {
                 // and delegate them to our ContextualInstanceInterceptor
                 .method(ElementMatchers.any()
                     .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class)))
-                    .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(ProxyState.class))))
+                    .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(ProxyState.class)))
+                    .and(ElementMatchers.not(ElementMatchers.named("writeReplace"))))
                 .intercept(MethodDelegation.to(ContextualInstanceInterceptor.class))
 
                 // Load the class into the same classloader as the target class
@@ -709,9 +711,22 @@ public class ClientProxyGenerator {
             // Get the classloader for this bean class
             assert beanClass != null;
             ClassLoader classLoader = beanClass.getClassLoader();
+            ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
 
             // Look up the container context
             ContainerContext containerContext = getContainerContext(classLoader);
+            if (containerContext == null && contextClassLoader != null && contextClassLoader != classLoader) {
+                containerContext = getContainerContext(contextClassLoader);
+            }
+            if (containerContext == null) {
+                BeanManagerImpl registeredBeanManager = BeanManagerImpl.getRegisteredBeanManager(classLoader);
+                if (registeredBeanManager == null && contextClassLoader != null && contextClassLoader != classLoader) {
+                    registeredBeanManager = BeanManagerImpl.getRegisteredBeanManager(contextClassLoader);
+                }
+                if (registeredBeanManager != null) {
+                    containerContext = new ContainerContext(registeredBeanManager, registeredBeanManager.getContextManager());
+                }
+            }
             if (containerContext == null) {
                 throw new IllegalStateException(
                     "Cannot deserialize proxy for " + beanClass.getName() + ": " +

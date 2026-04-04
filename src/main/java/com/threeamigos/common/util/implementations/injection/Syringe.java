@@ -867,6 +867,7 @@ public class Syringe {
             // (e.g. WildFly integration) where no explicit global provider registration occurs.
             SyringeCDIProvider.ensureProviderConfigured();
             SyringeCDIProvider.registerGlobalCDI(getCDI());
+            ClientProxyGenerator.registerContainer(beanManager.getRegistrationClassLoader(), beanManager, contextManager);
 
             initialized = true;
             info("Container initialization complete");
