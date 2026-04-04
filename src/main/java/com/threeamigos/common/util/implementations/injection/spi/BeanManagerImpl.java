@@ -107,6 +107,8 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, BeanManagerImpl> BEAN_MANAGER_ID_REGISTRY =
             new ConcurrentHashMap<>();
+    private static final Map<Object, DependentReference<?>> TRANSIENT_DEPENDENT_REFERENCE_REGISTRY =
+            Collections.synchronizedMap(new IdentityHashMap<Object, DependentReference<?>>());
 
     private final KnowledgeBase knowledgeBase;
     private final BeanResolver beanResolver;
@@ -192,6 +194,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         bceContextInstances.clear();
         beanResolver.clearRuntimeState();
         decoratorAwareProxyGenerator.clearCache();
+        clearTransientReferencesForOwner(beanManagerId);
     }
 
     public static BeanManagerImpl getRegisteredBeanManager(ClassLoader classLoader) {
@@ -206,6 +209,77 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return null;
         }
         return BEAN_MANAGER_ID_REGISTRY.get(beanManagerId);
+    }
+
+    public boolean destroyOwnedTransientReference(Object instance) {
+        return destroyTransientReference(beanManagerId, instance);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static boolean destroyTransientReference(Object instance) {
+        return destroyTransientReference(null, instance);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static boolean destroyTransientReference(String ownerBeanManagerId, Object instance) {
+        if (instance == null) {
+            return false;
+        }
+
+        DependentReference<?> reference;
+        synchronized (TRANSIENT_DEPENDENT_REFERENCE_REGISTRY) {
+            reference = TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.get(instance);
+            if (reference == null) {
+                return false;
+            }
+            if (ownerBeanManagerId != null && !ownerBeanManagerId.equals(reference.beanManagerId)) {
+                return false;
+            }
+            TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.remove(instance);
+        }
+        if (reference == null) {
+            return false;
+        }
+
+        try {
+            Bean bean = reference.bean;
+            CreationalContext context = reference.creationalContext;
+            bean.destroy(instance, context);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> void registerTransientReference(String ownerBeanManagerId,
+                                                       Bean<T> bean,
+                                                       T instance,
+                                                       CreationalContext<T> creationalContext) {
+        if (ownerBeanManagerId == null || bean == null || instance == null || creationalContext == null) {
+            return;
+        }
+        synchronized (TRANSIENT_DEPENDENT_REFERENCE_REGISTRY) {
+            TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.put(instance,
+                    new DependentReference<T>(ownerBeanManagerId, bean, creationalContext));
+        }
+    }
+
+    private static void clearTransientReferencesForOwner(String ownerBeanManagerId) {
+        if (ownerBeanManagerId == null) {
+            return;
+        }
+        synchronized (TRANSIENT_DEPENDENT_REFERENCE_REGISTRY) {
+            Iterator<Map.Entry<Object, DependentReference<?>>> iterator =
+                    TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.entrySet().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Object, DependentReference<?>> entry = iterator.next();
+                DependentReference<?> reference = entry.getValue();
+                if (reference != null && ownerBeanManagerId.equals(reference.beanManagerId)) {
+                    iterator.remove();
+                }
+            }
+        }
     }
 
     public String getBeanManagerId() {
@@ -2021,9 +2095,13 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 Bean<Object> dependentBean = (Bean<Object>) bean;
                 CreationalContext<Object> childContext = createCreationalContext(dependentBean);
                 Object instance = dependentBean.create(childContext);
-                @SuppressWarnings("unchecked")
-                CreationalContextImpl<Object> parentContext = (CreationalContextImpl<Object>) ctx;
-                parentContext.addDependentInstance(dependentBean, instance, childContext);
+                if (isTransientReferenceInjectionPoint(injectionPoint)) {
+                    registerTransientReference(beanManagerId, dependentBean, instance, childContext);
+                } else {
+                    @SuppressWarnings("unchecked")
+                    CreationalContextImpl<Object> parentContext = (CreationalContextImpl<Object>) ctx;
+                    parentContext.addDependentInstance(dependentBean, instance, childContext);
+                }
                 return instance;
             }
 
@@ -2043,6 +2121,19 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             String name = qualifier.annotationType().getName();
             if ("jakarta.enterprise.inject.Default".equals(name) ||
                     "javax.enterprise.inject.Default".equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isTransientReferenceInjectionPoint(InjectionPoint injectionPoint) {
+        if (injectionPoint == null || injectionPoint.getAnnotated() == null ||
+                injectionPoint.getAnnotated().getAnnotations() == null) {
+            return false;
+        }
+        for (Annotation annotation : injectionPoint.getAnnotated().getAnnotations()) {
+            if (annotation != null && hasTransientReferenceAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
@@ -3677,6 +3768,14 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
         @Override
         public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+            if (creationalContext == null) {
+                return get(contextual);
+            }
+            if (!scopeContext.isActive()) {
+                throw new jakarta.enterprise.context.ContextNotActiveException(
+                    "Context not active for scope: " + scope.getName()
+                );
+            }
             if (!(contextual instanceof Bean)) {
                 return null;
             }
@@ -3794,6 +3893,18 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             }
             collected.add(Object.class);
             return collected;
+        }
+    }
+
+    private static final class DependentReference<T> {
+        private final String beanManagerId;
+        private final Bean<T> bean;
+        private final CreationalContext<T> creationalContext;
+
+        private DependentReference(String beanManagerId, Bean<T> bean, CreationalContext<T> creationalContext) {
+            this.beanManagerId = beanManagerId;
+            this.bean = bean;
+            this.creationalContext = creationalContext;
         }
     }
 

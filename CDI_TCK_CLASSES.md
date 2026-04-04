@@ -55,14 +55,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.context.DestroyForSameCreationalContextTest
 - [x] org.jboss.cdi.tck.tests.context.DestroyedInstanceReturnedByGetTest
 - [x] org.jboss.cdi.tck.tests.context.GetFromContextualTest
-- [ ] org.jboss.cdi.tck.tests.context.GetOnInactiveContextTest
-- [ ] org.jboss.cdi.tck.tests.context.GetWithNoCreationalContextTest
-- [ ] org.jboss.cdi.tck.tests.context.alterable.AlterableContextTest
-- [ ] org.jboss.cdi.tck.tests.context.dependent.DependentContextTest
-- [ ] org.jboss.cdi.tck.tests.context.dependent.instance.BuiltinInstanceDependentObjectTest
-- [ ] org.jboss.cdi.tck.tests.context.dependent.transientreference.DependentTransientReferenceDestroyedTest
-- [ ] org.jboss.cdi.tck.tests.definition.bean.BeanDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedManagedBeanTest
+- [x] org.jboss.cdi.tck.tests.context.GetOnInactiveContextTest
+- [x] org.jboss.cdi.tck.tests.context.GetWithNoCreationalContextTest
+- [x] org.jboss.cdi.tck.tests.context.alterable.AlterableContextTest
+- [x] org.jboss.cdi.tck.tests.context.dependent.DependentContextTest
+- [x] org.jboss.cdi.tck.tests.context.dependent.instance.BuiltinInstanceDependentObjectTest
+- [x] org.jboss.cdi.tck.tests.context.dependent.transientreference.DependentTransientReferenceDestroyedTest
+- [x] org.jboss.cdi.tck.tests.definition.bean.BeanDefinitionTest
+- [x] org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedManagedBeanTest
 - [ ] org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedProducerFieldTest
 - [ ] org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedProducerMethodTest
 - [ ] org.jboss.cdi.tck.tests.definition.bean.genericbroken.GenericManagedBeanTest

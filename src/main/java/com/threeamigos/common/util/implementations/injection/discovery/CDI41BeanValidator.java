@@ -474,9 +474,10 @@ public class CDI41BeanValidator {
         if (beanClass.getTypeParameters().length == 0) {
             return;
         }
-        // Keep extractor chapter-2 expectations (raw class in type closure) while still
-        // exposing the generic declaration at runtime for typesafe resolution.
-        bean.addType(TypeClosureHelper.parameterizedDeclarationOf(beanClass));
+        Set<Type> updatedTypes = new LinkedHashSet<Type>(bean.getTypes());
+        updatedTypes.remove(beanClass);
+        updatedTypes.add(TypeClosureHelper.parameterizedDeclarationOf(beanClass));
+        bean.setTypes(updatedTypes);
     }
 
     @SuppressWarnings("unchecked")

@@ -56,6 +56,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     private final String beanManagerId;
     private transient ResolutionStrategy<T> resolutionStrategy;
     private transient Function<Class<? extends T>, Bean<? extends T>> beanLookup;
+    private transient Set<Object> trackedDependentInstances;
 
     @SuppressWarnings("unchecked")
     private <U extends T> Function<Class<? extends U>, Bean<? extends U>> adaptBeanLookup() {
@@ -165,12 +166,15 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         this.resolutionStrategy = Objects.requireNonNull(resolutionStrategy, "resolutionStrategy cannot be null");
         this.beanLookup = beanLookup;
         this.beanManagerId = owningBeanManager != null ? owningBeanManager.getBeanManagerId() : null;
+        this.trackedDependentInstances = createIdentitySet();
     }
 
     @Override
     public T get() {
         try {
-            return resolveInstanceWithRequiredType();
+            T instance = resolveInstanceWithRequiredType();
+            trackDependentResult(instance);
+            return instance;
         } catch (UnsatisfiedResolutionException | AmbiguousResolutionException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -237,6 +241,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     public void destroy(T instance) {
         try {
             if (instance != null) {
+                trackedDependentInstances().remove(instance);
                 if (!destroyViaBeanManager(instance)) {
                     strategy().invokePreDestroy(instance);
                 }
@@ -251,6 +256,31 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to invoke @PreDestroy on " + type.getName(), e);
+        }
+    }
+
+    public void close() {
+        destroyTrackedDependentInstances();
+    }
+
+    @SuppressWarnings("unchecked")
+    public void destroyTrackedDependentInstances() {
+        Set<Object> tracked = trackedDependentInstances();
+        if (tracked.isEmpty()) {
+            return;
+        }
+
+        List<Object> snapshot = new ArrayList<Object>(tracked);
+        tracked.clear();
+        for (Object instance : snapshot) {
+            if (instance == null) {
+                continue;
+            }
+            try {
+                destroy((T) instance);
+            } catch (RuntimeException ignored) {
+                // Best-effort cleanup of observer-scoped programmatic lookups.
+            }
         }
     }
 
@@ -618,5 +648,46 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
     private void readObject(ObjectInputStream stream) throws IOException, ClassNotFoundException {
         stream.defaultReadObject();
+        trackedDependentInstances = createIdentitySet();
+    }
+
+    @SuppressWarnings("rawtypes")
+    private void trackDependentResult(T instance) {
+        if (instance == null) {
+            return;
+        }
+        BeanManager beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+        if (beanManager == null) {
+            return;
+        }
+
+        try {
+            Annotation[] qualifierArray = qualifiers.toArray(new Annotation[qualifiers.size()]);
+            Set<Bean<?>> beans = beanManager.getBeans(requiredType, qualifierArray);
+            if (beans == null || beans.isEmpty()) {
+                return;
+            }
+            Bean<?> resolved = beanManager.resolve(beans);
+            if (resolved == null || resolved.getScope() == null) {
+                return;
+            }
+            if (!"jakarta.enterprise.context.Dependent".equals(resolved.getScope().getName())) {
+                return;
+            }
+            trackedDependentInstances().add(instance);
+        } catch (Throwable ignored) {
+            // Tracking is best-effort only.
+        }
+    }
+
+    private Set<Object> trackedDependentInstances() {
+        if (trackedDependentInstances == null) {
+            trackedDependentInstances = createIdentitySet();
+        }
+        return trackedDependentInstances;
+    }
+
+    private Set<Object> createIdentitySet() {
+        return Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
     }
 }

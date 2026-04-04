@@ -599,6 +599,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         // Resolve constructor parameters
         Parameter[] parameters = constructor.getParameters();
         Object[] args = new Object[parameters.length];
+        List<TransientInvocationArgument> transientArguments = new ArrayList<TransientInvocationArgument>();
 
         for (int i = 0; i < parameters.length; i++) {
             InjectionPoint injectionPoint = findInjectionPoint(parameters[i]);
@@ -624,19 +625,31 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             if (args[i] == null && parameters[i].getType().isPrimitive()) {
                 args[i] = defaultPrimitiveValue(parameters[i].getType());
             }
+            if (args[i] != null &&
+                    isTransientReferenceInjectionPoint(injectionPoint, parameters[i].getAnnotations())) {
+                transientArguments.add(new TransientInvocationArgument(
+                        args[i],
+                        parameters[i].getType(),
+                        qualifiersAsArray(injectionPoint, parameters[i].getAnnotations())
+                ));
+            }
         }
 
-        // PHASE 3: Check for @AroundConstruct interceptors
-        if (constructorInterceptorChain != null) {
-            // Invoke constructor interceptor chain
-            // The chain will execute all @AroundConstruct interceptors, then invoke the actual constructor
-            Object result = constructorInterceptorChain.invoke(null, constructor, args);
-            @SuppressWarnings("unchecked")
-            T resultT = (T) result;
-            return resultT;
-        } else {
-            // No constructor interceptors, invoke directly
-            return constructor.newInstance(args);
+        try {
+            // PHASE 3: Check for @AroundConstruct interceptors
+            if (constructorInterceptorChain != null) {
+                // Invoke constructor interceptor chain
+                // The chain will execute all @AroundConstruct interceptors, then invoke the actual constructor
+                Object result = constructorInterceptorChain.invoke(null, constructor, args);
+                @SuppressWarnings("unchecked")
+                T resultT = (T) result;
+                return resultT;
+            } else {
+                // No constructor interceptors, invoke directly
+                return constructor.newInstance(args);
+            }
+        } finally {
+            destroyTransientInvocationArguments(transientArguments);
         }
     }
 
@@ -720,6 +733,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 method.setAccessible(true);
                 Parameter[] parameters = method.getParameters();
                 Object[] args = new Object[parameters.length];
+                List<TransientInvocationArgument> transientArguments =
+                        new ArrayList<TransientInvocationArgument>();
 
                 for (int i = 0; i < parameters.length; i++) {
                     InjectionPoint injectionPoint = findInjectionPoint(parameters[i]);
@@ -745,10 +760,130 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                     if (args[i] == null && parameters[i].getType().isPrimitive()) {
                         args[i] = defaultPrimitiveValue(parameters[i].getType());
                     }
+                    if (args[i] != null &&
+                            isTransientReferenceInjectionPoint(injectionPoint, parameters[i].getAnnotations())) {
+                        transientArguments.add(new TransientInvocationArgument(
+                                args[i],
+                                parameters[i].getType(),
+                                qualifiersAsArray(injectionPoint, parameters[i].getAnnotations())
+                        ));
+                    }
                 }
 
-                method.invoke(instance, args);
+                try {
+                    method.invoke(instance, args);
+                } finally {
+                    destroyTransientInvocationArguments(transientArguments);
+                }
             }
+        }
+    }
+
+    private boolean isTransientReferenceInjectionPoint(InjectionPoint injectionPoint, Annotation[] fallbackAnnotations) {
+        if (injectionPoint != null && injectionPoint.getAnnotated() != null &&
+                injectionPoint.getAnnotated().getAnnotations() != null) {
+            for (Annotation annotation : injectionPoint.getAnnotated().getAnnotations()) {
+                if (annotation != null &&
+                        AnnotationsEnum.hasTransientReferenceAnnotation(annotation.annotationType())) {
+                    return true;
+                }
+            }
+        }
+        if (fallbackAnnotations == null) {
+            return false;
+        }
+        for (Annotation annotation : fallbackAnnotations) {
+            if (annotation != null &&
+                    AnnotationsEnum.hasTransientReferenceAnnotation(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void destroyTransientInvocationArguments(List<TransientInvocationArgument> transientArguments) {
+        if (transientArguments == null || transientArguments.isEmpty()) {
+            return;
+        }
+        for (TransientInvocationArgument transientArgument : transientArguments) {
+            if (transientArgument == null || transientArgument.instance == null) {
+                continue;
+            }
+            try {
+                destroyTransientInvocationArgument(transientArgument);
+            } catch (Exception ignored) {
+                // Best-effort cleanup only.
+            }
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void destroyTransientInvocationArgument(TransientInvocationArgument argument) throws Exception {
+        if (argument == null || argument.instance == null) {
+            return;
+        }
+
+        BeanManager beanManager = null;
+        if (dependencyResolver instanceof BeanResolver) {
+            BeanManagerImpl owningBeanManager = ((BeanResolver) dependencyResolver).getOwningBeanManager();
+            if (owningBeanManager != null) {
+                if (owningBeanManager.destroyOwnedTransientReference(argument.instance)) {
+                    return;
+                }
+                beanManager = owningBeanManager;
+            }
+        }
+        if (beanManager == null && BeanManagerImpl.destroyTransientReference(argument.instance)) {
+            return;
+        }
+        try {
+            if (beanManager == null) {
+                beanManager = CDI.current().getBeanManager();
+            }
+            if (beanManager != null) {
+                Annotation[] qualifiers = extractQualifierAnnotations(argument.annotations);
+                Set<Bean<?>> beans = beanManager.getBeans(argument.type, qualifiers);
+                if (beans != null && !beans.isEmpty()) {
+                    Bean<?> resolved = beanManager.resolve(beans);
+                    if (resolved != null && AnnotationsEnum.hasDependentAnnotation(resolved.getScope())) {
+                        CreationalContext context = beanManager.createCreationalContext((Bean) resolved);
+                        ((Bean) resolved).destroy(argument.instance, context);
+                        return;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+            // Fallback below.
+        }
+
+        LifecycleMethodHelper.invokeLifecycleMethod(argument.instance, AnnotationsEnum.PRE_DESTROY);
+    }
+
+    private Annotation[] extractQualifierAnnotations(Annotation[] annotations) {
+        if (annotations == null || annotations.length == 0) {
+            return new Annotation[0];
+        }
+        Set<Annotation> qualifiers = new HashSet<Annotation>();
+        for (Annotation annotation : annotations) {
+            if (annotation == null || annotation.annotationType() == null) {
+                continue;
+            }
+            if (AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
+                qualifiers.add(annotation);
+            }
+        }
+        return qualifiers.toArray(new Annotation[qualifiers.size()]);
+    }
+
+    private static final class TransientInvocationArgument {
+        private final Object instance;
+        private final Class<?> type;
+        private final Annotation[] annotations;
+
+        private TransientInvocationArgument(Object instance, Class<?> type, Annotation[] annotations) {
+            this.instance = instance;
+            this.type = type;
+            this.annotations = annotations == null ? new Annotation[0] : annotations.clone();
         }
     }
 

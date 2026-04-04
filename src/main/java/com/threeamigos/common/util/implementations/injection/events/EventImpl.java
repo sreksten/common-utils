@@ -9,6 +9,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.SessionScope
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
+import com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
@@ -33,6 +34,7 @@ import jakarta.enterprise.event.ObserverException;
 import jakarta.enterprise.event.Reception;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.enterprise.inject.spi.*;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
@@ -1426,6 +1428,9 @@ public class EventImpl<T> implements Event<T> {
             if (i == observedParameterPosition) {
                 continue;
             }
+            if (cleanupDependentInstancesFromProgrammaticLookup(parameter, arg)) {
+                continue;
+            }
             if (!isDependentParameter(parameter)) {
                 continue;
             }
@@ -1433,6 +1438,23 @@ public class EventImpl<T> implements Event<T> {
                 LifecycleMethodHelper.invokeLifecycleMethod(arg, PRE_DESTROY);
             }
         }
+    }
+
+    private boolean cleanupDependentInstancesFromProgrammaticLookup(Parameter parameter, Object arg) {
+        if (parameter == null || arg == null) {
+            return false;
+        }
+
+        Class<?> parameterType = parameter.getType();
+        if (parameterType == null || !Instance.class.isAssignableFrom(parameterType)) {
+            return false;
+        }
+
+        if (arg instanceof InstanceImpl<?>) {
+            ((InstanceImpl<?>) arg).destroyTrackedDependentInstances();
+            return true;
+        }
+        return false;
     }
 
     private void destroyDependentObserverReceiver(Object beanInstance, Method method, Bean<?> declaringBean) throws Exception {

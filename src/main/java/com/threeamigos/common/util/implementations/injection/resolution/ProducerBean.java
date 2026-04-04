@@ -4,6 +4,7 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
 
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -309,6 +310,7 @@ public class ProducerBean<T> implements Bean<T> {
             return produced;
         } finally {
             if (invocationSucceeded && produced != null) {
+                destroyTransientProducerMethodParameters(parameters, args);
                 trackDependentProducerParametersForProducedInstance(parameters, args, produced);
             } else {
                 destroyDependentInvocationParameters(parameters, args, false);
@@ -564,6 +566,9 @@ public class ProducerBean<T> implements Bean<T> {
             if (!isDependentParameter(parameter)) {
                 continue;
             }
+            if (isTransientReferenceParameter(parameter)) {
+                continue;
+            }
             tracked.add(new TrackedDependentArgument(
                     arg,
                     parameter.getType(),
@@ -594,8 +599,23 @@ public class ProducerBean<T> implements Bean<T> {
             return;
         }
 
+        BeanManager beanManager = null;
+        if (dependencyResolver instanceof BeanResolver) {
+            BeanManagerImpl owningBeanManager = ((BeanResolver) dependencyResolver).getOwningBeanManager();
+            if (owningBeanManager != null) {
+                if (owningBeanManager.destroyOwnedTransientReference(argument.instance)) {
+                    return;
+                }
+                beanManager = owningBeanManager;
+            }
+        }
+        if (beanManager == null && BeanManagerImpl.destroyTransientReference(argument.instance)) {
+            return;
+        }
         try {
-            BeanManager beanManager = jakarta.enterprise.inject.spi.CDI.current().getBeanManager();
+            if (beanManager == null) {
+                beanManager = jakarta.enterprise.inject.spi.CDI.current().getBeanManager();
+            }
             Annotation[] qualifiers = extractQualifiers(argument.annotations);
             Set<Bean<?>> beans = beanManager.getBeans(argument.type, qualifiers);
             if (beans != null && !beans.isEmpty()) {
@@ -611,6 +631,42 @@ public class ProducerBean<T> implements Bean<T> {
         }
 
         LifecycleMethodHelper.invokeLifecycleMethod(argument.instance, PRE_DESTROY);
+    }
+
+    private void destroyTransientProducerMethodParameters(Parameter[] parameters, Object[] args) throws Exception {
+        for (int i = 0; i < parameters.length; i++) {
+            if (i >= args.length) {
+                break;
+            }
+            Parameter parameter = parameters[i];
+            Object arg = args[i];
+            if (arg == null) {
+                continue;
+            }
+            if (!isTransientReferenceParameter(parameter)) {
+                continue;
+            }
+            if (!isDependentParameter(parameter)) {
+                continue;
+            }
+            destroyDependentArgument(new TrackedDependentArgument(
+                    arg,
+                    parameter.getType(),
+                    parameter.getAnnotations()
+            ));
+        }
+    }
+
+    private boolean isTransientReferenceParameter(Parameter parameter) {
+        if (parameter == null) {
+            return false;
+        }
+        for (Annotation annotation : parameter.getAnnotations()) {
+            if (annotation != null && hasTransientReferenceAnnotation(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Annotation[] extractQualifiers(Annotation[] annotations) {
