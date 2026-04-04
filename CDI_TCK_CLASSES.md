@@ -111,14 +111,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.event.eventTypes.EventTypesTest
 - [x] org.jboss.cdi.tck.tests.event.fires.FireEventTest
 - [x] org.jboss.cdi.tck.tests.event.fires.nonbinding.NonBindingTypePassedToFireTest
-- [ ] org.jboss.cdi.tck.tests.event.fires.sync.FireSyncEventTest
-- [ ] org.jboss.cdi.tck.tests.event.implicit.ImplicitEventTest
-- [ ] org.jboss.cdi.tck.tests.event.lifecycle.StartupShutdownTest
-- [ ] org.jboss.cdi.tck.tests.event.metadata.EventMetadataTest
-- [ ] org.jboss.cdi.tck.tests.event.metadata.broken.initializer.InvalidEventMetadataInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.event.metadata.injectionpoint.EventMetadataInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.ObserverNotificationTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.abortProcessing.ObserverExceptionAbortsProcessingTest
+- [x] org.jboss.cdi.tck.tests.event.fires.sync.FireSyncEventTest
+- [x] org.jboss.cdi.tck.tests.event.implicit.ImplicitEventTest
+- [x] org.jboss.cdi.tck.tests.event.lifecycle.StartupShutdownTest
+- [x] org.jboss.cdi.tck.tests.event.metadata.EventMetadataTest
+- [x] org.jboss.cdi.tck.tests.event.metadata.broken.initializer.InvalidEventMetadataInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.event.metadata.injectionpoint.EventMetadataInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.event.observer.ObserverNotificationTest
+- [x] org.jboss.cdi.tck.tests.event.observer.abortProcessing.ObserverExceptionAbortsProcessingTest
 - [ ] org.jboss.cdi.tck.tests.event.observer.abortProcessing.orderedObservers.ExceptionInOrderedObserversAbortsProcessingTest
 - [ ] org.jboss.cdi.tck.tests.event.observer.async.basic.MixedObserversTest
 - [ ] org.jboss.cdi.tck.tests.event.observer.async.executor.FireAsyncWithCustomExecutorTest

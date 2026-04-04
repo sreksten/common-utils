@@ -20,6 +20,8 @@ import jakarta.decorator.Decorator;
 import jakarta.decorator.Delegate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
@@ -41,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName( "21 - Events in CDI full test")
+@Execution(ExecutionMode.SAME_THREAD)
 public class EventsInCDIFullTest {
     private static final Class<?>[] FIXTURE_CLASSES = new Class<?>[]{
             SessionBeanInjectingEvent.class,

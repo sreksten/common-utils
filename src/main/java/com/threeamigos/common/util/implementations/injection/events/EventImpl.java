@@ -12,6 +12,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanReso
 import com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
@@ -37,6 +38,10 @@ import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.util.TypeLiteral;
 
+import java.io.InvalidObjectException;
+import java.io.NotSerializableException;
+import java.io.ObjectStreamException;
+import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -101,7 +106,9 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
  * @see jakarta.enterprise.event.ObservesAsync
  * @see ObserverMethodInfo
  */
-public class EventImpl<T> implements Event<T> {
+public class EventImpl<T> implements Event<T>, Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final Type eventType;
     private final Set<Annotation> qualifiers;
@@ -1249,12 +1256,13 @@ public class EventImpl<T> implements Event<T> {
     @SuppressWarnings("unchecked")
     private void invokeObserver(ObserverMethodInfo observerInfo, Object event) {
         try {
+            Type metadataType = resolveMetadataType(event);
             // Check if this is a synthetic observer (registered via AfterBeanDiscovery.addObserverMethod())
             if (observerInfo.isSynthetic()) {
                 // Invoke the synthetic observer's notify() method
                 ObserverMethod syntheticObserver = observerInfo.getSyntheticObserver();
                 final Object eventPayload = event;
-                final EventMetadata metadata = new EventMetadataImpl(qualifiers, firingInjectionPoint, eventPayload.getClass());
+                final EventMetadata metadata = new EventMetadataImpl(qualifiers, firingInjectionPoint, metadataType);
                 syntheticObserver.notify(new EventContext<Object>() {
                     @Override
                     public Object getEvent() {
@@ -1285,7 +1293,7 @@ public class EventImpl<T> implements Event<T> {
                 if (i == observedParameterPosition) {
                     args[i] = event;
                 } else if (EventMetadata.class.equals(param.getType())) {
-                    args[i] = new EventMetadataImpl(qualifiers, firingInjectionPoint, event.getClass());
+                    args[i] = new EventMetadataImpl(qualifiers, firingInjectionPoint, metadataType);
                 } else {
                     // Other parameters are injection points - resolve them
                     InjectionPoint registeredInjectionPoint =
@@ -1377,6 +1385,33 @@ public class EventImpl<T> implements Event<T> {
         } catch (Exception e) {
             throw toRuntimeObserverFailure(e);
         }
+    }
+
+    private Type resolveMetadataType(Object event) {
+        Class<?> runtimeType = event.getClass();
+        Set<Type> dispatchTypes = getResolvedEventDispatchTypes(event);
+        Type fallbackMatch = null;
+
+        for (Type dispatchType : dispatchTypes) {
+            Class<?> dispatchRawType = RawTypeExtractor.getRawType(dispatchType);
+            if (!runtimeType.equals(dispatchRawType)) {
+                continue;
+            }
+            if (dispatchType instanceof Class<?>) {
+                if (fallbackMatch == null) {
+                    fallbackMatch = dispatchType;
+                }
+                continue;
+            }
+            if (!containsUnresolvableTypeVariable(dispatchType)) {
+                return dispatchType;
+            }
+            if (fallbackMatch == null) {
+                fallbackMatch = dispatchType;
+            }
+        }
+
+        return fallbackMatch != null ? fallbackMatch : runtimeType;
     }
 
     private RuntimeException toRuntimeObserverFailure(Throwable throwable) {
@@ -1931,6 +1966,90 @@ public class EventImpl<T> implements Event<T> {
         }
     }
 
+    private Object writeReplace() throws ObjectStreamException {
+        String beanManagerId = resolveBeanManagerId();
+        if (beanManagerId == null) {
+            throw new NotSerializableException("Cannot serialize Event - no registered BeanManager available");
+        }
+        return new SerializedEventReference(
+                makeSerializableType(eventType),
+                new LinkedHashSet<Annotation>(qualifiers),
+                allowStartupEventDispatch,
+                beanManagerId
+        );
+    }
+
+    private String resolveBeanManagerId() {
+        BeanManagerImpl owningBeanManager = beanResolver.getOwningBeanManager();
+        if (owningBeanManager != null) {
+            return owningBeanManager.getBeanManagerId();
+        }
+
+        BeanManagerImpl byContextClassLoader =
+                BeanManagerImpl.getRegisteredBeanManager(Thread.currentThread().getContextClassLoader());
+        if (byContextClassLoader != null) {
+            return byContextClassLoader.getBeanManagerId();
+        }
+
+        BeanManagerImpl byEventClassLoader =
+                BeanManagerImpl.getRegisteredBeanManager(EventImpl.class.getClassLoader());
+        if (byEventClassLoader != null) {
+            return byEventClassLoader.getBeanManagerId();
+        }
+
+        return null;
+    }
+
+    private Type makeSerializableType(Type type) throws NotSerializableException {
+        if (type == null || type instanceof Class<?>) {
+            return type;
+        }
+
+        if (type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+            Type rawType = makeSerializableType(parameterizedType.getRawType());
+            Type ownerType = makeSerializableType(parameterizedType.getOwnerType());
+            Type[] originalArguments = parameterizedType.getActualTypeArguments();
+            Type[] serializableArguments = new Type[originalArguments.length];
+            for (int i = 0; i < originalArguments.length; i++) {
+                serializableArguments[i] = makeSerializableType(originalArguments[i]);
+            }
+            return new SerializableParameterizedType(rawType, ownerType, serializableArguments);
+        }
+
+        if (type instanceof GenericArrayType) {
+            Type componentType = ((GenericArrayType) type).getGenericComponentType();
+            return new SerializableGenericArrayType(makeSerializableType(componentType));
+        }
+
+        if (type instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) type;
+            Type[] upperBounds = wildcardType.getUpperBounds();
+            Type[] lowerBounds = wildcardType.getLowerBounds();
+            Type[] serializableUpperBounds = new Type[upperBounds.length];
+            Type[] serializableLowerBounds = new Type[lowerBounds.length];
+            for (int i = 0; i < upperBounds.length; i++) {
+                serializableUpperBounds[i] = makeSerializableType(upperBounds[i]);
+            }
+            for (int i = 0; i < lowerBounds.length; i++) {
+                serializableLowerBounds[i] = makeSerializableType(lowerBounds[i]);
+            }
+            return new SerializableWildcardType(serializableUpperBounds, serializableLowerBounds);
+        }
+
+        if (type instanceof TypeVariable<?>) {
+            throw new NotSerializableException(
+                    "Cannot serialize Event with unresolved type variable: " + type.getTypeName());
+        }
+
+        if (type instanceof Serializable) {
+            return type;
+        }
+
+        throw new NotSerializableException(
+                "Cannot serialize Event with unsupported type representation: " + type.getTypeName());
+    }
+
     private static final class EventMetadataImpl implements EventMetadata {
         private final Set<Annotation> qualifiers;
         private final InjectionPoint injectionPoint;
@@ -1955,6 +2074,168 @@ public class EventImpl<T> implements Event<T> {
         @Override
         public Type getType() {
             return type;
+        }
+    }
+
+    private static final class SerializedEventReference implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final Type eventType;
+        private final Set<Annotation> qualifiers;
+        private final boolean allowStartupEventDispatch;
+        private final String beanManagerId;
+
+        private SerializedEventReference(Type eventType,
+                                         Set<Annotation> qualifiers,
+                                         boolean allowStartupEventDispatch,
+                                         String beanManagerId) {
+            this.eventType = eventType;
+            this.qualifiers = qualifiers;
+            this.allowStartupEventDispatch = allowStartupEventDispatch;
+            this.beanManagerId = beanManagerId;
+        }
+
+        private Object readResolve() throws ObjectStreamException {
+            BeanManagerImpl beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+            if (beanManager == null) {
+                beanManager = BeanManagerImpl.getRegisteredBeanManager(Thread.currentThread().getContextClassLoader());
+            }
+            if (beanManager == null) {
+                beanManager = BeanManagerImpl.getRegisteredBeanManager(EventImpl.class.getClassLoader());
+            }
+            if (beanManager == null) {
+                throw new InvalidObjectException(
+                        "Cannot restore Event - no registered BeanManager available for id " + beanManagerId);
+            }
+
+            Set<Annotation> restoredQualifiers = qualifiers == null
+                    ? Collections.<Annotation>emptySet()
+                    : qualifiers;
+
+            return new EventImpl<Object>(
+                    eventType,
+                    new LinkedHashSet<Annotation>(restoredQualifiers),
+                    beanManager.getKnowledgeBase(),
+                    beanManager.getBeanResolver(),
+                    beanManager.getContextManager(),
+                    beanManager.getBeanResolver().getTransactionServices(),
+                    null,
+                    null,
+                    allowStartupEventDispatch
+            );
+        }
+    }
+
+    private static final class SerializableParameterizedType implements ParameterizedType, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final Type rawType;
+        private final Type ownerType;
+        private final Type[] actualTypeArguments;
+
+        private SerializableParameterizedType(Type rawType, Type ownerType, Type[] actualTypeArguments) {
+            this.rawType = rawType;
+            this.ownerType = ownerType;
+            this.actualTypeArguments = actualTypeArguments.clone();
+        }
+
+        @Override
+        public Type[] getActualTypeArguments() {
+            return actualTypeArguments.clone();
+        }
+
+        @Override
+        public Type getRawType() {
+            return rawType;
+        }
+
+        @Override
+        public Type getOwnerType() {
+            return ownerType;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof ParameterizedType)) {
+                return false;
+            }
+            ParameterizedType that = (ParameterizedType) other;
+            return Objects.equals(rawType, that.getRawType())
+                    && Objects.equals(ownerType, that.getOwnerType())
+                    && Arrays.equals(actualTypeArguments, that.getActualTypeArguments());
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(actualTypeArguments)
+                    ^ Objects.hashCode(ownerType)
+                    ^ Objects.hashCode(rawType);
+        }
+    }
+
+    private static final class SerializableGenericArrayType implements GenericArrayType, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final Type componentType;
+
+        private SerializableGenericArrayType(Type componentType) {
+            this.componentType = componentType;
+        }
+
+        @Override
+        public Type getGenericComponentType() {
+            return componentType;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof GenericArrayType)) {
+                return false;
+            }
+            GenericArrayType that = (GenericArrayType) other;
+            return Objects.equals(componentType, that.getGenericComponentType());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(componentType);
+        }
+    }
+
+    private static final class SerializableWildcardType implements WildcardType, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final Type[] upperBounds;
+        private final Type[] lowerBounds;
+
+        private SerializableWildcardType(Type[] upperBounds, Type[] lowerBounds) {
+            this.upperBounds = upperBounds.clone();
+            this.lowerBounds = lowerBounds.clone();
+        }
+
+        @Override
+        public Type[] getUpperBounds() {
+            return upperBounds.clone();
+        }
+
+        @Override
+        public Type[] getLowerBounds() {
+            return lowerBounds.clone();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof WildcardType)) {
+                return false;
+            }
+            WildcardType that = (WildcardType) other;
+            return Arrays.equals(upperBounds, that.getUpperBounds())
+                    && Arrays.equals(lowerBounds, that.getLowerBounds());
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(upperBounds) ^ Arrays.hashCode(lowerBounds);
         }
     }
 
