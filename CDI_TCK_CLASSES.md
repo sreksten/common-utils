@@ -79,14 +79,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.definition.scope.inOtherBda.ScopeDefinedInOtherBDATest
 - [x] org.jboss.cdi.tck.tests.definition.stereotype.StereotypeDefinitionTest
 - [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.ConflictingPrioritiesFromSingleStereotypeTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.ConflictingPriorityStereotypesTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.inherited.StereotypeInheritedPriorityConflictTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.nonEmptyNamed.NonEmptyNamedTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.scopeConflict.IncompatibleStereotypesTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.scopeConflict.transitive.TransitiveIncompatibleStereotypesTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.tooManyScopes.TooManyScopeTypesTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.withBindingType.StereoTypeWithBindingTypesTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.inheritance.StereotypeInheritenceTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.ConflictingPriorityStereotypesTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.inherited.StereotypeInheritedPriorityConflictTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.nonEmptyNamed.NonEmptyNamedTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.scopeConflict.IncompatibleStereotypesTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.scopeConflict.transitive.TransitiveIncompatibleStereotypesTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.tooManyScopes.TooManyScopeTypesTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.withBindingType.StereoTypeWithBindingTypesTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.inheritance.StereotypeInheritenceTest
 - [ ] org.jboss.cdi.tck.tests.definition.stereotype.interceptor.StereotypeWithMultipleInterceptorBindingsTest
 - [ ] org.jboss.cdi.tck.tests.definition.stereotype.named.DefaultNamedTest
 - [ ] org.jboss.cdi.tck.tests.definition.stereotype.priority.StereotypeWithPriorityTest
