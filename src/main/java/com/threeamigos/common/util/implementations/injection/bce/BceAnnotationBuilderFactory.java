@@ -52,9 +52,26 @@ final class BceAnnotationBuilderFactory implements AnnotationBuilderFactory {
             if ("build".equals(methodName)) {
                 return BceMetadata.annotationInfo(buildAnnotationProxy());
             }
-            if ("member".equals(methodName) && args != null && args.length == 2) {
-                members.put((String) args[0], normalizeValue(args[1]));
-                return proxy;
+            if ("member".equals(methodName) && args != null) {
+                if (args.length == 2) {
+                    members.put((String) args[0], normalizeValue(args[1]));
+                    return proxy;
+                }
+                if (args.length == 3 && args[1] instanceof Class && args[2] instanceof String) {
+                    @SuppressWarnings("unchecked")
+                    Class<? extends Enum> enumClass = (Class<? extends Enum>) args[1];
+                    Object enumValue = Enum.valueOf(enumClass, (String) args[2]);
+                    members.put((String) args[0], normalizeValue(enumValue));
+                    return proxy;
+                }
+                if (args.length == 3 && args[1] instanceof ClassInfo && args[2] instanceof String) {
+                    Class<?> enumClass = BceMetadata.unwrapClassInfo((ClassInfo) args[1]);
+                    @SuppressWarnings("unchecked")
+                    Class<? extends Enum> castEnumClass = (Class<? extends Enum>) enumClass;
+                    Object enumValue = Enum.valueOf(castEnumClass, (String) args[2]);
+                    members.put((String) args[0], normalizeValue(enumValue));
+                    return proxy;
+                }
             }
             if ("value".equals(methodName) && args != null && args.length >= 1) {
                 Object value;

@@ -77,6 +77,7 @@ public class BuildCompatibleExtensionRunner {
     private final Messages messages;
     private final MetaAnnotations metaAnnotations;
     private final ScannedClasses scannedClasses;
+    private final Map<Method, Set<String>> deliveredRegistrationModels = new HashMap<Method, Set<String>>();
 
     public BuildCompatibleExtensionRunner(MessageHandler messageHandler,
                                           KnowledgeBase knowledgeBase,
@@ -128,6 +129,12 @@ public class BuildCompatibleExtensionRunner {
 
         if (enhancementModelState != null) {
             applyEnhancementModelState(enhancementModelState);
+        }
+
+        if (phase == BceSupportedPhase.SYNTHESIS && !invocations.isEmpty()) {
+            synchronized (deliveredRegistrationModels) {
+                deliveredRegistrationModels.clear();
+            }
         }
 
         if (syntheticComponents != null) {
@@ -530,6 +537,49 @@ public class BuildCompatibleExtensionRunner {
                 method.getDeclaringClass().getName() + "." + method.getName() +
                 ": at most one model parameter is allowed from {BeanInfo, ObserverInfo, InterceptorInfo, InjectionPointInfo, DisposerInfo, ScopeInfo, StereotypeInfo}.");
         }
+        if (phase == BceSupportedPhase.REGISTRATION && modelCount == 0 &&
+            !isRegistrationWithoutModelAllowed(method, seenInvokerFactory, seenContext, seenBuildServices,
+                seenTypes, seenMessages)) {
+            throw new DefinitionException("Invalid BCE " + phase + " method " +
+                method.getDeclaringClass().getName() + "." + method.getName() +
+                ": exactly one model parameter is required from {BeanInfo, ObserverInfo, InterceptorInfo, InjectionPointInfo, DisposerInfo, ScopeInfo, StereotypeInfo}.");
+        }
+    }
+
+    private boolean isRegistrationWithoutModelAllowed(Method method,
+                                                      boolean seenInvokerFactory,
+                                                      boolean seenContext,
+                                                      boolean seenBuildServices,
+                                                      boolean seenTypes,
+                                                      boolean seenMessages) {
+        // Service-driven registration callbacks are allowed without a direct model parameter.
+        if (seenInvokerFactory || seenContext || seenBuildServices) {
+            return true;
+        }
+
+        Registration registration = getRegistrationAnnotation(method);
+        Class<?>[] acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
+        boolean objectFiltered = containsObjectRegistrationType(acceptedTypes);
+
+        // Parameterless registration callback is only meaningful as a broad registration checkpoint.
+        if (!seenTypes && !seenMessages) {
+            return objectFiltered;
+        }
+
+        // Types/Messages-only signatures are accepted only for broad Object-filtered registration callbacks.
+        return objectFiltered;
+    }
+
+    private boolean containsObjectRegistrationType(Class<?>[] acceptedTypes) {
+        if (acceptedTypes == null || acceptedTypes.length == 0) {
+            return false;
+        }
+        for (Class<?> acceptedType : acceptedTypes) {
+            if (Object.class.equals(acceptedType)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Nonnull
@@ -593,6 +643,9 @@ public class BuildCompatibleExtensionRunner {
         if (isObserverInfo(modelType)) {
             List<ObserverInfo> observers = collectObserverInfosForPhase(phaseMethod, phase);
             for (ObserverInfo observerInfo : observers) {
+                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(observerInfo))) {
+                    continue;
+                }
                 invokeRegistrationOrValidationForModel(invocation, phase, null, observerInfo, null, null, null, null, null);
             }
             return;
@@ -600,6 +653,9 @@ public class BuildCompatibleExtensionRunner {
         if (isInterceptorInfo(modelType)) {
             List<InterceptorInfo> interceptors = collectInterceptorInfosForPhase(phaseMethod, phase);
             for (InterceptorInfo interceptorInfo : interceptors) {
+                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(interceptorInfo))) {
+                    continue;
+                }
                 invokeRegistrationOrValidationForModel(invocation, phase, null, null, interceptorInfo, null, null, null, null);
             }
             return;
@@ -607,6 +663,9 @@ public class BuildCompatibleExtensionRunner {
         if (isBeanInfo(modelType)) {
             List<BeanInfo> beans = collectBeanInfosForPhase(phaseMethod, phase);
             for (BeanInfo beanInfo : beans) {
+                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(beanInfo))) {
+                    continue;
+                }
                 invokeRegistrationOrValidationForModel(invocation, phase, beanInfo, null, null, null, null, null, null);
             }
             return;
@@ -614,6 +673,9 @@ public class BuildCompatibleExtensionRunner {
         if (isInjectionPointInfo(modelType)) {
             List<InjectionPointInfo> injectionPoints = collectInjectionPointInfosForPhase(phaseMethod, phase);
             for (InjectionPointInfo injectionPointInfo : injectionPoints) {
+                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(injectionPointInfo))) {
+                    continue;
+                }
                 invokeRegistrationOrValidationForModel(
                     invocation, phase, null, null, null, injectionPointInfo, null, null, null);
             }
@@ -622,6 +684,9 @@ public class BuildCompatibleExtensionRunner {
         if (isDisposerInfo(modelType)) {
             List<DisposerInfo> disposers = collectDisposerInfosForPhase(phaseMethod, phase);
             for (DisposerInfo disposerInfo : disposers) {
+                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(disposerInfo))) {
+                    continue;
+                }
                 invokeRegistrationOrValidationForModel(
                     invocation, phase, null, null, null, null, disposerInfo, null, null);
             }
@@ -630,6 +695,9 @@ public class BuildCompatibleExtensionRunner {
         if (isScopeInfo(modelType)) {
             List<ScopeInfo> scopes = collectScopeInfosForPhase(phaseMethod, phase);
             for (ScopeInfo scopeInfo : scopes) {
+                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(scopeInfo))) {
+                    continue;
+                }
                 invokeRegistrationOrValidationForModel(
                     invocation, phase, null, null, null, null, null, scopeInfo, null);
             }
@@ -638,6 +706,9 @@ public class BuildCompatibleExtensionRunner {
         if (isStereotypeInfo(modelType)) {
             List<StereotypeInfo> stereotypes = collectStereotypeInfosForPhase(phaseMethod, phase);
             for (StereotypeInfo stereotypeInfo : stereotypes) {
+                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(stereotypeInfo))) {
+                    continue;
+                }
                 invokeRegistrationOrValidationForModel(
                     invocation, phase, null, null, null, null, null, null, stereotypeInfo);
             }
@@ -646,7 +717,8 @@ public class BuildCompatibleExtensionRunner {
 
     private List<BeanInfo> collectBeanInfosForPhase(Method phaseMethod,
                                                     BceSupportedPhase phase) {
-        List<BeanInfo> beans = new ArrayList<>();
+        List<BeanInfo> beans = new ArrayList<BeanInfo>();
+        Set<String> seenModelKeys = new LinkedHashSet<String>();
         if (phase == BceSupportedPhase.REGISTRATION) {
             Registration registration = getRegistrationAnnotation(phaseMethod);
             Class<?>[] acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
@@ -657,7 +729,19 @@ public class BuildCompatibleExtensionRunner {
                 if (acceptedTypes.length > 0 && !isBeanAcceptedByRegistrationTypes(bean, acceptedTypes)) {
                     continue;
                 }
-                beans.add(BceMetadata.beanInfo(bean.getBeanClass()));
+                BeanInfo beanInfo = BceMetadata.beanInfo(bean);
+                if (acceptedTypes.length > 0 && !isBeanInfoAcceptedByRegistrationTypes(beanInfo, acceptedTypes)) {
+                    continue;
+                }
+                if (seenModelKeys.add(registrationModelKey(beanInfo))) {
+                    beans.add(beanInfo);
+                }
+            }
+            for (InterceptorInfo interceptorInfo : collectInterceptorInfosForPhase(phaseMethod, phase)) {
+                BeanInfo beanInfo = (BeanInfo) interceptorInfo;
+                if (seenModelKeys.add(registrationModelKey(beanInfo))) {
+                    beans.add(beanInfo);
+                }
             }
         } else {
             for (Class<?> clazz : knowledgeBase.getClasses()) {
@@ -834,6 +918,92 @@ public class BuildCompatibleExtensionRunner {
         return "Z:" + injectionPointInfo.declaration().kind().name();
     }
 
+    private boolean shouldDeliverRegistrationModel(Method phaseMethod,
+                                                   BceSupportedPhase phase,
+                                                   String modelKey) {
+        if (phase != BceSupportedPhase.REGISTRATION) {
+            return true;
+        }
+        synchronized (deliveredRegistrationModels) {
+            Set<String> delivered = deliveredRegistrationModels.get(phaseMethod);
+            if (delivered == null) {
+                delivered = new LinkedHashSet<String>();
+                deliveredRegistrationModels.put(phaseMethod, delivered);
+            }
+            return delivered.add(modelKey);
+        }
+    }
+
+    private String registrationModelKey(BeanInfo beanInfo) {
+        if (beanInfo == null) {
+            return "bean:null";
+        }
+        if (beanInfo.isProducerMethod() && beanInfo.producerMethod() != null) {
+            return "bean:producer-method:" +
+                beanInfo.producerMethod().declaringClass().name() + "#" + beanInfo.producerMethod().name() +
+                "|q=" + qualifierKey(beanInfo.qualifiers());
+        }
+        if (beanInfo.isProducerField() && beanInfo.producerField() != null) {
+            return "bean:producer-field:" +
+                beanInfo.producerField().declaringClass().name() + "#" + beanInfo.producerField().name() +
+                "|q=" + qualifierKey(beanInfo.qualifiers());
+        }
+        String declaring = beanInfo.declaringClass() != null ? beanInfo.declaringClass().name() : "unknown";
+        return "bean:class:" + declaring + "|q=" + qualifierKey(beanInfo.qualifiers());
+    }
+
+    private String registrationModelKey(ObserverInfo observerInfo) {
+        if (observerInfo == null) {
+            return "observer:null";
+        }
+        String declaring = observerInfo.declaringClass() != null ? observerInfo.declaringClass().name() : "unknown";
+        String method = observerInfo.observerMethod() != null ? observerInfo.observerMethod().name() : "unknown";
+        String eventType = observerInfo.eventType() != null ? observerInfo.eventType().toString() : "unknown";
+        return "observer:" + declaring + "#" + method + ":" + eventType;
+    }
+
+    private String registrationModelKey(InterceptorInfo interceptorInfo) {
+        if (interceptorInfo == null || interceptorInfo.declaringClass() == null) {
+            return "interceptor:null";
+        }
+        return "interceptor:" + interceptorInfo.declaringClass().name();
+    }
+
+    private String registrationModelKey(InjectionPointInfo injectionPointInfo) {
+        return "ip:" + injectionPointSortKey(injectionPointInfo);
+    }
+
+    private String registrationModelKey(DisposerInfo disposerInfo) {
+        return "disposer:" + disposerSortKey(disposerInfo);
+    }
+
+    private String registrationModelKey(ScopeInfo scopeInfo) {
+        if (scopeInfo == null || scopeInfo.annotation() == null) {
+            return "scope:null";
+        }
+        return "scope:" + scopeInfo.annotation().name();
+    }
+
+    private String registrationModelKey(StereotypeInfo stereotypeInfo) {
+        return "stereotype:" + stereotypeSortKey(stereotypeInfo);
+    }
+
+    private String qualifierKey(Collection<jakarta.enterprise.lang.model.AnnotationInfo> qualifiers) {
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            return "";
+        }
+        List<String> out = new ArrayList<String>();
+        for (jakarta.enterprise.lang.model.AnnotationInfo qualifier : qualifiers) {
+            if (qualifier == null) {
+                continue;
+            }
+            String name = qualifier.name() != null ? qualifier.name() : "";
+            out.add(name + "|" + qualifier.members().toString());
+        }
+        Collections.sort(out);
+        return String.join(",", out);
+    }
+
     private boolean isClassAcceptedByRegistrationTypes(Class<?> candidate, Class<?>[] acceptedTypes) {
         for (Class<?> acceptedType : acceptedTypes) {
             if (acceptedType.isAssignableFrom(candidate)) {
@@ -856,6 +1026,40 @@ public class BuildCompatibleExtensionRunner {
                 if (acceptedType.isAssignableFrom(beanTypeClass)) {
                     return true;
                 }
+            }
+        }
+        Class<?> beanClass = bean.getBeanClass();
+        if (beanClass != null && isClassAcceptedByRegistrationTypes(beanClass, acceptedTypes)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isBeanInfoAcceptedByRegistrationTypes(BeanInfo beanInfo, Class<?>[] acceptedTypes) {
+        if (beanInfo == null) {
+            return false;
+        }
+        Collection<jakarta.enterprise.lang.model.types.Type> modelTypes = beanInfo.types();
+        if (modelTypes != null) {
+            for (jakarta.enterprise.lang.model.types.Type modelType : modelTypes) {
+                try {
+                    Class<?> candidate = BceMetadata.unwrapType(modelType);
+                    if (isClassAcceptedByRegistrationTypes(candidate, acceptedTypes)) {
+                        return true;
+                    }
+                } catch (RuntimeException ignored) {
+                    // Best effort model filtering.
+                }
+            }
+        }
+        if (beanInfo.declaringClass() != null) {
+            try {
+                Class<?> declaringClass = BceMetadata.unwrapClassInfo(beanInfo.declaringClass());
+                if (isClassAcceptedByRegistrationTypes(declaringClass, acceptedTypes)) {
+                    return true;
+                }
+            } catch (RuntimeException ignored) {
+                // Best effort model filtering.
             }
         }
         return false;

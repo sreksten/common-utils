@@ -32,29 +32,35 @@ public class ApplicationScopedContext implements ScopeContext {
             throw new ContextNotActiveException("ApplicationScoped context is not active");
         }
 
-        return (T) instances.computeIfAbsent(bean, b -> {
-            if (creationalContext != null) {
-                creationalContexts.put(bean, creationalContext);
+        Object existing = instances.get(bean);
+        if (existing != null) {
+            return (T) existing;
+        }
+
+        synchronized (this) {
+            existing = instances.get(bean);
+            if (existing != null) {
+                return (T) existing;
             }
 
-            // Step 1: Create the actual bean instance (with full dependency injection and lifecycle callbacks)
+            // Create the contextual instance; explicit locking avoids nested computeIfAbsent
+            // recursion when bean creation triggers other ApplicationScoped bean lookups.
             T instance = bean.create(creationalContext);
 
-            // Step 2: PHASE 2 - Wrap with interceptor-aware proxy if bean has interceptors
-            // Check if this is a BeanImpl (our managed beans) and if it has interceptors configured
+            // PHASE 2 - Wrap with interceptor-aware proxy if bean has interceptors.
             if (bean instanceof BeanImpl) {
                 BeanImpl<T> beanImpl = (BeanImpl<T>) bean;
-
-                // If the bean has interceptors, wrap the instance with an interceptor-aware proxy
-                // The proxy will intercept method calls and execute the interceptor chain before
-                // delegating to the actual bean instance
                 if (beanImpl.hasInterceptors()) {
                     instance = beanImpl.createInterceptorAwareProxy(instance);
                 }
             }
 
+            if (creationalContext != null) {
+                creationalContexts.put(bean, creationalContext);
+            }
+            instances.put(bean, instance);
             return instance;
-        });
+        }
     }
 
     @Override

@@ -20,6 +20,8 @@ import jakarta.interceptor.InterceptorBinding;
 import jakarta.interceptor.InvocationContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -35,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("23.8 - InterceptionFactory interface")
+@Execution(ExecutionMode.SAME_THREAD)
 public class InterceptionFactoryInterfaceTest {
 
     @Test

@@ -337,6 +337,8 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         return new Handle<T>() {
             private T instance;
             private boolean destroyed = false;
+            private Bean<T> handleBean;
+            private CreationalContext<T> handleCreationalContext;
 
             @Override
             public T get() {
@@ -349,7 +351,30 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                     try {
                         @SuppressWarnings("unchecked")
                         Class<T> classToResolve = (Class<T>) beanClass;
-                        instance = strategy().resolveInstance(classToResolve, qualifiers);
+                        Bean<T> resolvedBean = null;
+                        Function<Class<? extends T>, Bean<? extends T>> lookup = InstanceImpl.this.beanLookup;
+                        if (lookup != null) {
+                            @SuppressWarnings("unchecked")
+                            Bean<T> lookupBean = (Bean<T>) lookup.apply(beanClass);
+                            resolvedBean = lookupBean;
+                        }
+
+                        BeanManagerImpl beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+                        if (resolvedBean != null &&
+                                beanManager != null &&
+                                (resolvedBean.getScope() == null ||
+                                        "jakarta.enterprise.context.Dependent".equals(resolvedBean.getScope().getName()))) {
+                            CreationalContext<T> creationalContext = beanManager.createCreationalContext(resolvedBean);
+                            @SuppressWarnings("unchecked")
+                            T resolvedInstance = (T) beanManager.getReference(resolvedBean, classToResolve, creationalContext);
+                            instance = resolvedInstance;
+                            handleBean = resolvedBean;
+                            handleCreationalContext = creationalContext;
+                        } else {
+                            instance = strategy().resolveInstance(classToResolve, qualifiers);
+                            handleBean = resolvedBean;
+                            handleCreationalContext = null;
+                        }
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to create instance of " + beanClass.getName(), e);
                     }
@@ -385,19 +410,12 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             public void destroy() {
                 if (!destroyed && instance != null) {
                     try {
-                        Bean<T> bean = null;
-                        Function<Class<? extends T>, Bean<? extends T>> lookup = InstanceImpl.this.beanLookup;
-                        if (lookup != null) {
-                            @SuppressWarnings("unchecked")
-                            Bean<T> resolvedBean = (Bean<T>) lookup.apply(beanClass);
-                            bean = resolvedBean;
-                        }
-
+                        Bean<T> bean = handleBean;
                         if (bean != null) {
                             @SuppressWarnings("unchecked")
                             jakarta.enterprise.context.spi.Contextual<T> contextual =
                                     (jakarta.enterprise.context.spi.Contextual<T>) bean;
-                            contextual.destroy(instance, null);
+                            contextual.destroy(instance, handleCreationalContext);
                         } else {
                             strategy().invokePreDestroy(instance);
                         }
@@ -405,6 +423,8 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                         throw new RuntimeException("Failed to destroy instance of " + beanClass.getName(), e);
                     }
                     instance = null;
+                    handleBean = null;
+                    handleCreationalContext = null;
                     destroyed = true;
                 }
                 // Per spec: multiple calls to destroy() are no-ops

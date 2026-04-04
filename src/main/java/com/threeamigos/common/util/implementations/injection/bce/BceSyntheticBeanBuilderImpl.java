@@ -14,11 +14,13 @@ import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanDisposer;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.types.Type;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Member;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -85,10 +87,11 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
             return this;
         }
         try {
-            Annotation annotation = qualifier.getDeclaredConstructor().newInstance();
+            Annotation annotation = BceMetadata.unwrapAnnotationInfo(
+                    new BceAnnotationBuilderFactory().create(qualifier).build());
             this.qualifiers.add(annotation);
             return this;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             throw new IllegalArgumentException("Cannot instantiate qualifier " + qualifier.getName() +
                 ". Use qualifier(Annotation) or qualifier(AnnotationInfo).", e);
         }
@@ -311,13 +314,17 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         final Map<String, Object> frozenParams = Collections.unmodifiableMap(new LinkedHashMap<>(params));
         final Class<? extends SyntheticBeanCreator<T>> frozenCreatorClass = creatorClass;
         final Class<? extends SyntheticBeanDisposer<T>> frozenDisposerClass = disposerClass;
+        final boolean fallbackInjectionPointForCreator = Dependent.class.equals(scope);
         final Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent =
                 Collections.synchronizedMap(new java.util.IdentityHashMap<CreationalContext<?>, java.util.List<DependentLookupInstance>>());
 
         Function<CreationalContext<T>, T> createCallback = ctx -> {
             try {
                 SyntheticBeanCreator<T> creator = frozenCreatorClass.getDeclaredConstructor().newInstance();
-                return creator.create(createLookup(ctx, dependentLookupsByParent), new BceParameters(frozenParams, invokerRegistry));
+                return creator.create(
+                        createLookup(ctx, dependentLookupsByParent, fallbackInjectionPointForCreator),
+                        new BceParameters(frozenParams, invokerRegistry)
+                );
             } catch (RuntimeException e) {
                 throw e;
             } catch (Exception e) {
@@ -370,7 +377,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
             destroyCallback = (instance, ctx) -> {
                 try {
                     SyntheticBeanDisposer<T> disposer = frozenDisposerClass.getDeclaredConstructor().newInstance();
-                    disposer.dispose(instance, createLookup(ctx, dependentLookupsByParent),
+                    disposer.dispose(instance, createLookup(ctx, dependentLookupsByParent, false),
                         new BceParameters(frozenParams, invokerRegistry));
                     releaseDependentLookups(ctx, dependentLookupsByParent);
                 } catch (RuntimeException e) {
@@ -389,13 +396,27 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private Instance<Object> createLookup(
             CreationalContext<?> parentContext,
-            Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent) {
+            Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent,
+            boolean fallbackInjectionPointWhenMissing) {
         return new com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl<>(
                 Object.class,
                 defaultQualifiers(),
                 new com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl.ResolutionStrategy<Object>() {
                     @Override
                     public Object resolveInstance(Class<Object> type, java.util.Collection<Annotation> quals) {
+                        if (InjectionPoint.class.equals(type)) {
+                            InjectionPoint current = beanManager.getBeanResolver() != null
+                                    ? beanManager.getBeanResolver().getCurrentInjectionPoint()
+                                    : null;
+                            if (current != null) {
+                                return current;
+                            }
+                            if (!fallbackInjectionPointWhenMissing) {
+                                return null;
+                            }
+                            return new LookupInjectionPoint(quals);
+                        }
+
                         Annotation[] qualifierArray = quals.toArray(new Annotation[0]);
                         java.util.Set<Bean<?>> beans = beanManager.getBeans(type, qualifierArray);
                         Bean<?> bean = beanManager.resolve(beans);
@@ -487,5 +508,50 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         qualifiers.add(Default.Literal.INSTANCE);
         qualifiers.add(Any.Literal.INSTANCE);
         return qualifiers;
+    }
+
+    private static final class LookupInjectionPoint implements InjectionPoint {
+        private final Set<Annotation> qualifiers;
+
+        private LookupInjectionPoint(java.util.Collection<Annotation> qualifiers) {
+            this.qualifiers = qualifiers == null
+                    ? Collections.emptySet()
+                    : Collections.unmodifiableSet(new LinkedHashSet<Annotation>(qualifiers));
+        }
+
+        @Override
+        public java.lang.reflect.Type getType() {
+            return Object.class;
+        }
+
+        @Override
+        public Set<Annotation> getQualifiers() {
+            return qualifiers;
+        }
+
+        @Override
+        public Bean<?> getBean() {
+            return null;
+        }
+
+        @Override
+        public Member getMember() {
+            return null;
+        }
+
+        @Override
+        public jakarta.enterprise.inject.spi.Annotated getAnnotated() {
+            return null;
+        }
+
+        @Override
+        public boolean isDelegate() {
+            return false;
+        }
+
+        @Override
+        public boolean isTransient() {
+            return false;
+        }
     }
 }

@@ -1,11 +1,16 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
 import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
+import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.DisposerInfo;
 import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
 import jakarta.enterprise.inject.build.compatible.spi.ScopeInfo;
 import jakarta.enterprise.inject.build.compatible.spi.StereotypeInfo;
+import jakarta.enterprise.inject.spi.AnnotatedParameter;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.AnnotationMember;
 import jakarta.enterprise.lang.model.AnnotationTarget;
@@ -53,6 +58,10 @@ public final class BceMetadata {
         return new ReflectionBeanInfo(beanClass);
     }
 
+    public static BeanInfo beanInfo(Bean<?> bean) {
+        return new RuntimeBeanInfo(bean);
+    }
+
     public static MethodInfo methodInfo(Method method) {
         return new ReflectionMethodInfo(method);
     }
@@ -84,6 +93,9 @@ public final class BceMetadata {
     static Class<?> unwrapBeanClass(BeanInfo beanInfo) {
         if (beanInfo instanceof ReflectionBeanInfo) {
             return ((ReflectionBeanInfo) beanInfo).beanClass;
+        }
+        if (beanInfo instanceof RuntimeBeanInfo) {
+            return ((RuntimeBeanInfo) beanInfo).beanClass;
         }
         return unwrapClassInfo(beanInfo.declaringClass());
     }
@@ -565,6 +577,146 @@ public final class BceMetadata {
         }
     }
 
+    private static final class RuntimeBeanInfo implements BeanInfo {
+        private final Bean<?> bean;
+        private final Class<?> beanClass;
+        private final ClassInfo declaringClass;
+
+        private RuntimeBeanInfo(Bean<?> bean) {
+            this.bean = Objects.requireNonNull(bean, "bean");
+            this.beanClass = bean.getBeanClass() != null ? bean.getBeanClass() : Object.class;
+
+            if (bean instanceof ProducerBean<?>) {
+                ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+                Class<?> producerDeclaringClass = producerBean.getDeclaringClass();
+                this.declaringClass = new ReflectionClassInfo(
+                    producerDeclaringClass != null ? producerDeclaringClass : this.beanClass
+                );
+            } else {
+                this.declaringClass = new ReflectionClassInfo(this.beanClass);
+            }
+        }
+
+        @Override
+        public ScopeInfo scope() {
+            Class<? extends Annotation> scopeType = bean.getScope();
+            if (scopeType == null) {
+                scopeType = resolveScope(beanClass);
+            }
+            return new ReflectionScopeInfo(scopeType);
+        }
+
+        @Override
+        public Collection<Type> types() {
+            Set<Type> out = new LinkedHashSet<Type>();
+            for (java.lang.reflect.Type reflectType : bean.getTypes()) {
+                try {
+                    out.add(toType(reflectType, null));
+                } catch (RuntimeException ignored) {
+                    // Keep resilient behavior for unresolved generic signatures.
+                }
+            }
+            if (out.isEmpty()) {
+                out.add(new ReflectionClassType(beanClass, null));
+                out.add(new ReflectionClassType(Object.class, null));
+            }
+            return Collections.unmodifiableSet(out);
+        }
+
+        @Override
+        public Collection<AnnotationInfo> qualifiers() {
+            return qualifierAnnotations(bean.getQualifiers());
+        }
+
+        @Override
+        public ClassInfo declaringClass() {
+            return declaringClass;
+        }
+
+        @Override
+        public boolean isClassBean() {
+            return !isProducerMethod() && !isProducerField();
+        }
+
+        @Override
+        public boolean isProducerMethod() {
+            return bean instanceof ProducerBean<?> && ((ProducerBean<?>) bean).isMethod();
+        }
+
+        @Override
+        public boolean isProducerField() {
+            return bean instanceof ProducerBean<?> && ((ProducerBean<?>) bean).isField();
+        }
+
+        @Override
+        public boolean isSynthetic() {
+            return bean instanceof SyntheticBean<?>;
+        }
+
+        @Override
+        public MethodInfo producerMethod() {
+            if (!(bean instanceof ProducerBean<?>)) {
+                return null;
+            }
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Method method = producerBean.getProducerMethod();
+            return method != null ? BceMetadata.methodInfo(method) : null;
+        }
+
+        @Override
+        public FieldInfo producerField() {
+            if (!(bean instanceof ProducerBean<?>)) {
+                return null;
+            }
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Field field = producerBean.getProducerField();
+            return field != null ? BceMetadata.fieldInfo(field) : null;
+        }
+
+        @Override
+        public boolean isAlternative() {
+            return bean.isAlternative();
+        }
+
+        @Override
+        public Integer priority() {
+            if (bean instanceof SyntheticBean<?>) {
+                Integer priority = ((SyntheticBean<?>) bean).getPriority();
+                if (priority != null) {
+                    return priority;
+                }
+            }
+            return AnnotationsEnum.getPriorityValue(beanClass);
+        }
+
+        @Override
+        public String name() {
+            return bean.getName();
+        }
+
+        @Override
+        public DisposerInfo disposer() {
+            if (bean instanceof ProducerBean<?>) {
+                return BceDisposerInfo.from((ProducerBean<?>) bean);
+            }
+            return null;
+        }
+
+        @Override
+        public Collection<StereotypeInfo> stereotypes() {
+            List<StereotypeInfo> out = new ArrayList<StereotypeInfo>();
+            for (Class<? extends Annotation> stereotype : bean.getStereotypes()) {
+                out.add(new ReflectionStereotypeInfo(stereotype));
+            }
+            return Collections.unmodifiableList(out);
+        }
+
+        @Override
+        public Collection<InjectionPointInfo> injectionPoints() {
+            return toInjectionPointInfos(bean.getInjectionPoints());
+        }
+    }
+
     private static Collection<AnnotationInfo> qualifierAnnotations(Annotation[] annotations) {
         if (annotations == null || annotations.length == 0) {
             return Collections.emptyList();
@@ -576,6 +728,63 @@ public final class BceMetadata {
             }
         }
         return Collections.unmodifiableList(out);
+    }
+
+    private static Collection<AnnotationInfo> qualifierAnnotations(Collection<Annotation> annotations) {
+        if (annotations == null || annotations.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<AnnotationInfo> out = new ArrayList<AnnotationInfo>(annotations.size());
+        for (Annotation annotation : annotations) {
+            if (annotation != null) {
+                out.add(new ReflectionAnnotationInfo(annotation));
+            }
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    private static Collection<InjectionPointInfo> toInjectionPointInfos(Set<InjectionPoint> injectionPoints) {
+        if (injectionPoints == null || injectionPoints.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<InjectionPointInfo> out = new ArrayList<InjectionPointInfo>(injectionPoints.size());
+        for (InjectionPoint injectionPoint : injectionPoints) {
+            if (injectionPoint == null) {
+                continue;
+            }
+            Type modelType = toType(injectionPoint.getType(), null);
+            Collection<AnnotationInfo> qualifiers = qualifierAnnotations(injectionPoint.getQualifiers());
+            DeclarationInfo declaration = declarationFromInjectionPoint(injectionPoint);
+            if (declaration == null) {
+                continue;
+            }
+            out.add(new ReflectionInjectionPointInfo(modelType, qualifiers, declaration));
+        }
+        return Collections.unmodifiableList(out);
+    }
+
+    private static DeclarationInfo declarationFromInjectionPoint(InjectionPoint injectionPoint) {
+        Member member = injectionPoint.getMember();
+        if (member instanceof Field) {
+            return new ReflectionFieldInfo((Field) member);
+        }
+
+        if (injectionPoint.getAnnotated() instanceof AnnotatedParameter<?>) {
+            AnnotatedParameter<?> annotatedParameter = (AnnotatedParameter<?>) injectionPoint.getAnnotated();
+            if (member instanceof Executable) {
+                Executable executable = (Executable) member;
+                int position = annotatedParameter.getPosition();
+                Parameter[] parameters = executable.getParameters();
+                if (position >= 0 && position < parameters.length) {
+                    MethodInfo methodInfo = executable instanceof Method
+                        ? BceMetadata.methodInfo((Method) executable)
+                        : BceMetadata.methodInfo((Constructor<?>) executable);
+                    return new ReflectionParameterInfo((ReflectionMethodInfo) methodInfo, parameters[position]);
+                }
+            }
+        }
+
+        return null;
     }
 
     private static Class<? extends Annotation> resolveScope(Class<?> beanClass) {
@@ -1445,6 +1654,16 @@ public final class BceMetadata {
         @Override
         public ClassInfo declaration() {
             return declaration;
+        }
+
+        @Override
+        public int hashCode() {
+            return clazz.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof ReflectionClassType && clazz.equals(((ReflectionClassType) other).clazz);
         }
     }
 

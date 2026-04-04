@@ -34,19 +34,19 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.build.compatible.extensions.customStereotype.CustomStereotypeTest
 - [x] org.jboss.cdi.tck.tests.build.compatible.extensions.inspectAnnotatedSubtypes.InspectAnnotatedSubtypesTest
 - [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementMultipleParams2Test
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementMultipleParamsTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementNoParamTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementOnlyMessagesTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementOnlyTypesTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationMultipleParams2Test
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationMultipleParamsTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationNoParamTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationOnlyMessagesTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationOnlyTypesTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.priority.PriorityTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.registration.RegistrationTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBean.SyntheticBeanTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanInjectionPoint.SyntheticBeanInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementMultipleParamsTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementNoParamTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementOnlyMessagesTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.EnhancementOnlyTypesTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationMultipleParams2Test
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationMultipleParamsTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationNoParamTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationOnlyMessagesTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.RegistrationOnlyTypesTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.priority.PriorityTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.registration.RegistrationTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBean.SyntheticBeanTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanInjectionPoint.SyntheticBeanInjectionPointTest
 - [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanWithLookup.SyntheticBeanWithLookupTest
 - [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticObserver.SyntheticObserverTest
 - [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticObserverOfParameterizedType.SyntheticObserverOfParameterizedTypeTest
