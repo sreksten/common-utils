@@ -7,7 +7,7 @@ import jakarta.annotation.Priority;
 import jakarta.decorator.Decorator;
 import jakarta.decorator.Delegate;
 import jakarta.enterprise.context.Dependent;
-import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,7 @@ public class UnproxyableBeanTypesTest {
                 ContractDecorator.class,
                 ContractConsumer.class
         );
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertThrows(DeploymentException.class, syringe::setup);
     }
 
     @Test

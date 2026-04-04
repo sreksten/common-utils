@@ -3171,6 +3171,8 @@ public class Syringe {
         validateBeansXmlInterceptorsConfiguration();
         // 1.3 Validate beans.xml decorator declarations
         validateBeansXmlDecoratorsConfiguration();
+        // 1.4 Validate extension-provided custom decorator metadata
+        validateProgrammaticDecoratorsConfiguration();
 
         // 2. Check definition errors
         if (knowledgeBase.hasErrors()) {
@@ -3205,22 +3207,69 @@ public class Syringe {
         if (definitionErrors == null || definitionErrors.isEmpty()) {
             return false;
         }
-        Collection<Class<?>> excludedClasses = knowledgeBase.getExcludedClasses();
-        if (excludedClasses == null || excludedClasses.size() != 1) {
-            return false;
-        }
-        Class<?> excludedClass = excludedClasses.iterator().next();
-        if (excludedClass == null ||
-                !jakarta.enterprise.inject.spi.Decorator.class.isAssignableFrom(excludedClass)) {
-            return false;
-        }
+        boolean hasDeploymentProblem = false;
         for (String definitionError : definitionErrors) {
-            if (definitionError == null ||
-                    !definitionError.contains("matches a decorator but is unproxyable")) {
-                return false;
+            if (isDeploymentProblemDefinitionError(definitionError)) {
+                hasDeploymentProblem = true;
             }
         }
-        return true;
+        return hasDeploymentProblem;
+    }
+
+    private boolean isDeploymentProblemDefinitionError(String definitionError) {
+        if (definitionError == null) {
+            return false;
+        }
+        return definitionError.contains("matches a decorator but is unproxyable")
+                || definitionError.startsWith("beans.xml <decorators><class>")
+                || definitionError.startsWith("beans.xml decorator class ");
+    }
+
+    private void validateProgrammaticDecoratorsConfiguration() {
+        Set<Class<?>> validatedDecoratorClasses = new HashSet<Class<?>>();
+        for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
+            if (decoratorInfo != null && decoratorInfo.getDecoratorClass() != null) {
+                validatedDecoratorClasses.add(decoratorInfo.getDecoratorClass());
+            }
+        }
+
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (!(bean instanceof Decorator<?>)) {
+                continue;
+            }
+            Decorator<?> decorator = (Decorator<?>) bean;
+            Class<?> decoratorClass = decorator.getBeanClass();
+            if (decoratorClass != null && validatedDecoratorClasses.contains(decoratorClass)) {
+                continue;
+            }
+            validateProgrammaticDecoratorDelegateInjectionPoints(decorator);
+        }
+    }
+
+    private void validateProgrammaticDecoratorDelegateInjectionPoints(Decorator<?> decorator) {
+        Set<InjectionPoint> injectionPoints = decorator.getInjectionPoints();
+        if (injectionPoints == null || injectionPoints.isEmpty()) {
+            return;
+        }
+        Class<?> beanClass = decorator.getBeanClass();
+        String decoratorName = beanClass != null ? beanClass.getName() : decorator.getClass().getName();
+
+        int delegateInjectionPoints = 0;
+        for (InjectionPoint injectionPoint : injectionPoints) {
+            if (injectionPoint != null && injectionPoint.isDelegate()) {
+                delegateInjectionPoints++;
+            }
+        }
+
+        if (delegateInjectionPoints == 0) {
+            knowledgeBase.addDefinitionError(
+                    "Custom decorator '" + decoratorName +
+                            "' must declare exactly one delegate injection point but declares none");
+        } else if (delegateInjectionPoints > 1) {
+            knowledgeBase.addDefinitionError(
+                    "Custom decorator '" + decoratorName +
+                            "' must declare exactly one delegate injection point but declares " + delegateInjectionPoints);
+        }
     }
 
     private void validateBeansXmlAlternativesConfiguration() {

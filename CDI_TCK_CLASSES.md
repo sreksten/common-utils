@@ -191,14 +191,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.decorators.context.dependent.DependentContextTest
 - [x] org.jboss.cdi.tck.tests.full.decorators.custom.CustomDecoratorTest
 - [x] org.jboss.cdi.tck.tests.full.decorators.custom.broken.finalBeanClass.CustomDecoratorMatchingBeanWithFinalClassTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.custom.broken.nodelegateinjectionpoint.CustomDecoratorWithNoDelegateInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.custom.broken.toomanydelegateinjectionpoints.CustomDecoratorWithTooManyDelegateInjectionPointsTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.DecoratorDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.decoratorListedTwiceInBeansXml.DecoratorListedTwiceInBeansXmlTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.enabledDecoratorIsNotDecorator.EnabledDecoratorNotADecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.finalBeanClass.FinalBeanClassTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.finalBeanMethod.FinalBeanMethodTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.invalidAbstractMethodOnDecorator.DecoratorWithInvalidAbstractMethodTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.custom.broken.nodelegateinjectionpoint.CustomDecoratorWithNoDelegateInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.custom.broken.toomanydelegateinjectionpoints.CustomDecoratorWithTooManyDelegateInjectionPointsTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.DecoratorDefinitionTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.decoratorListedTwiceInBeansXml.DecoratorListedTwiceInBeansXmlTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.enabledDecoratorIsNotDecorator.EnabledDecoratorNotADecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.finalBeanClass.FinalBeanClassTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.finalBeanMethod.FinalBeanMethodTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.invalidAbstractMethodOnDecorator.DecoratorWithInvalidAbstractMethodTest
 - [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.multipleDelegateInjectionPoints.MultipleDelegateInjectionPointsTest
 - [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.noDelegateInjectionPoints.NoDelegateInjectionPointsTest
 - [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes1Test

@@ -9,7 +9,7 @@ import jakarta.annotation.Priority;
 import jakarta.decorator.Decorator;
 import jakarta.decorator.Delegate;
 import jakarta.enterprise.context.Dependent;
-import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.enterprise.util.AnnotationLiteral;
 import jakarta.inject.Inject;
 import jakarta.interceptor.AroundInvoke;
@@ -181,7 +181,7 @@ public class DecoratorEnablementAndOrderingTest {
     void shouldFailDeploymentWhenBeansXmlDecoratorClassDoesNotExist() {
         Syringe syringe = newSyringe(OrderedServiceBean.class, BeansXmlFirstDecorator.class);
         addBeansXmlDecorators(syringe, "com.acme.missing.DoesNotExistDecorator");
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertThrows(DeploymentException.class, syringe::setup);
     }
 
     @Test
@@ -189,7 +189,7 @@ public class DecoratorEnablementAndOrderingTest {
     void shouldFailDeploymentWhenBeansXmlClassIsNotDecorator() {
         Syringe syringe = newSyringe(OrderedServiceBean.class, NotADecoratorClass.class);
         addBeansXmlDecorators(syringe, NotADecoratorClass.class.getName());
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertThrows(DeploymentException.class, syringe::setup);
     }
 
     @Test
@@ -201,7 +201,7 @@ public class DecoratorEnablementAndOrderingTest {
                 BeansXmlFirstDecorator.class.getName(),
                 BeansXmlFirstDecorator.class.getName()
         );
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertThrows(DeploymentException.class, syringe::setup);
     }
 
     private Syringe newSyringe(Class<?>... beanClasses) {

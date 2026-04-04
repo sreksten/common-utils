@@ -20,6 +20,7 @@ import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
@@ -65,7 +66,7 @@ public class DecoratorTckParityTest {
         addBeansXmlDecorators(syringe, VehicleDecorator.class.getName());
         syringe.addExtension(CustomDecoratorFinalBeanExtension.class.getName());
 
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertThrows(DeploymentException.class, syringe::setup);
     }
 
     @Test
@@ -78,7 +79,7 @@ public class DecoratorTckParityTest {
         );
         addBeansXmlDecorators(syringe, TimestampLoggerDecorator.class.getName());
 
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertThrows(DeploymentException.class, syringe::setup);
     }
 
     @Test
