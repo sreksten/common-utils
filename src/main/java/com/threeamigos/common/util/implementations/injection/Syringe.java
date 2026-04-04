@@ -2604,13 +2604,12 @@ public class Syringe {
     }
 
     private Set<Annotation> extractObserverQualifiers(Annotation[] observedParameterAnnotations) {
-        Set<Annotation> qualifiers = new HashSet<Annotation>();
-        for (Annotation annotation : observedParameterAnnotations) {
-            if (hasQualifierAnnotation(annotation.annotationType())) {
-                qualifiers.add(annotation);
-            }
+        if (observedParameterAnnotations == null) {
+            return new HashSet<Annotation>();
         }
-        return qualifiers;
+        return new HashSet<Annotation>(
+                com.threeamigos.common.util.implementations.injection.util.QualifiersHelper
+                        .extractQualifierAnnotations(observedParameterAnnotations));
     }
 
     private AnnotatedParameter<?> findAnnotatedParameter(AnnotatedMethod<?> annotatedMethod, int position) {

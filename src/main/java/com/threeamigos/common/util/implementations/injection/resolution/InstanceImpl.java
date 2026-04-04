@@ -12,6 +12,7 @@ import jakarta.enterprise.util.TypeLiteral;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -471,6 +472,26 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     @Override
     public @Nonnull Iterator<T> iterator() {
         try {
+            BeanManager beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+            if (beanManager != null) {
+                Annotation[] qualifierArray = qualifiers.toArray(new Annotation[qualifiers.size()]);
+                Set<Bean<?>> beans = beanManager.getBeans(requiredType, qualifierArray);
+                Collection<Bean<?>> iteratorBeans = applyIteratorAmbiguityElimination(beans);
+                @SuppressWarnings("unchecked")
+                Class<T> referenceType = (Class<T>) RawTypeExtractor.getRawType(requiredType);
+                List<T> instances = new ArrayList<T>();
+                for (Bean<?> bean : iteratorBeans) {
+                    @SuppressWarnings({"rawtypes", "unchecked"})
+                    CreationalContext<Object> creationalContext =
+                            (CreationalContext<Object>) beanManager.createCreationalContext((Bean) bean);
+                    @SuppressWarnings({"rawtypes", "unchecked"})
+                    T instance = (T) beanManager.getReference((Bean) bean, referenceType, (CreationalContext) creationalContext);
+                    trackDependentResult(instance);
+                    instances.add(instance);
+                }
+                return instances.iterator();
+            }
+
             Collection<Class<? extends T>> classes = resolveImplementationsWithRequiredType();
 
             List<T> instances = new ArrayList<>();
@@ -481,6 +502,133 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         } catch (Exception e) {
             throw new RuntimeException("Failed to resolve implementations", e);
         }
+    }
+
+    /**
+     * Applies CDI Instance iterator()/stream() ambiguity elimination rules:
+     * - unsatisfied => empty set
+     * - ambiguous + alternatives present => eliminate non-alternatives
+     * - if remaining alternatives all declare explicit priority => keep highest-priority subset
+     */
+    private Collection<Bean<?>> applyIteratorAmbiguityElimination(Collection<Bean<?>> candidates) {
+        if (candidates == null || candidates.size() <= 1) {
+            return candidates == null ? Collections.<Bean<?>>emptyList() : candidates;
+        }
+
+        boolean hasAlternative = false;
+        for (Bean<?> candidate : candidates) {
+            if (candidate != null && candidate.isAlternative()) {
+                hasAlternative = true;
+                break;
+            }
+        }
+        if (!hasAlternative) {
+            return candidates;
+        }
+
+        List<Bean<?>> remaining = new ArrayList<Bean<?>>();
+        for (Bean<?> candidate : candidates) {
+            if (candidate != null && candidate.isAlternative()) {
+                remaining.add(candidate);
+            }
+        }
+        if (remaining.size() <= 1) {
+            return remaining;
+        }
+
+        Map<Bean<?>, Integer> priorities = new IdentityHashMap<Bean<?>, Integer>();
+        boolean allHaveExplicitPriority = true;
+        for (Bean<?> bean : remaining) {
+            Integer priority = getExplicitAlternativePriority(bean);
+            priorities.put(bean, priority);
+            if (priority == null) {
+                allHaveExplicitPriority = false;
+            }
+        }
+        if (!allHaveExplicitPriority) {
+            return remaining;
+        }
+
+        int highestPriority = Integer.MIN_VALUE;
+        for (Integer priority : priorities.values()) {
+            if (priority != null && priority > highestPriority) {
+                highestPriority = priority;
+            }
+        }
+
+        List<Bean<?>> highestPriorityBeans = new ArrayList<Bean<?>>();
+        for (Bean<?> bean : remaining) {
+            Integer priority = priorities.get(bean);
+            if (priority != null && priority == highestPriority) {
+                highestPriorityBeans.add(bean);
+            }
+        }
+        return highestPriorityBeans;
+    }
+
+    private Integer getExplicitAlternativePriority(Bean<?> bean) {
+        if (bean instanceof ProducerBean) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Integer memberPriority = extractPriorityFromProducerMember(producerBean);
+            if (memberPriority != null) {
+                return memberPriority;
+            }
+
+            Integer producerPriority = producerBean.getPriority();
+            if (producerPriority != null) {
+                return producerPriority;
+            }
+
+            return extractPriorityFromClass(producerBean.getDeclaringClass());
+        }
+
+        if (bean instanceof BeanImpl) {
+            Integer beanPriority = ((BeanImpl<?>) bean).getPriority();
+            if (beanPriority != null) {
+                return beanPriority;
+            }
+        }
+
+        return extractPriorityFromClass(bean.getBeanClass());
+    }
+
+    private Integer extractPriorityFromProducerMember(ProducerBean<?> producerBean) {
+        if (producerBean.getProducerMethod() != null) {
+            return extractPriorityFromAnnotations(producerBean.getProducerMethod().getAnnotations());
+        }
+        if (producerBean.getProducerField() != null) {
+            return extractPriorityFromAnnotations(producerBean.getProducerField().getAnnotations());
+        }
+        return null;
+    }
+
+    private Integer extractPriorityFromClass(Class<?> beanClass) {
+        if (beanClass == null) {
+            return null;
+        }
+        return extractPriorityFromAnnotations(beanClass.getAnnotations());
+    }
+
+    private Integer extractPriorityFromAnnotations(Annotation[] annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        for (Annotation annotation : annotations) {
+            String annotationTypeName = annotation.annotationType().getName();
+            if (jakarta.annotation.Priority.class.getName().equals(annotationTypeName) ||
+                    "javax.annotation.Priority".equals(annotationTypeName)) {
+                try {
+                    Method valueMethod = annotation.annotationType().getMethod("value");
+                    Object value = valueMethod.invoke(annotation);
+                    if (value instanceof Integer) {
+                        return (Integer) value;
+                    }
+                } catch (ReflectiveOperationException ignored) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

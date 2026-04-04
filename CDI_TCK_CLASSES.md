@@ -71,14 +71,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.definition.name.NameDefinitionTest
 - [x] org.jboss.cdi.tck.tests.definition.qualifier.QualifierDefinitionTest
 - [x] org.jboss.cdi.tck.tests.definition.qualifier.builtin.BuiltInQualifierDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.definition.qualifier.repeatable.RepeatableQualifiersTest
-- [ ] org.jboss.cdi.tck.tests.definition.scope.ScopeDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.definition.scope.broken.tooManyScopes.TooManyScopesTest
-- [ ] org.jboss.cdi.tck.tests.definition.scope.broken.tooManyScopes.producer.field.ProducerFieldTooManyScopesTest
-- [ ] org.jboss.cdi.tck.tests.definition.scope.broken.tooManyScopes.producer.method.ProducerMethodTooManyScopesTest
-- [ ] org.jboss.cdi.tck.tests.definition.scope.inOtherBda.ScopeDefinedInOtherBDATest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.StereotypeDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.ConflictingPrioritiesFromSingleStereotypeTest
+- [x] org.jboss.cdi.tck.tests.definition.qualifier.repeatable.RepeatableQualifiersTest
+- [x] org.jboss.cdi.tck.tests.definition.scope.ScopeDefinitionTest
+- [x] org.jboss.cdi.tck.tests.definition.scope.broken.tooManyScopes.TooManyScopesTest
+- [x] org.jboss.cdi.tck.tests.definition.scope.broken.tooManyScopes.producer.field.ProducerFieldTooManyScopesTest
+- [x] org.jboss.cdi.tck.tests.definition.scope.broken.tooManyScopes.producer.method.ProducerMethodTooManyScopesTest
+- [x] org.jboss.cdi.tck.tests.definition.scope.inOtherBda.ScopeDefinedInOtherBDATest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.StereotypeDefinitionTest
+- [x] org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.ConflictingPrioritiesFromSingleStereotypeTest
 - [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.ConflictingPriorityStereotypesTest
 - [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.multiplePriorities.inherited.StereotypeInheritedPriorityConflictTest
 - [ ] org.jboss.cdi.tck.tests.definition.stereotype.broken.nonEmptyNamed.NonEmptyNamedTest

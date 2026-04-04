@@ -2649,13 +2649,57 @@ public class CDI41InjectionValidator {
      */
     private Set<Annotation> extractQualifiers(Annotation[] annotations) {
         Set<Annotation> qualifiers = new HashSet<>();
+        if (annotations == null) {
+            return qualifiers;
+        }
+
+        // Handles standard qualifiers and repeatable qualifier containers.
+        qualifiers.addAll(com.threeamigos.common.util.implementations.injection.util.QualifiersHelper
+                .extractQualifierAnnotations(annotations));
+
+        // Also honor dynamically-registered qualifiers from extensions.
         for (Annotation annotation : annotations) {
-            if (hasQualifierAnnotation(annotation.annotationType()) ||
-                knowledgeBase.isRegisteredQualifier(annotation.annotationType())) {
+            if (annotation == null) {
+                continue;
+            }
+            if (knowledgeBase.isRegisteredQualifier(annotation.annotationType())) {
                 qualifiers.add(annotation);
+                continue;
+            }
+            for (Annotation nested : extractRegisteredQualifierAnnotationsFromContainer(annotation)) {
+                qualifiers.add(nested);
             }
         }
         return qualifiers;
+    }
+
+    private Annotation[] extractRegisteredQualifierAnnotationsFromContainer(Annotation containerAnnotation) {
+        try {
+            Method valueMethod = containerAnnotation.annotationType().getMethod("value");
+            Class<?> returnType = valueMethod.getReturnType();
+            if (!returnType.isArray()) {
+                return new Annotation[0];
+            }
+
+            Class<?> componentType = returnType.getComponentType();
+            if (componentType == null || !Annotation.class.isAssignableFrom(componentType)) {
+                return new Annotation[0];
+            }
+
+            @SuppressWarnings("unchecked")
+            Class<? extends Annotation> nestedType = (Class<? extends Annotation>) componentType;
+            if (!knowledgeBase.isRegisteredQualifier(nestedType)) {
+                return new Annotation[0];
+            }
+
+            Object value = valueMethod.invoke(containerAnnotation);
+            if (value instanceof Annotation[]) {
+                return (Annotation[]) value;
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // Not a qualifier container annotation.
+        }
+        return new Annotation[0];
     }
 
     /**
