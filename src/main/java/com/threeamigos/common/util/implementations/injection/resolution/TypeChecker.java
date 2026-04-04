@@ -547,6 +547,9 @@ public class TypeChecker {
                         requiredTypeVariable,
                         (TypeVariable<?>) t2);
             }
+            if (t2 instanceof WildcardType) {
+                return isWildcardCompatible(requiredTypeVariable, (WildcardType) t2);
+            }
             Type[] bounds = effectiveBounds(requiredTypeVariable.getBounds());
             if (isOnlyObjectBound(bounds)) {
                 return true;

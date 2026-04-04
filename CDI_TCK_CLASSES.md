@@ -215,14 +215,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.decorators.definition.inject.delegateConstructor.DelegateInjectionPointTest
 - [x] org.jboss.cdi.tck.tests.full.decorators.definition.inject.delegateField.DelegateFieldInjectionPointTest
 - [x] org.jboss.cdi.tck.tests.full.decorators.definition.inject.delegateInitializerMethod.DelegateInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.producer.DecoratorNotAppliedToResultOfProducerTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.types.DelegateTypeImplementsParameterizedDecoratedTypeTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.interceptor.DecoratorAndInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.invocation.DecoratorInvocationTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.invocation.observer.DecoratorInvocationTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.invocation.producer.method.DecoratorInvocationTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.lookup.clientProxy.unproxyable.decorator.DecoratoredBeanProxyTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.resolution.DecoratorResolutionTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.producer.DecoratorNotAppliedToResultOfProducerTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.types.DelegateTypeImplementsParameterizedDecoratedTypeTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.interceptor.DecoratorAndInterceptorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.invocation.DecoratorInvocationTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.invocation.observer.DecoratorInvocationTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.invocation.producer.method.DecoratorInvocationTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.lookup.clientProxy.unproxyable.decorator.DecoratoredBeanProxyTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.resolution.DecoratorResolutionTest
 - [ ] org.jboss.cdi.tck.tests.full.definition.bean.custom.CustomBeanImplementationTest
 - [ ] org.jboss.cdi.tck.tests.full.deployment.discovery.BeanDiscoveryTest
 - [ ] org.jboss.cdi.tck.tests.full.deployment.exclude.ExcludeFiltersTest

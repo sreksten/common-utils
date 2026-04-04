@@ -1,0 +1,74 @@
+/*
+ * Copyright 2010, Red Hat, Inc., and individual contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.threeamigos.common.util.implementations.injection.cditcktests.full.decorators.invocation.producer.method;
+
+import com.threeamigos.common.util.implementations.injection.Syringe;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
+import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
+import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.spi.Bean;
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class DecoratorInvocationTest {
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void testDecoratorInvocation() {
+        Syringe syringe = new Syringe(new InMemoryMessageHandler(),
+                Foo.class,
+                Producer.class,
+                ProducerDecorator.class,
+                ProducerImpl.class);
+        syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
+        addDecoratorBeansXml(syringe, ProducerDecorator.class);
+
+        syringe.setup();
+        try {
+            ProducerDecorator.reset();
+            ProducerImpl.reset();
+            Bean<Foo> bean = (Bean<Foo>) syringe.getBeanManager().resolve(syringe.getBeanManager().getBeans(Foo.class));
+            CreationalContext<Foo> creationalContext = syringe.getBeanManager().createCreationalContext(bean);
+            Foo foo = bean.create(creationalContext);
+            assertEquals("foo!!!", foo.getFoo());
+            bean.destroy(foo, creationalContext);
+            assertTrue(ProducerImpl.isDisposedCorrectly());
+        } finally {
+            syringe.shutdown();
+        }
+    }
+
+    private void addDecoratorBeansXml(Syringe syringe, Class<?>... decoratorClasses) {
+        StringBuilder xmlBuilder = new StringBuilder()
+                .append("<beans xmlns=\"https://jakarta.ee/xml/ns/jakartaee\" ")
+                .append("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" ")
+                .append("xsi:schemaLocation=\"https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/beans_3_0.xsd\" ")
+                .append("version=\"3.0\" bean-discovery-mode=\"all\">")
+                .append("<decorators>");
+        for (Class<?> decoratorClass : decoratorClasses) {
+            xmlBuilder.append("<class>").append(decoratorClass.getName()).append("</class>");
+        }
+        xmlBuilder.append("</decorators></beans>");
+        BeansXml beansXml = new BeansXmlParser().parse(
+                new ByteArrayInputStream(xmlBuilder.toString().getBytes(StandardCharsets.UTF_8)));
+        syringe.addBeansXmlConfiguration(beansXml);
+    }
+}

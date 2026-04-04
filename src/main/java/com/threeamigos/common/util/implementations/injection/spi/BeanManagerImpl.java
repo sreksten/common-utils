@@ -2461,7 +2461,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (decoratedTypes != null) {
             for (Type decoratedType : decoratedTypes) {
                 for (Type requestedType : requestedTypes) {
-                    if (typeChecker.isAssignable(requestedType, decoratedType)) {
+                    if (typeChecker.isLookupTypeAssignable(requestedType, decoratedType)) {
                         return true;
                     }
                 }
@@ -2470,7 +2470,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
         if (delegateType != null) {
             for (Type requestedType : requestedTypes) {
-                if (typeChecker.isAssignable(requestedType, delegateType)) {
+                if (typeChecker.isLookupTypeAssignable(requestedType, delegateType)) {
                     return true;
                 }
             }
