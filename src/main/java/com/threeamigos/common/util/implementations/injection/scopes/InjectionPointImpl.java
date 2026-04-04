@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
 import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
@@ -330,6 +331,8 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
         private final String beanId;
         private final String beanClassName;
         private final Type annotatedBaseType;
+        private final Set<Type> annotatedTypeClosure;
+        private final Set<Annotation> annotatedAnnotations;
 
         private transient Bean<?> bean;
         private transient Member member;
@@ -350,6 +353,16 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
             this.beanClassName = sourceBean != null ? sourceBean.getBeanClass().getName() : null;
             Annotated annotated = injectionPoint.getAnnotated();
             this.annotatedBaseType = annotated != null ? annotated.getBaseType() : injectionPoint.getType();
+            if (annotated != null) {
+                Set<Type> typeClosure = annotated.getTypeClosure();
+                this.annotatedTypeClosure = typeClosure != null && !typeClosure.isEmpty()
+                        ? new LinkedHashSet<Type>(typeClosure)
+                        : Collections.<Type>singleton(this.annotatedBaseType);
+                this.annotatedAnnotations = new LinkedHashSet<Annotation>(annotated.getAnnotations());
+            } else {
+                this.annotatedTypeClosure = Collections.<Type>singleton(this.annotatedBaseType);
+                this.annotatedAnnotations = new LinkedHashSet<Annotation>();
+            }
             this.member = injectionPoint.getMember();
         }
 
@@ -368,28 +381,73 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
             if (bean != null) {
                 return bean;
             }
+
+            Bean<?> resolved = resolveFromRegisteredBeanManagers();
+            if (resolved != null) {
+                bean = resolved;
+                return bean;
+            }
+
             try {
                 jakarta.enterprise.inject.spi.BeanManager beanManager = CDI.current().getBeanManager();
-                if (beanId != null) {
-                    Bean<?> passivationCapable = beanManager.getPassivationCapableBean(beanId);
-                    if (passivationCapable != null) {
-                        bean = passivationCapable;
-                        return bean;
-                    }
-                }
-                if (beanClassName != null) {
-                    Class<?> beanClass = Class.forName(beanClassName);
-                    @SuppressWarnings({"rawtypes", "unchecked"})
-                    Set<Bean<?>> beans = (Set) beanManager.getBeans(beanClass);
-                    Bean<?> resolved = beanManager.resolve(beans);
-                    if (resolved != null) {
-                        bean = resolved;
-                    }
+                resolved = resolveWithBeanManager(beanManager);
+                if (resolved != null) {
+                    bean = resolved;
                 }
             } catch (Exception ignored) {
                 // Bean lookup best effort for serialization support.
             }
             return bean;
+        }
+
+        private Bean<?> resolveFromRegisteredBeanManagers() {
+            for (BeanManagerImpl candidate : BeanManagerImpl.getRegisteredBeanManagersSnapshot()) {
+                Bean<?> resolved = resolveWithBeanManager(candidate);
+                if (resolved != null) {
+                    return resolved;
+                }
+            }
+            return null;
+        }
+
+        private Bean<?> resolveWithBeanManager(jakarta.enterprise.inject.spi.BeanManager beanManager) {
+            if (beanManager == null) {
+                return null;
+            }
+
+            if (beanId != null) {
+                try {
+                    return beanManager.getPassivationCapableBean(beanId);
+                } catch (Exception ignored) {
+                    return null;
+                }
+            }
+
+            if (beanClassName == null || beanClassName.trim().isEmpty()) {
+                return null;
+            }
+
+            if (beanManager instanceof BeanManagerImpl) {
+                BeanManagerImpl beanManagerImpl = (BeanManagerImpl) beanManager;
+                for (Bean<?> candidate : beanManagerImpl.getKnowledgeBase().getValidBeans()) {
+                    Class<?> candidateClass = candidate.getBeanClass();
+                    if (candidateClass != null && beanClassName.equals(candidateClass.getName())) {
+                        return candidate;
+                    }
+                }
+            }
+
+            try {
+                Class<?> beanClass = Class.forName(beanClassName);
+                @SuppressWarnings({"rawtypes", "unchecked"})
+                Set<Bean<?>> beans = (Set) beanManager.getBeans(beanClass);
+                if (beans == null || beans.isEmpty()) {
+                    return null;
+                }
+                return beanManager.resolve(beans);
+            } catch (Exception ignored) {
+                return null;
+            }
         }
 
         @Override
@@ -403,7 +461,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
 
         @Override
         public Annotated getAnnotated() {
-            return new AnnotatedBaseTypeOnly(annotatedBaseType, qualifiers);
+            return new AnnotatedBaseTypeOnly(annotatedBaseType, annotatedTypeClosure, annotatedAnnotations);
         }
 
         @Override
@@ -421,11 +479,17 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
         private static final long serialVersionUID = 1L;
 
         private final Type baseType;
+        private final Set<Type> typeClosure;
         private final Set<Annotation> annotations;
 
-        private AnnotatedBaseTypeOnly(Type baseType, Set<Annotation> qualifiers) {
+        private AnnotatedBaseTypeOnly(Type baseType, Set<Type> typeClosure, Set<Annotation> annotations) {
             this.baseType = baseType;
-            this.annotations = new LinkedHashSet<Annotation>(qualifiers);
+            this.typeClosure = typeClosure != null && !typeClosure.isEmpty()
+                    ? new LinkedHashSet<Type>(typeClosure)
+                    : Collections.<Type>singleton(baseType);
+            this.annotations = annotations != null
+                    ? new LinkedHashSet<Annotation>(annotations)
+                    : new LinkedHashSet<Annotation>();
         }
 
         @Override
@@ -435,7 +499,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
 
         @Override
         public Set<Type> getTypeClosure() {
-            return Collections.<Type>singleton(baseType);
+            return Collections.unmodifiableSet(typeClosure);
         }
 
         @Override

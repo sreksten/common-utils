@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
+import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanAttributes;
@@ -65,9 +66,16 @@ public class SyntheticBeanImpl<T> implements Bean<T>, PassivationCapable {
 
     @Override
     public void destroy(T instance, CreationalContext<T> creationalContext) {
+        if (instance == null || DestroyedInstanceTracker.isDestroyed(instance)) {
+            return;
+        }
+        creationalContext = BeanManagerImpl.resolveDependentCreationalContext(creationalContext, this, instance);
         injectionTarget.preDestroy(instance);
         injectionTarget.dispose(instance);
-        creationalContext.release();
+        DestroyedInstanceTracker.markDestroyed(instance);
+        if (creationalContext != null) {
+            creationalContext.release();
+        }
     }
 
     @Override

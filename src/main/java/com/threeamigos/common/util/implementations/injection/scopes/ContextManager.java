@@ -309,6 +309,12 @@ public class ContextManager {
     public void activateRequest() {
         ConversationImpl.setConversationContext(conversationContext);
         requestContext.activateRequest();
+        if (conversationContext.getCurrentConversationId() == null) {
+            String transientConversationId = ConversationImpl.getCurrentConversationStateId();
+            if (transientConversationId != null && !transientConversationId.trim().isEmpty()) {
+                conversationContext.beginConversation(transientConversationId);
+            }
+        }
         RequestContextLifecycleListener listener = requestContextLifecycleListener;
         if (listener != null) {
             listener.onInitialized();
@@ -325,6 +331,10 @@ public class ContextManager {
             listener.onBeforeDestroyed();
         }
         requestContext.deactivateRequest();
+        String currentConversationId = conversationContext.getCurrentConversationId();
+        if (currentConversationId != null && ConversationImpl.isCurrentConversationTransient()) {
+            conversationContext.endConversation(currentConversationId);
+        }
         conversationContext.clearCurrentThread();
         ConversationImpl.clearCurrentConversation();
         if (wasActive && listener != null) {

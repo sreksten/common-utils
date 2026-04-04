@@ -254,9 +254,10 @@ public class ProducerBean<T> implements Bean<T> {
 
     @Override
     public void destroy(T instance, CreationalContext<T> creationalContext) {
-        if (instance == null) {
+        if (instance == null || DestroyedInstanceTracker.isDestroyed(instance)) {
             return;
         }
+        creationalContext = BeanManagerImpl.resolveDependentCreationalContext(creationalContext, this, instance);
 
         Throwable ignored = null;
         try {
@@ -268,6 +269,7 @@ public class ProducerBean<T> implements Bean<T> {
         } catch (Exception e) {
             ignored = e;
         } finally {
+            DestroyedInstanceTracker.markDestroyed(instance);
             try {
                 // Release CreationalContext
                 if (creationalContext != null) {
@@ -277,8 +279,6 @@ public class ProducerBean<T> implements Bean<T> {
                 if (ignored == null) {
                     ignored = e;
                 }
-            } finally {
-                DestroyedInstanceTracker.markDestroyed(instance);
             }
         }
     }

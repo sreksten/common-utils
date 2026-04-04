@@ -65,6 +65,16 @@ import java.util.*;
  */
 public class ConversationBean implements Bean<Conversation> {
 
+    private final BeanManagerImpl beanManager;
+
+    public ConversationBean() {
+        this(null);
+    }
+
+    public ConversationBean(BeanManagerImpl beanManager) {
+        this.beanManager = beanManager;
+    }
+
     @Override
     public Class<?> getBeanClass() {
         return Conversation.class;
@@ -79,7 +89,10 @@ public class ConversationBean implements Bean<Conversation> {
     public Conversation create(CreationalContext<Conversation> context) {
         Conversation conversation = new ConversationImpl();
         try {
-            jakarta.enterprise.inject.spi.BeanManager beanManager = CDI.current().getBeanManager();
+            jakarta.enterprise.inject.spi.BeanManager beanManager = resolveBeanManager();
+            if (beanManager == null) {
+                return conversation;
+            }
             Set<Type> types = new HashSet<Type>();
             types.add(Conversation.class);
             types.add(Object.class);
@@ -166,5 +179,26 @@ public class ConversationBean implements Bean<Conversation> {
             }
         }
         return null;
+    }
+
+    private jakarta.enterprise.inject.spi.BeanManager resolveBeanManager() {
+        if (beanManager != null) {
+            return beanManager;
+        }
+
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        if (classLoader == null) {
+            classLoader = ConversationBean.class.getClassLoader();
+        }
+        BeanManagerImpl registered = BeanManagerImpl.getRegisteredBeanManager(classLoader);
+        if (registered != null) {
+            return registered;
+        }
+
+        try {
+            return CDI.current().getBeanManager();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

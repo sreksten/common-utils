@@ -138,7 +138,7 @@ public class BeanResolver implements DependencyResolver {
                     "\n" +
                     "\nSee CDI 4.1 Spec Section 3.10 for more details.");
             }
-            return ip;
+            return createInjectionPointWrapper(ip, effectiveQualifiers);
         }
 
         // Special handling for Bean/Interceptor metadata built-in beans
@@ -1397,6 +1397,28 @@ public class BeanResolver implements DependencyResolver {
                 .createDecoratorChain(baseEvent, decorators, owningBeanManager, new CreationalContextImpl<Object>())
                 .getOutermostInstance();
         return decoratedEvent;
+    }
+
+    private InjectionPoint createInjectionPointWrapper(InjectionPoint injectionPoint, Annotation[] qualifiers) {
+        if (injectionPoint == null || owningBeanManager == null) {
+            return injectionPoint;
+        }
+
+        Set<Annotation> normalizedQualifiers = extractQualifiers(qualifiers);
+        normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
+
+        Set<Type> injectionPointTypes = new HashSet<Type>();
+        injectionPointTypes.add(InjectionPoint.class);
+        injectionPointTypes.add(Object.class);
+
+        List<DecoratorInfo> decorators = decoratorResolver.resolve(injectionPointTypes, normalizedQualifiers);
+        if (decorators.isEmpty()) {
+            return injectionPoint;
+        }
+
+        return (InjectionPoint) decoratorAwareProxyGenerator
+                .createDecoratorChain(injectionPoint, decorators, owningBeanManager, new CreationalContextImpl<Object>())
+                .getOutermostInstance();
     }
 
     private ParameterizedType parameterizedEventType(final Type eventType) {

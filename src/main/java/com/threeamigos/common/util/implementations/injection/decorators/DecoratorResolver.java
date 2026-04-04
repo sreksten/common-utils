@@ -4,8 +4,14 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Decor
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.annotation.Nonnull;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.Decorator;
+import jakarta.enterprise.inject.spi.InjectionPoint;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
+import java.lang.reflect.Member;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
@@ -111,12 +117,163 @@ public class DecoratorResolver {
         if (beanTypes.isEmpty()) {
             return Collections.emptyList();
         }
-        return knowledgeBase.getDecoratorInfos().stream()
-            .filter(this::isEnabled) // must be enabled via beans.xml or @Priority
-            .filter(decorator -> matchesDelegateType(decorator, beanTypes))
-            .filter(decorator -> matchesQualifiers(decorator, qualifiers))
-            .sorted(decoratorOrderingComparator())
-            .collect(Collectors.toList());
+        List<DecoratorInfo> allDecorators = collectRuntimeDecorators();
+        return allDecorators.stream()
+                .filter(this::isEnabled) // must be enabled via beans.xml or @Priority
+                .filter(decorator -> matchesDelegateType(decorator, beanTypes))
+                .filter(decorator -> matchesQualifiers(decorator, qualifiers))
+                .sorted(decoratorOrderingComparator())
+                .collect(Collectors.toList());
+    }
+
+    private List<DecoratorInfo> collectRuntimeDecorators() {
+        List<DecoratorInfo> all = new ArrayList<DecoratorInfo>();
+        Set<Class<?>> seenDecoratorClasses = new HashSet<Class<?>>();
+
+        for (DecoratorInfo info : knowledgeBase.getDecoratorInfos()) {
+            all.add(info);
+            seenDecoratorClasses.add(info.getDecoratorClass());
+        }
+
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (!(bean instanceof Decorator<?>)) {
+                continue;
+            }
+            Decorator<?> decoratorBean = (Decorator<?>) bean;
+            Class<?> decoratorClass = decoratorBean.getBeanClass();
+            if (decoratorClass == null || !seenDecoratorClasses.add(decoratorClass)) {
+                continue;
+            }
+
+            DecoratorInfo syntheticInfo = toDecoratorInfo(decoratorBean);
+            if (syntheticInfo != null) {
+                all.add(syntheticInfo);
+            }
+        }
+
+        return all;
+    }
+
+    private DecoratorInfo toDecoratorInfo(Decorator<?> decoratorBean) {
+        Type delegateType = decoratorBean.getDelegateType();
+        if (delegateType == null) {
+            return null;
+        }
+        Set<Annotation> delegateQualifiers = decoratorBean.getDelegateQualifiers();
+
+        Set<Type> decoratedTypes = decoratorBean.getDecoratedTypes();
+        if (decoratedTypes == null || decoratedTypes.isEmpty()) {
+            decoratedTypes = new LinkedHashSet<Type>();
+            decoratedTypes.add(delegateType);
+        } else {
+            decoratedTypes = new LinkedHashSet<Type>(decoratedTypes);
+        }
+
+        InjectionPoint delegateInjectionPoint = findDelegateInjectionPoint(
+                decoratorBean,
+                delegateType,
+                delegateQualifiers
+        );
+        if (delegateInjectionPoint == null) {
+            return null;
+        }
+
+        return new DecoratorInfo(
+                decoratorBean.getBeanClass(),
+                decoratedTypes,
+                extractPriority(decoratorBean.getBeanClass()),
+                delegateInjectionPoint
+        );
+    }
+
+    private InjectionPoint findDelegateInjectionPoint(Decorator<?> decoratorBean,
+                                                      Type delegateType,
+                                                      Set<Annotation> delegateQualifiers) {
+        Set<InjectionPoint> injectionPoints = decoratorBean.getInjectionPoints();
+        if (injectionPoints != null) {
+            for (InjectionPoint injectionPoint : injectionPoints) {
+                if (injectionPoint != null && injectionPoint.isDelegate()) {
+                    Member member = injectionPoint.getMember();
+                    if (member instanceof Field && Modifier.isStatic(((Field) member).getModifiers())) {
+                        continue;
+                    }
+                    return injectionPoint;
+                }
+            }
+            if (injectionPoints.size() == 1) {
+                InjectionPoint single = injectionPoints.iterator().next();
+                if (single != null) {
+                    Member member = single.getMember();
+                    if (member instanceof Field && Modifier.isStatic(((Field) member).getModifiers())) {
+                        single = null;
+                    }
+                }
+                if (single != null) {
+                    return single;
+                }
+            }
+        }
+
+        return new SyntheticDelegateInjectionPoint(
+                delegateType,
+                delegateQualifiers != null ? delegateQualifiers : Collections.<Annotation>emptySet(),
+                decoratorBean
+        );
+    }
+
+    private int extractPriority(Class<?> decoratorClass) {
+        if (decoratorClass == null) {
+            return Integer.MAX_VALUE;
+        }
+        jakarta.annotation.Priority priority = decoratorClass.getAnnotation(jakarta.annotation.Priority.class);
+        return priority != null ? priority.value() : Integer.MAX_VALUE;
+    }
+
+    private static final class SyntheticDelegateInjectionPoint implements InjectionPoint {
+        private final Type type;
+        private final Set<Annotation> qualifiers;
+        private final Bean<?> bean;
+
+        private SyntheticDelegateInjectionPoint(Type type, Set<Annotation> qualifiers, Bean<?> bean) {
+            this.type = type;
+            this.qualifiers = Collections.unmodifiableSet(new LinkedHashSet<Annotation>(qualifiers));
+            this.bean = bean;
+        }
+
+        @Override
+        public Type getType() {
+            return type;
+        }
+
+        @Override
+        public Set<Annotation> getQualifiers() {
+            return qualifiers;
+        }
+
+        @Override
+        public Bean<?> getBean() {
+            return bean;
+        }
+
+        @Override
+        public Member getMember() {
+            return null;
+        }
+
+        @Override
+        public jakarta.enterprise.inject.spi.Annotated getAnnotated() {
+            return null;
+        }
+
+        @Override
+        public boolean isDelegate() {
+            return true;
+        }
+
+        @Override
+        public boolean isTransient() {
+            return false;
+        }
     }
 
     /**

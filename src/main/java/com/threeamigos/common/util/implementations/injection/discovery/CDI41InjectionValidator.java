@@ -25,6 +25,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.PassivationCapable;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.Decorator;
 import jakarta.enterprise.inject.spi.InterceptionFactory;
 import jakarta.enterprise.inject.spi.Interceptor;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -1023,6 +1024,9 @@ public class CDI41InjectionValidator {
         Method producerMethod = producerBean.getProducerMethod();
         if (producerMethod != null) {
             Class<?> returnType = producerMethod.getReturnType();
+            if (returnType.isPrimitive()) {
+                return true;
+            }
             if (Modifier.isFinal(returnType.getModifiers()) &&
                     !java.io.Serializable.class.isAssignableFrom(returnType)) {
                 knowledgeBase.addError(
@@ -1039,6 +1043,9 @@ public class CDI41InjectionValidator {
         Field producerField = producerBean.getProducerField();
         if (producerField != null) {
             Class<?> fieldType = producerField.getType();
+            if (fieldType.isPrimitive()) {
+                return true;
+            }
             if (Modifier.isFinal(fieldType.getModifiers()) &&
                     !java.io.Serializable.class.isAssignableFrom(fieldType)) {
                 knowledgeBase.addError(
@@ -1725,6 +1732,13 @@ public class CDI41InjectionValidator {
                 ? Collections.emptySet()
                 : bean.getQualifiers();
 
+        if (hasMatchingDecoratorInfo(beanTypes, beanQualifiers)) {
+            return true;
+        }
+        return hasMatchingDecoratorBean(beanTypes, beanQualifiers);
+    }
+
+    private boolean hasMatchingDecoratorInfo(Set<Type> beanTypes, Set<Annotation> beanQualifiers) {
         for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
             if (!isDecoratorInfoEnabled(decoratorInfo)) {
                 continue;
@@ -1738,7 +1752,27 @@ public class CDI41InjectionValidator {
             }
             return true;
         }
+        return false;
+    }
 
+    private boolean hasMatchingDecoratorBean(Set<Type> beanTypes, Set<Annotation> beanQualifiers) {
+        for (Bean<?> candidate : knowledgeBase.getBeans()) {
+            if (!(candidate instanceof Decorator<?>)) {
+                continue;
+            }
+            Decorator<?> decorator = (Decorator<?>) candidate;
+            if (!isDecoratorBeanEnabled(decorator)) {
+                continue;
+            }
+            if (!decoratorMatchesTypes(decorator.getDecoratedTypes(), beanTypes)) {
+                continue;
+            }
+            Set<Annotation> delegateQualifiers = decorator.getDelegateQualifiers();
+            if (delegateQualifiers != null && !qualifierSubset(delegateQualifiers, beanQualifiers)) {
+                continue;
+            }
+            return true;
+        }
         return false;
     }
 
@@ -1750,8 +1784,24 @@ public class CDI41InjectionValidator {
                 || knowledgeBase.getDecoratorBeansXmlOrder(decoratorInfo.getDecoratorClass()) >= 0;
     }
 
+    private boolean isDecoratorBeanEnabled(Decorator<?> decorator) {
+        if (decorator == null || decorator.getBeanClass() == null) {
+            return false;
+        }
+        Class<?> beanClass = decorator.getBeanClass();
+        Priority priority = beanClass.getAnnotation(Priority.class);
+        return priority != null || knowledgeBase.getDecoratorBeansXmlOrder(beanClass) >= 0;
+    }
+
     private boolean decoratorMatchesTypes(DecoratorInfo decoratorInfo, Set<Type> beanTypes) {
-        for (Type decoratedType : decoratorInfo.getDecoratedTypes()) {
+        return decoratorMatchesTypes(decoratorInfo.getDecoratedTypes(), beanTypes);
+    }
+
+    private boolean decoratorMatchesTypes(Set<Type> decoratedTypes, Set<Type> beanTypes) {
+        if (decoratedTypes == null || decoratedTypes.isEmpty()) {
+            return false;
+        }
+        for (Type decoratedType : decoratedTypes) {
             for (Type beanType : beanTypes) {
                 try {
                     if (typeChecker.isAssignable(decoratedType, beanType)) {

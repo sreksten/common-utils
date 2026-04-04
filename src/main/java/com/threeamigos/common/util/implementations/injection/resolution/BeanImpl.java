@@ -530,9 +530,10 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
     @Override
     public void destroy(T instance, CreationalContext<T> creationalContext) {
-        if (instance == null) {
+        if (instance == null || DestroyedInstanceTracker.isDestroyed(instance)) {
             return;
         }
+        creationalContext = BeanManagerImpl.resolveDependentCreationalContext(creationalContext, this, instance);
 
         Throwable ignored = null;
         try {
@@ -547,6 +548,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         } catch (Exception e) {
             ignored = e;
         } finally {
+            DestroyedInstanceTracker.markDestroyed(instance);
             try {
                 // 2. Release CreationalContext (destroys dependent objects)
                 if (creationalContext != null) {
@@ -556,10 +558,6 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 if (ignored == null) {
                     ignored = e;
                 }
-            } finally {
-                // CDI 6.1: invoking destroyed contextual instances is undefined.
-                // Syringe rejects this non-portable usage explicitly.
-                DestroyedInstanceTracker.markDestroyed(instance);
             }
         }
     }
@@ -1291,6 +1289,25 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         try {
             // InjectionPoint metadata must describe the owning injection site, not itself.
             if (isInjectionPointMetadataType(type)) {
+                if (dependencyResolver instanceof BeanResolver) {
+                    BeanResolver beanResolver = (BeanResolver) dependencyResolver;
+                    beanResolver.setCurrentInjectionPoint(injectionPoint);
+                    try {
+                        BeanManagerImpl beanManager = beanResolver.getOwningBeanManager();
+                        if (beanManager != null && creationalContext != null) {
+                            try {
+                                return beanManager.getInjectableReference(injectionPoint, creationalContext);
+                            } catch (IllegalStateException beforeAfterDeploymentValidation) {
+                                // During bootstrap phases BeanManager SPI lookup can be lifecycle-guarded.
+                                // Fall back to direct resolver resolution in those phases.
+                            }
+                        }
+                        return dependencyResolver.resolve(type, annotations);
+                    } finally {
+                        beanResolver.clearCurrentInjectionPoint();
+                    }
+                }
+
                 InjectionPoint contextual = resolveContextualInjectionPointFromStack(stack);
                 if ((contextual == null || isInjectionPointMetadataType(contextual.getType()))
                         && dependencyResolver instanceof BeanResolver) {

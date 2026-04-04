@@ -144,6 +144,9 @@ public class CDI41BeanValidator {
         if (hasVetoedAnnotation(clazz)) {
             return null;
         }
+        if (knowledgeBase.isTypeVetoed(clazz)) {
+            return null;
+        }
 
         // 2) Basic structural constraints
         if (clazz.isInterface() || clazz.isAnnotation() || clazz.isEnum() || clazz.isPrimitive() || clazz.isArray()) {
@@ -1463,7 +1466,10 @@ public class CDI41BeanValidator {
             }
 
             try {
-                checkInjectionTypeValidity(baseTypeOf(p));
+                boolean allowTypeVariableArguments =
+                        hasDecoratorAnnotation(p.getDeclaringExecutable().getDeclaringClass()) &&
+                                hasDelegateAnnotation(p);
+                checkInjectionTypeValidity(baseTypeOf(p), allowTypeVariableArguments);
             } catch (IllegalArgumentException e) {
                 knowledgeBase.addInjectionError(fmtParameter(p) + ": " + e.getMessage());
                 valid = false;
@@ -4708,8 +4714,20 @@ public class CDI41BeanValidator {
      * The decorated types are the interfaces/classes that the decorator implements/extends.
      */
     private Set<Type> extractDecoratedTypes(Class<?> clazz, InjectionPoint delegateInjectionPoint) {
-        Set<Type> decoratedTypes = new HashSet<>();
-        collectInterfaceDecoratedTypes(clazz, decoratedTypes, new HashSet<>());
+        Set<Type> decoratedTypes = new HashSet<Type>();
+        Set<Type> typeClosure = TypeClosureHelper.extractTypesFromClass(clazz);
+        for (Type type : typeClosure) {
+            Class<?> raw = rawTypeOf(type);
+            if (raw == null || !raw.isInterface()) {
+                continue;
+            }
+            if (raw.equals(Object.class)
+                    || raw.equals(java.io.Serializable.class)
+                    || raw.equals(jakarta.enterprise.inject.spi.Decorator.class)) {
+                continue;
+            }
+            decoratedTypes.add(type);
+        }
         decoratedTypes.removeIf(t -> java.io.Serializable.class.equals(rawTypeOf(t)));
         return decoratedTypes;
     }

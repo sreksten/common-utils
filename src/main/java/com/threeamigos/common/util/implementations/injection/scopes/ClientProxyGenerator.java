@@ -9,6 +9,7 @@ import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.PassivationCapable;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
@@ -134,6 +135,10 @@ public class ClientProxyGenerator {
      */
     private static final ConcurrentHashMap<ClassLoader, ContainerContext> containerRegistry =
         new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, ContainerContext> containerRegistryByBeanManagerId =
+            new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ContextManager, String> beanManagerIdByContextManager =
+            new ConcurrentHashMap<>();
 
     /**
      * Registers a container context for proxy deserialization.
@@ -144,7 +149,15 @@ public class ClientProxyGenerator {
      */
     public static void registerContainer(ClassLoader classLoader, BeanManager beanManager,
                                         ContextManager contextManager) {
-        containerRegistry.put(classLoader, new ContainerContext(beanManager, contextManager));
+        ContainerContext containerContext = new ContainerContext(beanManager, contextManager);
+        containerRegistry.put(classLoader, containerContext);
+        String beanManagerId = resolveBeanManagerId(beanManager);
+        if (beanManagerId != null) {
+            containerRegistryByBeanManagerId.put(beanManagerId, containerContext);
+            if (contextManager != null) {
+                beanManagerIdByContextManager.put(contextManager, beanManagerId);
+            }
+        }
     }
 
     /**
@@ -153,7 +166,42 @@ public class ClientProxyGenerator {
      * @param classLoader the classloader to unregister
      */
     public static void unregisterContainer(ClassLoader classLoader) {
+        if (classLoader == null) {
+            return;
+        }
         containerRegistry.remove(classLoader);
+    }
+
+    public static void unregisterContainer(ClassLoader classLoader,
+                                           BeanManager beanManager,
+                                           ContextManager contextManager) {
+        String beanManagerId = resolveBeanManagerId(beanManager);
+        if (beanManagerId != null) {
+            ContainerContext removedById = containerRegistryByBeanManagerId.remove(beanManagerId);
+            if (contextManager != null) {
+                beanManagerIdByContextManager.remove(contextManager, beanManagerId);
+            }
+            if (classLoader != null && removedById != null) {
+                containerRegistry.remove(classLoader, removedById);
+                return;
+            }
+            if (classLoader != null) {
+                ContainerContext current = containerRegistry.get(classLoader);
+                if (current != null) {
+                    String currentId = resolveBeanManagerId(current.beanManager);
+                    if (beanManagerId.equals(currentId)) {
+                        containerRegistry.remove(classLoader, current);
+                    }
+                }
+            }
+            return;
+        }
+        if (contextManager != null) {
+            beanManagerIdByContextManager.remove(contextManager);
+        }
+        if (classLoader != null) {
+            containerRegistry.remove(classLoader);
+        }
     }
 
     /**
@@ -164,6 +212,20 @@ public class ClientProxyGenerator {
      */
     static ContainerContext getContainerContext(ClassLoader classLoader) {
         return containerRegistry.get(classLoader);
+    }
+
+    static ContainerContext getContainerContext(String beanManagerId) {
+        if (beanManagerId == null) {
+            return null;
+        }
+        return containerRegistryByBeanManagerId.get(beanManagerId);
+    }
+
+    private static String resolveBeanManagerId(BeanManager beanManager) {
+        if (beanManager instanceof BeanManagerImpl) {
+            return ((BeanManagerImpl) beanManager).getBeanManagerId();
+        }
+        return null;
     }
 
     /**
@@ -646,9 +708,69 @@ public class ClientProxyGenerator {
             // Extract bean class from the proxy
             Bean<?> bean = proxyState.$$_getBean();
             Class<?> beanClass = bean.getBeanClass();
+            ContextManager contextManager = proxyState.$$_getContextManager();
+            String beanManagerId = resolveBeanManagerId(bean, contextManager, beanClass);
+            String beanPassivationId = bean instanceof PassivationCapable
+                    ? ((PassivationCapable) bean).getId()
+                    : null;
 
             // Return a serializable marker that can recreate the proxy
-            return new SerializedProxy(beanClass);
+            return new SerializedProxy(beanClass, beanManagerId, beanPassivationId);
+        }
+
+        private static String resolveBeanManagerId(Bean<?> bean,
+                                                   ContextManager contextManager,
+                                                   Class<?> beanClass) {
+            if (contextManager != null) {
+                String byContext = beanManagerIdByContextManager.get(contextManager);
+                if (byContext != null) {
+                    return byContext;
+                }
+            }
+
+            String byBean = resolveBeanManagerIdFromBean(bean);
+            if (byBean != null) {
+                return byBean;
+            }
+
+            if (beanClass != null) {
+                BeanManagerImpl byClassLoader = BeanManagerImpl.getRegisteredBeanManager(beanClass.getClassLoader());
+                if (byClassLoader != null) {
+                    return byClassLoader.getBeanManagerId();
+                }
+            }
+
+            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+            BeanManagerImpl byTccl = BeanManagerImpl.getRegisteredBeanManager(tccl);
+            if (byTccl != null) {
+                return byTccl.getBeanManagerId();
+            }
+            return null;
+        }
+
+        private static String resolveBeanManagerIdFromBean(Bean<?> bean) {
+            if (bean == null) {
+                return null;
+            }
+            Class<?> current = bean.getClass();
+            while (current != null && !Object.class.equals(current)) {
+                for (Field field : current.getDeclaredFields()) {
+                    if (!BeanManager.class.isAssignableFrom(field.getType())) {
+                        continue;
+                    }
+                    try {
+                        field.setAccessible(true);
+                        Object value = field.get(bean);
+                        if (value instanceof BeanManagerImpl) {
+                            return ((BeanManagerImpl) value).getBeanManagerId();
+                        }
+                    } catch (Exception ignored) {
+                        // try next field/superclass
+                    }
+                }
+                current = current.getSuperclass();
+            }
+            return null;
         }
     }
 
@@ -686,9 +808,13 @@ public class ClientProxyGenerator {
         private static final long serialVersionUID = 1L;
 
         private final Class<?> beanClass;
+        private final String beanManagerId;
+        private final String beanPassivationId;
 
-        SerializedProxy(Class<?> beanClass) {
+        SerializedProxy(Class<?> beanClass, String beanManagerId, String beanPassivationId) {
             this.beanClass = beanClass;
+            this.beanManagerId = beanManagerId;
+            this.beanPassivationId = beanPassivationId;
         }
 
         /**
@@ -714,7 +840,16 @@ public class ClientProxyGenerator {
             ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
 
             // Look up the container context
-            ContainerContext containerContext = getContainerContext(classLoader);
+            ContainerContext containerContext = getContainerContext(beanManagerId);
+            if (containerContext == null && beanManagerId != null) {
+                BeanManagerImpl byId = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+                if (byId != null) {
+                    containerContext = new ContainerContext(byId, byId.getContextManager());
+                }
+            }
+            if (containerContext == null) {
+                containerContext = getContainerContext(classLoader);
+            }
             if (containerContext == null && contextClassLoader != null && contextClassLoader != classLoader) {
                 containerContext = getContainerContext(contextClassLoader);
             }
@@ -738,25 +873,31 @@ public class ClientProxyGenerator {
             BeanManager beanManager = containerContext.beanManager;
             ContextManager contextManager = containerContext.contextManager;
 
-            // Look up the bean from the BeanManager
-            // Use BeanManager.getBeans() to find beans of this type
-            java.util.Set<Bean<?>> beans = beanManager.getBeans(beanClass);
-
-            if (beans.isEmpty()) {
-                throw new IllegalStateException(
-                    "Cannot deserialize proxy for " + beanClass.getName() + ": " +
-                    "No bean found in container. The bean may have been removed or the container restarted."
-                );
+            Bean<?> bean = null;
+            if (beanManager instanceof BeanManagerImpl && beanPassivationId != null) {
+                bean = ((BeanManagerImpl) beanManager).getPassivationCapableBean(beanPassivationId);
             }
-
-            // Resolve to a single bean (handles alternatives and priorities)
-            Bean<?> bean = beanManager.resolve(beans);
-
             if (bean == null) {
-                throw new IllegalStateException(
-                    "Cannot deserialize proxy for " + beanClass.getName() + ": " +
-                    "Ambiguous beans found - cannot resolve to a single bean."
-                );
+                // Look up the bean from the BeanManager
+                // Use BeanManager.getBeans() to find beans of this type
+                java.util.Set<Bean<?>> beans = beanManager.getBeans(beanClass);
+
+                if (beans.isEmpty()) {
+                    throw new IllegalStateException(
+                        "Cannot deserialize proxy for " + beanClass.getName() + ": " +
+                        "No bean found in container. The bean may have been removed or the container restarted."
+                    );
+                }
+
+                // Resolve to a single bean (handles alternatives and priorities)
+                bean = beanManager.resolve(beans);
+
+                if (bean == null) {
+                    throw new IllegalStateException(
+                        "Cannot deserialize proxy for " + beanClass.getName() + ": " +
+                        "Ambiguous beans found - cannot resolve to a single bean."
+                    );
+                }
             }
 
             // Create a new ClientProxyGenerator and generate the proxy

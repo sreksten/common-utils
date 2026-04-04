@@ -49,6 +49,14 @@ Cost-efficiency rules (important for long migrations):
   - interface,
   - standard implementation,
   - alternative implementation with priority.
+- Prefer bulk fixture bootstrap per selected package:
+  - copy the exact reference fixture subtree from `org/jboss/...` into the mapped destination,
+  - rewrite package declarations in one pass,
+  - then minimally adapt only migrated parity tests and any fixture classes that still depend on Arquillian/TestNG/TCK utilities.
+- Use migration archetypes to avoid rediscovery:
+  - deployment-failure classes (`@ShouldThrowException`) usually map to `assertThrows(DeploymentException.class, syringe::setup)`,
+  - runtime passivation dependency violations usually map to resolved contextual reference + `assertThrows(IllegalProductException.class, ...)`,
+  - custom-context behavior classes usually map to extension instance registration + direct bean resolution assertions.
 
 Mandatory package/class mapping:
 - Original: `org.jboss.cdi.tck.tests.X.Y.Z.TestName`
@@ -97,6 +105,10 @@ Syringe rules (do not re-discover each batch; assume these):
     - `addDiscoveredClass(..., EXPLICIT)` for fixture classes only
     - `start()`
 7) Do not replicate original multi-archive deployment shape unless behavior depends on archive boundaries or distinct `beans.xml` activation; prefer one isolated fixture package per method.
+8) For passivation/proxy serialization scenarios, preserve these baselines:
+    - proxy `writeReplace` must remain on serialization path (must not be re-intercepted as business method),
+    - container must be registered for proxy deserialization during startup and unregistered at shutdown.
+9) For custom passivating scopes (`@NormalScope(passivating = true)`), custom context `get(Contextual, CreationalContext)` calls should receive serializable-compatible contextual and creational parameters; if not, treat as Syringe gap.
 
 Recommended default bootstrap helper in each migrated test:
 - `Syringe s = new Syringe("<method-fixture-package>");`
@@ -118,6 +130,9 @@ Low-cost preflight checklist (before considering Syringe core changes):
 Execution model:
 - No Arquillian, no WildFly/container adapters, no deployment archives.
 - Standalone Syringe tests only.
+- Batch execution strategy for lower debug cost:
+  - if a batch introduces a new mechanism (for example custom passivating scope, passivating interceptor wiring, producer passivation edge), run one sentinel class first,
+  - only run the full N-class targeted Maven command after sentinel passes.
 - After each batch migration, automatically run only the newly ported test classes via a targeted Maven run:
   - `mvn -q -Dtest=<FQCN1>,<FQCN2>,... test`
 - Do not run full-suite Maven goals for migration verification.

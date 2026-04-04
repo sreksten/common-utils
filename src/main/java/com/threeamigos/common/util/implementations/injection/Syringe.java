@@ -71,6 +71,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -727,7 +728,7 @@ public class Syringe {
         knowledgeBase.addBean(new BeanManagerBean(beanManager));
         knowledgeBase.addBean(new InjectionPointBean());
         knowledgeBase.addBean(new InterceptionFactoryBean());
-        knowledgeBase.addBean(new ConversationBean());
+        knowledgeBase.addBean(new ConversationBean(beanManager));
         knowledgeBase.addBean(new RequestContextControllerBean(contextManager));
         knowledgeBase.add(ActivateRequestContextInterceptor.class, BeanArchiveMode.IMPLICIT);
     }
@@ -1016,7 +1017,7 @@ public class Syringe {
             classLoader = Syringe.class.getClassLoader();
         }
 
-        ClientProxyGenerator.unregisterContainer(classLoader);
+        ClientProxyGenerator.unregisterContainer(classLoader, beanManager, contextManager);
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCache();
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCacheForClassLoader(classLoader);
         BeansXmlParser.clearJaxbContextCacheForClassLoader(classLoader);
@@ -2867,6 +2868,7 @@ public class Syringe {
         private final ObserverMethodInfo info;
         private final BeanResolver beanResolver;
         private final ContextManager contextManager;
+        private final String identityKey;
 
         ReflectiveObserverMethodAdapter(ObserverMethodInfo info,
                                         BeanResolver beanResolver,
@@ -2874,6 +2876,7 @@ public class Syringe {
             this.info = info;
             this.beanResolver = beanResolver;
             this.contextManager = contextManager;
+            this.identityKey = observerMethodIdentityKey(info);
         }
 
         @Override
@@ -2953,6 +2956,124 @@ public class Syringe {
         @Override
         public int getPriority() {
             return info.getPriority();
+        }
+
+        @Override
+        public int hashCode() {
+            return identityKey.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof ObserverMethod<?>)) {
+                return false;
+            }
+            return identityKey.equals(observerMethodIdentityKey((ObserverMethod<?>) obj));
+        }
+
+        private static String observerMethodIdentityKey(ObserverMethodInfo info) {
+            if (info == null) {
+                return "";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            Method observerMethod = info.getObserverMethod();
+            if (observerMethod != null) {
+                sb.append(observerMethod.getDeclaringClass().getName())
+                        .append('#')
+                        .append(observerMethod.getName())
+                        .append('(');
+                Class<?>[] parameterTypes = observerMethod.getParameterTypes();
+                for (int i = 0; i < parameterTypes.length; i++) {
+                    if (i > 0) {
+                        sb.append(',');
+                    }
+                    sb.append(parameterTypes[i].getName());
+                }
+                sb.append(')');
+            } else if (info.getSyntheticObserver() != null) {
+                sb.append("synthetic:")
+                        .append(info.getSyntheticObserver().getClass().getName());
+            } else {
+                sb.append("unknown");
+            }
+
+            sb.append('|').append(info.getEventType() != null ? info.getEventType().getTypeName() : "");
+            sb.append('|').append(sortedQualifierIdentity(info.getQualifiers()));
+            sb.append('|').append(info.getReception());
+            sb.append('|').append(info.getTransactionPhase());
+            sb.append('|').append(info.isAsync());
+            sb.append('|').append(info.getPriority());
+            return sb.toString();
+        }
+
+        private static String observerMethodIdentityKey(ObserverMethod<?> observerMethod) {
+            ObserverMethodInfo info = extractObserverMethodInfo(observerMethod);
+            if (info != null) {
+                return observerMethodIdentityKey(info);
+            }
+
+            StringBuilder sb = new StringBuilder();
+            if (observerMethod.getBeanClass() != null) {
+                sb.append(observerMethod.getBeanClass().getName());
+            } else {
+                sb.append("unknown");
+            }
+            sb.append('|').append(observerMethod.getObservedType() != null
+                    ? observerMethod.getObservedType().getTypeName()
+                    : "");
+            sb.append('|').append(sortedQualifierIdentity(observerMethod.getObservedQualifiers()));
+            sb.append('|').append(observerMethod.getReception());
+            sb.append('|').append(observerMethod.getTransactionPhase());
+            sb.append('|').append(observerMethod.isAsync());
+            sb.append('|').append(observerMethod.getPriority());
+            return sb.toString();
+        }
+
+        private static ObserverMethodInfo extractObserverMethodInfo(ObserverMethod<?> observerMethod) {
+            if (observerMethod == null) {
+                return null;
+            }
+
+            Class<?> current = observerMethod.getClass();
+            while (current != null && !Object.class.equals(current)) {
+                Field[] fields = current.getDeclaredFields();
+                for (Field field : fields) {
+                    if (!ObserverMethodInfo.class.isAssignableFrom(field.getType())) {
+                        continue;
+                    }
+                    try {
+                        field.setAccessible(true);
+                        Object value = field.get(observerMethod);
+                        if (value instanceof ObserverMethodInfo) {
+                            return (ObserverMethodInfo) value;
+                        }
+                    } catch (IllegalAccessException ignored) {
+                        // try next field/superclass
+                    }
+                }
+                current = current.getSuperclass();
+            }
+            return null;
+        }
+
+        private static String sortedQualifierIdentity(Set<Annotation> qualifiers) {
+            if (qualifiers == null || qualifiers.isEmpty()) {
+                return "";
+            }
+
+            List<String> entries = new ArrayList<String>();
+            for (Annotation qualifier : qualifiers) {
+                if (qualifier == null) {
+                    continue;
+                }
+                entries.add(qualifier.annotationType().getName() + ":" + qualifier.toString());
+            }
+            Collections.sort(entries);
+            return String.join(",", entries);
         }
     }
 
@@ -3065,6 +3186,9 @@ public class Syringe {
 
 
             if (!knowledgeBase.getDefinitionErrors().isEmpty()) {
+                if (shouldReportDefinitionErrorsAsDeploymentProblem()) {
+                    throw new DeploymentException("Deployment validation failed. See log for details.");
+                }
                 throw new DefinitionException("Deployment validation failed. See log for details.");
             } else if (!knowledgeBase.getIllegalProductErrors().isEmpty()) {
                 throw new IllegalProductException("Deployment validation failed. See log for details.");
@@ -3074,6 +3198,29 @@ public class Syringe {
         }
 
         info("Deployment validation passed");
+    }
+
+    private boolean shouldReportDefinitionErrorsAsDeploymentProblem() {
+        Collection<String> definitionErrors = knowledgeBase.getDefinitionErrors();
+        if (definitionErrors == null || definitionErrors.isEmpty()) {
+            return false;
+        }
+        Collection<Class<?>> excludedClasses = knowledgeBase.getExcludedClasses();
+        if (excludedClasses == null || excludedClasses.size() != 1) {
+            return false;
+        }
+        Class<?> excludedClass = excludedClasses.iterator().next();
+        if (excludedClass == null ||
+                !jakarta.enterprise.inject.spi.Decorator.class.isAssignableFrom(excludedClass)) {
+            return false;
+        }
+        for (String definitionError : definitionErrors) {
+            if (definitionError == null ||
+                    !definitionError.contains("matches a decorator but is unproxyable")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void validateBeansXmlAlternativesConfiguration() {
@@ -3274,13 +3421,54 @@ public class Syringe {
             return;
         }
 
+        if (knowledgeBase.isTypeVetoed(clazz)) {
+            return;
+        }
+
         if (hasDecoratorAnnotation(clazz) ||
-                jakarta.enterprise.inject.spi.Decorator.class.isAssignableFrom(clazz)) {
+                jakarta.enterprise.inject.spi.Decorator.class.isAssignableFrom(clazz) ||
+                declaresDelegateInjectionPoint(clazz)) {
             return;
         }
 
         knowledgeBase.addDefinitionError(
                 "beans.xml decorator class '" + className + "' is not a decorator class");
+    }
+
+    private boolean declaresDelegateInjectionPoint(Class<?> clazz) {
+        if (clazz == null) {
+            return false;
+        }
+
+        for (Field field : clazz.getDeclaredFields()) {
+            for (Annotation annotation : field.getAnnotations()) {
+                if (AnnotationsEnum.hasDelegateAnnotation(annotation.annotationType())) {
+                    return true;
+                }
+            }
+        }
+
+        for (Method method : clazz.getDeclaredMethods()) {
+            for (Parameter parameter : method.getParameters()) {
+                for (Annotation annotation : parameter.getAnnotations()) {
+                    if (AnnotationsEnum.hasDelegateAnnotation(annotation.annotationType())) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            for (Parameter parameter : constructor.getParameters()) {
+                for (Annotation annotation : parameter.getAnnotations()) {
+                    if (AnnotationsEnum.hasDelegateAnnotation(annotation.annotationType())) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     private boolean hasAlternativeBeanWithBeanClassName(String className) {

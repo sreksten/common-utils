@@ -27,6 +27,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
@@ -651,20 +652,28 @@ public class DecoratorAwareProxyGenerator {
         InjectionPoint delegateInjectionPoint = decoratorInfo.getDelegateInjectionPoint();
 
         try {
+            Member delegateMember = delegateInjectionPoint != null ? delegateInjectionPoint.getMember() : null;
+
             // Field injection
-            if (delegateInjectionPoint.getMember() instanceof Field) {
-                Field field = (Field) delegateInjectionPoint.getMember();
+            if (delegateMember instanceof Field) {
+                Field field = (Field) delegateMember;
+                if (Modifier.isStatic(field.getModifiers())) {
+                    if (injectDelegateByScanning(decoratorInstance, delegate)) {
+                        return;
+                    }
+                    throw new IllegalStateException("Resolved @Delegate field is static: " + field.getName());
+                }
                 field.setAccessible(true);
                 field.set(decoratorInstance, delegate);
             }
             // Constructor injection - already handled during instance creation
-            else if (delegateInjectionPoint.getMember() instanceof Constructor) {
+            else if (delegateMember instanceof Constructor) {
                 // Constructor injection is handled by createDecoratorInstanceWithConstructorDelegate()
                 // Nothing to do here - delegate was passed during constructor call
             }
             // Method injection
-            else if (delegateInjectionPoint.getMember() instanceof Method) {
-                Method method = (Method) delegateInjectionPoint.getMember();
+            else if (delegateMember instanceof Method) {
+                Method method = (Method) delegateMember;
                 method.setAccessible(true);
 
                 // Find the @Delegate parameter index
@@ -683,6 +692,8 @@ public class DecoratorAwareProxyGenerator {
                     args[delegateParamIndex] = delegate;
                     method.invoke(decoratorInstance, args);
                 }
+            } else if (!injectDelegateByScanning(decoratorInstance, delegate)) {
+                throw new IllegalStateException("No usable @Delegate injection point member found");
             }
         } catch (Exception e) {
             throw new IllegalStateException(
@@ -690,6 +701,49 @@ public class DecoratorAwareProxyGenerator {
                     ": " + e.getMessage(), e
             );
         }
+    }
+
+    private boolean injectDelegateByScanning(Object decoratorInstance, Object delegate) throws Exception {
+        Class<?> current = decoratorInstance.getClass();
+        while (current != null && !Object.class.equals(current)) {
+            for (Field field : current.getDeclaredFields()) {
+                if (!hasDelegateAnnotation(field) || Modifier.isStatic(field.getModifiers())) {
+                    continue;
+                }
+                field.setAccessible(true);
+                field.set(decoratorInstance, delegate);
+                return true;
+            }
+            current = current.getSuperclass();
+        }
+
+        current = decoratorInstance.getClass();
+        while (current != null && !Object.class.equals(current)) {
+            for (Method method : current.getDeclaredMethods()) {
+                if (Modifier.isStatic(method.getModifiers())) {
+                    continue;
+                }
+                Parameter[] parameters = method.getParameters();
+                int delegateParamIndex = -1;
+                for (int i = 0; i < parameters.length; i++) {
+                    if (hasDelegateAnnotation(parameters[i])) {
+                        delegateParamIndex = i;
+                        break;
+                    }
+                }
+                if (delegateParamIndex < 0) {
+                    continue;
+                }
+                Object[] args = new Object[parameters.length];
+                args[delegateParamIndex] = delegate;
+                method.setAccessible(true);
+                method.invoke(decoratorInstance, args);
+                return true;
+            }
+            current = current.getSuperclass();
+        }
+
+        return false;
     }
 
     /**

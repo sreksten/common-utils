@@ -292,6 +292,16 @@ public class ConversationImpl implements Conversation, Serializable {
         conversationContext.remove();
     }
 
+    public static boolean isCurrentConversationTransient() {
+        ConversationState state = currentConversation.get();
+        return state == null || state.transientFlag;
+    }
+
+    public static String getCurrentConversationStateId() {
+        ConversationState state = currentConversation.get();
+        return state != null ? state.id : null;
+    }
+
     public static void clearAllGlobalState() {
         activeConversations.clear();
         clearCurrentConversation();

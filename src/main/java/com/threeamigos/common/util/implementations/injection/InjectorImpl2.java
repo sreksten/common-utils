@@ -220,7 +220,7 @@ public class InjectorImpl2 implements Injector {
         knowledgeBase.addBean(new InjectionPointBean());
 
         // Register Conversation as a built-in bean (no dependencies needed!)
-        knowledgeBase.addBean(new ConversationBean());
+        knowledgeBase.addBean(new ConversationBean(beanManager));
     }
 
     /**
@@ -507,7 +507,7 @@ public class InjectorImpl2 implements Injector {
             // Best-effort cleanup.
         }
 
-        ClientProxyGenerator.unregisterContainer(classLoader);
+        ClientProxyGenerator.unregisterContainer(classLoader, beanManager, contextManager);
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCacheForClassLoader(classLoader);
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCache();
         BeansXmlParser.clearJaxbContextCacheForClassLoader(classLoader);

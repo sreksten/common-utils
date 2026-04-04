@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
+import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanAttributes;
@@ -63,6 +64,10 @@ public class SyntheticProducerBeanImpl<T> implements Bean<T> {
 
     @Override
     public void destroy(T instance, CreationalContext<T> creationalContext) {
+        if (instance == null || DestroyedInstanceTracker.isDestroyed(instance)) {
+            return;
+        }
+        creationalContext = BeanManagerImpl.resolveDependentCreationalContext(creationalContext, this, instance);
         producer.dispose(instance);
         CreationalContext<T> ctx = creationalContext != null
                 ? creationalContext
@@ -71,6 +76,7 @@ public class SyntheticProducerBeanImpl<T> implements Bean<T> {
         if (ctx == null) {
             throw new IllegalStateException("No CreationalContext available to destroy instance of " + beanClass.getName());
         }
+        DestroyedInstanceTracker.markDestroyed(instance);
         ctx.release();
     }
 

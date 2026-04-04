@@ -212,6 +212,11 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         return BEAN_MANAGER_ID_REGISTRY.get(beanManagerId);
     }
 
+    public static Collection<BeanManagerImpl> getRegisteredBeanManagersSnapshot() {
+        return new ArrayList<BeanManagerImpl>(
+                new LinkedHashSet<BeanManagerImpl>(BEAN_MANAGER_ID_REGISTRY.values()));
+    }
+
     public boolean destroyOwnedTransientReference(Object instance) {
         return destroyTransientReference(beanManagerId, instance);
     }
@@ -347,6 +352,17 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         // For normal scopes, return a client proxy
         if (contextManager.isNormalScope(bean.getScope())) {
             return contextManager.createClientProxy(bean);
+        }
+
+        if (DEPENDENT.matches(bean.getScope()) && ctx instanceof CreationalContextImpl) {
+            @SuppressWarnings("unchecked")
+            Bean<Object> dependentBean = (Bean<Object>) bean;
+            CreationalContext<Object> childContext = createCreationalContext(dependentBean);
+            Object instance = dependentBean.create(childContext);
+            @SuppressWarnings("unchecked")
+            CreationalContextImpl<Object> parentContext = (CreationalContextImpl<Object>) ctx;
+            parentContext.addDependentInstance(dependentBean, instance, childContext);
+            return maybeDecorateBuiltInInstance(bean, childContext, instance);
         }
 
         // For pseudo-scopes (e.g., @Dependent), get from context
@@ -504,6 +520,23 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     @Override
     public <T> CreationalContext<T> createCreationalContext(Contextual<T> contextual) {
         return new CreationalContextImpl<>();
+    }
+
+    public static <T> CreationalContext<T> resolveDependentCreationalContext(
+            CreationalContext<T> creationalContext,
+            Bean<?> bean,
+            Object instance) {
+        if (!(creationalContext instanceof CreationalContextImpl) || bean == null || instance == null) {
+            return creationalContext;
+        }
+        CreationalContextImpl<?> parentContext = (CreationalContextImpl<?>) creationalContext;
+        CreationalContext<?> dependentContext = parentContext.findDependentCreationalContext(bean, instance);
+        if (dependentContext == null) {
+            return creationalContext;
+        }
+        @SuppressWarnings("unchecked")
+        CreationalContext<T> typedContext = (CreationalContext<T>) dependentContext;
+        return typedContext;
     }
 
     /**
@@ -1822,12 +1855,46 @@ public class BeanManagerImpl implements BeanManager, Serializable {
      */
     @Override
     public Event<Object> getEvent() {
-        // Create an Event<Object> with @Default specified qualifier
-        Set<Annotation> qualifiers = new HashSet<>();
+        if (beanResolver != null) {
+            Type eventObjectType = new ParameterizedType() {
+                @Override
+                public Type[] getActualTypeArguments() {
+                    return new Type[]{Object.class};
+                }
+
+                @Override
+                public Type getRawType() {
+                    return Event.class;
+                }
+
+                @Override
+                public Type getOwnerType() {
+                    return null;
+                }
+            };
+            Object resolved = beanResolver.resolve(
+                    eventObjectType,
+                    new Annotation[]{jakarta.enterprise.inject.Default.Literal.INSTANCE}
+            );
+            if (resolved instanceof Event) {
+                @SuppressWarnings("unchecked")
+                Event<Object> event = (Event<Object>) resolved;
+                return event;
+            }
+        }
+
+        // Fallback to raw built-in EventImpl if resolver integration is unavailable.
+        Set<Annotation> qualifiers = new HashSet<Annotation>();
         qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
         qualifiers.add(new AnyLiteral());
-
-        return new EventImpl<>(Object.class, qualifiers, knowledgeBase, beanResolver, contextManager, beanResolver.getTransactionServices());
+        return new EventImpl<Object>(
+                Object.class,
+                qualifiers,
+                knowledgeBase,
+                beanResolver,
+                contextManager,
+                beanResolver.getTransactionServices()
+        );
     }
 
     /**
@@ -2430,7 +2497,8 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return true;
         }
         int applicationOrder = knowledgeBase.getApplicationInterceptorOrder(interceptor.getBeanClass());
-        return applicationOrder >= 0 || getInterceptorPriority(interceptor) != Integer.MAX_VALUE;
+        int beansXmlOrder = knowledgeBase.getInterceptorBeansXmlOrder(interceptor.getBeanClass());
+        return applicationOrder >= 0 || beansXmlOrder >= 0 || getInterceptorPriority(interceptor) != Integer.MAX_VALUE;
     }
 
     /**
@@ -3464,6 +3532,14 @@ public class BeanManagerImpl implements BeanManager, Serializable {
      * Creates an ObserverMethod wrapper from ObserverMethodInfo.
      */
     private <T> ObserverMethod<T> createObserverMethod(ObserverMethodInfo info) {
+        if (info.isSynthetic() && info.getSyntheticObserver() != null) {
+            @SuppressWarnings("unchecked")
+            ObserverMethod<T> synthetic = (ObserverMethod<T>) info.getSyntheticObserver();
+            return synthetic;
+        }
+
+        final String identityKey = observerMethodIdentityKey(info);
+
         // Create a wrapper that implements ObserverMethod
         return new ObserverMethod<T>() {
             @Override
@@ -3524,7 +3600,125 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             public boolean isAsync() {
                 return info.isAsync();
             }
+
+            @Override
+            public int hashCode() {
+                return identityKey.hashCode();
+            }
+
+            @Override
+            public boolean equals(Object obj) {
+                if (this == obj) {
+                    return true;
+                }
+                if (!(obj instanceof ObserverMethod<?>)) {
+                    return false;
+                }
+                return identityKey.equals(observerMethodIdentityKey((ObserverMethod<?>) obj));
+            }
         };
+    }
+
+    private static String observerMethodIdentityKey(ObserverMethodInfo info) {
+        if (info == null) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        Method observerMethod = info.getObserverMethod();
+        if (observerMethod != null) {
+            sb.append(observerMethod.getDeclaringClass().getName())
+                    .append('#')
+                    .append(observerMethod.getName())
+                    .append('(');
+            Class<?>[] parameterTypes = observerMethod.getParameterTypes();
+            for (int i = 0; i < parameterTypes.length; i++) {
+                if (i > 0) {
+                    sb.append(',');
+                }
+                sb.append(parameterTypes[i].getName());
+            }
+            sb.append(')');
+        } else if (info.getSyntheticObserver() != null) {
+            sb.append("synthetic:")
+                    .append(info.getSyntheticObserver().getClass().getName());
+        } else {
+            sb.append("unknown");
+        }
+
+        sb.append('|').append(info.getEventType() != null ? info.getEventType().getTypeName() : "");
+        sb.append('|').append(sortedQualifierIdentity(info.getQualifiers()));
+        sb.append('|').append(info.getReception());
+        sb.append('|').append(info.getTransactionPhase());
+        sb.append('|').append(info.isAsync());
+        sb.append('|').append(info.getPriority());
+        return sb.toString();
+    }
+
+    private static String observerMethodIdentityKey(ObserverMethod<?> observerMethod) {
+        ObserverMethodInfo info = extractObserverMethodInfo(observerMethod);
+        if (info != null) {
+            return observerMethodIdentityKey(info);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (observerMethod.getBeanClass() != null) {
+            sb.append(observerMethod.getBeanClass().getName());
+        } else {
+            sb.append("unknown");
+        }
+        sb.append('|').append(observerMethod.getObservedType() != null
+                ? observerMethod.getObservedType().getTypeName()
+                : "");
+        sb.append('|').append(sortedQualifierIdentity(observerMethod.getObservedQualifiers()));
+        sb.append('|').append(observerMethod.getReception());
+        sb.append('|').append(observerMethod.getTransactionPhase());
+        sb.append('|').append(observerMethod.isAsync());
+        sb.append('|').append(observerMethod.getPriority());
+        return sb.toString();
+    }
+
+    private static ObserverMethodInfo extractObserverMethodInfo(ObserverMethod<?> observerMethod) {
+        if (observerMethod == null) {
+            return null;
+        }
+
+        Class<?> current = observerMethod.getClass();
+        while (current != null && !Object.class.equals(current)) {
+            Field[] fields = current.getDeclaredFields();
+            for (Field field : fields) {
+                if (!ObserverMethodInfo.class.isAssignableFrom(field.getType())) {
+                    continue;
+                }
+                try {
+                    field.setAccessible(true);
+                    Object value = field.get(observerMethod);
+                    if (value instanceof ObserverMethodInfo) {
+                        return (ObserverMethodInfo) value;
+                    }
+                } catch (IllegalAccessException ignored) {
+                    // try next field/superclass
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
+    private static String sortedQualifierIdentity(Set<Annotation> qualifiers) {
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            return "";
+        }
+
+        List<String> entries = new ArrayList<String>();
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null) {
+                continue;
+            }
+            entries.add(qualifier.annotationType().getName() + ":" + qualifier.toString());
+        }
+        Collections.sort(entries);
+        return String.join(",", entries);
     }
 
     /**
@@ -3760,6 +3954,12 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             for (int i = dependentInstances.size() - 1; i >= 0; i--) {
                 DependentEntry entry = dependentInstances.get(i);
                 try {
+                    if (DestroyedInstanceTracker.isDestroyed(entry.instance)) {
+                        if (entry.creationalContext != null) {
+                            entry.creationalContext.release();
+                        }
+                        continue;
+                    }
                     entry.bean.destroy(entry.instance, entry.creationalContext);
                 } catch (Exception ignored) {
                     // Continue destroying remaining dependents.
@@ -3772,6 +3972,19 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             if (bean != null && instance != null) {
                 dependentInstances.add(new DependentEntry(bean, instance, creationalContext));
             }
+        }
+
+        public CreationalContext<Object> findDependentCreationalContext(Bean<?> bean, Object instance) {
+            if (bean == null || instance == null) {
+                return null;
+            }
+            for (int i = dependentInstances.size() - 1; i >= 0; i--) {
+                DependentEntry entry = dependentInstances.get(i);
+                if (entry.bean == bean && entry.instance == instance) {
+                    return entry.creationalContext;
+                }
+            }
+            return null;
         }
 
         private static class DependentEntry {

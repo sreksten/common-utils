@@ -175,22 +175,22 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.method.managed.NonPassivationCapableProducerMethodTest
 - [x] org.jboss.cdi.tck.tests.full.context.passivating.broken.producer.method.managed.dependent.ManagedBeanWithIllegalDependencyTest
 - [x] org.jboss.cdi.tck.tests.full.context.passivating.custom.CustomPassivatingScopeCalledWithSerializableParametersTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.dependency.builtin.BuiltinBeanPassivationDependencyTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.injection.point.PassivationCapableInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.producer.ProducerMethodWithPrimitiveReturnTypePassivationTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.producer.ProducerWithPrimitiveFieldTypePassivationTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.transientreference.TransientReferenceParameterTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.validation.DecoratorWithNonPassivationCapableDependenciesTest
-- [ ] org.jboss.cdi.tck.tests.full.context.passivating.validation.InterceptorWithNonPassivationCapableDependenciesTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.builtin.beanmanager.BeanManagerDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.builtin.conversation.BuiltinConversationDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.builtin.event.BuiltinEventDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.builtin.event.complex.ComplexEventDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.builtin.injectionpoint.BuiltinInjectionPointDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.builtin.instance.BuiltinInstanceDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.context.dependent.DependentContextTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.custom.CustomDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.custom.broken.finalBeanClass.CustomDecoratorMatchingBeanWithFinalClassTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.dependency.builtin.BuiltinBeanPassivationDependencyTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.injection.point.PassivationCapableInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.producer.ProducerMethodWithPrimitiveReturnTypePassivationTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.producer.ProducerWithPrimitiveFieldTypePassivationTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.transientreference.TransientReferenceParameterTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.validation.DecoratorWithNonPassivationCapableDependenciesTest
+- [x] org.jboss.cdi.tck.tests.full.context.passivating.validation.InterceptorWithNonPassivationCapableDependenciesTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.builtin.beanmanager.BeanManagerDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.builtin.conversation.BuiltinConversationDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.builtin.event.BuiltinEventDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.builtin.event.complex.ComplexEventDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.builtin.injectionpoint.BuiltinInjectionPointDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.builtin.instance.BuiltinInstanceDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.context.dependent.DependentContextTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.custom.CustomDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.custom.broken.finalBeanClass.CustomDecoratorMatchingBeanWithFinalClassTest
 - [ ] org.jboss.cdi.tck.tests.full.decorators.custom.broken.nodelegateinjectionpoint.CustomDecoratorWithNoDelegateInjectionPointTest
 - [ ] org.jboss.cdi.tck.tests.full.decorators.custom.broken.toomanydelegateinjectionpoints.CustomDecoratorWithTooManyDelegateInjectionPointsTest
 - [ ] org.jboss.cdi.tck.tests.full.decorators.definition.DecoratorDefinitionTest
