@@ -2209,6 +2209,31 @@ public class CDI41BeanValidator {
         return false;
     }
 
+    /**
+     * Returns true when an annotated element (for example a producer method/field)
+     * declares an alternative directly or via an applied stereotype.
+     */
+    private boolean isAlternativeDeclared(AnnotatedElement element) {
+        if (element == null) {
+            return false;
+        }
+
+        if (hasAlternativeAnnotation(element)) {
+            return true;
+        }
+
+        Set<Class<? extends Annotation>> visited = new HashSet<>();
+        for (Annotation annotation : annotationsOf(element)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (isStereotypeAnnotationType(annotationType) &&
+                stereotypeDeclaresAlternative(annotationType, visited)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private boolean stereotypeDeclaresAlternative(Class<? extends Annotation> stereotypeType,
                                                   Set<Class<? extends Annotation>> visited) {
         if (!visited.add(stereotypeType)) {
@@ -2258,11 +2283,31 @@ public class CDI41BeanValidator {
             return true;
         }
 
+        if (isAlternativeEnabledByElementStereotype(element)) {
+            return true;
+        }
+
         // Fallback for class elements when declaringClass is null.
         if (element instanceof Class) {
             return isAlternativeEnabledForClass((Class<?>) element);
         }
 
+        return false;
+    }
+
+    private boolean isAlternativeEnabledByElementStereotype(AnnotatedElement element) {
+        if (element == null) {
+            return false;
+        }
+        for (Annotation annotation : annotationsOf(element)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (!isStereotypeAnnotationType(annotationType)) {
+                continue;
+            }
+            if (isAlternativeEnabledForClass(annotationType)) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -3269,7 +3314,7 @@ public class CDI41BeanValidator {
         AnnotatedElement element = (producerMethod != null) ? producerMethod : producerField;
 
         // Determine alternative status at element level
-        boolean annotatedAlternative = isAlternativeDeclared(declaringClass) || hasAlternativeAnnotation(element);
+        boolean annotatedAlternative = isAlternativeDeclared(declaringClass) || isAlternativeDeclared(element);
         boolean alternativeEnabled = isAlternativeEnabled(element, declaringClass, annotatedAlternative);
 
         // Create ProducerBean

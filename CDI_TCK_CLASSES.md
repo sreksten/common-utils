@@ -135,14 +135,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.event.observer.resolve.ResolveEventObserversTest
 - [x] org.jboss.cdi.tck.tests.event.observer.runtimeException.ObserverExceptionRethrownTest
 - [x] org.jboss.cdi.tck.tests.event.observer.wildcardAndTypeVariable.ObserverMethodWithParametertizedTypeTest
-- [ ] org.jboss.cdi.tck.tests.event.parameterized.ParameterizedEventTest
-- [ ] org.jboss.cdi.tck.tests.event.resolve.binding.DuplicateBindingTypesWhenResolvingTest
-- [ ] org.jboss.cdi.tck.tests.event.resolve.binding.ResolvingChecksBindingTypeMembersTest
-- [ ] org.jboss.cdi.tck.tests.event.resolve.nonbinding.NonBindingTypesWhenResolvingTest
-- [ ] org.jboss.cdi.tck.tests.event.resolve.typeWithParameters.CheckTypeParametersWhenResolvingObserversTest
-- [ ] org.jboss.cdi.tck.tests.event.resolve.typeWithParameters.ChecksEventTypeWhenResolvingTest
-- [ ] org.jboss.cdi.tck.tests.event.select.SelectEventTest
-- [ ] org.jboss.cdi.tck.tests.full.alternative.AlternativeAvailabilityTest
+- [x] org.jboss.cdi.tck.tests.event.parameterized.ParameterizedEventTest
+- [x] org.jboss.cdi.tck.tests.event.resolve.binding.DuplicateBindingTypesWhenResolvingTest
+- [x] org.jboss.cdi.tck.tests.event.resolve.binding.ResolvingChecksBindingTypeMembersTest
+- [x] org.jboss.cdi.tck.tests.event.resolve.nonbinding.NonBindingTypesWhenResolvingTest
+- [x] org.jboss.cdi.tck.tests.event.resolve.typeWithParameters.CheckTypeParametersWhenResolvingObserversTest
+- [x] org.jboss.cdi.tck.tests.event.resolve.typeWithParameters.ChecksEventTypeWhenResolvingTest
+- [x] org.jboss.cdi.tck.tests.event.select.SelectEventTest
+- [x] org.jboss.cdi.tck.tests.full.alternative.AlternativeAvailabilityTest
 - [ ] org.jboss.cdi.tck.tests.full.alternative.broken.incorrect.name.NoClassWithSpecifiedNameTest
 - [ ] org.jboss.cdi.tck.tests.full.alternative.broken.incorrect.name.stereotype.NoAnnotationWithSpecifiedNameTest
 - [ ] org.jboss.cdi.tck.tests.full.alternative.broken.not.alternative.ClassIsNotAlternativeTest

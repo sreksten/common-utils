@@ -172,6 +172,15 @@ public class TypeChecker {
      * CDI observer event types may include type variables and wildcards.
      */
     public boolean isEventTypeAssignable(Type observedEventType, Type eventType) {
+        // CDI observer resolution allows a parameterized event type to match a raw observed type
+        // when raw types are assignable (e.g. observe Box, fire Box<Integer, String, Random>).
+        if (observedEventType instanceof Class<?> && eventType instanceof ParameterizedType) {
+            Class<?> observedRaw = normalizePrimitive((Class<?>) observedEventType);
+            Class<?> eventRaw = normalizePrimitive(RawTypeExtractor.getRawType(eventType));
+            if (observedRaw.isAssignableFrom(eventRaw)) {
+                return true;
+            }
+        }
         return isAssignableInternal(observedEventType, eventType, false);
     }
 

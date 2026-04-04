@@ -12,6 +12,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.Producer
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
+import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
@@ -688,6 +689,7 @@ public class CDI41InjectionValidator {
             for (Map.Entry<Set<Annotation>, Set<Bean<?>>> qualEntry : typeEntry.getValue().entrySet()) {
                 List<Bean<?>> alternatives = qualEntry.getValue().stream()
                         .filter(Bean::isAlternative)
+                        .filter(this::isBeanEnabledForResolution)
                         .collect(Collectors.toList());
 
                 if (alternatives.size() > 1) {
@@ -2143,7 +2145,15 @@ public class CDI41InjectionValidator {
     }
 
     private boolean isBeanEnabledForResolution(Bean<?> bean) {
+        Set<Bean<?>> visited = Collections.newSetFromMap(new IdentityHashMap<Bean<?>, Boolean>());
+        return isBeanEnabledForResolution(bean, visited);
+    }
+
+    private boolean isBeanEnabledForResolution(Bean<?> bean, Set<Bean<?>> visited) {
         if (bean == null) {
+            return false;
+        }
+        if (!visited.add(bean)) {
             return false;
         }
         if (bean instanceof ProducerBean) {
@@ -2152,13 +2162,19 @@ public class CDI41InjectionValidator {
             if (declaringBean == null) {
                 return false;
             }
-            if (!isBeanEnabledForResolution(declaringBean)) {
+            if (!isBeanEnabledForResolution(declaringBean, visited)) {
                 return false;
             }
             if (!bean.isAlternative()) {
                 return true;
             }
             return producerBean.isAlternativeEnabled();
+        }
+        if (bean instanceof SyntheticProducerBeanImpl) {
+            Bean<?> originalBean = findOriginalProducerBean(bean);
+            if (originalBean instanceof ProducerBean) {
+                return isBeanEnabledForResolution(originalBean, visited);
+            }
         }
         if (!bean.isAlternative()) {
             return true;
@@ -2174,12 +2190,31 @@ public class CDI41InjectionValidator {
             return null;
         }
         for (Bean<?> candidate : knowledgeBase.getValidBeans()) {
-            if (candidate instanceof ProducerBean) {
+            if (candidate instanceof ProducerBean || candidate instanceof SyntheticProducerBeanImpl) {
                 continue;
             }
             if (declaringClass.equals(candidate.getBeanClass())) {
                 return candidate;
             }
+        }
+        return null;
+    }
+
+    private Bean<?> findOriginalProducerBean(Bean<?> syntheticBean) {
+        if (syntheticBean == null) {
+            return null;
+        }
+        for (ProducerBean<?> producerBean : knowledgeBase.getProducerBeans()) {
+            if (!Objects.equals(producerBean.getBeanClass(), syntheticBean.getBeanClass())) {
+                continue;
+            }
+            if (!Objects.equals(producerBean.getTypes(), syntheticBean.getTypes())) {
+                continue;
+            }
+            if (!Objects.equals(producerBean.getQualifiers(), syntheticBean.getQualifiers())) {
+                continue;
+            }
+            return producerBean;
         }
         return null;
     }
