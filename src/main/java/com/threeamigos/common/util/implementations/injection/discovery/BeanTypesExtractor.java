@@ -67,19 +67,11 @@ public final class BeanTypesExtractor {
         Objects.requireNonNull(producerType, "producerType cannot be null");
 
         List<String> definitionErrors = new ArrayList<>();
-        Set<Type> unrestrictedTypes = new LinkedHashSet<>();
+        Set<Type> unrestrictedTypes = TypeClosureHelper.extractTypesFromType(producerType);
         Class<?> producerRawType = RawTypeExtractor.getRawType(producerType);
-
-        // CDI 4.1 §3.2.1: primitive/array producer return types contribute exactly
-        // the return type and Object.
-        if (producerRawType.isPrimitive() || producerRawType.isArray()) {
-            unrestrictedTypes.add(producerType);
-            unrestrictedTypes.add(Object.class);
-        } else {
-            // Keep the declared producer type itself (may be parameterized) and derive
-            // additional closure from the raw class hierarchy.
-            unrestrictedTypes.add(producerType);
-            unrestrictedTypes.addAll(TypeClosureHelper.extractTypesFromClass(producerRawType));
+        if (producerType instanceof ParameterizedType
+                && shouldAddRawProducerType((ParameterizedType) producerType, producerRawType)) {
+            unrestrictedTypes.add(producerRawType);
         }
         Set<Type> resultingTypes = unrestrictedTypes;
         if (producerElement != null && hasTypedAnnotation(producerElement)) {
@@ -89,7 +81,114 @@ public final class BeanTypesExtractor {
             }
         }
         Set<Type> legalTypes = keepLegalBeanTypes(resultingTypes);
+        legalTypes = pruneSyntheticArrayParameterizedSupertypes(legalTypes);
         return new ExtractionResult(legalTypes, definitionErrors);
+    }
+
+    private boolean shouldAddRawProducerType(ParameterizedType producerType, Class<?> producerRawType) {
+        if (producerRawType == null) {
+            return false;
+        }
+        for (Type argument : producerType.getActualTypeArguments()) {
+            if (containsWildcard(argument)) {
+                return true;
+            }
+            if (containsTypeVariable(argument)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean containsTypeVariable(Type type) {
+        if (type instanceof TypeVariable) {
+            return true;
+        }
+        if (type instanceof GenericArrayType) {
+            return containsTypeVariable(((GenericArrayType) type).getGenericComponentType());
+        }
+        if (type instanceof Class && ((Class<?>) type).isArray()) {
+            return containsTypeVariable(((Class<?>) type).getComponentType());
+        }
+        if (type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+            for (Type argument : parameterizedType.getActualTypeArguments()) {
+                if (containsTypeVariable(argument)) {
+                    return true;
+                }
+            }
+            Type owner = parameterizedType.getOwnerType();
+            return owner != null && containsTypeVariable(owner);
+        }
+        if (type instanceof WildcardType) {
+            WildcardType wildcardType = (WildcardType) type;
+            for (Type bound : wildcardType.getUpperBounds()) {
+                if (containsTypeVariable(bound)) {
+                    return true;
+                }
+            }
+            for (Type bound : wildcardType.getLowerBounds()) {
+                if (containsTypeVariable(bound)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean containsWildcard(Type type) {
+        if (type instanceof WildcardType) {
+            return true;
+        }
+        if (type instanceof GenericArrayType) {
+            return containsWildcard(((GenericArrayType) type).getGenericComponentType());
+        }
+        if (type instanceof Class && ((Class<?>) type).isArray()) {
+            return containsWildcard(((Class<?>) type).getComponentType());
+        }
+        if (type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+            for (Type argument : parameterizedType.getActualTypeArguments()) {
+                if (containsWildcard(argument)) {
+                    return true;
+                }
+            }
+            Type owner = parameterizedType.getOwnerType();
+            return owner != null && containsWildcard(owner);
+        }
+        return false;
+    }
+
+    private Set<Type> pruneSyntheticArrayParameterizedSupertypes(Set<Type> types) {
+        Set<Type> pruned = new LinkedHashSet<>();
+        for (Type type : types) {
+            if (type instanceof ParameterizedType
+                    && isTypeClosureSyntheticParameterizedType(type)
+                    && hasArrayTypeArgument((ParameterizedType) type)) {
+                continue;
+            }
+            pruned.add(type);
+        }
+        return pruned;
+    }
+
+    private boolean isTypeClosureSyntheticParameterizedType(Type type) {
+        return type != null
+                && type.getClass() != null
+                && "com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper$SimpleParameterizedType"
+                .equals(type.getClass().getName());
+    }
+
+    private boolean hasArrayTypeArgument(ParameterizedType parameterizedType) {
+        for (Type argument : parameterizedType.getActualTypeArguments()) {
+            if (argument instanceof GenericArrayType) {
+                return true;
+            }
+            if (argument instanceof Class && ((Class<?>) argument).isArray()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Set<Type> computeTypedBeanTypes(Class<?> beanClass, Annotation typedAnnotation, Set<Type> unrestrictedTypes, List<String> definitionErrors) {

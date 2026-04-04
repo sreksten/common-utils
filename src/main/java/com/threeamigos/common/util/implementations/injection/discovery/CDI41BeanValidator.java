@@ -382,7 +382,7 @@ public class CDI41BeanValidator {
         // Populate BeanAttributes (now that BeanImpl supports it)
         String beanName = extractBeanName(clazz);
         bean.setName(beanName);
-        bean.setQualifiers(extractBeanQualifiers(clazz));
+        bean.setQualifiers(synchronizeNamedQualifier(extractBeanQualifiers(clazz), beanName));
         Class<? extends Annotation> effectiveBeanScope = extractBeanScope(clazz, beanScope);
         validateManagedBeanPublicFieldScopeConstraint(clazz, effectiveBeanScope);
         validateManagedBeanGenericTypeScopeConstraint(clazz, effectiveBeanScope);
@@ -2460,7 +2460,8 @@ public class CDI41BeanValidator {
             }
         }
 
-        bean.setQualifiers(QualifiersHelper.normalizeBeanQualifiers(mergedQualifiers));
+        bean.setQualifiers(synchronizeNamedQualifier(QualifiersHelper.normalizeBeanQualifiers(mergedQualifiers),
+                bean.getName()));
 
         if (!inheritedName.isEmpty()) {
             if (declaresBeanNameExplicitly(clazz)) {
@@ -2471,6 +2472,7 @@ public class CDI41BeanValidator {
                 bean.setName(inheritedName);
             }
         }
+        bean.setQualifiers(synchronizeNamedQualifier(bean.getQualifiers(), bean.getName()));
     }
 
     private List<Class<?>> specializationAncestors(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
@@ -3265,7 +3267,7 @@ public class CDI41BeanValidator {
             // Set bean attributes from producer method annotations
             String producerName = extractProducerName(producerMethod);
             producerBean.setName(producerName);
-            producerBean.setQualifiers(extractQualifiers(producerMethod));
+            producerBean.setQualifiers(synchronizeNamedQualifier(extractQualifiers(producerMethod), producerName));
             producerBean.setScope(extractScope(producerMethod));
             producerBean.setStereotypes(extractStereotypes(producerMethod));
 
@@ -3294,7 +3296,7 @@ public class CDI41BeanValidator {
             // Set bean attributes from producer field annotations
             String producerName = extractProducerName(producerField);
             producerBean.setName(producerName);
-            producerBean.setQualifiers(extractQualifiers(producerField));
+            producerBean.setQualifiers(synchronizeNamedQualifier(extractQualifiers(producerField), producerName));
             producerBean.setScope(extractScope(producerField));
             producerBean.setStereotypes(extractStereotypes(producerField));
 
@@ -3418,6 +3420,83 @@ public class CDI41BeanValidator {
             }
         }
         return QualifiersHelper.normalizeBeanQualifiers(qualifiers);
+    }
+
+    private Set<Annotation> synchronizeNamedQualifier(Set<Annotation> qualifiers, String beanName) {
+        Set<Annotation> normalized = new LinkedHashSet<>();
+        Annotation existingNamed = null;
+        if (qualifiers != null) {
+            for (Annotation qualifier : qualifiers) {
+                if (qualifier == null) {
+                    continue;
+                }
+                if (hasNamedAnnotation(qualifier.annotationType())) {
+                    if (existingNamed == null) {
+                        existingNamed = qualifier;
+                    }
+                    continue;
+                }
+                normalized.add(qualifier);
+            }
+        }
+
+        if (existingNamed == null) {
+            return normalized;
+        }
+
+        String resolvedName = normalizeBeanName(beanName);
+        if (resolvedName == null) {
+            return normalized;
+        }
+
+        Class<? extends Annotation> namedType = existingNamed.annotationType();
+        normalized.add(createNamedQualifier(namedType, resolvedName));
+        return normalized;
+    }
+
+    private String normalizeBeanName(String beanName) {
+        if (beanName == null) {
+            return null;
+        }
+        String trimmed = beanName.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Annotation createNamedQualifier(Class<? extends Annotation> namedType, String value) {
+        final Class<? extends Annotation> effectiveType = namedType == null ? Named.class : namedType;
+        InvocationHandler handler = (proxy, method, args) -> {
+            String methodName = method.getName();
+            if ("annotationType".equals(methodName)) {
+                return effectiveType;
+            }
+            if ("value".equals(methodName)) {
+                return value;
+            }
+            if ("equals".equals(methodName)) {
+                Object other = args == null || args.length == 0 ? null : args[0];
+                if (!effectiveType.isInstance(other)) {
+                    return false;
+                }
+                try {
+                    Method otherValueMethod = effectiveType.getMethod("value");
+                    Object otherValue = otherValueMethod.invoke(other);
+                    return Objects.equals(value, otherValue);
+                } catch (ReflectiveOperationException ignored) {
+                    return false;
+                }
+            }
+            if ("hashCode".equals(methodName)) {
+                return (127 * "value".hashCode()) ^ Objects.hashCode(value);
+            }
+            if ("toString".equals(methodName)) {
+                return "@" + effectiveType.getName() + "(value=" + value + ")";
+            }
+            throw new UnsupportedOperationException("Unsupported @Named literal method: " + methodName);
+        };
+        return (Annotation) Proxy.newProxyInstance(
+                effectiveType.getClassLoader(),
+                new Class<?>[]{effectiveType},
+                handler);
     }
 
     /**

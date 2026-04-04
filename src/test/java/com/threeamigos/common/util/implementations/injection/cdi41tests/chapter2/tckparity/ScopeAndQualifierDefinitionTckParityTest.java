@@ -123,7 +123,7 @@ class ScopeAndQualifierDefinitionTckParityTest {
         Bean<?> named = uniqueBean(beanManager, NamedBean.class);
         assertTrue(named.getQualifiers().contains(Default.Literal.INSTANCE));
         assertTrue(named.getQualifiers().contains(Any.Literal.INSTANCE));
-        assertTrue(named.getQualifiers().contains(NamedLiteral.of("")));
+        assertTrue(named.getQualifiers().contains(NamedLiteral.of("namedBean")));
         assertEquals("namedBean", named.getName());
 
         Bean<?> any = uniqueBean(beanManager, AnyBean.class, Any.Literal.INSTANCE);
@@ -133,13 +133,13 @@ class ScopeAndQualifierDefinitionTckParityTest {
         Bean<?> namedAny = uniqueBean(beanManager, NamedAnyBean.class, Any.Literal.INSTANCE);
         assertTrue(namedAny.getQualifiers().contains(Default.Literal.INSTANCE));
         assertTrue(namedAny.getQualifiers().contains(Any.Literal.INSTANCE));
-        assertTrue(namedAny.getQualifiers().contains(NamedLiteral.of("")));
+        assertTrue(namedAny.getQualifiers().contains(NamedLiteral.of("namedAnyBean")));
         assertEquals("namedAnyBean", namedAny.getName());
 
-        Bean<?> producedNamed = uniqueBean(beanManager, ProducedNamedBean.class, NamedLiteral.of(""));
+        Bean<?> producedNamed = uniqueBean(beanManager, ProducedNamedBean.class, NamedLiteral.of("producedNamedBean"));
         assertTrue(producedNamed.getQualifiers().contains(Default.Literal.INSTANCE));
         assertTrue(producedNamed.getQualifiers().contains(Any.Literal.INSTANCE));
-        assertTrue(producedNamed.getQualifiers().contains(NamedLiteral.of("")));
+        assertTrue(producedNamed.getQualifiers().contains(NamedLiteral.of("producedNamedBean")));
         assertEquals("producedNamedBean", producedNamed.getName());
     }
 

@@ -63,14 +63,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.context.dependent.transientreference.DependentTransientReferenceDestroyedTest
 - [x] org.jboss.cdi.tck.tests.definition.bean.BeanDefinitionTest
 - [x] org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedManagedBeanTest
-- [ ] org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedProducerFieldTest
-- [ ] org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedProducerMethodTest
-- [ ] org.jboss.cdi.tck.tests.definition.bean.genericbroken.GenericManagedBeanTest
-- [ ] org.jboss.cdi.tck.tests.definition.bean.types.ManagedBeanTypesTest
-- [ ] org.jboss.cdi.tck.tests.definition.bean.types.illegal.BeanTypesWithIllegalTypeTest
-- [ ] org.jboss.cdi.tck.tests.definition.name.NameDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.definition.qualifier.QualifierDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.definition.qualifier.builtin.BuiltInQualifierDefinitionTest
+- [x] org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedProducerFieldTest
+- [x] org.jboss.cdi.tck.tests.definition.bean.broken.restricted.RestrictedProducerMethodTest
+- [x] org.jboss.cdi.tck.tests.definition.bean.genericbroken.GenericManagedBeanTest
+- [x] org.jboss.cdi.tck.tests.definition.bean.types.ManagedBeanTypesTest
+- [x] org.jboss.cdi.tck.tests.definition.bean.types.illegal.BeanTypesWithIllegalTypeTest
+- [x] org.jboss.cdi.tck.tests.definition.name.NameDefinitionTest
+- [x] org.jboss.cdi.tck.tests.definition.qualifier.QualifierDefinitionTest
+- [x] org.jboss.cdi.tck.tests.definition.qualifier.builtin.BuiltInQualifierDefinitionTest
 - [ ] org.jboss.cdi.tck.tests.definition.qualifier.repeatable.RepeatableQualifiersTest
 - [ ] org.jboss.cdi.tck.tests.definition.scope.ScopeDefinitionTest
 - [ ] org.jboss.cdi.tck.tests.definition.scope.broken.tooManyScopes.TooManyScopesTest

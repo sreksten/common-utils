@@ -270,7 +270,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
     public BeanImpl(Class<T> beanClass, boolean alternative) {
         this.beanClass = beanClass;
-        this.name = "";
+        this.name = null;
         this.scope = null;
         this.alternative = alternative;
         String packageName = (beanClass != null && beanClass.getPackage() != null)
@@ -316,11 +316,19 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
     @Override
     public String getName() {
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
         return name;
     }
 
     public void setName(String name) {
-        this.name = (name == null) ? "" : name;
+        if (name == null) {
+            this.name = null;
+            return;
+        }
+        String trimmed = name.trim();
+        this.name = trimmed.isEmpty() ? null : trimmed;
     }
 
     @Override

@@ -1,5 +1,18 @@
 You are migrating CDI TCK tests to standalone Syringe compatibility tests in batches.
 
+Non-negotiable constraints:
+- Java version is strictly Java 8.
+- All migrated tests and helper code must compile and run on Java 8.
+- Do not introduce Java 9+ language features or APIs (for example `var`, `List.of`, `Set.of`, `Map.of`, `Optional.or`, module-system assumptions, or newer JDK-only methods).
+- Test parity must be as strict as possible to the original TCK behavior.
+- Do not relax tests to make Syringe pass:
+  - do not weaken assertions,
+  - do not broaden expected outcomes,
+  - do not remove checks that exist in the original,
+  - do not add `@Disabled`/ignored paths for failing behavior unless the original test is disabled,
+  - do not add timing/retry hacks that hide deterministic failures.
+- If a migrated test fails and fixture/test adherence to the original has been verified, treat it as a likely Syringe gap and investigate/fix Syringe.
+
 Source of truth:
 - Read class list from `CDI_TCK_CLASSES.md`.
 - Original TCK source files are reference-only under project root `org/jboss/...` (not under `src/test/java`).
@@ -116,6 +129,8 @@ Automatic completion rule:
 
 Parity rules:
 - Preserve original TCK intent, assertions, and expected exceptions.
+- Match the strictness of original assertions and failure conditions; parity is correctness, not "close enough".
+- Never make a failing migrated test pass by loosening its expectations.
 - If exact parity is not possible, document mismatch and rationale.
 
 Failure triage rules (if user reports a failing migrated test):
@@ -124,6 +139,8 @@ Failure triage rules (if user reports a failing migrated test):
   - `DefinitionException` during bootstrap: check invalid fixture bean classes in scanned packages first.
   - Ambiguous/unsatisfied resolution: verify isolation boundaries and qualifiers before changing core resolution logic.
 - Prefer fixing parity fixture mistakes before changing Syringe core.
+- After fixture parity is confirmed, bias strongly toward fixing Syringe core/runtime behavior rather than altering tests.
+- A parity-correct failing test is evidence of a Syringe gap until proven otherwise.
 - If you change Syringe core, document why fixture-level fixes were insufficient.
 - Low-credit debug workflow:
   - Run only the exact failing test:
