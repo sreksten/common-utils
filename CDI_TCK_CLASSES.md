@@ -199,22 +199,22 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.finalBeanClass.FinalBeanClassTest
 - [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.finalBeanMethod.FinalBeanMethodTest
 - [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.invalidAbstractMethodOnDecorator.DecoratorWithInvalidAbstractMethodTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.multipleDelegateInjectionPoints.MultipleDelegateInjectionPointsTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.noDelegateInjectionPoints.NoDelegateInjectionPointsTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes1Test
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes2Test
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes3Test
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonDecoratorWithDecorates.NonDecoratorWithDecoratesTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonDependent.NonDependentDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonExistantClassInBeansXml.NonExistantDecoratorClassInBeansXmlTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.notAllDecoratedTypesImplemented.NotAllDecoratedTypesImplementedTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.notAllDecoratedTypesImplemented.parameterized.TypeParametersNotTheSameTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.observer.DecoratorWithAsyncObserverMethodTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.observer.DecoratorWithObserverMethodTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.broken.parameterizedTypesWithDifferentTypeParameters.DifferentTypeParametersTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.inject.delegateConstructor.DelegateInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.inject.delegateField.DelegateFieldInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.definition.inject.delegateInitializerMethod.DelegateInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.multipleDelegateInjectionPoints.MultipleDelegateInjectionPointsTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.noDelegateInjectionPoints.NoDelegateInjectionPointsTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes1Test
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes2Test
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes3Test
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonDecoratorWithDecorates.NonDecoratorWithDecoratesTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonDependent.NonDependentDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonExistantClassInBeansXml.NonExistantDecoratorClassInBeansXmlTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.notAllDecoratedTypesImplemented.NotAllDecoratedTypesImplementedTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.notAllDecoratedTypesImplemented.parameterized.TypeParametersNotTheSameTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.observer.DecoratorWithAsyncObserverMethodTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.observer.DecoratorWithObserverMethodTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.broken.parameterizedTypesWithDifferentTypeParameters.DifferentTypeParametersTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.inject.delegateConstructor.DelegateInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.inject.delegateField.DelegateFieldInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.decorators.definition.inject.delegateInitializerMethod.DelegateInjectionPointTest
 - [ ] org.jboss.cdi.tck.tests.full.decorators.definition.producer.DecoratorNotAppliedToResultOfProducerTest
 - [ ] org.jboss.cdi.tck.tests.full.decorators.definition.types.DelegateTypeImplementsParameterizedDecoratedTypeTest
 - [ ] org.jboss.cdi.tck.tests.full.decorators.interceptor.DecoratorAndInterceptorTest
