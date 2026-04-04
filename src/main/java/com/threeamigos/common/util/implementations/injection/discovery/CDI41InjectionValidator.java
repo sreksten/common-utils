@@ -10,6 +10,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl
 import com.threeamigos.common.util.implementations.injection.resolution.LegacyNewBeanAdapter;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
+import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
@@ -78,6 +79,7 @@ public class CDI41InjectionValidator {
     private final KnowledgeBase knowledgeBase;
     private final TypeChecker typeChecker;
     private final boolean legacyCdi10NewEnabled;
+    private final boolean allowNonPortableAsyncObserverEventParameterPriority;
 
     /**
      * Tracks beans currently being resolved to detect circular dependencies.
@@ -92,13 +94,21 @@ public class CDI41InjectionValidator {
             ThreadLocal.withInitial(HashSet::new);
 
     public CDI41InjectionValidator(KnowledgeBase knowledgeBase) {
-        this(knowledgeBase, false);
+        this(knowledgeBase, false, false);
     }
 
     public CDI41InjectionValidator(KnowledgeBase knowledgeBase, boolean legacyCdi10NewEnabled) {
+        this(knowledgeBase, legacyCdi10NewEnabled, false);
+    }
+
+    public CDI41InjectionValidator(KnowledgeBase knowledgeBase,
+                                   boolean legacyCdi10NewEnabled,
+                                   boolean allowNonPortableAsyncObserverEventParameterPriority) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.typeChecker = new TypeChecker();
         this.legacyCdi10NewEnabled = legacyCdi10NewEnabled;
+        this.allowNonPortableAsyncObserverEventParameterPriority =
+                allowNonPortableAsyncObserverEventParameterPriority;
     }
 
     /**
@@ -2602,6 +2612,28 @@ public class CDI41InjectionValidator {
             }
         }
 
+        // Additional observer parameters are regular injection points and must be deployment-validated.
+        for (ObserverParameterMetadata parameter : parameters) {
+            if (parameter == observedParameter) {
+                continue;
+            }
+            Type parameterType = GenericTypeResolver.resolve(
+                    parameter.baseType,
+                    declaringBean.getBeanClass(),
+                    method.getDeclaringClass()
+            );
+            InjectionPoint injectionPoint = new InjectionPointImpl(
+                    parameter.parameter,
+                    declaringBean,
+                    parameterType,
+                    parameter.annotations,
+                    parameter.annotatedParameter
+            );
+            if (!validateInjectionPoint(injectionPoint, declaringBean)) {
+                return false;
+            }
+        }
+
         // Extract observer ordering priority (CDI 4.1 9.5.2):
         // - Declared on observed event parameter via @Priority
         // - Default is Interceptor.Priority.APPLICATION + 500
@@ -2609,7 +2641,7 @@ public class CDI41InjectionValidator {
         int priority = jakarta.interceptor.Interceptor.Priority.APPLICATION + 500;
         Integer parameterPriority = getPriorityValueFromAnnotations(observedParameter.annotations);
         if (parameterPriority != null) {
-            if (async) {
+            if (async && !allowNonPortableAsyncObserverEventParameterPriority) {
                 throw new NonPortableBehaviourException(
                     "Asynchronous observer method " + method.getName() + " in " +
                     declaringBean.getBeanClass().getName() +

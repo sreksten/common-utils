@@ -119,14 +119,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.event.metadata.injectionpoint.EventMetadataInjectionPointTest
 - [x] org.jboss.cdi.tck.tests.event.observer.ObserverNotificationTest
 - [x] org.jboss.cdi.tck.tests.event.observer.abortProcessing.ObserverExceptionAbortsProcessingTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.abortProcessing.orderedObservers.ExceptionInOrderedObserversAbortsProcessingTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.async.basic.MixedObserversTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.async.executor.FireAsyncWithCustomExecutorTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.async.handlingExceptions.MultipleExceptionsInObserversNotificationTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.broken.validation.ambiguous.ObserverMethodParameterInjectionValidationTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.broken.validation.unsatisfied.ObserverMethodParameterInjectionValidationTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.checkedException.CheckedExceptionWrappedTest
-- [ ] org.jboss.cdi.tck.tests.event.observer.conditional.ConditionalObserverTest
+- [x] org.jboss.cdi.tck.tests.event.observer.abortProcessing.orderedObservers.ExceptionInOrderedObserversAbortsProcessingTest
+- [x] org.jboss.cdi.tck.tests.event.observer.async.basic.MixedObserversTest
+- [x] org.jboss.cdi.tck.tests.event.observer.async.executor.FireAsyncWithCustomExecutorTest
+- [x] org.jboss.cdi.tck.tests.event.observer.async.handlingExceptions.MultipleExceptionsInObserversNotificationTest
+- [x] org.jboss.cdi.tck.tests.event.observer.broken.validation.ambiguous.ObserverMethodParameterInjectionValidationTest
+- [x] org.jboss.cdi.tck.tests.event.observer.broken.validation.unsatisfied.ObserverMethodParameterInjectionValidationTest
+- [x] org.jboss.cdi.tck.tests.event.observer.checkedException.CheckedExceptionWrappedTest
+- [x] org.jboss.cdi.tck.tests.event.observer.conditional.ConditionalObserverTest
 - [ ] org.jboss.cdi.tck.tests.event.observer.inheritance.ObserverInheritanceTest
 - [ ] org.jboss.cdi.tck.tests.event.observer.method.ObserverMethodTest
 - [ ] org.jboss.cdi.tck.tests.event.observer.param.modification.SyncEventModificationTest

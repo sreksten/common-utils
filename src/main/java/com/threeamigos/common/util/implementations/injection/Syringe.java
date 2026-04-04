@@ -238,6 +238,7 @@ public class Syringe {
     private boolean cdiLiteMode = false;
     private boolean cdiFullLegacyInterceptionEnabled = true;
     private boolean legacyCdi10NewEnabled = false;
+    private boolean allowNonPortableAsyncObserverEventParameterPriority = false;
 
     /**
      * Custom contexts to register programmatically before container initialization.
@@ -376,6 +377,27 @@ public class Syringe {
             throw new IllegalStateException("Cannot change legacy @New mode after container initialization");
         }
         this.legacyCdi10NewEnabled = enabled;
+    }
+
+    /**
+     * Allows non-portable behavior where an asynchronous observer event parameter is annotated with {@code @Priority}.
+     *
+     * <p>By default this remains disabled and such observer methods cause
+     * {@link com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException}
+     * during deployment validation.
+     *
+     * <p><b>CDI 4.1 note:</b> This switch should stay disabled for spec-conformant behavior.
+     * It exists only for legacy compatibility tests that intentionally exercise older,
+     * non-portable observer declarations.
+     *
+     * @param enabled true to allow this non-portable observer declaration
+     */
+    public void allowNonPortableAsyncObserverEventParameterPriority(boolean enabled) {
+        if (initialized) {
+            throw new IllegalStateException(
+                    "Cannot change async observer @Priority non-portable mode after container initialization");
+        }
+        this.allowNonPortableAsyncObserverEventParameterPriority = enabled;
     }
 
     /**
@@ -3008,7 +3030,10 @@ public class Syringe {
 
         // 1. Check for unsatisfied/ambiguous dependencies
         CDI41InjectionValidator injectionValidator =
-                new CDI41InjectionValidator(knowledgeBase, legacyCdi10NewEnabled);
+                new CDI41InjectionValidator(
+                        knowledgeBase,
+                        legacyCdi10NewEnabled,
+                        allowNonPortableAsyncObserverEventParameterPriority);
         injectionValidator.validateAllInjectionPoints();
 
         // 1.1 Validate beans.xml alternatives declarations (CDI Full modularity rules)
