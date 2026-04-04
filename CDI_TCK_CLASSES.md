@@ -47,14 +47,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.build.compatible.extensions.registration.RegistrationTest
 - [x] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBean.SyntheticBeanTest
 - [x] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanInjectionPoint.SyntheticBeanInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanWithLookup.SyntheticBeanWithLookupTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticObserver.SyntheticObserverTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticObserverOfParameterizedType.SyntheticObserverOfParameterizedTypeTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.validation.ValidationTest
-- [ ] org.jboss.cdi.tck.tests.context.DestroyForSameCreationalContext2Test
-- [ ] org.jboss.cdi.tck.tests.context.DestroyForSameCreationalContextTest
-- [ ] org.jboss.cdi.tck.tests.context.DestroyedInstanceReturnedByGetTest
-- [ ] org.jboss.cdi.tck.tests.context.GetFromContextualTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanWithLookup.SyntheticBeanWithLookupTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticObserver.SyntheticObserverTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticObserverOfParameterizedType.SyntheticObserverOfParameterizedTypeTest
+- [x] org.jboss.cdi.tck.tests.build.compatible.extensions.validation.ValidationTest
+- [x] org.jboss.cdi.tck.tests.context.DestroyForSameCreationalContext2Test
+- [x] org.jboss.cdi.tck.tests.context.DestroyForSameCreationalContextTest
+- [x] org.jboss.cdi.tck.tests.context.DestroyedInstanceReturnedByGetTest
+- [x] org.jboss.cdi.tck.tests.context.GetFromContextualTest
 - [ ] org.jboss.cdi.tck.tests.context.GetOnInactiveContextTest
 - [ ] org.jboss.cdi.tck.tests.context.GetWithNoCreationalContextTest
 - [ ] org.jboss.cdi.tck.tests.context.alterable.AlterableContextTest
