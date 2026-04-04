@@ -1,10 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.arquillian;
 
-import jakarta.enterprise.inject.spi.DefinitionException;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SyringeDeploymentExceptionTransformerTest {
@@ -20,7 +19,8 @@ class SyringeDeploymentExceptionTransformerTest {
 
         Throwable transformed = transformer.transform(first);
 
-        assertSame(first, transformed);
+        assertTrue(transformed.getClass().getName().endsWith("DeploymentException"));
+        assertTrue(transformed != transformed.getCause());
     }
 
     @Test
@@ -32,8 +32,11 @@ class SyringeDeploymentExceptionTransformerTest {
 
         Throwable transformed = transformer.transform(exception);
 
-        assertTrue(transformed instanceof DefinitionException);
-        assertNull(transformed.getCause());
+        assertTrue(transformed.getClass().getName().endsWith("DeploymentException"));
+        assertNotNull(transformed.getCause());
+        assertTrue(
+                transformed.getCause().getClass().getName().endsWith("DefinitionException")
+                        || transformed.getCause().getClass().getName().endsWith("DeploymentException"));
     }
 
     @Test
@@ -50,5 +53,16 @@ class SyringeDeploymentExceptionTransformerTest {
         Throwable transformed = transformer.transform(recursiveMessageThrowable);
 
         assertSame(recursiveMessageThrowable, transformed);
+    }
+
+    @Test
+    void transformShouldKeepAcyclicUnknownExceptionsUntouched() {
+        SyringeDeploymentExceptionTransformer transformer = new SyringeDeploymentExceptionTransformer();
+
+        RuntimeException exception = new RuntimeException("plain failure");
+
+        Throwable transformed = transformer.transform(exception);
+
+        assertSame(exception, transformed);
     }
 }

@@ -16,6 +16,7 @@ import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.InterceptorInfo;
 import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
 import jakarta.enterprise.inject.build.compatible.spi.MethodConfig;
+import jakarta.enterprise.inject.build.compatible.spi.ParameterConfig;
 import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.MetaAnnotations;
 import jakarta.enterprise.inject.build.compatible.spi.ObserverInfo;
@@ -29,9 +30,13 @@ import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.lang.model.declarations.FieldInfo;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.configurator.AnnotatedFieldConfigurator;
+import jakarta.enterprise.inject.spi.configurator.AnnotatedMethodConfigurator;
+import jakarta.enterprise.inject.spi.configurator.AnnotatedParameterConfigurator;
 import jakarta.enterprise.lang.model.declarations.ParameterInfo;
 import jakarta.interceptor.Interceptor;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
+import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -44,9 +49,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.spi.SPIUtils.*;
@@ -117,6 +124,10 @@ public class BuildCompatibleExtensionRunner {
             for (PhaseMethodInvocation invocation : invocations) {
                 invokePhaseMethod(invocation, phase, syntheticComponents, enhancementModelState);
             }
+        }
+
+        if (enhancementModelState != null) {
+            applyEnhancementModelState(enhancementModelState);
         }
 
         if (syntheticComponents != null) {
@@ -1150,6 +1161,138 @@ public class BuildCompatibleExtensionRunner {
                 fieldConfigs.put(field, BceEnhancementModels.fieldConfig(field));
             }
             return fieldConfigs.get(field);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void applyEnhancementModelState(EnhancementModelState enhancementModelState) {
+        Set<Class<?>> affectedClasses = new LinkedHashSet<Class<?>>();
+        affectedClasses.addAll(enhancementModelState.classConfigs.keySet());
+        for (Method method : enhancementModelState.methodConfigs.keySet()) {
+            affectedClasses.add(method.getDeclaringClass());
+        }
+        for (Field field : enhancementModelState.fieldConfigs.keySet()) {
+            affectedClasses.add(field.getDeclaringClass());
+        }
+
+        for (Class<?> clazz : affectedClasses) {
+            jakarta.enterprise.inject.spi.AnnotatedType<?> baseType = knowledgeBase.getAnnotatedTypeOverride((Class) clazz);
+            if (baseType == null) {
+                baseType = beanManager.createAnnotatedType((Class) clazz);
+            }
+
+            AnnotatedTypeConfiguratorImpl typeConfigurator = new AnnotatedTypeConfiguratorImpl(baseType);
+            boolean changed = false;
+
+            ClassConfig classConfig = enhancementModelState.classConfigs.get(clazz);
+            if (classConfig != null) {
+                replaceTypeAnnotations(typeConfigurator, classConfig.info().annotations());
+                changed = true;
+            }
+
+            for (Map.Entry<Field, FieldConfig> entry : enhancementModelState.fieldConfigs.entrySet()) {
+                Field field = entry.getKey();
+                if (!clazz.equals(field.getDeclaringClass())) {
+                    continue;
+                }
+                if (replaceFieldAnnotations(typeConfigurator, field, entry.getValue().info().annotations())) {
+                    changed = true;
+                }
+            }
+
+            for (Map.Entry<Method, MethodConfig> entry : enhancementModelState.methodConfigs.entrySet()) {
+                Method method = entry.getKey();
+                if (!clazz.equals(method.getDeclaringClass())) {
+                    continue;
+                }
+                if (replaceMethodAnnotations(typeConfigurator, method, entry.getValue())) {
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                knowledgeBase.setAnnotatedTypeOverride((Class) clazz, typeConfigurator.complete());
+            }
+        }
+    }
+
+    private void replaceTypeAnnotations(AnnotatedTypeConfiguratorImpl<?> typeConfigurator,
+                                        Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
+        typeConfigurator.removeAll();
+        addAnnotationsToType(typeConfigurator, annotations);
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean replaceFieldAnnotations(AnnotatedTypeConfiguratorImpl<?> typeConfigurator,
+                                            Field field,
+                                            Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
+        for (AnnotatedFieldConfigurator<?> fieldConfigurator : typeConfigurator.fields()) {
+            if (field.equals(fieldConfigurator.getAnnotated().getJavaMember())) {
+                fieldConfigurator.removeAll();
+                addAnnotationsToField((AnnotatedFieldConfigurator) fieldConfigurator, annotations);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean replaceMethodAnnotations(AnnotatedTypeConfiguratorImpl<?> typeConfigurator,
+                                             Method method,
+                                             MethodConfig methodConfig) {
+        for (AnnotatedMethodConfigurator<?> methodConfigurator : typeConfigurator.methods()) {
+            if (!method.equals(methodConfigurator.getAnnotated().getJavaMember())) {
+                continue;
+            }
+
+            methodConfigurator.removeAll();
+            addAnnotationsToMethod((AnnotatedMethodConfigurator) methodConfigurator, methodConfig.info().annotations());
+
+            List<ParameterConfig> parameterConfigs = methodConfig.parameters();
+            List<AnnotatedParameterConfigurator<?>> parameterConfigurators =
+                    (List<AnnotatedParameterConfigurator<?>>) (List<?>) methodConfigurator.params();
+            int parameterCount = Math.min(parameterConfigs.size(), parameterConfigurators.size());
+            for (int i = 0; i < parameterCount; i++) {
+                AnnotatedParameterConfigurator<?> parameterConfigurator = parameterConfigurators.get(i);
+                parameterConfigurator.removeAll();
+                addAnnotationsToParameter((AnnotatedParameterConfigurator) parameterConfigurator,
+                        parameterConfigs.get(i).info().annotations());
+            }
+
+            return true;
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void addAnnotationsToType(AnnotatedTypeConfiguratorImpl<?> typeConfigurator,
+                                      Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
+        for (jakarta.enterprise.lang.model.AnnotationInfo annotationInfo : annotations) {
+            typeConfigurator.add(BceMetadata.unwrapAnnotationInfo(annotationInfo));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void addAnnotationsToField(AnnotatedFieldConfigurator fieldConfigurator,
+                                       Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
+        for (jakarta.enterprise.lang.model.AnnotationInfo annotationInfo : annotations) {
+            fieldConfigurator.add(BceMetadata.unwrapAnnotationInfo(annotationInfo));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void addAnnotationsToMethod(AnnotatedMethodConfigurator methodConfigurator,
+                                        Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
+        for (jakarta.enterprise.lang.model.AnnotationInfo annotationInfo : annotations) {
+            methodConfigurator.add(BceMetadata.unwrapAnnotationInfo(annotationInfo));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void addAnnotationsToParameter(AnnotatedParameterConfigurator parameterConfigurator,
+                                           Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
+        for (jakarta.enterprise.lang.model.AnnotationInfo annotationInfo : annotations) {
+            parameterConfigurator.add(BceMetadata.unwrapAnnotationInfo(annotationInfo));
         }
     }
 

@@ -216,6 +216,14 @@ public class Syringe {
      */
     private boolean shutdownStarted = false;
     /**
+     * ClassLoader used when retaining dynamic BCE metadata for this container lifecycle.
+     */
+    private ClassLoader dynamicAnnotationClassLoader;
+    /**
+     * Whether this container lifecycle retained dynamic BCE metadata.
+     */
+    private boolean dynamicAnnotationsRetained = false;
+    /**
      * Whether BeforeBeanDiscovery has already been fired for this container lifecycle.
      */
     private boolean beforeBeanDiscoveryFired = false;
@@ -535,6 +543,8 @@ public class Syringe {
         shutdownStarted = false;
         beforeBeanDiscoveryFired = false;
         beforeShutdownFired = false;
+        dynamicAnnotationClassLoader = null;
+        dynamicAnnotationsRetained = false;
         processedSyntheticAnnotatedTypeIds.clear();
         syntheticAnnotatedTypeClasses.clear();
 
@@ -549,6 +559,9 @@ public class Syringe {
 
         // Step 1.2: Create BeanManager
         beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
+        dynamicAnnotationClassLoader = beanManager.getRegistrationClassLoader();
+        AnnotationsEnum.retainDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
+        dynamicAnnotationsRetained = true;
         beanManager.setLegacyCdi10NewEnabled(legacyCdi10NewEnabled);
         beanManager.registerExtensions(extensions);
         buildCompatibleExtensionRunner = new BuildCompatibleExtensionRunner(
@@ -984,7 +997,9 @@ public class Syringe {
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCache();
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCacheForClassLoader(classLoader);
         BeansXmlParser.clearJaxbContextCacheForClassLoader(classLoader);
-        AnnotationsEnum.clearDynamicAnnotationsForClassLoader(classLoader);
+        if (dynamicAnnotationsRetained && dynamicAnnotationClassLoader != null) {
+            AnnotationsEnum.releaseDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
+        }
         ConversationImpl.clearAllGlobalState();
         ConversationPropagationRegistry.clear();
         DestroyedInstanceTracker.clear();
@@ -1023,6 +1038,8 @@ public class Syringe {
             runtimeDecoratorAwareProxyGenerator.clearCache();
             runtimeDecoratorAwareProxyGenerator = null;
         }
+        dynamicAnnotationsRetained = false;
+        dynamicAnnotationClassLoader = null;
         beanManager = null;
     }
 
@@ -1546,7 +1563,7 @@ public class Syringe {
             if (!hasAlternativeAnnotation(candidate)) {
                 continue;
             }
-            Integer priority = getPriorityValue(candidate);
+            Integer priority = getEffectivePriority(candidate);
             if (priority == null) {
                 continue;
             }
@@ -1555,7 +1572,10 @@ public class Syringe {
             }
         }
         enabled.sort(Comparator
-                .comparingInt((Class<?> clazz) -> getPriorityValue(clazz))
+                .comparingInt((Class<?> clazz) -> {
+                    Integer priority = getEffectivePriority(clazz);
+                    return priority != null ? priority : Integer.MAX_VALUE;
+                })
                 .thenComparing(Class::getName));
         return enabled;
     }
@@ -1569,7 +1589,7 @@ public class Syringe {
             if (ActivateRequestContextInterceptor.class.equals(candidate)) {
                 continue;
             }
-            Integer priority = getPriorityValue(candidate);
+            Integer priority = getEffectivePriority(candidate);
             if (priority == null) {
                 continue;
             }
@@ -1578,7 +1598,10 @@ public class Syringe {
             }
         }
         enabled.sort(Comparator
-                .comparingInt((Class<?> clazz) -> getPriorityValue(clazz))
+                .comparingInt((Class<?> clazz) -> {
+                    Integer priority = getEffectivePriority(clazz);
+                    return priority != null ? priority : Integer.MAX_VALUE;
+                })
                 .thenComparing(Class::getName));
         return enabled;
     }
@@ -1589,7 +1612,7 @@ public class Syringe {
             if (!hasDecoratorAnnotation(candidate)) {
                 continue;
             }
-            Integer priority = getPriorityValue(candidate);
+            Integer priority = getEffectivePriority(candidate);
             if (priority == null) {
                 continue;
             }
@@ -1598,9 +1621,48 @@ public class Syringe {
             }
         }
         enabled.sort(Comparator
-                .comparingInt((Class<?> clazz) -> getPriorityValue(clazz))
+                .comparingInt((Class<?> clazz) -> {
+                    Integer priority = getEffectivePriority(clazz);
+                    return priority != null ? priority : Integer.MAX_VALUE;
+                })
                 .thenComparing(Class::getName));
         return enabled;
+    }
+
+    private Integer getEffectivePriority(Class<?> candidate) {
+        if (candidate == null) {
+            return null;
+        }
+
+        Integer directPriority = getPriorityValue(candidate);
+        if (directPriority != null) {
+            return directPriority;
+        }
+
+        AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(candidate);
+        if (override == null) {
+            return null;
+        }
+
+        for (Annotation annotation : override.getAnnotations()) {
+            Integer value = extractPriorityValue(annotation);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private Integer extractPriorityValue(Annotation annotation) {
+        if (annotation == null || !hasPriorityAnnotation(annotation.annotationType())) {
+            return null;
+        }
+        try {
+            Object value = annotation.annotationType().getMethod("value").invoke(annotation);
+            return value instanceof Integer ? (Integer) value : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private void addClassByName(List<Class<?>> target, String className) {

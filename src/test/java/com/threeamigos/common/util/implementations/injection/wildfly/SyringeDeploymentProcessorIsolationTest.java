@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -108,6 +109,48 @@ class SyringeDeploymentProcessorIsolationTest {
 
         assertEquals(1, selected.size());
         assertEquals("org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest", selected.get(0));
+    }
+
+    @Test
+    @DisplayName("Chapter 27.2 deployment isolation: deployment class collection excludes non-bean libraries")
+    void shouldExcludeClassesFromLibrariesWithoutBeansXml() {
+        List<String> relativePaths = Arrays.asList(
+                "WEB-INF/lib/tck-support.jar/org/jboss/cdi/tck/tests/alternative/selection/FooProducer.class",
+                "WEB-INF/lib/bravo.jar/META-INF/beans.xml",
+                "WEB-INF/lib/bravo.jar/org/jboss/cdi/tck/tests/alternative/selection/Foo.class",
+                "WEB-INF/classes/org/jboss/cdi/tck/tests/alternative/selection/SelectedAlternative01Test.class"
+        );
+
+        Set<String> beanArchiveLibraries = SyringeDeploymentProcessor.collectBeanArchiveLibraryPrefixes(relativePaths);
+        assertEquals(1, beanArchiveLibraries.size());
+        assertTrue(beanArchiveLibraries.contains("WEB-INF/lib/bravo.jar/"));
+
+        assertNull(SyringeDeploymentProcessor.toDeploymentClassEntry(
+                "WEB-INF/lib/tck-support.jar/org/jboss/cdi/tck/tests/alternative/selection/FooProducer.class",
+                beanArchiveLibraries));
+
+        assertEquals(
+                "org/jboss/cdi/tck/tests/alternative/selection/Foo.class",
+                SyringeDeploymentProcessor.toDeploymentClassEntry(
+                        "WEB-INF/lib/bravo.jar/org/jboss/cdi/tck/tests/alternative/selection/Foo.class",
+                        beanArchiveLibraries));
+
+        assertEquals(
+                "org/jboss/cdi/tck/tests/alternative/selection/SelectedAlternative01Test.class",
+                SyringeDeploymentProcessor.toDeploymentClassEntry(
+                        "WEB-INF/classes/org/jboss/cdi/tck/tests/alternative/selection/SelectedAlternative01Test.class",
+                        beanArchiveLibraries));
+    }
+
+    @Test
+    @DisplayName("Chapter 27.2 deployment isolation: beans.xml discovery includes deployment and bean-library descriptors only")
+    void shouldRecognizeOnlyDeploymentAndLibraryBeansXmlPaths() {
+        assertTrue(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("WEB-INF/beans.xml"));
+        assertTrue(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("WEB-INF/classes/META-INF/beans.xml"));
+        assertTrue(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("WEB-INF/lib/bravo.jar/META-INF/beans.xml"));
+
+        assertFalse(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("WEB-INF/lib/bravo.jar/beans.xml"));
+        assertFalse(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("META-INF/services/jakarta.enterprise.inject.spi.Extension"));
     }
 
     static class DynamicLookupTestAnchor {

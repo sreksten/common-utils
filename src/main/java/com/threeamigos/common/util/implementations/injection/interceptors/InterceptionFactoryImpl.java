@@ -286,7 +286,8 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
             }
 
             // Create interceptor chain for this method using builder
-            InterceptorChain.Builder chainBuilder = InterceptorChain.builder();
+            InterceptorChain.Builder chainBuilder = InterceptorChain.builder()
+                    .withInterceptorBindings(interceptorBindings);
 
             for (int i = 0; i < interceptorInstances.size(); i++) {
                 if (i < aroundInvokeMethods.size()) {

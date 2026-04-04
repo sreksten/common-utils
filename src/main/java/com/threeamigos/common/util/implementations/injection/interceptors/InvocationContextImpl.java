@@ -2,11 +2,15 @@ package com.threeamigos.common.util.implementations.injection.interceptors;
 
 import jakarta.interceptor.InvocationContext;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Implementation of Jakarta Interceptors InvocationContext.
@@ -75,6 +79,7 @@ public class InvocationContextImpl implements InvocationContext {
      * The chain of interceptor invocations to execute.
      */
     private final InterceptorChain chain;
+    private final Set<Annotation> interceptorBindings;
 
     /**
      * Current position in the interceptor chain.
@@ -108,6 +113,7 @@ public class InvocationContextImpl implements InvocationContext {
         this.parameters = parameters != null ? parameters : new Object[0];
         this.contextData = new HashMap<>();
         this.chain = Objects.requireNonNull(chain, "chain cannot be null");
+        this.interceptorBindings = copyInterceptorBindings(chain);
         this.targetInvocation = Objects.requireNonNull(targetInvocation, "targetInvocation cannot be null");
     }
 
@@ -131,6 +137,7 @@ public class InvocationContextImpl implements InvocationContext {
         this.parameters = parameters != null ? parameters : new Object[0];
         this.contextData = new HashMap<>();
         this.chain = Objects.requireNonNull(chain, "chain cannot be null");
+        this.interceptorBindings = copyInterceptorBindings(chain);
         this.targetInvocation = Objects.requireNonNull(targetInvocation, "targetInvocation cannot be null");
     }
 
@@ -152,6 +159,7 @@ public class InvocationContextImpl implements InvocationContext {
         this.parameters = new Object[0]; // Lifecycle callbacks have no parameters
         this.contextData = new HashMap<>();
         this.chain = Objects.requireNonNull(chain, "chain cannot be null");
+        this.interceptorBindings = copyInterceptorBindings(chain);
         this.targetInvocation = Objects.requireNonNull(targetInvocation, "targetInvocation cannot be null");
     }
 
@@ -211,6 +219,38 @@ public class InvocationContextImpl implements InvocationContext {
         return null;
     }
 
+    @Override
+    public Set<Annotation> getInterceptorBindings() {
+        return interceptorBindings;
+    }
+
+    @Override
+    public <T extends Annotation> T getInterceptorBinding(Class<T> annotationType) {
+        if (annotationType == null || interceptorBindings.isEmpty()) {
+            return null;
+        }
+        for (Annotation interceptorBinding : interceptorBindings) {
+            if (annotationType.equals(interceptorBinding.annotationType())) {
+                return annotationType.cast(interceptorBinding);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public <T extends Annotation> Set<T> getInterceptorBindings(Class<T> annotationType) {
+        if (annotationType == null || interceptorBindings.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<T> out = new LinkedHashSet<>();
+        for (Annotation interceptorBinding : interceptorBindings) {
+            if (annotationType.equals(interceptorBinding.annotationType())) {
+                out.add(annotationType.cast(interceptorBinding));
+            }
+        }
+        return Collections.unmodifiableSet(out);
+    }
+
     /**
      * Proceeds to the next interceptor in the chain, or to the target method if all interceptors have been invoked.
      *
@@ -252,6 +292,14 @@ public class InvocationContextImpl implements InvocationContext {
             // Lifecycle callback - no parameters
             return 0;
         }
+    }
+
+    private static Set<Annotation> copyInterceptorBindings(InterceptorChain chain) {
+        Set<Annotation> bindings = chain.getInterceptorBindings();
+        if (bindings == null || bindings.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return Collections.unmodifiableSet(new LinkedHashSet<>(bindings));
     }
 
     /**

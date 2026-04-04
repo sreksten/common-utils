@@ -120,6 +120,8 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     private volatile boolean legacyCdi10NewEnabled;
     private volatile boolean afterBeanDiscoveryFired;
     private volatile boolean afterDeploymentValidationFired;
+    private final Map<Class<? extends Annotation>, List<Context>> bceContextInstances =
+            new ConcurrentHashMap<Class<? extends Annotation>, List<Context>>();
 
     /**
      * Creates a new BeanManager implementation.
@@ -187,6 +189,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
      */
     public void clearRuntimeState() {
         registeredExtensions.clear();
+        bceContextInstances.clear();
         beanResolver.clearRuntimeState();
         decoratorAwareProxyGenerator.clearCache();
     }
@@ -1528,6 +1531,10 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         try {
             activeContexts = contextManager.getActiveContexts(scopeType);
         } catch (IllegalArgumentException e) {
+            Context bceContext = findActiveBceContext(scopeType);
+            if (bceContext != null) {
+                return bceContext;
+            }
             throw new jakarta.enterprise.context.ContextNotActiveException(
                     "Context not active for scope: " + scopeType.getName());
         }
@@ -1540,6 +1547,10 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             Collection<com.threeamigos.common.util.implementations.injection.scopes.ScopeContext> registered =
                     contextManager.getRegisteredContexts(scopeType);
             if (registered.isEmpty()) {
+                Context bceContext = findActiveBceContext(scopeType);
+                if (bceContext != null) {
+                    return bceContext;
+                }
                 throw new jakarta.enterprise.context.ContextNotActiveException(
                         "Context not active for scope: " + scopeType.getName());
             }
@@ -1593,16 +1604,60 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             // no runtime context for this scope
         }
 
-        for (Class<? extends AlterableContext> contextImplementation :
-                knowledgeBase.getContextImplementations(scopeType)) {
-            try {
-                contexts.add(contextImplementation.getDeclaredConstructor().newInstance());
-            } catch (Exception ignored) {
-                // ignore unusable custom context implementations and return the rest
+        for (Context bceContext : getOrCreateBceContexts(scopeType)) {
+            if (bceContext != null) {
+                contexts.add(bceContext);
             }
         }
 
         return contexts;
+    }
+
+    private Context findActiveBceContext(Class<? extends Annotation> scopeType) {
+        List<Context> contexts = getOrCreateBceContexts(scopeType);
+        if (contexts.isEmpty()) {
+            return null;
+        }
+
+        Context activeContext = null;
+        for (Context context : contexts) {
+            if (context == null || !context.isActive()) {
+                continue;
+            }
+            if (activeContext != null) {
+                throw new IllegalStateException("More than one active context for scope: " + scopeType.getName());
+            }
+            activeContext = context;
+        }
+        return activeContext;
+    }
+
+    private List<Context> getOrCreateBceContexts(Class<? extends Annotation> scopeType) {
+        List<Context> existing = bceContextInstances.get(scopeType);
+        if (existing != null) {
+            return existing;
+        }
+
+        List<Class<? extends AlterableContext>> implementations = knowledgeBase.getContextImplementations(scopeType);
+        if (implementations.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Context> created = new ArrayList<Context>();
+        for (Class<? extends AlterableContext> contextImplementation : implementations) {
+            try {
+                created.add(contextImplementation.getDeclaredConstructor().newInstance());
+            } catch (Exception ignored) {
+                // ignore unusable custom context implementations and continue with the rest
+            }
+        }
+        if (created.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Context> previous = bceContextInstances.putIfAbsent(
+                scopeType, Collections.unmodifiableList(created));
+        return previous != null ? previous : bceContextInstances.get(scopeType);
     }
 
     private static final class SerializedBeanManagerReference implements Serializable {
@@ -1791,8 +1846,16 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
         // Check type compatibility
         boolean typeMatches = false;
+        boolean requiredTypeIsObject = requiredType instanceof Class<?> && Object.class.equals(requiredType);
         for (Type beanType : beanTypes) {
             if (beanType == null || !isLegalBeanType(beanType)) {
+                continue;
+            }
+            if (requiredTypeIsObject) {
+                typeMatches = true;
+                break;
+            }
+            if (!sameRawType(requiredType, beanType)) {
                 continue;
             }
             if (typeChecker.isAssignable(requiredType, beanType)) {
@@ -3219,7 +3282,11 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (clazz == null) {
             return null;
         }
-        return extractPriorityFromAnnotations(clazz.getAnnotations());
+        jakarta.enterprise.inject.spi.AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(clazz);
+        Annotation[] annotations = override != null
+                ? override.getAnnotations().toArray(new Annotation[0])
+                : clazz.getAnnotations();
+        return extractPriorityFromAnnotations(annotations);
     }
 
     private Integer extractPriorityFromAnnotations(Annotation[] annotations) {

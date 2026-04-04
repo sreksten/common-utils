@@ -1523,7 +1523,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
                 // If interceptors were found for this method, build a chain
                 if (!interceptors.isEmpty()) {
-                    InterceptorChain chain = buildInterceptorChain(interceptors, InterceptionType.AROUND_INVOKE);
+                    Set<Annotation> methodBindings = interceptorResolver.resolveBindings(beanClass, method);
+                    InterceptorChain chain = buildInterceptorChain(
+                            interceptors,
+                            InterceptionType.AROUND_INVOKE,
+                            methodBindings
+                    );
                     chains.put(method, chain);
                     continue;
                 }
@@ -1563,9 +1568,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         );
 
         if (!constructorInterceptors.isEmpty()) {
+            Set<Annotation> constructorBindings =
+                    interceptorResolver.resolveBindingsForConstructor(beanClass, constructorForInterception);
             this.constructorInterceptorChain = buildInterceptorChain(
                 constructorInterceptors,
-                InterceptionType.AROUND_CONSTRUCT
+                InterceptionType.AROUND_CONSTRUCT,
+                constructorBindings
             );
         } else {
             this.constructorInterceptorChain = null;
@@ -1581,11 +1589,13 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             null,  // null method = lifecycle callback
             InterceptionType.POST_CONSTRUCT
         );
+        Set<Annotation> lifecycleBindings = interceptorResolver.resolveBindings(beanClass, null);
 
         if (!postConstructInterceptors.isEmpty()) {
             this.postConstructInterceptorChain = buildLifecycleInterceptorChain(
                 postConstructInterceptors,
-                InterceptionType.POST_CONSTRUCT
+                InterceptionType.POST_CONSTRUCT,
+                lifecycleBindings
             );
         } else {
             this.postConstructInterceptorChain = null;
@@ -1601,7 +1611,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         if (!preDestroyInterceptors.isEmpty()) {
             this.preDestroyInterceptorChain = buildLifecycleInterceptorChain(
                 preDestroyInterceptors,
-                InterceptionType.PRE_DESTROY
+                InterceptionType.PRE_DESTROY,
+                lifecycleBindings
             );
         } else {
             this.preDestroyInterceptorChain = null;
@@ -1635,9 +1646,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * @return an immutable InterceptorChain ready for execution
      * @throws RuntimeException if interceptor instance creation fails
      */
-    private InterceptorChain buildInterceptorChain(List<InterceptorInfo> interceptors, InterceptionType interceptionType) {
+    private InterceptorChain buildInterceptorChain(List<InterceptorInfo> interceptors,
+                                                   InterceptionType interceptionType,
+                                                   Set<Annotation> interceptorBindings) {
         // Use the Builder pattern to construct the chain
-        InterceptorChain.Builder builder = InterceptorChain.builder();
+        InterceptorChain.Builder builder = InterceptorChain.builder()
+                .withInterceptorBindings(interceptorBindings);
 
         // Add each interceptor to the chain in order (already sorted by priority)
         for (InterceptorInfo interceptorInfo : interceptors) {
@@ -1672,10 +1686,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      */
     private InterceptorChain buildLifecycleInterceptorChain(
             List<InterceptorInfo> interceptors,
-            InterceptionType interceptionType) {
+            InterceptionType interceptionType,
+            Set<Annotation> interceptorBindings) {
 
         // Use the Builder pattern to construct the chain
-        InterceptorChain.Builder builder = InterceptorChain.builder();
+        InterceptorChain.Builder builder = InterceptorChain.builder()
+                .withInterceptorBindings(interceptorBindings);
 
         // Add interceptor lifecycle methods to the chain
         // Note: The target bean's lifecycle methods are NOT added to the interceptor chain here.
@@ -1883,7 +1899,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             if (!postConstructInterceptors.isEmpty()) {
                 postConstructInterceptorChain = buildLifecycleInterceptorChain(
                         postConstructInterceptors,
-                        InterceptionType.POST_CONSTRUCT
+                        InterceptionType.POST_CONSTRUCT,
+                        interceptorResolver.resolveBindings(beanClass, null)
                 );
             }
         }
@@ -1897,7 +1914,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             if (!preDestroyInterceptors.isEmpty()) {
                 preDestroyInterceptorChain = buildLifecycleInterceptorChain(
                         preDestroyInterceptors,
-                        InterceptionType.PRE_DESTROY
+                        InterceptionType.PRE_DESTROY,
+                        interceptorResolver.resolveBindings(beanClass, null)
                 );
             }
         }
@@ -1998,6 +2016,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                     InterceptorChain.Builder chainBuilder = InterceptorChain.builder();
                     InterceptorChain existingChain = effectiveChains.get(method);
                     if (existingChain != null) {
+                        chainBuilder.withInterceptorBindings(existingChain.getInterceptorBindings());
                         for (InterceptorChain.InterceptorInvocation invocation : existingChain.getInvocations()) {
                             chainBuilder.addInvocation(invocation);
                         }

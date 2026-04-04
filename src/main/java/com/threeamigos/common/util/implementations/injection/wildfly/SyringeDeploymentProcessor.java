@@ -17,13 +17,10 @@ import org.jboss.modules.Module;
 import org.jboss.modules.ModuleLoader;
 import org.jboss.modules.ModuleLoadException;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -102,17 +99,13 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         }
 
         List<BeansXml> deploymentBeansXmlConfigurations = collectDeploymentBeansXmlConfigurations(deploymentUnit);
-        System.out.println("[Syringe][WildFly] Deployment beans.xml configurations for "
-                + deploymentUnit.getName() + ": " + deploymentBeansXmlConfigurations.size());
-        for (BeansXml beansXml : deploymentBeansXmlConfigurations) {
-            System.out.println("[Syringe][WildFly]  - " + beansXml);
-        }
 
         // 2. Initialize Syringe via Bootstrap
         SyringeBootstrap bootstrap = new SyringeBootstrap(
                 discoveredClasses,
                 module.getClassLoader(),
-                deploymentBeansXmlConfigurations);
+                deploymentBeansXmlConfigurations,
+                deploymentUnit.getName());
         Syringe syringe = null;
         try {
             syringe = bootstrap.bootstrap();
@@ -349,53 +342,140 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
     }
 
     static List<String> collectDeploymentClassNames(DeploymentUnit deploymentUnit) {
-        List<String> classNames = new ArrayList<String>();
+        Set<String> classNames = new HashSet<String>();
         if (deploymentUnit == null) {
-            return classNames;
-        }
-
-        ResourceRoot deploymentRoot = deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
-        if (deploymentRoot == null || deploymentRoot.getRoot() == null) {
-            return classNames;
-        }
-
-        try {
-            Object root = deploymentRoot.getRoot();
-            Method getChild = root.getClass().getMethod("getChild", String.class);
-            Object classesRoot = getChild.invoke(root, "WEB-INF/classes");
-
-            Method exists = classesRoot.getClass().getMethod("exists");
-            boolean classesRootExists = Boolean.TRUE.equals(exists.invoke(classesRoot));
-            if (!classesRootExists) {
-                classesRoot = root;
-            }
-
-            Method getChildrenRecursively = classesRoot.getClass().getMethod("getChildrenRecursively");
-            @SuppressWarnings("unchecked")
-            List<Object> files = (List<Object>) getChildrenRecursively.invoke(classesRoot);
-            for (Object file : files) {
-                Method relativePathMethod = file.getClass().getMethod("getPathNameRelativeTo", classesRoot.getClass());
-                String relativePath = (String) relativePathMethod.invoke(file, classesRoot);
-                if (relativePath == null || !relativePath.endsWith(".class")) {
-                    continue;
-                }
-                if (relativePath.contains("/WEB-INF/lib/") || relativePath.contains("\\WEB-INF\\lib\\")) {
-                    continue;
-                }
-                if (relativePath.endsWith("module-info.class") || relativePath.endsWith("package-info.class")) {
-                    continue;
-                }
-                String className = relativePath
-                        .substring(0, relativePath.length() - ".class".length())
-                        .replace('/', '.')
-                        .replace('\\', '.');
-                classNames.add(className);
-            }
-        } catch (Exception e) {
             return new ArrayList<String>();
         }
 
-        return classNames;
+        ResourceRoot deploymentRoot = deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
+        if (deploymentRoot != null && deploymentRoot.getRoot() != null) {
+            // Prefer deployment classes only; avoid traversing mounted container/module resources.
+            collectClassNamesFromDeploymentRoot(deploymentRoot.getRoot(), classNames);
+        }
+
+        return new ArrayList<String>(classNames);
+    }
+
+    private static void collectClassNamesFromDeploymentRoot(Object deploymentRoot,
+                                                            Set<String> classNames) {
+        if (deploymentRoot == null || classNames == null) {
+            return;
+        }
+
+        List<Object> files = listChildrenRecursively(deploymentRoot);
+        if (files.isEmpty()) {
+            return;
+        }
+
+        List<String> relativePaths = new ArrayList<String>();
+        for (Object file : files) {
+            String relativePath = extractRelativePath(file, deploymentRoot);
+            if (relativePath != null) {
+                relativePaths.add(relativePath.replace('\\', '/'));
+            }
+        }
+
+        Set<String> beanArchiveLibraryPrefixes = collectBeanArchiveLibraryPrefixes(relativePaths);
+        for (String relativePath : relativePaths) {
+            String classEntry = toDeploymentClassEntry(relativePath, beanArchiveLibraryPrefixes);
+            if (classEntry == null) {
+                continue;
+            }
+            String className = classEntry
+                    .substring(0, classEntry.length() - ".class".length())
+                    .replace('/', '.');
+            classNames.add(className);
+        }
+    }
+
+    static String toDeploymentClassEntry(String relativePath, Set<String> beanArchiveLibraryPrefixes) {
+        if (relativePath == null || !relativePath.endsWith(".class")) {
+            return null;
+        }
+
+        String normalizedPath = trimLeadingSlashes(relativePath.replace('\\', '/'));
+        int jarSeparator = normalizedPath.indexOf(".jar/");
+        if (jarSeparator >= 0) {
+            String jarPrefix = normalizedPath.substring(0, jarSeparator + ".jar/".length());
+            if (!beanArchiveLibraryPrefixes.contains(jarPrefix)) {
+                return null;
+            }
+            normalizedPath = normalizedPath.substring(jarSeparator + ".jar/".length());
+        } else {
+            normalizedPath = trimToWebInfClasses(normalizedPath);
+            if (normalizedPath == null) {
+                return null;
+            }
+        }
+
+        normalizedPath = trimLeadingSlashes(normalizedPath);
+        if (normalizedPath.startsWith("META-INF/")) {
+            return null;
+        }
+        if (normalizedPath.endsWith("module-info.class") || normalizedPath.endsWith("package-info.class")) {
+            return null;
+        }
+        return normalizedPath;
+    }
+
+    static Set<String> collectBeanArchiveLibraryPrefixes(List<String> relativePaths) {
+        if (relativePaths == null || relativePaths.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        Set<String> prefixes = new HashSet<String>();
+        for (String relativePath : relativePaths) {
+            if (relativePath == null) {
+                continue;
+            }
+            String normalized = trimLeadingSlashes(relativePath.replace('\\', '/'));
+            if (!isBeanArchiveLibraryBeansXmlPath(normalized)) {
+                continue;
+            }
+            int jarSeparator = normalized.indexOf(".jar/");
+            if (jarSeparator < 0) {
+                continue;
+            }
+            prefixes.add(normalized.substring(0, jarSeparator + ".jar/".length()));
+        }
+        return prefixes;
+    }
+
+    private static String extractRelativePath(Object file, Object root) {
+        if (file == null || root == null) {
+            return null;
+        }
+        try {
+            Method[] methods = file.getClass().getMethods();
+            for (Method method : methods) {
+                if (!"getPathNameRelativeTo".equals(method.getName())) {
+                    continue;
+                }
+                if (method.getParameterTypes().length != 1) {
+                    continue;
+                }
+                Object value = method.invoke(file, root);
+                if (value instanceof String) {
+                    return (String) value;
+                }
+            }
+        } catch (Exception ignored) {
+            // Fall back to path name.
+        }
+        String filePath = getPathName(file);
+        String rootPath = getPathName(root);
+        if (filePath != null && rootPath != null) {
+            String normalizedFilePath = normalizeForComparison(filePath);
+            String normalizedRootPath = normalizeForComparison(rootPath);
+            if (normalizedFilePath.startsWith(normalizedRootPath)) {
+                String relative = normalizedFilePath.substring(normalizedRootPath.length());
+                while (relative.startsWith("/")) {
+                    relative = relative.substring(1);
+                }
+                return relative;
+            }
+        }
+        return null;
     }
 
     static List<BeansXml> collectDeploymentBeansXmlConfigurations(DeploymentUnit deploymentUnit) {
@@ -409,98 +489,192 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
 
         ResourceRoot deploymentRoot = deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
         if (deploymentRoot != null && deploymentRoot.getRoot() != null) {
-            collectBeansXmlFromVirtualRoot(deploymentRoot.getRoot(), parser, seenPaths, configurations);
-        }
-
-        List<ResourceRoot> resourceRoots = deploymentUnit.getAttachmentList(Attachments.RESOURCE_ROOTS);
-        if (resourceRoots != null) {
-            for (ResourceRoot resourceRoot : resourceRoots) {
-                if (resourceRoot == null || resourceRoot.getRoot() == null) {
-                    continue;
-                }
-                collectBeansXmlFromVirtualRoot(resourceRoot.getRoot(), parser, seenPaths, configurations);
-            }
+            collectBeansXmlFromDeploymentRoot(deploymentRoot.getRoot(), parser, seenPaths, configurations);
         }
 
         return configurations;
     }
 
-    private static void collectBeansXmlFromVirtualRoot(Object root,
-                                                       BeansXmlParser parser,
-                                                       Set<String> seenPaths,
-                                                       List<BeansXml> sink) {
+    private static void collectBeansXmlFromDeploymentRoot(Object deploymentRoot,
+                                                          BeansXmlParser parser,
+                                                          Set<String> seenPaths,
+                                                          List<BeansXml> sink) {
+        List<Object> files = listChildrenRecursively(deploymentRoot);
+        if (!files.isEmpty()) {
+            for (Object file : files) {
+                String relativePath = extractRelativePath(file, deploymentRoot);
+                if (relativePath == null) {
+                    continue;
+                }
+                String normalized = trimLeadingSlashes(relativePath.replace('\\', '/'));
+                if (isDeploymentBeansXmlPath(normalized)) {
+                    addBeansXml(file, parser, seenPaths, sink);
+                }
+            }
+            return;
+        }
+
+        collectBeansXmlFromPath(deploymentRoot, "WEB-INF/beans.xml", parser, seenPaths, sink);
+        collectBeansXmlFromPath(deploymentRoot, "META-INF/beans.xml", parser, seenPaths, sink);
+        collectBeansXmlFromPath(deploymentRoot, "WEB-INF/classes/META-INF/beans.xml", parser, seenPaths, sink);
+    }
+
+    private static void collectBeansXmlFromPath(Object deploymentRoot,
+                                                String relativePath,
+                                                BeansXmlParser parser,
+                                                Set<String> seenPaths,
+                                                List<BeansXml> sink) {
+        if (deploymentRoot == null || relativePath == null || relativePath.isEmpty()) {
+            return;
+        }
+        try {
+            Method getChild = deploymentRoot.getClass().getMethod("getChild", String.class);
+            Object child = getChild.invoke(deploymentRoot, relativePath);
+            if (child == null) {
+                return;
+            }
+            Method exists = child.getClass().getMethod("exists");
+            if (!Boolean.TRUE.equals(exists.invoke(child))) {
+                return;
+            }
+            addBeansXml(child, parser, seenPaths, sink);
+        } catch (Exception ignored) {
+            // Best effort only.
+        }
+    }
+
+    private static void addBeansXml(Object file,
+                                    BeansXmlParser parser,
+                                    Set<String> seenPaths,
+                                    List<BeansXml> sink) {
+        try {
+            String path = getPathName(file);
+            if (path == null || path.isEmpty()) {
+                return;
+            }
+            String normalizedPath = path.replace('\\', '/');
+            if (!seenPaths.add(normalizedPath)) {
+                return;
+            }
+
+            Method openStream = file.getClass().getMethod("openStream");
+            InputStream inputStream = null;
+            try {
+                inputStream = (InputStream) openStream.invoke(file);
+                if (inputStream == null) {
+                    return;
+                }
+                BeansXml beansXml = parser.parse(inputStream);
+                sink.add(beansXml);
+            } finally {
+                if (inputStream != null) {
+                    inputStream.close();
+                }
+            }
+        } catch (Exception ignored) {
+            // Best effort only.
+        }
+    }
+
+    private static String getPathName(Object file) {
+        if (file == null) {
+            return null;
+        }
+        try {
+            Method pathNameMethod = file.getClass().getMethod("getPathName");
+            Object value = pathNameMethod.invoke(file);
+            if (value instanceof String) {
+                return (String) value;
+            }
+        } catch (Exception ignored) {
+            // Best effort only.
+        }
+        return null;
+    }
+
+    private static String normalizeForComparison(String path) {
+        if (path == null) {
+            return "";
+        }
+        String normalized = path.replace('\\', '/');
+        if (normalized.startsWith("vfs:")) {
+            normalized = normalized.substring("vfs:".length());
+        }
+        while (normalized.contains("//")) {
+            normalized = normalized.replace("//", "/");
+        }
+        if (normalized.endsWith("/") && normalized.length() > 1) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private static List<Object> listChildrenRecursively(Object root) {
+        if (root == null) {
+            return Collections.emptyList();
+        }
         try {
             Method getChildrenRecursively = root.getClass().getMethod("getChildrenRecursively");
             @SuppressWarnings("unchecked")
             List<Object> files = (List<Object>) getChildrenRecursively.invoke(root);
-
-            for (Object file : files) {
-                if (file == null) {
-                    continue;
-                }
-
-                String path = null;
-                try {
-                    Method pathName = file.getClass().getMethod("getPathName");
-                    Object value = pathName.invoke(file);
-                    if (value instanceof String) {
-                        path = (String) value;
-                    }
-                } catch (Exception ignored) {
-                    // Best effort only.
-                }
-
-                if (path == null || path.isEmpty()) {
-                    continue;
-                }
-
-                String normalizedPath = path.replace('\\', '/');
-                if (!normalizedPath.endsWith("/META-INF/beans.xml")
-                        && !normalizedPath.endsWith("/WEB-INF/beans.xml")
-                        && !"META-INF/beans.xml".equals(normalizedPath)
-                        && !"WEB-INF/beans.xml".equals(normalizedPath)) {
-                    continue;
-                }
-
-                if (!seenPaths.add(normalizedPath)) {
-                    continue;
-                }
-
-                Method openStream = file.getClass().getMethod("openStream");
-                InputStream inputStream = null;
-                try {
-                    inputStream = (InputStream) openStream.invoke(file);
-                    if (inputStream != null) {
-                        byte[] rawBytes = readBytes(inputStream);
-                        String rawXml = new String(rawBytes, StandardCharsets.UTF_8);
-                        String preview = rawXml.replace('\n', ' ').replace('\r', ' ');
-                        if (preview.length() > 400) {
-                            preview = preview.substring(0, 400) + "...";
-                        }
-                        System.out.println("[Syringe][WildFly] Raw beans.xml preview from " + normalizedPath + ": " + preview);
-                        BeansXml beansXml = parser.parse(new ByteArrayInputStream(rawBytes));
-                        sink.add(beansXml);
-                        System.out.println("[Syringe][WildFly] Parsed beans.xml from VFS path: "
-                                + normalizedPath + " => " + beansXml);
-                    }
-                } finally {
-                    if (inputStream != null) {
-                        inputStream.close();
-                    }
-                }
-            }
+            return files == null ? Collections.<Object>emptyList() : files;
         } catch (Exception ignored) {
-            // Best effort; beans.xml may be unavailable for some roots.
+            return Collections.emptyList();
         }
     }
 
-    private static byte[] readBytes(InputStream inputStream) throws Exception {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        byte[] buffer = new byte[4096];
-        int read;
-        while ((read = inputStream.read(buffer)) != -1) {
-            outputStream.write(buffer, 0, read);
+    private static String trimLeadingSlashes(String path) {
+        if (path == null) {
+            return null;
         }
-        return outputStream.toByteArray();
+        String normalized = path;
+        while (normalized.startsWith("/")) {
+            normalized = normalized.substring(1);
+        }
+        return normalized;
     }
+
+    private static String trimToWebInfClasses(String normalizedPath) {
+        if (normalizedPath == null || normalizedPath.isEmpty()) {
+            return null;
+        }
+        if (normalizedPath.startsWith("WEB-INF/classes/")) {
+            return normalizedPath.substring("WEB-INF/classes/".length());
+        }
+        int classesSeparator = normalizedPath.indexOf("/WEB-INF/classes/");
+        if (classesSeparator >= 0) {
+            return normalizedPath.substring(classesSeparator + "/WEB-INF/classes/".length());
+        }
+        return null;
+    }
+
+    static boolean isDeploymentBeansXmlPath(String relativePath) {
+        if (relativePath == null || relativePath.isEmpty()) {
+            return false;
+        }
+        String normalized = trimLeadingSlashes(relativePath.replace('\\', '/'));
+        if ("WEB-INF/beans.xml".equals(normalized)
+                || "META-INF/beans.xml".equals(normalized)
+                || "WEB-INF/classes/META-INF/beans.xml".equals(normalized)) {
+            return true;
+        }
+        return isBeanArchiveLibraryBeansXmlPath(normalized);
+    }
+
+    private static boolean isBeanArchiveLibraryBeansXmlPath(String normalizedPath) {
+        if (normalizedPath == null || normalizedPath.isEmpty()) {
+            return false;
+        }
+        if (!normalizedPath.endsWith("/META-INF/beans.xml")) {
+            return false;
+        }
+        int jarSeparator = normalizedPath.indexOf(".jar/");
+        if (jarSeparator < 0) {
+            return false;
+        }
+        String jarPrefix = normalizedPath.substring(0, jarSeparator + ".jar/".length());
+        return jarPrefix.startsWith("WEB-INF/lib/")
+                || jarPrefix.contains("/WEB-INF/lib/");
+    }
+
 }

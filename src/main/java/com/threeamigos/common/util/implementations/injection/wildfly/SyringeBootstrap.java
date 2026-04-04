@@ -2,18 +2,16 @@ package com.threeamigos.common.util.implementations.injection.wildfly;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
-import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import java.io.IOException;
-import java.io.InputStream;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.net.URL;
+import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -29,10 +27,14 @@ import java.lang.reflect.Method;
  */
 public class SyringeBootstrap {
 
+    private static final String EXTENSION_SERVICE = "META-INF/services/jakarta.enterprise.inject.spi.Extension";
+    private static final String BCE_SERVICE = "META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension";
+
     private final Syringe syringe;
     private final Set<Class<?>> discoveredClasses;
     private final ClassLoader classLoader;
     private final List<BeansXml> preDiscoveredBeansXmlConfigurations;
+    private final String deploymentName;
 
     /**
      * Creates a new SyringeBootstrap with pre-discovered classes.
@@ -42,7 +44,7 @@ public class SyringeBootstrap {
      * @throws IllegalArgumentException if any parameter is null
      */
     public SyringeBootstrap(Set<Class<?>> discoveredClasses, ClassLoader classLoader) {
-        this(discoveredClasses, classLoader, null);
+        this(discoveredClasses, classLoader, null, null);
     }
 
     /**
@@ -56,10 +58,18 @@ public class SyringeBootstrap {
     public SyringeBootstrap(Set<Class<?>> discoveredClasses,
                             ClassLoader classLoader,
                             Collection<BeansXml> preDiscoveredBeansXmlConfigurations) {
+        this(discoveredClasses, classLoader, preDiscoveredBeansXmlConfigurations, null);
+    }
+
+    public SyringeBootstrap(Set<Class<?>> discoveredClasses,
+                            ClassLoader classLoader,
+                            Collection<BeansXml> preDiscoveredBeansXmlConfigurations,
+                            String deploymentName) {
         this.discoveredClasses = Objects.requireNonNull(discoveredClasses, "discoveredClasses cannot be null");
         this.classLoader = Objects.requireNonNull(classLoader, "classLoader cannot be null");
         this.syringe = new Syringe(); // Use no-args constructor for managed bootstrap
         this.preDiscoveredBeansXmlConfigurations = new ArrayList<BeansXml>();
+        this.deploymentName = deploymentName;
         if (preDiscoveredBeansXmlConfigurations != null) {
             for (BeansXml beansXml : preDiscoveredBeansXmlConfigurations) {
                 if (beansXml != null) {
@@ -78,7 +88,7 @@ public class SyringeBootstrap {
     public Syringe bootstrap() {
         Thread currentThread = Thread.currentThread();
         ClassLoader previousTccl = currentThread.getContextClassLoader();
-        currentThread.setContextClassLoader(classLoader);
+        currentThread.setContextClassLoader(createDeploymentScopedClassLoader());
         try {
             // Managed WildFly runner targets CDI Full behavior.
             // Keep this explicit to avoid accidental mode drift from future defaults.
@@ -125,6 +135,62 @@ public class SyringeBootstrap {
         }
     }
 
+    private ClassLoader createDeploymentScopedClassLoader() {
+        final String deploymentMarker = normalizeDeploymentName(deploymentName);
+        if (deploymentMarker.isEmpty()) {
+            return classLoader;
+        }
+        return new ClassLoader(classLoader) {
+            @Override
+            public URL getResource(String name) {
+                if (!requiresDeploymentScoping(name)) {
+                    return super.getResource(name);
+                }
+                try {
+                    Enumeration<URL> resources = getResources(name);
+                    return resources.hasMoreElements() ? resources.nextElement() : null;
+                } catch (IOException e) {
+                    return null;
+                }
+            }
+
+            @Override
+            public Enumeration<URL> getResources(String name) throws IOException {
+                Enumeration<URL> delegateResources = classLoader.getResources(name);
+                if (!requiresDeploymentScoping(name)) {
+                    return delegateResources;
+                }
+                List<URL> filtered = new ArrayList<URL>();
+                while (delegateResources.hasMoreElements()) {
+                    URL url = delegateResources.nextElement();
+                    if (url != null && url.toExternalForm().contains(deploymentMarker)) {
+                        filtered.add(url);
+                    }
+                }
+                return Collections.enumeration(filtered);
+            }
+        };
+    }
+
+    private static boolean requiresDeploymentScoping(String resourceName) {
+        if (resourceName == null) {
+            return false;
+        }
+        return EXTENSION_SERVICE.equals(resourceName) || BCE_SERVICE.equals(resourceName);
+    }
+
+    private static String normalizeDeploymentName(String deploymentName) {
+        if (deploymentName == null || deploymentName.trim().isEmpty()) {
+            return "";
+        }
+        String normalized = deploymentName;
+        int slash = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+        if (slash >= 0 && slash + 1 < normalized.length()) {
+            normalized = normalized.substring(slash + 1);
+        }
+        return normalized;
+    }
+
     /**
      * Shuts down the Syringe container.
      */
@@ -133,42 +199,9 @@ public class SyringeBootstrap {
         syringe.shutdown();
     }
 
-    private void registerBeansXmlConfigurations() throws IOException {
-        System.out.println("[Syringe][WildFly] Pre-discovered beans.xml count: "
-                + preDiscoveredBeansXmlConfigurations.size());
+    private void registerBeansXmlConfigurations() {
         for (BeansXml beansXml : preDiscoveredBeansXmlConfigurations) {
-            System.out.println("[Syringe][WildFly] Registering pre-discovered beans.xml: " + beansXml);
             syringe.addBeansXmlConfiguration(beansXml);
-        }
-
-        BeansXmlParser parser = new BeansXmlParser();
-        Set<String> seenUrls = new HashSet<String>();
-        loadBeansXmlFromPath(parser, seenUrls, "META-INF/beans.xml");
-        loadBeansXmlFromPath(parser, seenUrls, "WEB-INF/beans.xml");
-    }
-
-    private void loadBeansXmlFromPath(BeansXmlParser parser,
-                                      Set<String> seenUrls,
-                                      String path) throws IOException {
-        Enumeration<URL> resources = classLoader.getResources(path);
-        while (resources.hasMoreElements()) {
-            URL url = resources.nextElement();
-            String external = url.toExternalForm();
-            if (!seenUrls.add(external)) {
-                continue;
-            }
-            InputStream stream = null;
-            try {
-                stream = url.openStream();
-                BeansXml beansXml = parser.parse(stream);
-                System.out.println("[Syringe][WildFly] Parsed beans.xml from classloader resource "
-                        + external + " => " + beansXml);
-                syringe.addBeansXmlConfiguration(beansXml);
-            } finally {
-                if (stream != null) {
-                    stream.close();
-                }
-            }
         }
     }
 

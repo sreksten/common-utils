@@ -92,13 +92,17 @@ import java.util.function.Supplier;
  * @see BeanResolver
  * @see ContextManager
  * @see KnowledgeBase
+ * @deprecated Syringe should be used instead
  */
+@Deprecated
 public class InjectorImpl2 implements Injector {
 
     private final KnowledgeBase knowledgeBase;
     private final BeanResolver beanResolver;
     private final ContextManager contextManager;
     private final BeanManagerImpl beanManager;
+    private final ClassLoader dynamicAnnotationClassLoader;
+    private boolean shutdownStarted = false;
 
     // ====================================================================================
     // PHASE 2: Interceptor Support
@@ -164,6 +168,8 @@ public class InjectorImpl2 implements Injector {
 
         // Create a BeanManager instance
         this.beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
+        this.dynamicAnnotationClassLoader = beanManager.getRegistrationClassLoader();
+        AnnotationsEnum.retainDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
 
         // Register container for proxy deserialization
         // This allows serialized client proxies (e.g., from @SessionScoped beans) to be
@@ -474,6 +480,11 @@ public class InjectorImpl2 implements Injector {
      */
     @Override
     public void shutdown() {
+        if (shutdownStarted) {
+            return;
+        }
+        shutdownStarted = true;
+
         // Destroy all contexts (calls @PreDestroy on beans)
         contextManager.destroyAll();
 
@@ -500,7 +511,7 @@ public class InjectorImpl2 implements Injector {
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCacheForClassLoader(classLoader);
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCache();
         BeansXmlParser.clearJaxbContextCacheForClassLoader(classLoader);
-        AnnotationsEnum.clearDynamicAnnotationsForClassLoader(classLoader);
+        AnnotationsEnum.releaseDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
         ConversationImpl.clearAllGlobalState();
         ConversationPropagationRegistry.clear();
         DestroyedInstanceTracker.clear();

@@ -3,10 +3,13 @@ package com.threeamigos.common.util.implementations.injection;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Target;
 import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Enumeration of JSR-330 (Dependency Injection) and CDI annotations used by the container.
@@ -461,6 +464,10 @@ public enum AnnotationsEnum {
             Collections.newSetFromMap(new ConcurrentHashMap<>());
     private static final Set<Class<? extends Annotation>> DYNAMIC_INTERCEPTOR_BINDINGS =
             Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final Map<Class<? extends Annotation>, Set<String>> DYNAMIC_NONBINDING_MEMBERS =
+            new ConcurrentHashMap<>();
+    private static final Map<ClassLoader, AtomicInteger> DYNAMIC_ANNOTATION_USERS =
+            new ConcurrentHashMap<>();
 
     @SafeVarargs
     AnnotationsEnum(Class<? extends Annotation>... annotationClasses) {
@@ -589,7 +596,24 @@ public enum AnnotationsEnum {
      * ignored during matching.
      */
     public static boolean hasNonbindingAnnotation(AnnotatedElement element) {
-        return NONBINDING.isPresent(element);
+        if (NONBINDING.isPresent(element)) {
+            return true;
+        }
+
+        if (!(element instanceof Method)) {
+            return false;
+        }
+
+        Method method = (Method) element;
+        Class<?> declaringClass = method.getDeclaringClass();
+        if (!Annotation.class.isAssignableFrom(declaringClass)) {
+            return false;
+        }
+
+        @SuppressWarnings("unchecked")
+        Class<? extends Annotation> annotationType = (Class<? extends Annotation>) declaringClass;
+        Set<String> members = DYNAMIC_NONBINDING_MEMBERS.get(annotationType);
+        return members != null && members.contains(method.getName());
     }
 
     /**
@@ -1117,14 +1141,52 @@ public enum AnnotationsEnum {
         registerDynamicAnnotation(bindingType, DYNAMIC_INTERCEPTOR_BINDINGS);
     }
 
+    public static void registerDynamicNonbindingMember(Class<? extends Annotation> annotationType,
+                                                       String memberName) {
+        if (annotationType == null || memberName == null || memberName.trim().isEmpty()) {
+            return;
+        }
+        DYNAMIC_NONBINDING_MEMBERS
+                .computeIfAbsent(annotationType, key -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
+                .add(memberName);
+    }
+
+    public static void retainDynamicAnnotationsForClassLoader(ClassLoader classLoader) {
+        if (classLoader == null) {
+            return;
+        }
+        DYNAMIC_ANNOTATION_USERS
+                .computeIfAbsent(classLoader, key -> new AtomicInteger())
+                .incrementAndGet();
+    }
+
+    public static void releaseDynamicAnnotationsForClassLoader(ClassLoader classLoader) {
+        if (classLoader == null) {
+            return;
+        }
+
+        AtomicInteger users = DYNAMIC_ANNOTATION_USERS.get(classLoader);
+        if (users == null) {
+            return;
+        }
+
+        int remaining = users.decrementAndGet();
+        if (remaining <= 0 && DYNAMIC_ANNOTATION_USERS.remove(classLoader, users)) {
+            clearDynamicAnnotationsForClassLoader(classLoader);
+        }
+    }
+
     public static void clearDynamicAnnotationsForClassLoader(ClassLoader classLoader) {
         if (classLoader == null) {
             return;
         }
+        DYNAMIC_ANNOTATION_USERS.remove(classLoader);
         DYNAMIC_QUALIFIERS.removeIf(type -> type != null && type.getClassLoader() == classLoader);
         DYNAMIC_SCOPES.removeIf(type -> type != null && type.getClassLoader() == classLoader);
         DYNAMIC_STEREOTYPES.removeIf(type -> type != null && type.getClassLoader() == classLoader);
         DYNAMIC_INTERCEPTOR_BINDINGS.removeIf(type -> type != null && type.getClassLoader() == classLoader);
+        DYNAMIC_NONBINDING_MEMBERS.keySet()
+                .removeIf(type -> type != null && type.getClassLoader() == classLoader);
     }
 
     private static void registerDynamicAnnotation(Class<? extends Annotation> annotationType,

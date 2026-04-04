@@ -91,10 +91,7 @@ public class InterceptorResolver {
         Objects.requireNonNull(targetClass, "targetClass cannot be null");
         Objects.requireNonNull(interceptionType, "interceptionType cannot be null");
 
-        Set<Annotation> classBindings = extractInterceptorBindings(targetClass);
-        Set<Annotation> targetBindings = method != null
-                ? mergeBindings(classBindings, extractInterceptorBindings(method, targetClass))
-                : classBindings;
+        Set<Annotation> targetBindings = resolveBindings(targetClass, method);
 
         // If no bindings, no interceptors apply
         if (targetBindings.isEmpty()) {
@@ -103,6 +100,20 @@ public class InterceptorResolver {
 
         // Query KnowledgeBase (already sorted by priority)
         return knowledgeBase.getInterceptorsByBindingsAndType(interceptionType, targetBindings);
+    }
+
+    public Set<Annotation> resolveBindings(Class<?> targetClass, Method method) {
+        Objects.requireNonNull(targetClass, "targetClass cannot be null");
+
+        Set<Annotation> classBindings = extractInterceptorBindings(targetClass);
+        Set<Annotation> targetBindings = method != null
+                ? mergeBindings(classBindings, extractInterceptorBindings(method, targetClass))
+                : classBindings;
+
+        if (targetBindings.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return Collections.unmodifiableSet(new HashSet<>(targetBindings));
     }
 
     /**
@@ -133,6 +144,18 @@ public class InterceptorResolver {
         Objects.requireNonNull(targetClass, "targetClass cannot be null");
         Objects.requireNonNull(interceptionType, "interceptionType cannot be null");
 
+        Set<Annotation> targetBindings = resolveBindingsForConstructor(targetClass, constructor);
+
+        if (targetBindings.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return knowledgeBase.getInterceptorsByBindingsAndType(interceptionType, targetBindings);
+    }
+
+    public Set<Annotation> resolveBindingsForConstructor(Class<?> targetClass, Constructor<?> constructor) {
+        Objects.requireNonNull(targetClass, "targetClass cannot be null");
+
         Set<Annotation> classBindings = extractInterceptorBindings(targetClass);
         Set<Annotation> constructorBindings = constructor != null
                 ? extractInterceptorBindings(constructor, targetClass)
@@ -140,10 +163,9 @@ public class InterceptorResolver {
         Set<Annotation> targetBindings = mergeBindings(classBindings, constructorBindings);
 
         if (targetBindings.isEmpty()) {
-            return Collections.emptyList();
+            return Collections.emptySet();
         }
-
-        return knowledgeBase.getInterceptorsByBindingsAndType(interceptionType, targetBindings);
+        return Collections.unmodifiableSet(new HashSet<>(targetBindings));
     }
 
     /**

@@ -2,12 +2,15 @@ package com.threeamigos.common.util.implementations.injection.interceptors;
 
 import jakarta.interceptor.InvocationContext;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Represents a chain of interceptor invocations using the Chain of Responsibility pattern.
@@ -60,14 +63,20 @@ public class InterceptorChain {
      * Immutable list of interceptor invocations in execution order.
      */
     private final List<InterceptorInvocation> invocations;
+    private final Set<Annotation> interceptorBindings;
 
     /**
      * Private constructor - use Builder to create instances.
      *
      * @param invocations the list of interceptor invocations
      */
-    private InterceptorChain(List<InterceptorInvocation> invocations) {
+    private InterceptorChain(List<InterceptorInvocation> invocations, Set<Annotation> interceptorBindings) {
         this.invocations = Collections.unmodifiableList(new ArrayList<>(invocations));
+        if (interceptorBindings == null || interceptorBindings.isEmpty()) {
+            this.interceptorBindings = Collections.emptySet();
+        } else {
+            this.interceptorBindings = Collections.unmodifiableSet(new LinkedHashSet<>(interceptorBindings));
+        }
     }
 
     /**
@@ -77,6 +86,10 @@ public class InterceptorChain {
      */
     public List<InterceptorInvocation> getInvocations() {
         return invocations;
+    }
+
+    public Set<Annotation> getInterceptorBindings() {
+        return interceptorBindings;
     }
 
     /**
@@ -300,6 +313,7 @@ public class InterceptorChain {
      */
     public static class Builder {
         private final List<InterceptorInvocation> invocations = new ArrayList<>();
+        private Set<Annotation> interceptorBindings = Collections.emptySet();
 
         /**
          * Adds an interceptor to the chain.
@@ -349,13 +363,22 @@ public class InterceptorChain {
             return this;
         }
 
+        public Builder withInterceptorBindings(Set<Annotation> interceptorBindings) {
+            if (interceptorBindings == null || interceptorBindings.isEmpty()) {
+                this.interceptorBindings = Collections.emptySet();
+            } else {
+                this.interceptorBindings = new LinkedHashSet<>(interceptorBindings);
+            }
+            return this;
+        }
+
         /**
          * Builds an immutable InterceptorChain from the added interceptors.
          *
          * @return the constructed chain
          */
         public InterceptorChain build() {
-            return new InterceptorChain(invocations);
+            return new InterceptorChain(invocations, interceptorBindings);
         }
     }
 
@@ -384,6 +407,7 @@ public class InterceptorChain {
     public String toString() {
         return "InterceptorChain{" +
                 "size=" + invocations.size() +
+                ", bindings=" + interceptorBindings.size() +
                 '}';
     }
 }
