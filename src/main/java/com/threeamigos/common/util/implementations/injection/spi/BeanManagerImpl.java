@@ -947,7 +947,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         List<Bean<? extends X>> nonAlternatives = new ArrayList<>();
 
         for (Bean<? extends X> bean : enabledBeans) {
-            if (bean.isAlternative()) {
+            if (isEffectivelyAlternative(bean)) {
                 alternatives.add(bean);
             } else {
                 nonAlternatives.add(bean);
@@ -1051,13 +1051,19 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (bean instanceof ProducerBean) {
             ProducerBean<?> producerBean = (ProducerBean<?>) bean;
             Bean<?> declaringBean = findDeclaringBean(producerBean.getDeclaringClass());
-            if (declaringBean != null && !isBeanEnabledForResolution(declaringBean)) {
+            if (declaringBean == null) {
                 return false;
             }
-            if (!bean.isAlternative()) {
-                return true;
+            if (!isBeanEnabledForResolution(declaringBean)) {
+                return false;
             }
             return producerBean.isAlternativeEnabled();
+        }
+        if (bean instanceof SyntheticProducerBeanImpl) {
+            Bean<?> originalBean = findOriginalProducerBean(bean);
+            if (originalBean instanceof ProducerBean) {
+                return isBeanEnabledForResolution(originalBean);
+            }
         }
         if (!bean.isAlternative()) {
             return true;
@@ -1099,6 +1105,25 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             }
         }
         return null;
+    }
+
+    private boolean isEffectivelyAlternative(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        if (bean.isAlternative()) {
+            return true;
+        }
+        if (bean instanceof ProducerBean) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Bean<?> declaringBean = findDeclaringBean(producerBean.getDeclaringClass());
+            return declaringBean != null && declaringBean.isAlternative();
+        }
+        if (bean instanceof SyntheticProducerBeanImpl) {
+            Bean<?> originalBean = findOriginalProducerBean(bean);
+            return isEffectivelyAlternative(originalBean);
+        }
+        return false;
     }
 
     private boolean isAlternativeSelectedByClassOrStereotype(Bean<?> bean) {

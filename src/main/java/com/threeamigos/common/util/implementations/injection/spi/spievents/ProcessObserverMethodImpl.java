@@ -79,7 +79,7 @@ public class ProcessObserverMethodImpl<T, X> extends PhaseAware
         configureCalledInCurrentInvocation.set(Boolean.TRUE);
         info(Phase.PROCESS_OBSERVER_METHOD, "Creating ObserverMethodConfigurator");
         if (configurator == null) {
-            configurator = new ObserverMethodConfiguratorImpl<>(null);
+            configurator = new ObserverMethodConfiguratorImpl<>(null, true);
             configurator.read(observerMethod);
         }
         return configurator;

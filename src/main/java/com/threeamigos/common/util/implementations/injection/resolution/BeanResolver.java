@@ -472,7 +472,7 @@ public class BeanResolver implements DependencyResolver {
         }
 
         List<Bean<?>> alternatives = candidates.stream()
-                .filter(Bean::isAlternative)
+                .filter(this::isEffectivelyAlternative)
                 .collect(Collectors.toList());
 
         if (alternatives.isEmpty()) {
@@ -860,9 +860,6 @@ public class BeanResolver implements DependencyResolver {
             if (!isBeanEnabledForResolution(declaringBean)) {
                 return false;
             }
-            if (!bean.isAlternative()) {
-                return true;
-            }
             return producerBean.isAlternativeEnabled();
         }
         if (!bean.isAlternative()) {
@@ -887,6 +884,21 @@ public class BeanResolver implements DependencyResolver {
             }
         }
         return null;
+    }
+
+    private boolean isEffectivelyAlternative(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        if (bean.isAlternative()) {
+            return true;
+        }
+        if (bean instanceof ProducerBean) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Bean<?> declaringBean = findDeclaringBean(producerBean.getDeclaringClass());
+            return declaringBean != null && declaringBean.isAlternative();
+        }
+        return false;
     }
 
     private boolean isBeanClassAccessibleFromCurrentInjectionPoint(Bean<?> bean) {
@@ -1307,13 +1319,13 @@ public class BeanResolver implements DependencyResolver {
             return candidates;
         }
 
-        boolean hasAlternative = candidates.stream().anyMatch(Bean::isAlternative);
+        boolean hasAlternative = candidates.stream().anyMatch(this::isEffectivelyAlternative);
         if (!hasAlternative) {
             return candidates;
         }
 
         List<Bean<?>> remaining = candidates.stream()
-                .filter(Bean::isAlternative)
+                .filter(this::isEffectivelyAlternative)
                 .collect(Collectors.toList());
 
         if (remaining.size() <= 1) {

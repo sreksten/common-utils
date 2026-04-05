@@ -300,14 +300,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.exception.discovery.AfterBeanDiscoveryObserverExecutionFailureTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.exception.validation.AfterDeploymentValidationObserverExecutionFailureTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.observerMethod.CustomObserverMethodWithoutNotifyMethodTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.observerMethod.ObserverMethodWithoutNotifyMethodTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.VerifyValuesTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.AddDefinitionErrorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.ThrowExceptionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidQualifierTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidScopeTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidStereotypeTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidTypesTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.observerMethod.ObserverMethodWithoutNotifyMethodTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.VerifyValuesTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.AddDefinitionErrorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.ThrowExceptionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidQualifierTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidScopeTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidStereotypeTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidTypesTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.passivation.PassivationCapabilityErrorTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.passivation.PassivationCapableDependencyErrorTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.decorator.DecoratorProcessBeanAttributesTest

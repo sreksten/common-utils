@@ -107,7 +107,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
         assertObserverInvocationActive();
         info(Phase.AFTER_BEAN_DISCOVERY, "Creating ObserverMethodConfigurator for synthetic observer");
         final AtomicBoolean applied = new AtomicBoolean(false);
-        final ObserverMethodConfiguratorImpl<T> configurator = new ObserverMethodConfiguratorImpl<T>(knowledgeBase) {
+        final ObserverMethodConfiguratorImpl<T> configurator = new ObserverMethodConfiguratorImpl<T>(knowledgeBase, false) {
             @Override
             public ObserverMethod<T> complete() {
                 ObserverMethod<T> observer = super.complete();

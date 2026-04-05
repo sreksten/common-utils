@@ -3375,9 +3375,16 @@ public class CDI41BeanValidator {
     private void createAndRegisterProducerBean(Class<?> declaringClass, Method producerMethod, Field producerField) {
         AnnotatedElement element = (producerMethod != null) ? producerMethod : producerField;
 
-        // Determine alternative status at element level
-        boolean annotatedAlternative = isAlternativeDeclared(declaringClass) || isAlternativeDeclared(element);
-        boolean alternativeEnabled = isAlternativeEnabled(element, declaringClass, annotatedAlternative);
+        // BeanAttributes#isAlternative for producer members is member-scoped.
+        // Resolution enablement must still account for @Alternative on the declaring bean class.
+        boolean annotatedAlternative = isAlternativeDeclared(element);
+        boolean classAlternative = isAlternativeDeclared(declaringClass);
+        boolean producerAlternativeDeclared = annotatedAlternative || classAlternative;
+        boolean alternativeEnabled = true;
+        if (producerAlternativeDeclared) {
+            AnnotatedElement enablementElement = annotatedAlternative ? element : declaringClass;
+            alternativeEnabled = isAlternativeEnabled(enablementElement, declaringClass, true);
+        }
 
         // Create ProducerBean
         ProducerBean<?> producerBean;

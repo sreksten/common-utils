@@ -36,6 +36,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.Conversation
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.InjectionTargetFactoryImpl;
+import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
@@ -2279,6 +2280,7 @@ public class Syringe {
                 }
 
                 BeanAttributes<?> finalAttrs = event.getBeanAttributesInternal();
+                validateBeanAttributesFromProcessBeanAttributes(bean, finalAttrs);
                 applyBeanAttributes(bean, finalAttrs);
 
             } catch (DefinitionException e) {
@@ -3156,6 +3158,107 @@ public class Syringe {
         return methodKey + "|" + declaringBeanClass + "|" + eventType + "|" + qualifiers + "|" + info.isAsync();
     }
 
+    private void validateBeanAttributesFromProcessBeanAttributes(Bean<?> bean, BeanAttributes<?> attrs) {
+        if (attrs == null) {
+            knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN_ATTRIBUTES,
+                    "BeanAttributes returned from extension must not be null for " +
+                            describeProcessBeanAttributesBean(bean), null);
+            return;
+        }
+
+        String beanDescription = describeProcessBeanAttributesBean(bean);
+
+        Set<Type> types = attrs.getTypes();
+        if (types == null || types.isEmpty()) {
+            knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN_ATTRIBUTES,
+                    "BeanAttributes types must not be empty for " + beanDescription, null);
+        } else {
+            for (Type type : types) {
+                if (type == null) {
+                    knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN_ATTRIBUTES,
+                            "BeanAttributes types must not contain null for " + beanDescription, null);
+                    break;
+                }
+            }
+        }
+
+        Set<Annotation> qualifiers = attrs.getQualifiers();
+        if (qualifiers != null) {
+            for (Annotation qualifier : qualifiers) {
+                Class<? extends Annotation> qualifierType =
+                        qualifier != null ? qualifier.annotationType() : null;
+                if (!isValidProcessBeanAttributesQualifier(qualifierType)) {
+                    knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN_ATTRIBUTES,
+                            "BeanAttributes qualifier " + String.valueOf(qualifierType) +
+                                    " is not a valid qualifier for " + beanDescription, null);
+                }
+            }
+        }
+
+        Class<? extends Annotation> scope = attrs.getScope();
+        if (!isValidProcessBeanAttributesScope(scope)) {
+            knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN_ATTRIBUTES,
+                    "BeanAttributes scope " + String.valueOf(scope) +
+                            " is not a valid scope for " + beanDescription, null);
+        }
+
+        Set<Class<? extends Annotation>> stereotypes = attrs.getStereotypes();
+        if (stereotypes != null) {
+            for (Class<? extends Annotation> stereotype : stereotypes) {
+                if (!isValidProcessBeanAttributesStereotype(stereotype)) {
+                    knowledgeBase.addDefinitionError(Phase.PROCESS_BEAN_ATTRIBUTES,
+                            "BeanAttributes stereotype " + String.valueOf(stereotype) +
+                                    " is not a valid stereotype for " + beanDescription, null);
+                }
+            }
+        }
+    }
+
+    private String describeProcessBeanAttributesBean(Bean<?> bean) {
+        if (bean instanceof ProducerBean<?>) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Class<?> declaringClass = producerBean.getDeclaringClass();
+            String declaringClassName = declaringClass != null ? declaringClass.getName() : "<unknown>";
+            if (producerBean.getProducerMethod() != null) {
+                return declaringClassName + "#" + producerBean.getProducerMethod().getName() + "()";
+            }
+            if (producerBean.getProducerField() != null) {
+                return declaringClassName + "#" + producerBean.getProducerField().getName();
+            }
+            return declaringClassName;
+        }
+        Class<?> beanClass = bean != null ? bean.getBeanClass() : null;
+        return beanClass != null ? beanClass.getName() : String.valueOf(bean);
+    }
+
+    private boolean isValidProcessBeanAttributesQualifier(Class<? extends Annotation> qualifierType) {
+        if (qualifierType == null) {
+            return false;
+        }
+        return hasQualifierAnnotation(qualifierType) || knowledgeBase.isRegisteredQualifier(qualifierType);
+    }
+
+    private boolean isValidProcessBeanAttributesScope(Class<? extends Annotation> scopeType) {
+        if (scopeType == null) {
+            return false;
+        }
+        if (hasDependentAnnotation(scopeType)) {
+            return true;
+        }
+        if (hasScopeAnnotation(scopeType) || hasNormalScopeAnnotation(scopeType) ||
+                hasBuiltInNormalScopeAnnotation(scopeType)) {
+            return true;
+        }
+        return knowledgeBase.isRegisteredScope(scopeType);
+    }
+
+    private boolean isValidProcessBeanAttributesStereotype(Class<? extends Annotation> stereotypeType) {
+        if (stereotypeType == null) {
+            return false;
+        }
+        return hasStereotypeAnnotation(stereotypeType) || knowledgeBase.isRegisteredStereotype(stereotypeType);
+    }
+
     /**
      * Applies updated BeanAttributes back to the underlying bean implementation.
      */
@@ -3177,8 +3280,12 @@ public class Syringe {
             b.setScope(attrs.getScope());
             b.setStereotypes(attrs.getStereotypes());
             b.setTypes(attrs.getTypes());
-            b.setAlternative(attrs.isAlternative());
-            b.setAlternativeEnabled(!attrs.isAlternative() ||
+            boolean memberAlternative = attrs.isAlternative();
+            boolean classAlternative = isAlternativeDeclaration(b.getBeanClass());
+            boolean producerAlternativeDeclared = memberAlternative || classAlternative;
+
+            b.setAlternative(memberAlternative);
+            b.setAlternativeEnabled(!producerAlternativeDeclared ||
                     isProducerAlternativeEnabledAfterBeanAttributes(b, attrs.getStereotypes()));
         } else {
             // Synthetic or built-in beans: no-op

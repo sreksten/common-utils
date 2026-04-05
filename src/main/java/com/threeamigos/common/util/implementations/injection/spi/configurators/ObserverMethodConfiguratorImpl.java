@@ -37,6 +37,7 @@ import java.util.Set;
 public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigurator<T> {
 
     private final KnowledgeBase knowledgeBase;
+    private final boolean preserveNotifyCallbackWhenReadingObserverMethod;
     private Class<?> beanClass;
     private Type observedType;
     private final Set<Annotation> qualifiers = new HashSet<>();
@@ -53,7 +54,20 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
      * @param knowledgeBase the knowledge base to register the observer in
      */
     public ObserverMethodConfiguratorImpl(KnowledgeBase knowledgeBase) {
+        this(knowledgeBase, false);
+    }
+
+    /**
+     * Creates an ObserverMethodConfigurator.
+     *
+     * @param knowledgeBase the knowledge base to register the observer in
+     * @param preserveNotifyCallbackWhenReadingObserverMethod whether read(ObserverMethod) should retain
+     *                                                        notification behavior when notifyWith() is not invoked
+     */
+    public ObserverMethodConfiguratorImpl(KnowledgeBase knowledgeBase,
+                                          boolean preserveNotifyCallbackWhenReadingObserverMethod) {
         this.knowledgeBase = knowledgeBase;
+        this.preserveNotifyCallbackWhenReadingObserverMethod = preserveNotifyCallbackWhenReadingObserverMethod;
     }
 
     @Override
@@ -282,7 +296,8 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
         if (observedType == null) {
             throw new IllegalStateException("Observed type must be set");
         }
-        if (notifyCallback == null && originalObserverMethod != null) {
+        if (notifyCallback == null && originalObserverMethod != null &&
+                preserveNotifyCallbackWhenReadingObserverMethod) {
             notifyCallback = eventContext -> originalObserverMethod.notify(eventContext.getEvent());
         }
         if (notifyCallback == null) {

@@ -305,7 +305,7 @@ public class CDI41InjectionValidator {
         }
 
         List<Bean<?>> alternatives = candidates.stream()
-                .filter(Bean::isAlternative)
+                .filter(this::isEffectivelyAlternative)
                 .collect(Collectors.toList());
 
         // Eliminate non-alternatives first (CDI 4.1 §5.3.1).
@@ -689,7 +689,7 @@ public class CDI41InjectionValidator {
             Type type = typeEntry.getKey();
             for (Map.Entry<Set<Annotation>, Set<Bean<?>>> qualEntry : typeEntry.getValue().entrySet()) {
                 List<Bean<?>> alternatives = qualEntry.getValue().stream()
-                        .filter(Bean::isAlternative)
+                        .filter(this::isEffectivelyAlternative)
                         .filter(this::isBeanEnabledForResolution)
                         .collect(Collectors.toList());
 
@@ -1971,7 +1971,7 @@ public class CDI41InjectionValidator {
         }
 
         List<Bean<?>> alternatives = candidates.stream()
-                .filter(Bean::isAlternative)
+                .filter(this::isEffectivelyAlternative)
                 .collect(Collectors.toList());
 
         if (alternatives.isEmpty()) {
@@ -2238,9 +2238,6 @@ public class CDI41InjectionValidator {
             if (!isBeanEnabledForResolution(declaringBean, visited)) {
                 return false;
             }
-            if (!bean.isAlternative()) {
-                return true;
-            }
             return producerBean.isAlternativeEnabled();
         }
         if (bean instanceof SyntheticProducerBeanImpl) {
@@ -2256,6 +2253,25 @@ public class CDI41InjectionValidator {
             return ((BeanImpl<?>) bean).isAlternativeEnabled();
         }
         return true;
+    }
+
+    private boolean isEffectivelyAlternative(Bean<?> bean) {
+        if (bean == null) {
+            return false;
+        }
+        if (bean.isAlternative()) {
+            return true;
+        }
+        if (bean instanceof ProducerBean) {
+            ProducerBean<?> producerBean = (ProducerBean<?>) bean;
+            Bean<?> declaringBean = findDeclaringBean(producerBean.getDeclaringClass());
+            return declaringBean != null && declaringBean.isAlternative();
+        }
+        if (bean instanceof SyntheticProducerBeanImpl) {
+            Bean<?> originalBean = findOriginalProducerBean(bean);
+            return isEffectivelyAlternative(originalBean);
+        }
+        return false;
     }
 
     private Bean<?> findDeclaringBean(Class<?> declaringClass) {

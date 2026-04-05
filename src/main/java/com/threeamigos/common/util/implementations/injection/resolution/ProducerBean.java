@@ -198,7 +198,7 @@ public class ProducerBean<T> implements Bean<T> {
     }
 
     public boolean isAlternativeEnabled() {
-        return !alternative || alternativeEnabled;
+        return alternativeEnabled;
     }
 
     public void setAlternativeEnabled(boolean alternativeEnabled) {
