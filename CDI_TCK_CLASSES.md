@@ -292,14 +292,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.atd.massOperations.AfterTypeDiscoveryMassOperationsTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.BeforeBeanDiscoveryTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.DeploymentTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.exception.BeforeBeanDiscoveryThrowsExceptionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.normalScope.AddingNormalScopeTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.passivatingScope.AddingPassivatingScopeTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.addDefinitionError.AddDefinitionErrorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.addDeploymentProblem.AddDeploymentProblemTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.exception.discovery.AfterBeanDiscoveryObserverExecutionFailureTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.exception.validation.AfterDeploymentValidationObserverExecutionFailureTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.observerMethod.CustomObserverMethodWithoutNotifyMethodTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.exception.BeforeBeanDiscoveryThrowsExceptionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.normalScope.AddingNormalScopeTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.passivatingScope.AddingPassivatingScopeTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.addDefinitionError.AddDefinitionErrorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.addDeploymentProblem.AddDeploymentProblemTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.exception.discovery.AfterBeanDiscoveryObserverExecutionFailureTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.exception.validation.AfterDeploymentValidationObserverExecutionFailureTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.observerMethod.CustomObserverMethodWithoutNotifyMethodTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.broken.observerMethod.ObserverMethodWithoutNotifyMethodTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.VerifyValuesTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.AddDefinitionErrorTest

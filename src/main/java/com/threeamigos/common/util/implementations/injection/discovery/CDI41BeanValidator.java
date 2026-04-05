@@ -407,6 +407,7 @@ public class CDI41BeanValidator {
         Class<? extends Annotation> effectiveBeanScope = extractBeanScope(clazz, beanScope);
         validateManagedBeanPublicFieldScopeConstraint(clazz, effectiveBeanScope);
         validateManagedBeanGenericTypeScopeConstraint(clazz, effectiveBeanScope);
+        validateProgrammaticPassivatingScopeConstraint(clazz, effectiveBeanScope);
         bean.setScope(effectiveBeanScope);
 
         BeanTypesExtractor.ExtractionResult managedBeanTypes = beanTypesExtractor.extractManagedBeanTypes(clazz);
@@ -2522,6 +2523,26 @@ public class CDI41BeanValidator {
         }
 
         return hasNormalScopeAnnotation(scopeAnnotation);
+    }
+
+    private void validateProgrammaticPassivatingScopeConstraint(Class<?> clazz,
+                                                                Class<? extends Annotation> scopeAnnotation) {
+        if (clazz == null || scopeAnnotation == null) {
+            return;
+        }
+
+        ScopeMetadata registeredScope = knowledgeBase.getScopeMetadata(scopeAnnotation);
+        if (registeredScope == null || !registeredScope.isPassivating()) {
+            return;
+        }
+
+        if (Serializable.class.isAssignableFrom(clazz)) {
+            return;
+        }
+
+        knowledgeBase.addError(clazz.getName() +
+                ": bean with passivating scope @" + scopeAnnotation.getSimpleName() +
+                " must implement java.io.Serializable");
     }
 
     private void applySpecializationInheritance(BeanImpl<?> bean, Class<?> clazz, BeanArchiveMode beanArchiveMode) {
