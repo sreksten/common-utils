@@ -2861,11 +2861,20 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (field == null) {
             throw new IllegalArgumentException("field cannot be null");
         }
-        if (declaringBean == null) {
+
+        Field javaField = field.getJavaMember();
+        if (javaField == null) {
+            throw new IllegalArgumentException("field.getJavaMember() cannot be null");
+        }
+
+        if (!Modifier.isStatic(javaField.getModifiers()) && declaringBean == null) {
             throw new IllegalArgumentException("declaringBean cannot be null");
         }
-        if (!PRODUCES.isPresent(field.getJavaMember())) {
-            throw new IllegalArgumentException("field is not a producer field: " + field.getJavaMember().getName());
+        if (INJECT.isPresent(javaField)) {
+            throw new IllegalArgumentException("field is annotated @Inject: " + javaField.getName());
+        }
+        if (containsWildcardOrTypeVariable(javaField.getGenericType())) {
+            throw new IllegalArgumentException("Producer field type contains illegal type: " + javaField.getGenericType());
         }
 
         return new ProducerFactoryImpl<>(field, this);
@@ -2888,11 +2897,18 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (method == null) {
             throw new IllegalArgumentException("method cannot be null");
         }
-        if (declaringBean == null) {
+
+        Method javaMethod = method.getJavaMember();
+        if (javaMethod == null) {
+            throw new IllegalArgumentException("method.getJavaMember() cannot be null");
+        }
+
+        if (!Modifier.isStatic(javaMethod.getModifiers()) && declaringBean == null) {
             throw new IllegalArgumentException("declaringBean cannot be null");
         }
-        if (!PRODUCES.isPresent(method.getJavaMember())) {
-            throw new IllegalArgumentException("method is not a producer method: " + method.getJavaMember().getName());
+        if (containsWildcardOrTypeVariable(javaMethod.getGenericReturnType())) {
+            throw new IllegalArgumentException("Producer method return type contains illegal type: " +
+                    javaMethod.getGenericReturnType());
         }
         try {
             for (AnnotatedParameter<? super X> parameter : method.getParameters()) {
@@ -2904,6 +2920,30 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
 
         return new ProducerFactoryImpl<>(method, this);
+    }
+
+    private boolean containsWildcardOrTypeVariable(Type type) {
+        if (type instanceof TypeVariable || type instanceof WildcardType) {
+            return true;
+        }
+        if (type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+            for (Type argument : parameterizedType.getActualTypeArguments()) {
+                if (containsWildcardOrTypeVariable(argument)) {
+                    return true;
+                }
+            }
+            Type ownerType = parameterizedType.getOwnerType();
+            return ownerType != null && containsWildcardOrTypeVariable(ownerType);
+        }
+        if (type instanceof GenericArrayType) {
+            return containsWildcardOrTypeVariable(((GenericArrayType) type).getGenericComponentType());
+        }
+        if (type instanceof Class<?>) {
+            Class<?> klass = (Class<?>) type;
+            return klass.isArray() && containsWildcardOrTypeVariable(klass.getComponentType());
+        }
+        return false;
     }
 
     /**

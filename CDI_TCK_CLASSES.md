@@ -255,14 +255,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.PassivationIdTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.bean.SyntheticBeanTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.beanAttributes.CreateBeanAttributesTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.bootstrap.unavailable.methods.UnavailableMethodsDuringApplicationInitializationTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.broken.event.FireContainerLifecycleEventTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.bootstrap.unavailable.methods.UnavailableMethodsDuringApplicationInitializationTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.broken.event.FireContainerLifecycleEventTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.el.WrapExpressionFactoryTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.equivalence.interceptorbinding.InterceptorBindingEquivalenceTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.equivalence.qualifier.QualifierEquivalenceTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.injectionPoint.CreateInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.producer.SyntheticProducerTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.unmanaged.UnmanagedInstanceTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.equivalence.interceptorbinding.InterceptorBindingEquivalenceTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.equivalence.qualifier.QualifierEquivalenceTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.injectionPoint.CreateInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.producer.SyntheticProducerTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.unmanaged.UnmanagedInstanceTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.unmanaged.broken.UnamangedInstanceIllegalStatesTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.communication.ExtensionsCommunicationTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.BasicConfiguratorsTest
