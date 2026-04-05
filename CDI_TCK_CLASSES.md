@@ -345,13 +345,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratorTypeParamInitializerTest
 - [x] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratoredBeanTypeParamConstructorTest
 - [x] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratoredBeanTypeParamFieldTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratoredBeanTypeParamInitializerTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.disposal.method.definition.broken.decorator.DisposerMethodOnDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.producer.field.definition.broken.decorator.ProducerFieldOnDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.producer.field.lifecycle.ProducerFieldLifecycleTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.producer.method.broken.decorator.ProducerMethodOnDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.producer.method.definition.ProducerMethodDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.producer.method.lifecycle.ProducerMethodLifecycleTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratoredBeanTypeParamInitializerTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.disposal.method.definition.broken.decorator.DisposerMethodOnDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.producer.field.definition.broken.decorator.ProducerFieldOnDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.producer.field.lifecycle.ProducerFieldLifecycleTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.producer.method.broken.decorator.ProducerMethodOnDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.producer.method.definition.ProducerMethodDefinitionTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.producer.method.lifecycle.ProducerMethodLifecycleTest
 - [ ] org.jboss.cdi.tck.tests.full.implementation.simple.lifecycle.SimpleBeanLifecycleTest
 - [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.ProducerMethodSpecializationTest
 - [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.indirectoverride.IndirectOverrideTest
