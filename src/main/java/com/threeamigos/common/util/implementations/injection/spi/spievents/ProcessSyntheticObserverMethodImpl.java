@@ -53,6 +53,13 @@ public class ProcessSyntheticObserverMethodImpl<T, X> extends PhaseAware
         return observerMethod;
     }
 
+    /**
+     * Internal accessor used by lifecycle observer resolution before observer invocation starts.
+     */
+    public ObserverMethod<T> getObserverMethodInternal() {
+        return observerMethod;
+    }
+
     @Override
     public void addDefinitionError(Throwable t) {
         assertObserverInvocationActive();

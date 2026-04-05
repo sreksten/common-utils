@@ -57,6 +57,13 @@ public class ProcessSyntheticBeanImpl<T> extends PhaseAware
         return bean;
     }
 
+    /**
+     * Internal accessor used by lifecycle observer resolution before observer invocation starts.
+     */
+    public Bean<T> getBeanInternal() {
+        return bean;
+    }
+
     @Override
     public Annotated getAnnotated() {
         assertObserverInvocationActive();

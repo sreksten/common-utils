@@ -10,6 +10,7 @@ import com.threeamigos.common.util.implementations.injection.discovery.NonPortab
 import com.threeamigos.common.util.implementations.injection.resolution.*;
 import com.threeamigos.common.util.implementations.injection.resolution.LegacyNewBeanAdapter;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
+import com.threeamigos.common.util.implementations.injection.scopes.CustomContextAdapter;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -1709,6 +1710,9 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         } else {
             scopeContext = activeContexts.iterator().next();
         }
+        if (scopeContext instanceof CustomContextAdapter) {
+            return ((CustomContextAdapter) scopeContext).getWrappedContext();
+        }
         return new ScopeContextAdapter(scopeContext, scopeType);
     }
 
@@ -1749,7 +1753,11 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             Collection<com.threeamigos.common.util.implementations.injection.scopes.ScopeContext> registeredContexts =
                     contextManager.getRegisteredContexts(effectiveScope);
             for (com.threeamigos.common.util.implementations.injection.scopes.ScopeContext registered : registeredContexts) {
-                contexts.add(new ScopeContextAdapter(registered, effectiveScope));
+                if (registered instanceof CustomContextAdapter) {
+                    contexts.add(((CustomContextAdapter) registered).getWrappedContext());
+                } else {
+                    contexts.add(new ScopeContextAdapter(registered, effectiveScope));
+                }
             }
         } catch (Exception ignored) {
             // no runtime context for this scope
@@ -2158,6 +2166,13 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 if (isDefaultQualified(qualifiers)) {
                     Bean<?> owningBean = injectionPoint.getBean();
                     if (owningBean == null) {
+                        if (beanResolver != null) {
+                            Object contextualInjectionPoint = beanResolver.resolve(requiredType, qualifierArray);
+                            if (contextualInjectionPoint instanceof InjectionPoint &&
+                                    ((InjectionPoint) contextualInjectionPoint).getBean() != null) {
+                                return contextualInjectionPoint;
+                            }
+                        }
                         throw new jakarta.enterprise.inject.spi.DefinitionException(
                                 "InjectionPoint with qualifier @Default is not allowed for non-bean injection targets");
                     }

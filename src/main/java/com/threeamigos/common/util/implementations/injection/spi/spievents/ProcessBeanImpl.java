@@ -46,6 +46,13 @@ public class ProcessBeanImpl<T> extends PhaseAware
         return bean;
     }
 
+    /**
+     * Internal accessor used by lifecycle observer resolution before observer invocation starts.
+     */
+    public Bean<T> getBeanInternal() {
+        return bean;
+    }
+
     @Override
     public void addDefinitionError(Throwable t) {
         assertObserverInvocationActive();

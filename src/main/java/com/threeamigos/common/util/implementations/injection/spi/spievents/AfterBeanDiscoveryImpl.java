@@ -234,8 +234,19 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
         assertObserverInvocationActive();
         checkNotNull(type, "Class");
         if (id == null) {
-            List<AnnotatedType<T>> candidates = getAnnotatedTypes(type);
-            return candidates.isEmpty() ? null : candidates.get(0);
+            AnnotatedType<?> discovered = knowledgeBase.getAnnotatedTypeOverride(type);
+            if (discovered == null && knowledgeBase.getClasses().contains(type)) {
+                discovered = beanManager.createAnnotatedType(type);
+            }
+            if (discovered != null) {
+                return (AnnotatedType<T>) discovered;
+            }
+            for (AnnotatedType<?> annotatedType : knowledgeBase.getRegisteredAnnotatedTypes().values()) {
+                if (annotatedType.getJavaClass().equals(type)) {
+                    return (AnnotatedType<T>) annotatedType;
+                }
+            }
+            return null;
         }
 
         info(Phase.AFTER_BEAN_DISCOVERY, "Getting annotated type: " + type.getName() + " with ID: " + id);

@@ -231,14 +231,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.event.EventTest
 - [x] org.jboss.cdi.tck.tests.full.event.broken.raw.RawEventCustomBeanTest
 - [x] org.jboss.cdi.tck.tests.full.event.broken.raw.RawEventProcessInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.event.fires.FireEventTest
-- [ ] org.jboss.cdi.tck.tests.full.event.observer.extension.BeanManagerObserverNotificationTest
-- [ ] org.jboss.cdi.tck.tests.full.event.observer.extension.EventBeanObserverNotificationTest
-- [ ] org.jboss.cdi.tck.tests.full.event.observer.priority.EventObserverOrderingTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.afterBeanDiscovery.AfterBeanDiscoveryTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.afterBeanDiscovery.annotated.GetAnnotatedTypesTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.alternative.deployment.AlternativeInLibraryWithExtensionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.AlternativeMetadataTest
+- [x] org.jboss.cdi.tck.tests.full.event.fires.FireEventTest
+- [x] org.jboss.cdi.tck.tests.full.event.observer.extension.BeanManagerObserverNotificationTest
+- [x] org.jboss.cdi.tck.tests.full.event.observer.extension.EventBeanObserverNotificationTest
+- [x] org.jboss.cdi.tck.tests.full.event.observer.priority.EventObserverOrderingTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.afterBeanDiscovery.AfterBeanDiscoveryTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.afterBeanDiscovery.annotated.GetAnnotatedTypesTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.alternative.deployment.AlternativeInLibraryWithExtensionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.AlternativeMetadataTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.annotated.AnnotatedTypeAnnotationsTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.interceptor.AlternativeMetadataInterceptorInjectionTargetTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.interceptor.AlternativeMetadataInterceptorTest

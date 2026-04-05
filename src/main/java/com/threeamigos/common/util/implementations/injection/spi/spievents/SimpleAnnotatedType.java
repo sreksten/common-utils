@@ -121,6 +121,9 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
         Class<?> current = javaClass;
         while (current != null && current != Object.class) {
             for (Field field : current.getDeclaredFields()) {
+                if (field.isSynthetic()) {
+                    continue;
+                }
                 result.add(new AnnotatedFieldWrapper<>(field, this));
             }
             current = current.getSuperclass();
@@ -133,6 +136,9 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
         Class<?> current = javaClass;
         while (current != null && current != Object.class) {
             for (Method method : current.getDeclaredMethods()) {
+                if (method.isSynthetic() || method.isBridge()) {
+                    continue;
+                }
                 result.add(new AnnotatedMethodWrapper<>(method, this));
             }
             current = current.getSuperclass();

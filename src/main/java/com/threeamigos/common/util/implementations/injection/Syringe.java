@@ -1385,8 +1385,12 @@ public class Syringe {
             }
 
             // Add the class to KnowledgeBase so it will be processed as a bean candidate.
+            // Only mark it as synthetic-only when it was not already discovered on classpath.
+            boolean alreadyDiscovered = knowledgeBase.getClasses().contains(clazz);
             knowledgeBase.add(clazz, effectiveBeanArchiveMode(BeanArchiveMode.IMPLICIT));
-            syntheticAnnotatedTypeClasses.add(clazz);
+            if (!alreadyDiscovered) {
+                syntheticAnnotatedTypeClasses.add(clazz);
+            }
             knowledgeBase.setAnnotatedTypeOverride(clazz, finalAnnotatedType);
             processedSyntheticAnnotatedTypeIds.add(id);
         }
@@ -3856,6 +3860,11 @@ public class Syringe {
         }
 
         Type[] observedTypeArguments = observedParameterizedType.getActualTypeArguments();
+        if (observedTypeArguments.length == 2 &&
+                ProcessObserverMethod.class.isAssignableFrom((Class<?>) rawType)) {
+            return matchesProcessObserverMethodTypeArguments(observedTypeArguments, event);
+        }
+
         if (observedTypeArguments.length != 1) {
             return true;
         }
@@ -3866,6 +3875,24 @@ public class Syringe {
         }
 
         return matchesObservedTypeArgument(observedTypeArguments[0], discoveredType);
+    }
+
+    private boolean matchesProcessObserverMethodTypeArguments(Type[] observedTypeArguments, Object event) {
+        ObserverMethod<?> observerMethod = extractObserverMethodFromPomEvent(event);
+        if (observerMethod == null) {
+            return true;
+        }
+
+        Type eventObservedType = observerMethod.getObservedType();
+        Class<?> eventObservedRawType = extractRawClass(eventObservedType);
+        Class<?> observerBeanClass = observerMethod.getBeanClass();
+
+        if (eventObservedRawType != null &&
+                !matchesObservedTypeArgument(observedTypeArguments[0], eventObservedRawType)) {
+            return false;
+        }
+        return observerBeanClass == null ||
+                matchesObservedTypeArgument(observedTypeArguments[1], observerBeanClass);
     }
 
     private Class<?> extractObservedTypeForGenericEventMatch(Class<?> observedRawType, Object event) {
@@ -3887,7 +3914,41 @@ public class Syringe {
             }
         }
 
+        if (ProcessBean.class.isAssignableFrom(observedRawType) &&
+                event instanceof ProcessBean<?>) {
+            Bean<?> bean = extractBeanFromProcessBeanEvent(event);
+            return bean != null ? bean.getBeanClass() : null;
+        }
+
         return null;
+    }
+
+    private Bean<?> extractBeanFromProcessBeanEvent(Object event) {
+        if (event instanceof ProcessBeanImpl<?>) {
+            return ((ProcessBeanImpl<?>) event).getBeanInternal();
+        }
+        if (event instanceof ProcessSyntheticBeanImpl<?>) {
+            return ((ProcessSyntheticBeanImpl<?>) event).getBeanInternal();
+        }
+        try {
+            return ((ProcessBean<?>) event).getBean();
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
+    }
+
+    private ObserverMethod<?> extractObserverMethodFromPomEvent(Object event) {
+        if (event instanceof ProcessObserverMethodImpl<?, ?>) {
+            return ((ProcessObserverMethodImpl<?, ?>) event).getObserverMethodInternal();
+        }
+        if (event instanceof ProcessSyntheticObserverMethodImpl<?, ?>) {
+            return ((ProcessSyntheticObserverMethodImpl<?, ?>) event).getObserverMethodInternal();
+        }
+        try {
+            return ((ProcessObserverMethod<?, ?>) event).getObserverMethod();
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
     }
 
     private boolean matchesObservedTypeArgument(Type observedTypeArgument, Class<?> discoveredType) {
@@ -3926,6 +3987,19 @@ public class Syringe {
 
         // TypeVariable and other reflective forms are treated as unrestricted for PAT matching.
         return true;
+    }
+
+    private Class<?> extractRawClass(Type type) {
+        if (type instanceof Class<?>) {
+            return (Class<?>) type;
+        }
+        if (type instanceof ParameterizedType) {
+            Type rawType = ((ParameterizedType) type).getRawType();
+            if (rawType instanceof Class<?>) {
+                return (Class<?>) rawType;
+            }
+        }
+        return null;
     }
 
     private AnnotatedType<?> extractAnnotatedTypeFromPatEvent(Object event) {
