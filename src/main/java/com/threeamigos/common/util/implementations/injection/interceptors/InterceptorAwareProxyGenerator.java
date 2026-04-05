@@ -14,7 +14,11 @@ import net.bytebuddy.implementation.bind.annotation.*;
 import net.bytebuddy.matcher.ElementMatchers;
 
 import java.io.Serializable;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -162,7 +166,7 @@ public class InterceptorAwareProxyGenerator {
 
         try {
             // Create an instance of the proxy class
-            T proxy = (T) proxyClass.getDeclaredConstructor().newInstance();
+            T proxy = (T) instantiateProxyInstance(proxyClass);
 
             // Initialize the proxy with the target instance and interceptor chains
             // This is done via the InterceptorProxyState interface that the proxy implements
@@ -178,6 +182,65 @@ public class InterceptorAwareProxyGenerator {
             throw new RuntimeException(
                 "Failed to create interceptor-aware proxy for class: " + beanClass.getName(), e);
         }
+    }
+
+    private Object instantiateProxyInstance(Class<?> proxyClass) throws Exception {
+        try {
+            Constructor<?> noArg = proxyClass.getDeclaredConstructor();
+            noArg.setAccessible(true);
+            return noArg.newInstance();
+        } catch (NoSuchMethodException ignored) {
+            // Fall through to best-effort constructor invocation below.
+        }
+
+        Constructor<?>[] constructors = proxyClass.getDeclaredConstructors();
+        Arrays.sort(constructors, Comparator.comparingInt(Constructor::getParameterCount));
+        for (Constructor<?> constructor : constructors) {
+            if (Modifier.isPrivate(constructor.getModifiers())) {
+                continue;
+            }
+            constructor.setAccessible(true);
+            Class<?>[] parameterTypes = constructor.getParameterTypes();
+            Object[] args = new Object[parameterTypes.length];
+            for (int i = 0; i < parameterTypes.length; i++) {
+                args[i] = defaultValue(parameterTypes[i]);
+            }
+            return constructor.newInstance(args);
+        }
+
+        throw new IllegalStateException("No accessible constructor available for generated proxy " +
+                proxyClass.getName());
+    }
+
+    private Object defaultValue(Class<?> type) {
+        if (type == null || !type.isPrimitive()) {
+            return null;
+        }
+        if (boolean.class.equals(type)) {
+            return false;
+        }
+        if (byte.class.equals(type)) {
+            return (byte) 0;
+        }
+        if (short.class.equals(type)) {
+            return (short) 0;
+        }
+        if (int.class.equals(type)) {
+            return 0;
+        }
+        if (long.class.equals(type)) {
+            return 0L;
+        }
+        if (float.class.equals(type)) {
+            return 0f;
+        }
+        if (double.class.equals(type)) {
+            return 0d;
+        }
+        if (char.class.equals(type)) {
+            return '\0';
+        }
+        return null;
     }
 
     /**
@@ -226,9 +289,9 @@ public class InterceptorAwareProxyGenerator {
         try {
             return new ByteBuddy()
                 // Create a subclass of the target bean class
-                // Use DEFAULT_CONSTRUCTOR strategy to handle parent constructors with parameters
-                // The proxy shell never executes business logic, so default values are safe
-                .subclass(beanClass, ConstructorStrategy.Default.DEFAULT_CONSTRUCTOR)
+                // Imitate superclass constructors so proxy generation also works for classes
+                // without a no-arg constructor (for example synthetic beans with @Inject ctor).
+                .subclass(beanClass, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
 
                 // Add field to store the target instance (the real bean)
                 .defineField("$$_targetInstance", Object.class,
@@ -387,6 +450,9 @@ public class InterceptorAwareProxyGenerator {
             // Step 2: Check if this method has interceptors configured
             // The map contains entries ONLY for methods that have interceptors
             InterceptorChain chain = methodInterceptorChains.get(method);
+            if (chain == null) {
+                chain = findMatchingChain(methodInterceptorChains, method);
+            }
 
             if (chain != null) {
                 // Step 3a: Method has interceptors - execute the chain
@@ -411,6 +477,27 @@ public class InterceptorAwareProxyGenerator {
                 method.setAccessible(true);
                 return method.invoke(targetInstance, args);
             }
+        }
+
+        private static InterceptorChain findMatchingChain(Map<Method, InterceptorChain> methodInterceptorChains,
+                                                          Method invokedMethod) {
+            if (methodInterceptorChains == null || methodInterceptorChains.isEmpty() || invokedMethod == null) {
+                return null;
+            }
+            for (Map.Entry<Method, InterceptorChain> entry : methodInterceptorChains.entrySet()) {
+                Method configuredMethod = entry.getKey();
+                if (configuredMethod == null) {
+                    continue;
+                }
+                if (!configuredMethod.getName().equals(invokedMethod.getName())) {
+                    continue;
+                }
+                if (!Arrays.equals(configuredMethod.getParameterTypes(), invokedMethod.getParameterTypes())) {
+                    continue;
+                }
+                return entry.getValue();
+            }
+            return null;
         }
 
         private static Method findTargetClassAroundInvokeMethod(Class<?> targetClass) {

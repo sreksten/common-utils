@@ -187,10 +187,10 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
         // Get the configured AnnotatedType (with any added annotations)
         AnnotatedType<T> configuredType = configurator.complete();
 
-        // Extract interceptor bindings from the configured type
-        Set<Annotation> interceptorBindings = extractInterceptorBindings(configuredType);
+        Map<Method, Set<Annotation>> interceptorBindingsByMethod =
+                extractInterceptorBindingsByMethod(configuredType);
 
-        if (interceptorBindings.isEmpty()) {
+        if (interceptorBindingsByMethod.isEmpty()) {
             // No interceptors to apply - return original instance
             return instance;
         }
@@ -198,8 +198,12 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
         // Build interceptor chains for each method
         Map<Method, InterceptorChain> methodInterceptorChains = buildInterceptorChains(
             clazz,
-            interceptorBindings
+            interceptorBindingsByMethod
         );
+
+        if (methodInterceptorChains.isEmpty()) {
+            return instance;
+        }
 
         // Create interceptor-aware proxy
         try {
@@ -235,53 +239,30 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
      */
     private Map<Method, InterceptorChain> buildInterceptorChains(
             Class<T> clazz,
-            Set<Annotation> interceptorBindings) {
+            Map<Method, Set<Annotation>> interceptorBindingsByMethod) {
 
         Map<Method, InterceptorChain> chains = new HashMap<>();
 
-        if (interceptorBindings.isEmpty()) {
+        if (interceptorBindingsByMethod.isEmpty()) {
             return chains; // No interceptors to apply
         }
 
-        // Convert Set to array for BeanManager.resolveInterceptors()
-        Annotation[] bindingsArray = interceptorBindings.toArray(new Annotation[0]);
-
-        // Resolve interceptors for AROUND_INVOKE
-        List<Interceptor<?>> interceptors = beanManager.resolveInterceptors(
-            InterceptionType.AROUND_INVOKE,
-            bindingsArray
-        );
-
-        if (interceptors.isEmpty()) {
-            return chains; // No interceptors resolved
-        }
-
-        // Create interceptor instances
-        List<Object> interceptorInstances = new ArrayList<>();
-        List<Method> aroundInvokeMethods = new ArrayList<>();
-
-        for (Interceptor<?> interceptor : interceptors) {
-            // Get or create interceptor instance
-            Object interceptorInstance = beanManager.getReference(
-                interceptor,
-                interceptor.getBeanClass(),
-                creationalContext
-            );
-            interceptorInstances.add(interceptorInstance);
-
-            // Find @AroundInvoke method
-            Method aroundInvokeMethod = findAroundInvokeMethod(interceptor.getBeanClass());
-            if (aroundInvokeMethod != null) {
-                aroundInvokeMethods.add(aroundInvokeMethod);
+        for (Map.Entry<Method, Set<Annotation>> entry : interceptorBindingsByMethod.entrySet()) {
+            Method method = entry.getKey();
+            Set<Annotation> interceptorBindings = entry.getValue();
+            if (method == null || interceptorBindings == null || interceptorBindings.isEmpty()) {
+                continue;
             }
-        }
-
-        // Get all public methods (business methods)
-        Method[] methods = clazz.getMethods();
-
-        for (Method method : methods) {
-            // Skip methods that shouldn't be intercepted
             if (shouldSkipMethod(method)) {
+                continue;
+            }
+
+            Annotation[] bindingsArray = interceptorBindings.toArray(new Annotation[0]);
+            List<Interceptor<?>> interceptors = beanManager.resolveInterceptors(
+                    InterceptionType.AROUND_INVOKE,
+                    bindingsArray
+            );
+            if (interceptors.isEmpty()) {
                 continue;
             }
 
@@ -289,12 +270,15 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
             InterceptorChain.Builder chainBuilder = InterceptorChain.builder()
                     .withInterceptorBindings(interceptorBindings);
 
-            for (int i = 0; i < interceptorInstances.size(); i++) {
-                if (i < aroundInvokeMethods.size()) {
-                    chainBuilder.addInterceptor(
-                        interceptorInstances.get(i),
-                        aroundInvokeMethods.get(i)
-                    );
+            for (Interceptor<?> interceptor : interceptors) {
+                Object interceptorInstance = beanManager.getReference(
+                        interceptor,
+                        interceptor.getBeanClass(),
+                        creationalContext
+                );
+                Method aroundInvokeMethod = findAroundInvokeMethod(interceptor.getBeanClass());
+                if (aroundInvokeMethod != null) {
+                    chainBuilder.addInterceptor(interceptorInstance, aroundInvokeMethod);
                 }
             }
 
@@ -366,9 +350,6 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
         if (rawType.getTypeParameters().length > 0) {
             return "generic class with type parameters";
         }
-        if (!hasNonPrivateNoArgConstructor(rawType)) {
-            return "missing non-private no-arg constructor";
-        }
         for (Class<?> current = rawType; current != null && !Object.class.equals(current); current = current.getSuperclass()) {
             for (Method method : current.getDeclaredMethods()) {
                 int modifiers = method.getModifiers();
@@ -379,15 +360,6 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
             }
         }
         return null;
-    }
-
-    private boolean hasNonPrivateNoArgConstructor(Class<?> rawType) {
-        try {
-            int modifiers = rawType.getDeclaredConstructor().getModifiers();
-            return !Modifier.isPrivate(modifiers);
-        } catch (NoSuchMethodException e) {
-            return false;
-        }
     }
 
     /**
@@ -412,6 +384,51 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
         }
 
         return bindings;
+    }
+
+    private Map<Method, Set<Annotation>> extractInterceptorBindingsByMethod(AnnotatedType<T> annotatedType) {
+        Map<Method, Set<Annotation>> bindingsByMethod = new HashMap<Method, Set<Annotation>>();
+        Set<Annotation> classBindings = extractInterceptorBindings(annotatedType);
+
+        Map<Method, Set<Annotation>> configuredMethodBindings = new HashMap<Method, Set<Annotation>>();
+        for (AnnotatedMethod<? super T> annotatedMethod : annotatedType.getMethods()) {
+            if (annotatedMethod == null || annotatedMethod.getJavaMember() == null) {
+                continue;
+            }
+            Set<Annotation> methodBindings = new LinkedHashSet<Annotation>();
+            for (Annotation annotation : annotatedMethod.getAnnotations()) {
+                if (beanManager.isInterceptorBinding(annotation.annotationType())) {
+                    methodBindings.add(annotation);
+                }
+            }
+            if (!methodBindings.isEmpty()) {
+                configuredMethodBindings.put(annotatedMethod.getJavaMember(), methodBindings);
+            }
+        }
+
+        for (Method method : clazz.getMethods()) {
+            if (shouldSkipMethod(method)) {
+                continue;
+            }
+
+            Set<Annotation> bindings = new LinkedHashSet<Annotation>(classBindings);
+            Set<Annotation> methodBindings = configuredMethodBindings.get(method);
+            if (methodBindings != null) {
+                bindings.addAll(methodBindings);
+            } else {
+                for (Annotation annotation : method.getAnnotations()) {
+                    if (beanManager.isInterceptorBinding(annotation.annotationType())) {
+                        bindings.add(annotation);
+                    }
+                }
+            }
+
+            if (!bindings.isEmpty()) {
+                bindingsByMethod.put(method, bindings);
+            }
+        }
+
+        return bindingsByMethod;
     }
 
     /**

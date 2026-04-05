@@ -1510,6 +1510,20 @@ public class CDI41InjectionValidator {
         // Find all beans that match the required type
         Set<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
 
+        // @Delegate injection points are resolved against decorated beans, not decorator beans.
+        // Excluding decorators here avoids false ambiguity when the decorator type is assignable
+        // to its own delegate type.
+        if (injectionPoint.isDelegate()) {
+            Set<Bean<?>> delegateCandidates = new LinkedHashSet<Bean<?>>();
+            for (Bean<?> candidate : candidates) {
+                if (candidate instanceof Decorator<?>) {
+                    continue;
+                }
+                delegateCandidates.add(candidate);
+            }
+            candidates = delegateCandidates;
+        }
+
         // Check for unsatisfied dependency
         if (candidates.isEmpty()) {
             knowledgeBase.addInjectionError(

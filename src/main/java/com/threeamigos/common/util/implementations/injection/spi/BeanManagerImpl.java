@@ -23,6 +23,7 @@ import com.threeamigos.common.util.implementations.injection.util.LifecycleMetho
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
+import jakarta.el.ELContext;
 import jakarta.el.ELResolver;
 import jakarta.el.ExpressionFactory;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -111,6 +112,32 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             new ConcurrentHashMap<>();
     private static final Map<Object, DependentReference<?>> TRANSIENT_DEPENDENT_REFERENCE_REGISTRY =
             Collections.synchronizedMap(new IdentityHashMap<Object, DependentReference<?>>());
+    private static final ELResolver NOOP_EL_RESOLVER = new ELResolver() {
+        @Override
+        public Object getValue(ELContext context, Object base, Object property) {
+            return null;
+        }
+
+        @Override
+        public Class<?> getType(ELContext context, Object base, Object property) {
+            return null;
+        }
+
+        @Override
+        public void setValue(ELContext context, Object base, Object property, Object value) {
+            // no-op
+        }
+
+        @Override
+        public boolean isReadOnly(ELContext context, Object base, Object property) {
+            return true;
+        }
+
+        @Override
+        public Class<?> getCommonPropertyType(ELContext context, Object base) {
+            return Object.class;
+        }
+    };
 
     private final KnowledgeBase knowledgeBase;
     private final BeanResolver beanResolver;
@@ -2731,8 +2758,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
      */
     @Override
     public ELResolver getELResolver() {
-        // EL integration is not implemented yet
-        throw new UnsupportedOperationException("EL integration not yet implemented");
+        return NOOP_EL_RESOLVER;
     }
 
     /**
@@ -2898,13 +2924,12 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
         validateDeclaredBeanAttributes(type);
 
-        // Extract metadata from AnnotatedType
         String name = extractName(type);
-        Set<Annotation> qualifiers = normalizeBeanQualifiers(type.getAnnotations());
+        Set<Annotation> qualifiers = normalizeBeanQualifiers(extractBeanQualifiers(type));
         Class<? extends Annotation> scope = extractScopeFromAnnotated(type);
         Set<Class<? extends Annotation>> stereotypes = extractStereotypesFromAnnotated(type);
-        Set<Type> types = TypeClosureHelper.extractTypesFromClass(type.getJavaClass());
-        boolean alternative = hasAlternativeAnnotation(type.getJavaClass());
+        Set<Type> types = extractTypesFromAnnotatedType(type);
+        boolean alternative = isAlternativeDeclared(type);
 
         return new BeanAttributesImpl<>(name, qualifiers, scope, stereotypes, types, alternative);
     }
@@ -2924,21 +2949,17 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (member == null) {
             throw new IllegalArgumentException("member cannot be null");
         }
+        if (member instanceof AnnotatedConstructor<?>) {
+            throw new IllegalArgumentException("member must not be a constructor");
+        }
         validateDeclaredBeanAttributes(member);
 
-        // Extract metadata from AnnotatedMember (producer field or method)
         String name = extractName(member);
-        Set<Annotation> qualifiers = normalizeBeanQualifiers(member.getAnnotations());
+        Set<Annotation> qualifiers = normalizeBeanQualifiers(extractBeanQualifiers(member));
         Class<? extends Annotation> scope = extractScopeFromAnnotated(member);
         Set<Class<? extends Annotation>> stereotypes = extractStereotypesFromAnnotated(member);
         Set<Type> types = extractTypesFromMember(member);
-        boolean alternative = false;
-        for (Annotation annotation : member.getAnnotations()) {
-            if (hasAlternativeAnnotation(annotation.annotationType())) {
-                alternative = true;
-                break;
-            }
-        }
+        boolean alternative = isAlternativeDeclared(member);
 
         return new BeanAttributesImpl<>(name, qualifiers, scope, stereotypes, types, alternative);
     }
@@ -4270,23 +4291,98 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
     /**
      * Extracts the bean name from an Annotated element.
-     * Returns an empty string if no @Named annotation is present.
+     * Returns null if no bean name is declared.
      */
     private String extractName(jakarta.enterprise.inject.spi.Annotated annotated) {
-        for (Annotation annotation : annotated.getAnnotations()) {
-            if (NAMED.matches(annotation.annotationType())) {
-                String value = extractStringAttribute(annotation);
-                if (value != null && !value.trim().isEmpty()) {
-                    return value.trim();
-                }
-                // Default name: simple class name with first character lower-cased
-                if (annotated instanceof jakarta.enterprise.inject.spi.AnnotatedType) {
-                    Class<?> clazz = ((jakarta.enterprise.inject.spi.AnnotatedType<?>) annotated).getJavaClass();
-                    return decapitalize(clazz.getSimpleName());
-                }
+        if (annotated instanceof AnnotatedType<?>) {
+            return extractNameFromType((AnnotatedType<?>) annotated);
+        }
+        if (annotated instanceof AnnotatedMember<?>) {
+            return extractNameFromMember((AnnotatedMember<?>) annotated);
+        }
+        return null;
+    }
+
+    private String extractNameFromType(AnnotatedType<?> type) {
+        Annotation named = findNamedAnnotation(type.getAnnotations());
+        if (named != null) {
+            return defaultedTypeName(readNamedValue(named), type.getJavaClass());
+        }
+
+        Set<Class<? extends Annotation>> visited = new HashSet<Class<? extends Annotation>>();
+        for (Class<? extends Annotation> stereotype : extractStereotypesFromAnnotated(type)) {
+            String fromStereotype = extractNameFromStereotype(stereotype, type.getJavaClass(), visited);
+            if (fromStereotype != null) {
+                return fromStereotype;
             }
         }
-        return "";
+        return null;
+    }
+
+    private String extractNameFromMember(AnnotatedMember<?> member) {
+        Annotation named = findNamedAnnotation(member.getAnnotations());
+        if (named == null) {
+            return null;
+        }
+
+        String value = readNamedValue(named);
+        if (value != null && !value.trim().isEmpty()) {
+            return value.trim();
+        }
+
+        Member javaMember = member.getJavaMember();
+        if (javaMember instanceof Field) {
+            return ((Field) javaMember).getName();
+        }
+        if (javaMember instanceof Method) {
+            String methodName = ((Method) javaMember).getName();
+            if (methodName.startsWith("get") && methodName.length() > 3) {
+                return decapitalize(methodName.substring(3));
+            }
+            return methodName;
+        }
+        return null;
+    }
+
+    private String extractNameFromStereotype(Class<? extends Annotation> stereotype,
+                                             Class<?> beanClass,
+                                             Set<Class<? extends Annotation>> visited) {
+        if (stereotype == null || !visited.add(stereotype)) {
+            return null;
+        }
+
+        Set<Annotation> registeredDefinition = knowledgeBase.getStereotypeDefinition(stereotype);
+        if (registeredDefinition != null && !registeredDefinition.isEmpty()) {
+            Annotation named = findNamedAnnotation(registeredDefinition);
+            if (named != null) {
+                return defaultedTypeName(readNamedValue(named), beanClass);
+            }
+        }
+
+        Annotation named = findNamedAnnotation(Arrays.asList(stereotype.getAnnotations()));
+        if (named != null) {
+            return defaultedTypeName(readNamedValue(named), beanClass);
+        }
+
+        for (Annotation meta : stereotype.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (!isStereotype(metaType)) {
+                continue;
+            }
+            String nested = extractNameFromStereotype(metaType, beanClass, visited);
+            if (nested != null) {
+                return nested;
+            }
+        }
+
+        return null;
+    }
+
+    private String defaultedTypeName(String rawName, Class<?> beanClass) {
+        if (rawName != null && !rawName.trim().isEmpty()) {
+            return rawName.trim();
+        }
+        return beanClass != null ? decapitalize(beanClass.getSimpleName()) : null;
     }
 
     /**
@@ -4294,47 +4390,360 @@ public class BeanManagerImpl implements BeanManager, Serializable {
      * Returns @Dependent if no scope is present.
      */
     private Class<? extends Annotation> extractScopeFromAnnotated(jakarta.enterprise.inject.spi.Annotated annotated) {
-        for (Annotation ann : annotated.getAnnotations()) {
-            if (isScopeAnnotationType(ann.annotationType())) {
-                return normalizeSingletonToApplicationScoped(ann.annotationType());
+        Class<? extends Annotation> directScope = null;
+        for (Annotation annotation : annotated.getAnnotations()) {
+            if (!isScopeAnnotationType(annotation.annotationType())) {
+                continue;
+            }
+            Class<? extends Annotation> normalized = normalizeSingletonToApplicationScoped(annotation.annotationType());
+            if (directScope == null) {
+                directScope = normalized;
+            } else if (!directScope.equals(normalized)) {
+                throw new IllegalArgumentException("Definition error: multiple scope annotations declared on " +
+                        describeAnnotatedElement(annotated) + " (" +
+                        directScope.getName() + ", " + normalized.getName() + ")");
             }
         }
-        return jakarta.enterprise.context.Dependent.class;
+        if (directScope != null) {
+            return directScope;
+        }
+
+        Class<? extends Annotation> stereotypeScope = null;
+        for (Class<? extends Annotation> stereotype : extractStereotypesFromAnnotated(annotated)) {
+            Class<? extends Annotation> inheritedScope =
+                    extractScopeFromStereotype(stereotype, new HashSet<Class<? extends Annotation>>());
+            if (inheritedScope == null) {
+                continue;
+            }
+            if (stereotypeScope == null) {
+                stereotypeScope = inheritedScope;
+            } else if (!stereotypeScope.equals(inheritedScope)) {
+                throw new IllegalArgumentException("Definition error: conflicting scopes inherited from stereotypes on " +
+                        describeAnnotatedElement(annotated) + " (" +
+                        stereotypeScope.getName() + ", " + inheritedScope.getName() + ")");
+            }
+        }
+        return stereotypeScope != null ? stereotypeScope : jakarta.enterprise.context.Dependent.class;
+    }
+
+    private Class<? extends Annotation> extractScopeFromStereotype(Class<? extends Annotation> stereotype,
+                                                                   Set<Class<? extends Annotation>> visited) {
+        if (stereotype == null || !visited.add(stereotype)) {
+            return null;
+        }
+
+        Class<? extends Annotation> discovered = null;
+
+        Set<Annotation> registeredDefinition = knowledgeBase.getStereotypeDefinition(stereotype);
+        if (registeredDefinition != null && !registeredDefinition.isEmpty()) {
+            for (Annotation annotation : registeredDefinition) {
+                if (annotation == null || !isScopeAnnotationType(annotation.annotationType())) {
+                    continue;
+                }
+                Class<? extends Annotation> normalized = normalizeSingletonToApplicationScoped(annotation.annotationType());
+                if (discovered == null) {
+                    discovered = normalized;
+                } else if (!discovered.equals(normalized)) {
+                    throw new IllegalArgumentException("Definition error: conflicting scopes declared by stereotype " +
+                            stereotype.getName() + " (" + discovered.getName() + ", " + normalized.getName() + ")");
+                }
+            }
+        }
+
+        for (Annotation meta : stereotype.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (isScopeAnnotationType(metaType)) {
+                Class<? extends Annotation> normalized = normalizeSingletonToApplicationScoped(metaType);
+                if (discovered == null) {
+                    discovered = normalized;
+                } else if (!discovered.equals(normalized)) {
+                    throw new IllegalArgumentException("Definition error: conflicting scopes declared by stereotype " +
+                            stereotype.getName() + " (" + discovered.getName() + ", " + normalized.getName() + ")");
+                }
+                continue;
+            }
+            if (!isStereotype(metaType)) {
+                continue;
+            }
+            Class<? extends Annotation> nested = extractScopeFromStereotype(metaType, visited);
+            if (nested == null) {
+                continue;
+            }
+            if (discovered == null) {
+                discovered = nested;
+            } else if (!discovered.equals(nested)) {
+                throw new IllegalArgumentException("Definition error: conflicting scopes inherited from stereotype chain " +
+                        stereotype.getName() + " (" + discovered.getName() + ", " + nested.getName() + ")");
+            }
+        }
+
+        return discovered;
     }
 
     /**
      * Extracts stereotypes from an Annotated element.
      */
     private Set<Class<? extends Annotation>> extractStereotypesFromAnnotated(jakarta.enterprise.inject.spi.Annotated annotated) {
-        Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
+        Set<Class<? extends Annotation>> stereotypes = new HashSet<Class<? extends Annotation>>();
         for (Annotation ann : annotated.getAnnotations()) {
-            if (isStereotypeAnnotationType(ann.annotationType())) {
+            if (isStereotype(ann.annotationType())) {
                 stereotypes.add(ann.annotationType());
             }
         }
         return stereotypes;
     }
 
+    private Set<Annotation> extractBeanQualifiers(jakarta.enterprise.inject.spi.Annotated annotated) {
+        Set<Annotation> qualifiers = new LinkedHashSet<Annotation>(
+                com.threeamigos.common.util.implementations.injection.util.QualifiersHelper
+                        .extractQualifierAnnotations(annotated.getAnnotations().toArray(new Annotation[0])));
+        for (Class<? extends Annotation> stereotype : extractStereotypesFromAnnotated(annotated)) {
+            qualifiers.addAll(extractQualifiersFromStereotype(stereotype, new HashSet<Class<? extends Annotation>>()));
+        }
+        return qualifiers;
+    }
+
+    private Set<Annotation> extractQualifiersFromStereotype(Class<? extends Annotation> stereotype,
+                                                            Set<Class<? extends Annotation>> visited) {
+        if (stereotype == null || !visited.add(stereotype)) {
+            return Collections.emptySet();
+        }
+
+        Set<Annotation> qualifiers = new LinkedHashSet<Annotation>();
+
+        Set<Annotation> registeredDefinition = knowledgeBase.getStereotypeDefinition(stereotype);
+        if (registeredDefinition != null && !registeredDefinition.isEmpty()) {
+            for (Annotation annotation : registeredDefinition) {
+                if (annotation == null) {
+                    continue;
+                }
+                Class<? extends Annotation> annotationType = annotation.annotationType();
+                if (isQualifier(annotationType) && !hasNamedAnnotation(annotationType)) {
+                    qualifiers.add(annotation);
+                }
+            }
+        }
+
+        for (Annotation annotation : stereotype.getAnnotations()) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (isQualifier(annotationType) && !hasNamedAnnotation(annotationType)) {
+                qualifiers.add(annotation);
+            }
+            if (!isStereotype(annotationType)) {
+                continue;
+            }
+            qualifiers.addAll(extractQualifiersFromStereotype(annotationType, visited));
+        }
+
+        return qualifiers;
+    }
+
+    private Set<Type> extractTypesFromAnnotatedType(AnnotatedType<?> type) {
+        Set<Type> unrestrictedTypes = new LinkedHashSet<Type>(type.getTypeClosure());
+        if (unrestrictedTypes.isEmpty()) {
+            unrestrictedTypes.addAll(TypeClosureHelper.extractTypesFromClass(type.getJavaClass()));
+        }
+
+        Annotation typedAnnotation = findTypedAnnotation(type.getAnnotations());
+        Set<Type> resultingTypes = typedAnnotation != null
+                ? applyTypedRestriction(type.getJavaClass(), typedAnnotation, unrestrictedTypes)
+                : unrestrictedTypes;
+
+        return keepLegalBeanTypes(resultingTypes);
+    }
+
     /**
      * Extracts bean types from an AnnotatedMember (producer field or method).
      */
     private Set<Type> extractTypesFromMember(jakarta.enterprise.inject.spi.AnnotatedMember<?> member) {
-        Set<Type> types = new HashSet<>();
-        Type baseType = member.getBaseType();
-        types.add(baseType);
+        Set<Type> unrestrictedTypes = TypeClosureHelper.extractTypesFromType(member.getBaseType());
+        Annotation typedAnnotation = findTypedAnnotation(member.getAnnotations());
+        Set<Type> resultingTypes = unrestrictedTypes;
+        if (typedAnnotation != null) {
+            Class<?> memberRawType = RawTypeExtractor.getRawType(member.getBaseType());
+            resultingTypes = applyTypedRestriction(memberRawType, typedAnnotation, unrestrictedTypes);
+        }
+        return keepLegalBeanTypes(resultingTypes);
+    }
 
-        // If it's a class type, add its hierarchy
-        if (baseType instanceof Class) {
-            Class<?> clazz = (Class<?>) baseType;
-            while (clazz != null && clazz != Object.class) {
-                types.add(clazz);
-                types.addAll(Arrays.asList(clazz.getGenericInterfaces()));
-                clazz = clazz.getSuperclass();
+    private Annotation findTypedAnnotation(Collection<Annotation> annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation != null && TYPED.matches(annotation.annotationType())) {
+                return annotation;
+            }
+        }
+        return null;
+    }
+
+    private Set<Type> applyTypedRestriction(Class<?> beanClass,
+                                            Annotation typedAnnotation,
+                                            Set<Type> unrestrictedTypes) {
+        if (beanClass == null) {
+            throw new IllegalArgumentException("Definition error: @Typed may only be used when raw bean type can be determined");
+        }
+
+        Set<Type> types = new LinkedHashSet<Type>();
+
+        try {
+            Method valueMethod = typedAnnotation.annotationType().getMethod("value");
+            Object rawValue = valueMethod.invoke(typedAnnotation);
+            if (!(rawValue instanceof Class<?>[])) {
+                throw new IllegalArgumentException("Definition error: invalid @Typed declaration on " + beanClass.getName());
+            }
+
+            Class<?>[] typedClasses = (Class<?>[]) rawValue;
+            if (typedClasses.length == 0) {
+                types.add(Object.class);
+                return types;
+            }
+
+            for (Class<?> typedClass : typedClasses) {
+                if (typedClass == null || !typedClass.isAssignableFrom(beanClass)) {
+                    throw new IllegalArgumentException("Definition error: @Typed specifies type " +
+                            (typedClass == null ? "<null>" : typedClass.getName()) +
+                            " which is not assignable from bean class " + beanClass.getName());
+                }
+                boolean matched = false;
+                for (Type unrestricted : unrestrictedTypes) {
+                    Class<?> rawType = RawTypeExtractor.getRawType(unrestricted);
+                    if (typedClass.equals(rawType)) {
+                        types.add(unrestricted);
+                        matched = true;
+                    }
+                }
+                if (!matched) {
+                    types.add(typedClass);
+                }
+            }
+            types.add(Object.class);
+            return types;
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalArgumentException("Definition error: failed to read @Typed values for " +
+                    beanClass.getName(), e);
+        }
+    }
+
+    private Set<Type> keepLegalBeanTypes(Set<Type> candidateTypes) {
+        Set<Type> legalTypes = new LinkedHashSet<Type>();
+        if (candidateTypes == null) {
+            legalTypes.add(Object.class);
+            return legalTypes;
+        }
+        for (Type candidate : candidateTypes) {
+            if (isLegalBeanTypeForAttributes(candidate)) {
+                legalTypes.add(candidate);
+            }
+        }
+        if (legalTypes.isEmpty()) {
+            legalTypes.add(Object.class);
+        }
+        return legalTypes;
+    }
+
+    private boolean isLegalBeanTypeForAttributes(Type type) {
+        if (type instanceof TypeVariable || type instanceof WildcardType) {
+            return false;
+        }
+        if (type instanceof GenericArrayType) {
+            return isLegalBeanTypeForAttributes(((GenericArrayType) type).getGenericComponentType());
+        }
+        if (type instanceof Class<?>) {
+            Class<?> klass = (Class<?>) type;
+            return !klass.isArray() || isLegalBeanTypeForAttributes(klass.getComponentType());
+        }
+        if (type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+            for (Type argument : parameterizedType.getActualTypeArguments()) {
+                if (argument instanceof WildcardType) {
+                    return false;
+                }
+                if (argument instanceof TypeVariable) {
+                    continue;
+                }
+                if (!isLegalBeanTypeForAttributes(argument)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isAlternativeDeclared(jakarta.enterprise.inject.spi.Annotated annotated) {
+        if (annotated == null) {
+            return false;
+        }
+
+        for (Annotation annotation : annotated.getAnnotations()) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (hasAlternativeAnnotation(annotationType)) {
+                return true;
+            }
+            if (isStereotype(annotationType) &&
+                    stereotypeDeclaresAlternative(annotationType, new HashSet<Class<? extends Annotation>>())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean stereotypeDeclaresAlternative(Class<? extends Annotation> stereotype,
+                                                  Set<Class<? extends Annotation>> visited) {
+        if (stereotype == null || !visited.add(stereotype)) {
+            return false;
+        }
+
+        if (hasAlternativeAnnotation(stereotype)) {
+            return true;
+        }
+
+        Set<Annotation> registeredDefinition = knowledgeBase.getStereotypeDefinition(stereotype);
+        if (registeredDefinition != null && !registeredDefinition.isEmpty()) {
+            for (Annotation annotation : registeredDefinition) {
+                if (annotation != null && hasAlternativeAnnotation(annotation.annotationType())) {
+                    return true;
+                }
             }
         }
 
-        types.add(Object.class);
-        return types;
+        for (Annotation meta : stereotype.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (hasAlternativeAnnotation(metaType)) {
+                return true;
+            }
+            if (isStereotype(metaType) && stereotypeDeclaresAlternative(metaType, visited)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Annotation findNamedAnnotation(Collection<Annotation> annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation != null && hasNamedAnnotation(annotation.annotationType())) {
+                return annotation;
+            }
+        }
+        return null;
+    }
+
+    private String readNamedValue(Annotation namedAnnotation) {
+        if (namedAnnotation == null) {
+            return "";
+        }
+        try {
+            Method valueMethod = namedAnnotation.annotationType().getMethod("value");
+            Object rawValue = valueMethod.invoke(namedAnnotation);
+            return rawValue == null ? "" : rawValue.toString();
+        } catch (ReflectiveOperationException ignored) {
+            return "";
+        }
     }
 
     private void validateDeclaredBeanAttributes(jakarta.enterprise.inject.spi.Annotated annotated) {
@@ -4379,19 +4788,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     private String decapitalize(String s) {
         if (s == null || s.isEmpty()) return s;
         return Character.toLowerCase(s.charAt(0)) + s.substring(1);
-    }
-
-    private String extractStringAttribute(Annotation annotation) {
-        if (annotation == null) {
-            return null;
-        }
-        try {
-            Method method = annotation.annotationType().getMethod("value");
-            Object raw = method.invoke(annotation);
-            return raw == null ? null : raw.toString();
-        } catch (ReflectiveOperationException ignored) {
-            return null;
-        }
     }
 
     /**

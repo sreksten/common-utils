@@ -34,6 +34,10 @@ public class ProcessInjectionTargetImpl<T> extends PhaseAware
         return annotatedType;
     }
 
+    public AnnotatedType<T> getAnnotatedTypeInternal() {
+        return annotatedType;
+    }
+
     @Override
     public InjectionTarget<T> getInjectionTarget() {
         assertObserverInvocationActive();

@@ -75,6 +75,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
@@ -251,6 +252,8 @@ public class Syringe {
     private final Set<Class<?>> syntheticAnnotatedTypeClasses = new HashSet<Class<?>>();
     private final Map<String, AnnotatedType<?>> additionalAnnotatedTypesForDiscoveredClasses =
             new LinkedHashMap<String, AnnotatedType<?>>();
+    private final Map<ProducerBean<?>, Producer<?>> deferredProducerReplacements =
+            new IdentityHashMap<ProducerBean<?>, Producer<?>>();
     private InterceptorAwareProxyGenerator runtimeInterceptorAwareProxyGenerator;
     private DecoratorAwareProxyGenerator runtimeDecoratorAwareProxyGenerator;
 
@@ -756,6 +759,7 @@ public class Syringe {
 
         try {
             applyForcedArchiveModeOverride();
+            applyBeansXmlAllModeOverrideForExactPackageBootstrap();
 
             // ============================================================
             // PHASE 2 (CONT): PROCESS DISCOVERED TYPES
@@ -791,21 +795,24 @@ public class Syringe {
             // Extensions can wrap InjectionTarget to customize instantiation/injection
             processInjectionTargets();
 
-            // Step 3.4: Fire ProcessBeanAttributes<T> events
+            // Step 3.4: Fire ProcessProducer<T, X> events
+            // Extensions can wrap Producer to customize production logic
+            processProducerEvents();
+
+            // Step 3.5: Fire ProcessBeanAttributes<T> events
             // Extensions can modify bean attributes (scope, qualifiers, stereotypes, name)
             processBeanAttributes();
 
-            // Step 3.5: Fire ProcessBean events
+            // Step 3.6: Fire ProcessBean events
             // - ProcessManagedBean<T> for managed beans
             // - ProcessProducerMethod<T, X> for producer methods
             // - ProcessProducerField<T, X> for producer fields
             processBean();
 
-            // Step 3.6: Fire ProcessProducer<T, X> events
-            // Extensions can wrap Producer to customize production logic
+            // Step 3.7: Fire ProcessProducerMethod/Field events
             processProducers();
 
-            // Step 3.7: Fire ProcessObserverMethod<T, X> events
+            // Step 3.8: Fire ProcessObserverMethod<T, X> events
             // Extensions can modify observer method metadata
             processObserverMethods();
             fireBuildCompatibleExtensionPhase(BceSupportedPhase.REGISTRATION);
@@ -1045,6 +1052,7 @@ public class Syringe {
         processedSyntheticAnnotatedTypeIds.clear();
         syntheticAnnotatedTypeClasses.clear();
         additionalAnnotatedTypesForDiscoveredClasses.clear();
+        deferredProducerReplacements.clear();
         buildCompatibleExtensionRunner = null;
 
         // Drop runtime metadata references eagerly.
@@ -1361,11 +1369,14 @@ public class Syringe {
             }
             AnnotatedType<?> annotatedType = entry.getValue();
             Class<?> clazz = annotatedType.getJavaClass();
+            boolean alreadyDiscovered = knowledgeBase.getClasses().contains(clazz);
 
             info("Processing registered AnnotatedType: " + clazz.getName() + " (ID: " + id + ")");
 
             if (shouldSkipProcessAnnotatedTypeEvent(clazz)) {
-                knowledgeBase.vetoType(clazz);
+                if (!alreadyDiscovered) {
+                    knowledgeBase.vetoType(clazz);
+                }
                 processedSyntheticAnnotatedTypeIds.add(id);
                 continue;
             }
@@ -1378,7 +1389,9 @@ public class Syringe {
             fireEventToExtensions(event);
 
             if (event.isVetoed()) {
-                knowledgeBase.vetoType(clazz);
+                if (!alreadyDiscovered) {
+                    knowledgeBase.vetoType(clazz);
+                }
                 processedSyntheticAnnotatedTypeIds.add(id);
                 continue;
             }
@@ -1390,7 +1403,6 @@ public class Syringe {
 
             // Add the class to KnowledgeBase so it will be processed as a bean candidate.
             // Only mark it as synthetic-only when it was not already discovered on classpath.
-            boolean alreadyDiscovered = knowledgeBase.getClasses().contains(clazz);
             if (alreadyDiscovered) {
                 // CDI 4.1: addAnnotatedType() for an already discovered Java class contributes
                 // an additional bean definition. Keep discovered class metadata untouched and
@@ -2012,11 +2024,19 @@ public class Syringe {
         info("Processing bean attributes");
 
         List<Bean<?>> vetoed = new ArrayList<>();
+        Set<Class<?>> vetoedDeclaringBeanClasses = new HashSet<Class<?>>();
         Set<Class<?>> processedBeanClasses = new HashSet<Class<?>>();
 
         for (Bean<?> bean : knowledgeBase.getBeans()) {
             if (!isProcessBeanAttributesCandidate(bean)) {
                 continue;
+            }
+            if (bean instanceof ProducerBean<?>) {
+                Class<?> declaringClass = ((ProducerBean<?>) bean).getDeclaringClass();
+                if (declaringClass != null && vetoedDeclaringBeanClasses.contains(declaringClass)) {
+                    vetoed.add(bean);
+                    continue;
+                }
             }
             if (bean.getBeanClass() != null) {
                 processedBeanClasses.add(bean.getBeanClass());
@@ -2033,6 +2053,12 @@ public class Syringe {
 
                 if (event.isVetoed()) {
                     vetoed.add(bean);
+                    if (bean instanceof BeanImpl<?>) {
+                        Class<?> vetoedBeanClass = bean.getBeanClass();
+                        if (vetoedBeanClass != null) {
+                            vetoedDeclaringBeanClasses.add(vetoedBeanClass);
+                        }
+                    }
                     continue;
                 }
 
@@ -2057,6 +2083,20 @@ public class Syringe {
         }
 
         processInterceptorAndDecoratorBeanAttributes(processedBeanClasses);
+
+        if (!vetoedDeclaringBeanClasses.isEmpty()) {
+            for (Bean<?> bean : knowledgeBase.getBeans()) {
+                if (!(bean instanceof ProducerBean<?>)) {
+                    continue;
+                }
+                Class<?> declaringClass = ((ProducerBean<?>) bean).getDeclaringClass();
+                if (declaringClass != null && vetoedDeclaringBeanClasses.contains(declaringClass)) {
+                    if (!vetoed.contains(bean)) {
+                        vetoed.add(bean);
+                    }
+                }
+            }
+        }
 
         // Remove vetoed beans
         if (!vetoed.isEmpty()) {
@@ -2253,8 +2293,85 @@ public class Syringe {
      * <p>Extensions can wrap Producer to customize production logic.
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
+    private void processProducerEvents() {
+        info("Processing producer events");
+
+        Collection<ProducerBean<?>> producers = knowledgeBase.getProducerBeans();
+        info("Found " + producers.size() + " producers");
+
+        for (ProducerBean<?> producerBean : producers) {
+            if (producerBean == null || producerBean.isVetoed() || producerBean.hasValidationErrors()) {
+                continue;
+            }
+            if (!knowledgeBase.getBeans().contains(producerBean)) {
+                continue;
+            }
+            try {
+                Class<?> declaringClass = producerBean.getDeclaringClass();
+                AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(declaringClass);
+                Producer producer = new ProducerBeanAdapter(producerBean);
+
+                if (producerBean.isMethod()) {
+                    Method method = producerBean.getProducerMethod();
+                    AnnotatedMethod annotatedMethod = findAnnotatedMethod(annotatedType, method);
+                    if (annotatedMethod == null) {
+                        continue;
+                    }
+
+                    ProcessProducerImpl event = new ProcessProducerImpl(
+                            messageHandler,
+                            knowledgeBase,
+                            com.threeamigos.common.util.implementations.injection.spi.Phase.PROCESS_PRODUCER_METHOD,
+                            annotatedMethod,
+                            producer
+                    );
+                    fireEventToExtensions(event);
+
+                    Producer finalProducer = event.getFinalProducer();
+                    if (finalProducer != producer) {
+                        info("Producer wrapped for method: " + declaringClass.getSimpleName() + "." +
+                                method.getName());
+                        registerDeferredProducerReplacement(producerBean, finalProducer);
+                    }
+                } else if (producerBean.isField()) {
+                    Field field = producerBean.getProducerField();
+                    AnnotatedField annotatedField = findAnnotatedField(annotatedType, field);
+                    if (annotatedField == null) {
+                        continue;
+                    }
+
+                    ProcessProducerImpl event = new ProcessProducerImpl(
+                            messageHandler,
+                            knowledgeBase,
+                            com.threeamigos.common.util.implementations.injection.spi.Phase.PROCESS_PRODUCER_FIELD,
+                            annotatedField,
+                            producer
+                    );
+                    fireEventToExtensions(event);
+
+                    Producer finalProducer = event.getFinalProducer();
+                    if (finalProducer != producer) {
+                        info("Producer wrapped for field: " + declaringClass.getSimpleName() + "." +
+                                field.getName());
+                        registerDeferredProducerReplacement(producerBean, finalProducer);
+                    }
+                }
+            } catch (DefinitionException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new DefinitionException("Error processing producer", e);
+            }
+        }
+    }
+
+    /**
+     * Fires ProcessProducerMethod/ProcessProducerField events for all producers.
+     *
+     * <p>Extensions can inspect producer-bean metadata after ProcessBeanAttributes.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void processProducers() {
-        info("Processing producers");
+        info("Processing producer method/field events");
 
         Collection<ProducerBean<?>> producers = knowledgeBase.getProducerBeans();
         info("Found " + producers.size() + " producers");
@@ -2282,8 +2399,8 @@ public class Syringe {
                     AnnotatedMethod annotatedMethod = findAnnotatedMethod(annotatedType, method);
 
                     if (annotatedMethod != null) {
-                        // Create a Producer wrapper for the ProducerBean
-                        Producer producer = new ProducerBeanAdapter(producerBean);
+                        // Start with ProcessProducer-wrapped producer, if any.
+                        Producer producer = resolveEffectiveProducerForLifecycleEvent(producerBean);
 
                         // Create and fire ProcessProducerMethod event
                         ProcessProducerMethodImpl event = new ProcessProducerMethodImpl(messageHandler,
@@ -2295,8 +2412,8 @@ public class Syringe {
                         if (finalProducer != producer) {
                             info("Producer wrapped for method: " + declaringClass.getSimpleName() + "." +
                                     method.getName());
+                            registerDeferredProducerReplacement(producerBean, finalProducer);
                         }
-                        replaceProducerBean(producerBean, finalProducer);
                     }
                 } else if (producerBean.isField()) {
                     // Process producer field
@@ -2306,8 +2423,8 @@ public class Syringe {
                     AnnotatedField annotatedField = findAnnotatedField(annotatedType, field);
 
                     if (annotatedField != null) {
-                        // Create a Producer wrapper for the ProducerBean
-                        Producer producer = new ProducerBeanAdapter(producerBean);
+                        // Start with ProcessProducer-wrapped producer, if any.
+                        Producer producer = resolveEffectiveProducerForLifecycleEvent(producerBean);
 
                         // Create and fire ProcessProducerField event
                         ProcessProducerFieldImpl event = new ProcessProducerFieldImpl(messageHandler, knowledgeBase,
@@ -2319,8 +2436,8 @@ public class Syringe {
                         if (finalProducer != producer) {
                             info("Producer wrapped for field: " + declaringClass.getSimpleName() + "." +
                                     field.getName());
+                            registerDeferredProducerReplacement(producerBean, finalProducer);
                         }
-                        replaceProducerBean(producerBean, finalProducer);
                     }
                 }
             } catch (DefinitionException e) {
@@ -2329,6 +2446,8 @@ public class Syringe {
                 throw new DefinitionException("Error processing producer", e);
             }
         }
+
+        applyDeferredProducerReplacements();
     }
 
     /**
@@ -2353,6 +2472,33 @@ public class Syringe {
             }
         }
         return null;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Producer resolveEffectiveProducerForLifecycleEvent(ProducerBean<?> producerBean) {
+        Producer<?> producer = deferredProducerReplacements.get(producerBean);
+        if (producer != null) {
+            return (Producer) producer;
+        }
+        return new ProducerBeanAdapter((ProducerBean) producerBean);
+    }
+
+    private void registerDeferredProducerReplacement(ProducerBean<?> producerBean, Producer<?> producer) {
+        if (producerBean == null || producer == null) {
+            return;
+        }
+        deferredProducerReplacements.put(producerBean, producer);
+    }
+
+    private void applyDeferredProducerReplacements() {
+        if (deferredProducerReplacements.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<ProducerBean<?>, Producer<?>> entry :
+                new ArrayList<Map.Entry<ProducerBean<?>, Producer<?>>>(deferredProducerReplacements.entrySet())) {
+            replaceProducerBean(entry.getKey(), entry.getValue());
+        }
+        deferredProducerReplacements.clear();
     }
 
     /**
@@ -2654,6 +2800,12 @@ public class Syringe {
         }
         if (observesCount + observesAsyncCount != 1 || observedParameter == null) {
             return null;
+        }
+
+        if (resolveWithAnnotationsFilter(observedParameter) != null) {
+            throw new DefinitionException("@WithAnnotations is only valid on extension observer parameters " +
+                    "observing ProcessAnnotatedType: " +
+                    method.getDeclaringClass().getName() + "." + method.getName());
         }
 
         boolean async = observesAsyncCount > 0;
@@ -3874,6 +4026,9 @@ public class Syringe {
                 if (hasObservesAnnotation(parameter)) {
                     Class<?> observedType = parameter.getType();
                     validateExtensionObserverStaticMethod(method, parameter, observedType);
+                    if (!isObservedTypeApplicableToEvent(observedType, event)) {
+                        continue;
+                    }
                     if (observedType.isAssignableFrom(eventType) &&
                             matchesObservedGenericEventType(parameter, event)) {
                         int priority = resolvePriority(method, parameter);
@@ -3890,6 +4045,19 @@ public class Syringe {
                 }
             }
         }
+    }
+
+    private boolean isObservedTypeApplicableToEvent(Class<?> observedType, Object event) {
+        if (observedType == null || event == null) {
+            return true;
+        }
+
+        if (ProcessProducer.class.equals(observedType) &&
+                (event instanceof ProcessProducerMethod<?, ?> || event instanceof ProcessProducerField<?, ?>)) {
+            return false;
+        }
+
+        return true;
     }
 
     private Collection<Method> getExtensionObserverCandidateMethods(Class<?> extensionClass) {
@@ -3927,6 +4095,10 @@ public class Syringe {
             return matchesProcessObserverMethodTypeArguments(observedTypeArguments, event);
         }
 
+        if (observedTypeArguments.length == 2) {
+            return matchesObservedBinaryEventTypeArguments((Class<?>) rawType, observedTypeArguments, event);
+        }
+
         if (observedTypeArguments.length != 1) {
             return true;
         }
@@ -3957,6 +4129,71 @@ public class Syringe {
                 matchesObservedTypeArgument(observedTypeArguments[1], observerBeanClass);
     }
 
+    private boolean matchesObservedBinaryEventTypeArguments(Class<?> observedRawType,
+                                                            Type[] observedTypeArguments,
+                                                            Object event) {
+        if (ProcessProducerMethod.class.isAssignableFrom(observedRawType) &&
+                event instanceof ProcessProducerMethod<?, ?>) {
+            AnnotatedMethod<?> producerMethod = extractAnnotatedProducerMethodFromProcessProducerMethodEvent(event);
+            if (producerMethod == null) {
+                return true;
+            }
+            Class<?> producedType = extractRawClass(producerMethod.getBaseType());
+            Class<?> declaringType = extractDeclaringType(producerMethod);
+            return matchesObservedTypeArgumentsPair(observedTypeArguments, producedType, declaringType);
+        }
+
+        if (ProcessProducerField.class.isAssignableFrom(observedRawType) &&
+                event instanceof ProcessProducerField<?, ?>) {
+            AnnotatedField<?> producerField = extractAnnotatedProducerFieldFromProcessProducerFieldEvent(event);
+            if (producerField == null) {
+                return true;
+            }
+            Class<?> producedType = extractRawClass(producerField.getBaseType());
+            Class<?> declaringType = extractDeclaringType(producerField);
+            return matchesObservedTypeArgumentsPair(observedTypeArguments, producedType, declaringType);
+        }
+
+        if (ProcessProducer.class.isAssignableFrom(observedRawType) &&
+                event instanceof ProcessProducer<?, ?>) {
+            AnnotatedMember<?> annotatedMember = extractAnnotatedMemberFromProcessProducerEvent(event);
+            if (annotatedMember == null) {
+                return true;
+            }
+            Class<?> declaringType = extractDeclaringType(annotatedMember);
+            Class<?> producedType = extractRawClass(annotatedMember.getBaseType());
+            return matchesObservedTypeArgumentsPair(observedTypeArguments, declaringType, producedType);
+        }
+
+        if (ProcessInjectionPoint.class.isAssignableFrom(observedRawType) &&
+                event instanceof ProcessInjectionPoint<?, ?>) {
+            InjectionPoint injectionPoint = extractInjectionPointFromPipEvent(event);
+            if (injectionPoint == null) {
+                return true;
+            }
+            Bean<?> declaringBean = injectionPoint.getBean();
+            Class<?> declaringType = declaringBean != null ? declaringBean.getBeanClass() : null;
+            Class<?> injectionType = extractRawClass(injectionPoint.getType());
+            return matchesObservedTypeArgumentsPair(observedTypeArguments, declaringType, injectionType);
+        }
+
+        return true;
+    }
+
+    private boolean matchesObservedTypeArgumentsPair(Type[] observedTypeArguments,
+                                                     Class<?> discoveredFirstType,
+                                                     Class<?> discoveredSecondType) {
+        if (observedTypeArguments == null || observedTypeArguments.length != 2) {
+            return true;
+        }
+        if (discoveredFirstType != null &&
+                !matchesObservedTypeArgument(observedTypeArguments[0], discoveredFirstType)) {
+            return false;
+        }
+        return discoveredSecondType == null ||
+                matchesObservedTypeArgument(observedTypeArguments[1], discoveredSecondType);
+    }
+
     private Class<?> extractObservedTypeForGenericEventMatch(Class<?> observedRawType, Object event) {
         if (ProcessAnnotatedType.class.isAssignableFrom(observedRawType) &&
                 event instanceof ProcessAnnotatedType<?>) {
@@ -3971,9 +4208,14 @@ public class Syringe {
                 return ((AnnotatedType<?>) annotated).getJavaClass();
             }
             if (annotated instanceof AnnotatedMember<?>) {
-                AnnotatedType<?> declaringType = ((AnnotatedMember<?>) annotated).getDeclaringType();
-                return declaringType != null ? declaringType.getJavaClass() : null;
+                return extractRawClass(((AnnotatedMember<?>) annotated).getBaseType());
             }
+        }
+
+        if (ProcessInjectionTarget.class.isAssignableFrom(observedRawType) &&
+                event instanceof ProcessInjectionTarget<?>) {
+            AnnotatedType<?> annotatedType = extractAnnotatedTypeFromPitEvent(event);
+            return annotatedType != null ? annotatedType.getJavaClass() : null;
         }
 
         if (ProcessBean.class.isAssignableFrom(observedRawType) &&
@@ -4076,6 +4318,17 @@ public class Syringe {
         }
     }
 
+    private AnnotatedType<?> extractAnnotatedTypeFromPitEvent(Object event) {
+        if (event instanceof ProcessInjectionTargetImpl<?>) {
+            return ((ProcessInjectionTargetImpl<?>) event).getAnnotatedTypeInternal();
+        }
+        try {
+            return ((ProcessInjectionTarget<?>) event).getAnnotatedType();
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
+    }
+
     private Annotated extractAnnotatedFromPbaEvent(Object event) {
         if (event instanceof ProcessBeanAttributesImpl<?>) {
             return ((ProcessBeanAttributesImpl<?>) event).getAnnotatedInternal();
@@ -4086,6 +4339,62 @@ public class Syringe {
             // Guarded lifecycle event implementations may reject access outside invocation.
             return null;
         }
+    }
+
+    private InjectionPoint extractInjectionPointFromPipEvent(Object event) {
+        if (event instanceof ProcessInjectionPointImpl<?, ?>) {
+            return ((ProcessInjectionPointImpl<?, ?>) event).getInjectionPointInternal();
+        }
+        try {
+            return ((ProcessInjectionPoint<?, ?>) event).getInjectionPoint();
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
+    }
+
+    private AnnotatedMember<?> extractAnnotatedMemberFromProcessProducerEvent(Object event) {
+        if (event instanceof ProcessProducerImpl<?, ?>) {
+            return ((ProcessProducerImpl<?, ?>) event).getAnnotatedMember();
+        }
+        try {
+            return ((ProcessProducer<?, ?>) event).getAnnotatedMember();
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
+    }
+
+    private AnnotatedMethod<?> extractAnnotatedProducerMethodFromProcessProducerMethodEvent(Object event) {
+        if (event instanceof ProcessProducerMethodImpl<?, ?>) {
+            return ((ProcessProducerMethodImpl<?, ?>) event).getAnnotatedProducerMethod();
+        }
+        try {
+            return ((ProcessProducerMethod<?, ?>) event).getAnnotatedProducerMethod();
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
+    }
+
+    private AnnotatedField<?> extractAnnotatedProducerFieldFromProcessProducerFieldEvent(Object event) {
+        if (event instanceof ProcessProducerFieldImpl<?, ?>) {
+            return ((ProcessProducerFieldImpl<?, ?>) event).getAnnotatedProducerField();
+        }
+        try {
+            return ((ProcessProducerField<?, ?>) event).getAnnotatedProducerField();
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
+    }
+
+    private Class<?> extractDeclaringType(AnnotatedMember<?> member) {
+        if (member == null) {
+            return null;
+        }
+        AnnotatedType<?> declaringType = member.getDeclaringType();
+        if (declaringType != null) {
+            return declaringType.getJavaClass();
+        }
+        Member memberRef = member.getJavaMember();
+        return memberRef != null ? memberRef.getDeclaringClass() : null;
     }
 
     private void validateWithAnnotationsUsage(Method method,
@@ -4659,6 +4968,42 @@ public class Syringe {
             updated++;
         }
         info("Applied forced bean archive mode " + forcedBeanArchiveMode + " to " + updated + " class(es)");
+    }
+
+    private void applyBeansXmlAllModeOverrideForExactPackageBootstrap() {
+        if (!exactPackageMatchOnly || forcedBeanArchiveMode != null) {
+            return;
+        }
+
+        BeanArchiveMode beansXmlArchiveMode = null;
+        for (BeansXml beansXml : knowledgeBase.getBeansXmlConfigurations()) {
+            if (beansXml == null) {
+                continue;
+            }
+            String discoveryMode = beansXml.getBeanDiscoveryMode();
+            if (discoveryMode == null) {
+                continue;
+            }
+            if ("all".equalsIgnoreCase(discoveryMode.trim())) {
+                beansXmlArchiveMode = beansXml.isTrimEnabled()
+                        ? BeanArchiveMode.TRIMMED
+                        : BeanArchiveMode.EXPLICIT;
+                break;
+            }
+        }
+
+        if (beansXmlArchiveMode == null) {
+            return;
+        }
+
+        int updated = 0;
+        for (Class<?> clazz : knowledgeBase.getClasses()) {
+            knowledgeBase.setBeanArchiveMode(clazz, beansXmlArchiveMode);
+            updated++;
+        }
+
+        info("Applied beans.xml archive mode " + beansXmlArchiveMode + " to " + updated +
+                " class(es) for exact-package bootstrap");
     }
 
     private void info(String message) {

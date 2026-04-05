@@ -322,7 +322,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 }
             }
 
-            for (Method method : beanClass.getDeclaredMethods()) {
+            for (Method method : beanClass.getMethods()) {
                 for (Annotation annotation : method.getAnnotations()) {
                     if (beanManager.isInterceptorBinding(annotation.annotationType())) {
                         return true;

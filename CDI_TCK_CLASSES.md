@@ -247,14 +247,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.annotated.broken.processAnnotatedObserverThrowsException.ProcessAnnotatedTypeEventThrowsExceptionTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.annotated.broken.processInjectionTargetThrowsException.ProcessInjectionTargetEventThrowsExceptionTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.annotated.delivery.WithAnnotationsTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.delivery.broken.WithAnnotationsAppliedToIllegalContainerLifecycleEventParameterTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.delivery.broken.WithAnnotationsAppliedToIllegalEventParameterTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.synthetic.ProcessSyntheticAnnotatedTypeTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanDiscovery.event.ordering.LifecycleEventOrderingTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.BeanManagerTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.PassivationIdTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.bean.SyntheticBeanTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.beanAttributes.CreateBeanAttributesTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.annotated.delivery.broken.WithAnnotationsAppliedToIllegalContainerLifecycleEventParameterTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.annotated.delivery.broken.WithAnnotationsAppliedToIllegalEventParameterTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.annotated.synthetic.ProcessSyntheticAnnotatedTypeTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanDiscovery.event.ordering.LifecycleEventOrderingTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.BeanManagerTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.PassivationIdTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.bean.SyntheticBeanTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.beanAttributes.CreateBeanAttributesTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.bootstrap.unavailable.methods.UnavailableMethodsDuringApplicationInitializationTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.broken.event.FireContainerLifecycleEventTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.el.WrapExpressionFactoryTest
