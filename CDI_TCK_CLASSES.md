@@ -284,14 +284,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.broken.InvalidInterceptionFactoryInjectionPointTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.customBean.CustomBeanWithInterceptorTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.interceptors.annotation.InterceptorAnnotationExtensionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.interceptors.custom.CustomInterceptorInvocationTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.interceptors.custom.CustomInterceptorRegistrationTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.ExtensionLifecycleTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.atd.AfterTypeDiscoveryTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.atd.broken.ThrowExceptionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.atd.massOperations.AfterTypeDiscoveryMassOperationsTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.BeforeBeanDiscoveryTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.DeploymentTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.interceptors.custom.CustomInterceptorInvocationTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.interceptors.custom.CustomInterceptorRegistrationTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.ExtensionLifecycleTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.atd.AfterTypeDiscoveryTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.atd.broken.ThrowExceptionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.atd.massOperations.AfterTypeDiscoveryMassOperationsTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.BeforeBeanDiscoveryTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.DeploymentTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.exception.BeforeBeanDiscoveryThrowsExceptionTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.normalScope.AddingNormalScopeTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.bbd.broken.passivatingScope.AddingPassivatingScopeTest

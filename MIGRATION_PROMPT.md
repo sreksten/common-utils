@@ -160,6 +160,8 @@ Failure triage rules (if user reports a failing migrated test):
 - Low-credit debug workflow:
   - Run only the exact failing test:
     - `mvn -q -Dtest=<fully-qualified-test-class> test`
+  - Keep in mind JUnit tests run in parallel by default in this project (`src/test/resources/junit-platform.properties`).
+  - If a failure looks order-dependent/flaky or involves shared static/global state, treat parallel interference as a first-class hypothesis and annotate the affected test class with `@org.junit.jupiter.api.parallel.Isolated` before broader core changes.
   - Inspect `target/surefire-reports` for that class before broader code exploration.
   - Apply the smallest viable patch (fixture/test wiring first; Syringe core only if fixture fixes are insufficient).
   - Rerun only the same failing test class once for verification.

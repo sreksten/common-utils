@@ -1704,17 +1704,18 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                     beanAnnotatedType,
                     InterceptionType.AROUND_INVOKE
                 );
+                Set<Annotation> methodBindings = interceptorResolver.resolveBindings(beanClass, method, beanAnnotatedType);
 
-                // If interceptors were found for this method, build a chain
-                if (!interceptors.isEmpty()) {
-                    Set<Annotation> methodBindings = interceptorResolver.resolveBindings(beanClass, method, beanAnnotatedType);
+                if (!methodBindings.isEmpty()) {
                     InterceptorChain chain = buildInterceptorChain(
                             interceptors,
                             InterceptionType.AROUND_INVOKE,
                             methodBindings
                     );
-                    chains.put(method, chain);
-                    continue;
+                    if (!chain.isEmpty()) {
+                        chains.put(method, chain);
+                        continue;
+                    }
                 }
 
                 List<Class<?>> legacyInterceptors =
@@ -1841,16 +1842,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         InterceptorChain.Builder builder = InterceptorChain.builder()
                 .withInterceptorBindings(interceptorBindings);
 
-        // Add each interceptor to the chain in order (already sorted by priority)
-        for (InterceptorInfo interceptorInfo : interceptors) {
-            // Get or create the interceptor instance (cached)
-            Object interceptorInstance = getOrCreateInterceptorInstance(interceptorInfo);
-
-            List<Method> interceptorMethods = getInterceptorMethods(interceptorInfo, interceptionType);
-            for (Method interceptorMethod : interceptorMethods) {
-                builder.addInterceptor(interceptorInstance, interceptorMethod);
-            }
-        }
+        addResolvedInterceptorInvocations(builder, interceptors, interceptionType, interceptorBindings);
 
         // Build and return the immutable chain
         return builder.build();
@@ -1881,19 +1873,143 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         InterceptorChain.Builder builder = InterceptorChain.builder()
                 .withInterceptorBindings(interceptorBindings);
 
-        // Add interceptor lifecycle methods to the chain
+        // Add interceptor lifecycle methods to the chain.
         // Note: The target bean's lifecycle methods are NOT added to the interceptor chain here.
         // They are passed separately to invokeLifecycleChain() to support multiple lifecycle
         // methods in the class hierarchy (per Interceptors spec).
-        for (InterceptorInfo interceptorInfo : interceptors) {
-            Object interceptorInstance = getOrCreateInterceptorInstance(interceptorInfo);
-            List<Method> interceptorMethods = getInterceptorMethods(interceptorInfo, interceptionType);
-            for (Method interceptorMethod : interceptorMethods) {
-                builder.addInterceptor(interceptorInstance, interceptorMethod);
-            }
-        }
+        addResolvedInterceptorInvocations(builder, interceptors, interceptionType, interceptorBindings);
 
         return builder.build();
+    }
+
+    private void addResolvedInterceptorInvocations(InterceptorChain.Builder builder,
+                                                   List<InterceptorInfo> interceptors,
+                                                   InterceptionType interceptionType,
+                                                   Set<Annotation> interceptorBindings) {
+        Map<Class<?>, InterceptorInfo> interceptorInfoByClass = new LinkedHashMap<Class<?>, InterceptorInfo>();
+        for (InterceptorInfo interceptorInfo : interceptors) {
+            if (interceptorInfo == null || interceptorInfo.getInterceptorClass() == null) {
+                continue;
+            }
+            interceptorInfoByClass.put(interceptorInfo.getInterceptorClass(), interceptorInfo);
+        }
+
+        List<jakarta.enterprise.inject.spi.Interceptor<?>> runtimeInterceptors =
+                resolveRuntimeInterceptors(interceptionType, interceptorBindings);
+
+        if (runtimeInterceptors.isEmpty()) {
+            for (InterceptorInfo interceptorInfo : interceptors) {
+                addInterceptorInfoInvocations(builder, interceptorInfo, interceptionType);
+            }
+            return;
+        }
+        for (InterceptorInfo interceptorInfo : interceptors) {
+            addInterceptorInfoInvocations(builder, interceptorInfo, interceptionType);
+        }
+
+        Set<Class<?>> interceptorInfoClasses = interceptorInfoByClass.keySet();
+        for (jakarta.enterprise.inject.spi.Interceptor<?> runtimeInterceptor : runtimeInterceptors) {
+            if (runtimeInterceptor == null) {
+                continue;
+            }
+            Class<?> runtimeClass = runtimeInterceptor.getBeanClass();
+            if (runtimeClass != null && interceptorInfoClasses.contains(runtimeClass)) {
+                continue;
+            }
+            addProgrammaticInterceptorInvocation(builder, runtimeInterceptor, interceptionType);
+        }
+    }
+
+    private List<jakarta.enterprise.inject.spi.Interceptor<?>> resolveRuntimeInterceptors(
+            InterceptionType interceptionType,
+            Set<Annotation> interceptorBindings) {
+        if (!(beanManager instanceof BeanManagerImpl)) {
+            return Collections.emptyList();
+        }
+        if (interceptorBindings == null || interceptorBindings.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Annotation> normalized = new ArrayList<Annotation>(interceptorBindings.size());
+        for (Annotation binding : interceptorBindings) {
+            if (binding == null) {
+                continue;
+            }
+            String typeName = binding.annotationType().getName();
+            if ("jakarta.interceptor.InterceptorBinding".equals(typeName)
+                    || "javax.interceptor.InterceptorBinding".equals(typeName)) {
+                continue;
+            }
+            normalized.add(binding);
+        }
+        if (normalized.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Annotation[] bindings = normalized.toArray(new Annotation[normalized.size()]);
+        try {
+            return ((BeanManagerImpl) beanManager).resolveInterceptors(interceptionType, bindings);
+        } catch (IllegalArgumentException e) {
+            return Collections.emptyList();
+        } catch (IllegalStateException e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private void addInterceptorInfoInvocations(InterceptorChain.Builder builder,
+                                               InterceptorInfo interceptorInfo,
+                                               InterceptionType interceptionType) {
+        if (interceptorInfo == null) {
+            return;
+        }
+        Object interceptorInstance = getOrCreateInterceptorInstance(interceptorInfo);
+        List<Method> interceptorMethods = getInterceptorMethods(interceptorInfo, interceptionType);
+        for (Method interceptorMethod : interceptorMethods) {
+            builder.addInterceptor(interceptorInstance, interceptorMethod);
+        }
+    }
+
+    private void addProgrammaticInterceptorInvocation(
+            InterceptorChain.Builder builder,
+            jakarta.enterprise.inject.spi.Interceptor<?> interceptor,
+            InterceptionType interceptionType) {
+        if (!interceptor.intercepts(interceptionType)) {
+            return;
+        }
+
+        final Object interceptionTarget = getOrCreateProgrammaticInterceptorTarget(interceptor);
+        @SuppressWarnings("unchecked")
+        final jakarta.enterprise.inject.spi.Interceptor<Object> rawInterceptor =
+                (jakarta.enterprise.inject.spi.Interceptor<Object>) interceptor;
+        builder.addInvocation(ctx -> rawInterceptor.intercept(interceptionType, interceptionTarget, ctx));
+    }
+
+    private Object getOrCreateProgrammaticInterceptorTarget(
+            jakarta.enterprise.inject.spi.Interceptor<?> interceptor) {
+        Class<?> cacheKey = interceptor.getBeanClass() != null
+                ? interceptor.getBeanClass()
+                : interceptor.getClass();
+
+        @SuppressWarnings("unchecked")
+        final jakarta.enterprise.inject.spi.Interceptor<Object> rawInterceptor =
+                (jakarta.enterprise.inject.spi.Interceptor<Object>) interceptor;
+
+        return interceptorInstanceCache.computeIfAbsent(cacheKey, ignored -> {
+            CreationalContext<Object> creationalContext = new SimpleCreationalContext<Object>();
+            return rawInterceptor.create(creationalContext);
+        });
+    }
+
+    private static final class SimpleCreationalContext<X> implements CreationalContext<X> {
+        @Override
+        public void push(X incompleteInstance) {
+            // No-op context for synthetic interceptor bean instances.
+        }
+
+        @Override
+        public void release() {
+            // No-op context for synthetic interceptor bean instances.
+        }
     }
 
     /**

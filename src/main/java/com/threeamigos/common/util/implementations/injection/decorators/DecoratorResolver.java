@@ -283,6 +283,23 @@ public class DecoratorResolver {
      * 3) Tiebreaker: class name for determinism.
      */
     private Comparator<DecoratorInfo> decoratorOrderingComparator() {
+        if (knowledgeBase.hasAfterTypeDiscoveryDecoratorsCustomized()) {
+            return Comparator
+                    .comparingInt((DecoratorInfo d) -> {
+                        int appOrder = knowledgeBase.getApplicationDecoratorOrder(d.getDecoratorClass());
+                        return appOrder >= 0 ? 0 : 1;
+                    })
+                    .thenComparingInt(d -> {
+                        int appOrder = knowledgeBase.getApplicationDecoratorOrder(d.getDecoratorClass());
+                        if (appOrder >= 0) {
+                            return appOrder;
+                        }
+                        int beansXmlOrder = knowledgeBase.getDecoratorBeansXmlOrder(d.getDecoratorClass());
+                        return beansXmlOrder >= 0 ? beansXmlOrder : Integer.MAX_VALUE;
+                    })
+                    .thenComparing(di -> di.getDecoratorClass().getName());
+        }
+
         return Comparator
             .comparingInt((DecoratorInfo d) -> d.getPriority() != Integer.MAX_VALUE ? 0 : 1)
             .thenComparingInt(DecoratorInfo::getPriority)
@@ -302,7 +319,8 @@ public class DecoratorResolver {
      */
     private boolean isEnabled(DecoratorInfo decorator) {
         if (knowledgeBase.hasAfterTypeDiscoveryDecoratorsCustomized()) {
-            return knowledgeBase.getApplicationDecoratorOrder(decorator.getDecoratorClass()) >= 0;
+            return knowledgeBase.getApplicationDecoratorOrder(decorator.getDecoratorClass()) >= 0
+                    || knowledgeBase.getDecoratorBeansXmlOrder(decorator.getDecoratorClass()) >= 0;
         }
         int beansXmlOrder = knowledgeBase.getDecoratorBeansXmlOrder(decorator.getDecoratorClass());
         return beansXmlOrder >= 0 || decorator.getPriority() != Integer.MAX_VALUE;

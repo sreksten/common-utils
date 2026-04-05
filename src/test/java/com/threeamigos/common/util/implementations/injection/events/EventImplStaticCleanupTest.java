@@ -2,6 +2,9 @@ package com.threeamigos.common.util.implementations.injection.events;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -12,6 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("EventImpl static cleanup")
+@Execution(ExecutionMode.SAME_THREAD)
+@Isolated
 class EventImplStaticCleanupTest {
 
     @Test

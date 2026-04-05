@@ -2534,6 +2534,9 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (decoratedTypes != null) {
             for (Type decoratedType : decoratedTypes) {
                 for (Type requestedType : requestedTypes) {
+                    if (isObjectType(requestedType)) {
+                        continue;
+                    }
                     if (typeChecker.isLookupTypeAssignable(requestedType, decoratedType)) {
                         return true;
                     }
@@ -2543,6 +2546,9 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
         if (delegateType != null) {
             for (Type requestedType : requestedTypes) {
+                if (isObjectType(requestedType)) {
+                    continue;
+                }
                 if (typeChecker.isLookupTypeAssignable(requestedType, delegateType)) {
                     return true;
                 }
@@ -2550,6 +2556,10 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
 
         return false;
+    }
+
+    private boolean isObjectType(Type type) {
+        return type instanceof Class<?> && Object.class.equals(type);
     }
 
     private boolean isDecoratorEnabled(Decorator<?> decorator) {

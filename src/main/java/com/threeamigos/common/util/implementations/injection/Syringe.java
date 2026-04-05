@@ -4056,7 +4056,8 @@ public class Syringe {
         }
 
         if (hasInterceptorAnnotation(clazz) ||
-                jakarta.enterprise.inject.spi.Interceptor.class.isAssignableFrom(clazz)) {
+                jakarta.enterprise.inject.spi.Interceptor.class.isAssignableFrom(clazz) ||
+                hasInterceptorBeanWithBeanClassName(className)) {
             return;
         }
 
@@ -4134,6 +4135,19 @@ public class Syringe {
             if (beanClass != null &&
                     className.equals(beanClass.getName()) &&
                     bean.isAlternative()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasInterceptorBeanWithBeanClassName(String className) {
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (!(bean instanceof jakarta.enterprise.inject.spi.Interceptor<?>)) {
+                continue;
+            }
+            Class<?> beanClass = bean.getBeanClass();
+            if (beanClass != null && className.equals(beanClass.getName())) {
                 return true;
             }
         }
