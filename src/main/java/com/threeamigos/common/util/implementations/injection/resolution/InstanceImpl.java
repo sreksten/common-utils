@@ -667,18 +667,66 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             return existing;
         }
 
-        Map<Class<? extends Annotation>, Annotation> merged = new HashMap<>();
-        // Start with existing
-        for (Annotation a : existing) {
-            merged.put(a.annotationType(), a);
+        List<Annotation> merged = new ArrayList<Annotation>();
+        boolean hasDefault = false;
+        boolean hasAny = false;
+        if (existing != null) {
+            merged.addAll(existing);
+            for (Annotation qualifier : existing) {
+                if (qualifier == null) {
+                    continue;
+                }
+                Class<? extends Annotation> qualifierType = qualifier.annotationType();
+                if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDefaultAnnotation(qualifierType)) {
+                    hasDefault = true;
+                }
+                if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasAnyAnnotation(qualifierType)) {
+                    hasAny = true;
+                }
+            }
         }
 
-        // Overwrite/Add new ones
-        for (Annotation a : newAnnotations) {
-            merged.put(a.annotationType(), a);
+        Map<Class<? extends Annotation>, Annotation> replacements = new LinkedHashMap<Class<? extends Annotation>, Annotation>();
+        Set<Class<? extends Annotation>> replacedNonRepeatableTypes = new HashSet<Class<? extends Annotation>>();
+        boolean hasExplicitAdditionalQualifier = false;
+
+        for (Annotation annotation : newAnnotations) {
+            if (annotation == null) {
+                continue;
+            }
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (!com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDefaultAnnotation(annotationType)
+                    && !com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasAnyAnnotation(annotationType)) {
+                hasExplicitAdditionalQualifier = true;
+            }
+            if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasRepeatableAnnotation(annotationType)) {
+                if (!merged.contains(annotation)) {
+                    merged.add(annotation);
+                }
+                continue;
+            }
+            replacements.put(annotationType, annotation);
+            replacedNonRepeatableTypes.add(annotationType);
         }
 
-        return new ArrayList<>(merged.values());
+        if (!replacedNonRepeatableTypes.isEmpty()) {
+            merged.removeIf(existingQualifier ->
+                    existingQualifier != null &&
+                            replacedNonRepeatableTypes.contains(existingQualifier.annotationType()) &&
+                            !com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+                                    .hasRepeatableAnnotation(existingQualifier.annotationType()));
+        }
+
+        // BeanManager#createInstance() starts from @Default + @Any; when explicit qualifiers are added
+        // through select(...), keep @Any but drop inherited @Default to avoid over-constraining resolution.
+        if (hasDefault && hasAny && hasExplicitAdditionalQualifier) {
+            merged.removeIf(existingQualifier -> existingQualifier != null &&
+                    com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+                            .hasDefaultAnnotation(existingQualifier.annotationType()));
+        }
+
+        merged.addAll(replacements.values());
+        return merged;
     }
 
     private void validateSelectAnnotations(Annotation... annotations) {

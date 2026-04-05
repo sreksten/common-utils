@@ -1326,6 +1326,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
         Type eventType = event.getClass();
         Set<Annotation> eventQualifiers = new HashSet<>(Arrays.asList(qualifiers));
+        Set<Annotation> normalizedEventQualifiers = normalizeEventQualifiers(eventQualifiers);
 
         List<ObserverMethodInfo> matchingObserverInfos = new ArrayList<>();
 
@@ -1336,12 +1337,38 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             }
 
             // Check qualifier match
-            if (observerQualifiersMatch(eventQualifiers, observerInfo.getQualifiers())) {
+            Set<Annotation> observedQualifiers = normalizeObservedEventQualifiers(observerInfo.getQualifiers());
+            if (observerQualifiersMatch(normalizedEventQualifiers, observedQualifiers)) {
                 matchingObserverInfos.add(observerInfo);
             }
         }
 
-        matchingObserverInfos.sort(
+        for (ObserverMethod<?> syntheticObserver : knowledgeBase.getSyntheticObserverMethods()) {
+            if (syntheticObserver == null) {
+                continue;
+            }
+            if (!typeChecker.isEventTypeAssignable(syntheticObserver.getObservedType(), eventType)) {
+                continue;
+            }
+
+            Set<Annotation> observedQualifiers = syntheticObserver.getObservedQualifiers();
+            Set<Annotation> normalizedObservedQualifiers = normalizeObservedEventQualifiers(
+                    observedQualifiers == null ? Collections.<Annotation>emptySet() : observedQualifiers);
+            if (observerQualifiersMatch(normalizedEventQualifiers, normalizedObservedQualifiers)) {
+                matchingObserverInfos.add(createSyntheticObserverInfo(syntheticObserver));
+            }
+        }
+
+        List<ObserverMethodInfo> dedupedObserverInfos = new ArrayList<>();
+        Set<String> seenObserverIdentities = new HashSet<>();
+        for (ObserverMethodInfo observerInfo : matchingObserverInfos) {
+            String identityKey = observerMethodIdentityKey(observerInfo);
+            if (seenObserverIdentities.add(identityKey)) {
+                dedupedObserverInfos.add(observerInfo);
+            }
+        }
+
+        dedupedObserverInfos.sort(
                 Comparator.comparingInt(ObserverMethodInfo::getPriority)
                         .thenComparing(info -> {
                             Method observerMethod = info.getObserverMethod();
@@ -1357,7 +1384,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         );
 
         Set<ObserverMethod<? super T>> observerMethods = new LinkedHashSet<>();
-        for (ObserverMethodInfo observerInfo : matchingObserverInfos) {
+        for (ObserverMethodInfo observerInfo : dedupedObserverInfos) {
             observerMethods.add(createObserverMethod(observerInfo));
         }
         return observerMethods;
@@ -3611,6 +3638,21 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     /**
      * Creates an ObserverMethod wrapper from ObserverMethodInfo.
      */
+    private ObserverMethodInfo createSyntheticObserverInfo(ObserverMethod<?> syntheticObserver) {
+        return new ObserverMethodInfo(
+                syntheticObserver.getObservedType(),
+                syntheticObserver.getObservedQualifiers() == null
+                        ? Collections.<Annotation>emptySet()
+                        : syntheticObserver.getObservedQualifiers(),
+                syntheticObserver.getReception(),
+                syntheticObserver.getTransactionPhase(),
+                syntheticObserver.getPriority(),
+                syntheticObserver.isAsync(),
+                null,
+                syntheticObserver
+        );
+    }
+
     private <T> ObserverMethod<T> createObserverMethod(ObserverMethodInfo info) {
         if (info.isSynthetic() && info.getSyntheticObserver() != null) {
             @SuppressWarnings("unchecked")

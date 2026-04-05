@@ -13,7 +13,9 @@ import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.BeanConfigurator;
 import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
 
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -123,19 +125,22 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
     public void addObserverMethod(ObserverMethod<?> observerMethod) {
         assertObserverInvocationActive();
         checkNotNull(observerMethod, "ObserverMethod");
-        if (!hasNotifyOverride(observerMethod)) {
+        Extension sourceExtension = currentObserverExtension.get();
+        ObserverMethod<?> effectiveObserverMethod = applyDefaultObserverBeanClass(observerMethod, sourceExtension);
+        if (!hasNotifyOverride(effectiveObserverMethod)) {
             knowledgeBase.addDefinitionError(Phase.AFTER_BEAN_DISCOVERY,
-                    "ObserverMethod " + observerMethod.getClass().getName() +
+                    "ObserverMethod " + effectiveObserverMethod.getClass().getName() +
                             " must override notify(T) or notify(EventContext<T>)", null);
             return;
         }
         info(Phase.AFTER_BEAN_DISCOVERY, "Registering synthetic observer method: observedType=" +
-                observerMethod.getObservedType() + ", async=" + observerMethod.isAsync());
-        ProcessSyntheticObserverMethodImpl<?, ?> event = fireProcessSyntheticObserverMethod(observerMethod);
+                effectiveObserverMethod.getObservedType() + ", async=" + effectiveObserverMethod.isAsync());
+        ProcessSyntheticObserverMethodImpl<?, ?> event = fireProcessSyntheticObserverMethod(effectiveObserverMethod);
         if (event != null && event.isVetoed()) {
             return;
         }
-        ObserverMethod<?> finalObserver = event != null ? event.getFinalObserverMethod() : observerMethod;
+        ObserverMethod<?> finalObserver = event != null ? event.getFinalObserverMethod() : effectiveObserverMethod;
+        finalObserver = applyDefaultObserverBeanClass(finalObserver, sourceExtension);
         knowledgeBase.addSyntheticObserverMethod(finalObserver);
     }
 
@@ -333,6 +338,73 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
                         messageHandler, knowledgeBase, observerMethod, currentObserverExtension.get());
         eventDispatcher.accept(event);
         return event;
+    }
+
+    private ObserverMethod<?> applyDefaultObserverBeanClass(ObserverMethod<?> observerMethod, Extension sourceExtension) {
+        if (observerMethod == null || observerMethod.getBeanClass() != null || sourceExtension == null) {
+            return observerMethod;
+        }
+        return new ObserverMethodWithDefaultBeanClass<Object>(observerMethod, sourceExtension.getClass());
+    }
+
+    private static final class ObserverMethodWithDefaultBeanClass<T> implements ObserverMethod<T> {
+        private final ObserverMethod<?> delegate;
+        private final Class<?> defaultBeanClass;
+
+        private ObserverMethodWithDefaultBeanClass(ObserverMethod<?> delegate, Class<?> defaultBeanClass) {
+            this.delegate = delegate;
+            this.defaultBeanClass = defaultBeanClass;
+        }
+
+        @Override
+        public Class<?> getBeanClass() {
+            return defaultBeanClass;
+        }
+
+        @Override
+        public java.lang.reflect.Type getObservedType() {
+            return delegate.getObservedType();
+        }
+
+        @Override
+        public Set<Annotation> getObservedQualifiers() {
+            Set<Annotation> qualifiers = delegate.getObservedQualifiers();
+            return qualifiers == null ? Collections.<Annotation>emptySet() : qualifiers;
+        }
+
+        @Override
+        public jakarta.enterprise.event.Reception getReception() {
+            return delegate.getReception();
+        }
+
+        @Override
+        public jakarta.enterprise.event.TransactionPhase getTransactionPhase() {
+            return delegate.getTransactionPhase();
+        }
+
+        @Override
+        public void notify(T event) {
+            @SuppressWarnings("unchecked")
+            ObserverMethod<T> typedDelegate = (ObserverMethod<T>) delegate;
+            typedDelegate.notify(event);
+        }
+
+        @Override
+        public void notify(EventContext<T> eventContext) {
+            @SuppressWarnings("unchecked")
+            ObserverMethod<T> typedDelegate = (ObserverMethod<T>) delegate;
+            typedDelegate.notify(eventContext);
+        }
+
+        @Override
+        public boolean isAsync() {
+            return delegate.isAsync();
+        }
+
+        @Override
+        public int getPriority() {
+            return delegate.getPriority();
+        }
     }
 
     private boolean hasNotifyOverride(ObserverMethod<?> observerMethod) {

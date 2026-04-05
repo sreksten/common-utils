@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
 import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
-import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.configurator.InjectionPointConfigurator;
@@ -44,6 +43,7 @@ public class InjectionPointConfiguratorImpl implements InjectionPointConfigurato
     public InjectionPointConfigurator addQualifier(Annotation qualifier) {
         if (qualifier != null) {
             qualifiers.add(qualifier);
+            normalizeDefaultQualifierForInjectionPoint();
         }
         return this;
     }
@@ -54,6 +54,7 @@ public class InjectionPointConfiguratorImpl implements InjectionPointConfigurato
             Arrays.stream(qualifiers)
                   .filter(Objects::nonNull)
                   .forEach(this.qualifiers::add);
+            normalizeDefaultQualifierForInjectionPoint();
         }
         return this;
     }
@@ -64,6 +65,7 @@ public class InjectionPointConfiguratorImpl implements InjectionPointConfigurato
             qualifiers.stream()
                       .filter(Objects::nonNull)
                       .forEach(this.qualifiers::add);
+            normalizeDefaultQualifierForInjectionPoint();
         }
         return this;
     }
@@ -74,7 +76,7 @@ public class InjectionPointConfiguratorImpl implements InjectionPointConfigurato
         if (qualifiers != null) {
             addQualifiers(qualifiers);
         }
-        return ensureDefaultQualifiers();
+        return normalizeDefaultQualifierForInjectionPoint();
     }
 
     @Override
@@ -83,7 +85,7 @@ public class InjectionPointConfiguratorImpl implements InjectionPointConfigurato
         if (qualifiers != null) {
             addQualifiers(qualifiers);
         }
-        return ensureDefaultQualifiers();
+        return normalizeDefaultQualifierForInjectionPoint();
     }
 
     @Override
@@ -102,24 +104,46 @@ public class InjectionPointConfiguratorImpl implements InjectionPointConfigurato
         * Materializes the configured {@link InjectionPoint}.
         */
     public InjectionPoint complete() {
-        ensureDefaultQualifiers();
+        normalizeDefaultQualifierForInjectionPoint();
         return new ConfiguredInjectionPoint(original, type, qualifiers, isDelegate, isTransient);
     }
 
-    private InjectionPointConfigurator ensureDefaultQualifiers() {
-        boolean hasDefault = qualifiers.stream()
-                .anyMatch(q -> q.annotationType().getName()
-                        .equals(jakarta.enterprise.inject.Default.class.getName()));
-        boolean hasAny = qualifiers.stream()
-                .anyMatch(q -> q.annotationType().getName()
-                        .equals(jakarta.enterprise.inject.Any.class.getName()));
+    private InjectionPointConfigurator normalizeDefaultQualifierForInjectionPoint() {
+        boolean hasDefault = false;
+        boolean hasNonDefaultQualifier = false;
 
-        if (!hasDefault) {
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null) {
+                continue;
+            }
+            if (isDefaultQualifier(qualifier)) {
+                hasDefault = true;
+                continue;
+            }
+            if (!isAnyQualifier(qualifier)) {
+                hasNonDefaultQualifier = true;
+            }
+        }
+
+        if (hasNonDefaultQualifier) {
+            qualifiers.removeIf(this::isDefaultQualifier);
+            qualifiers.removeIf(this::isAnyQualifier);
+            return this;
+        }
+
+        if (!hasDefault && qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());
         }
-        if (!hasAny) {
-            qualifiers.add(new AnyLiteral());
-        }
         return this;
+    }
+
+    private boolean isDefaultQualifier(Annotation qualifier) {
+        return qualifier != null &&
+                qualifier.annotationType().getName().equals(jakarta.enterprise.inject.Default.class.getName());
+    }
+
+    private boolean isAnyQualifier(Annotation qualifier) {
+        return qualifier != null &&
+                qualifier.annotationType().getName().equals(jakarta.enterprise.inject.Any.class.getName());
     }
 }

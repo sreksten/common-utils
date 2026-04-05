@@ -19,6 +19,7 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -116,12 +117,18 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         private final AnnotatedType<T> annotatedType;
         private final BeanManager beanManager;
         private final Bean<T> bean;
+        private final Set<Constructor<?>> injectableConstructors;
+        private final Set<Field> injectableFields;
+        private final Set<Method> injectableMethods;
         private final Set<InjectionPoint> injectionPoints;
 
         public InjectionTargetImpl(AnnotatedType<T> annotatedType, BeanManager beanManager, Bean<T> bean) {
             this.annotatedType = annotatedType;
             this.beanManager = beanManager;
             this.bean = bean;
+            this.injectableConstructors = discoverInjectableConstructors();
+            this.injectableFields = discoverInjectableFields();
+            this.injectableMethods = discoverInjectableMethods();
             this.injectionPoints = discoverInjectionPoints();
         }
 
@@ -179,14 +186,14 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 List<Class<?>> hierarchy = buildHierarchy(targetInstance.getClass());
 
                 // Inject fields
-                for (Class<?> clazz : hierarchy) {
-                    for (Field field : clazz.getDeclaredFields()) {
-                        if (hasInjectAnnotation(field)) {
-                            field.setAccessible(true);
-                            Type resolvedFieldType = GenericTypeResolver.resolve(
-                                    field.getGenericType(),
-                                    targetInstance.getClass(),
-                                    field.getDeclaringClass()
+            for (Class<?> clazz : hierarchy) {
+                for (Field field : clazz.getDeclaredFields()) {
+                    if (isInjectableField(field)) {
+                        field.setAccessible(true);
+                        Type resolvedFieldType = GenericTypeResolver.resolve(
+                                field.getGenericType(),
+                                targetInstance.getClass(),
+                                field.getDeclaringClass()
                             );
                             Object value = beanManager.getInjectableReference(
                                 createInjectionPoint(field, resolvedFieldType), ctx);
@@ -199,14 +206,14 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 }
 
                 // Inject methods
-                for (Class<?> clazz : hierarchy) {
-                    for (Method method : clazz.getDeclaredMethods()) {
-                        if (hasInjectAnnotation(method)) {
-                            if (isOverridden(method, targetInstance.getClass())) {
-                                continue;
-                            }
-                            method.setAccessible(true);
-                            Object[] args = resolveMethodParameters(method, ctx);
+            for (Class<?> clazz : hierarchy) {
+                for (Method method : clazz.getDeclaredMethods()) {
+                    if (isInjectableMethod(method)) {
+                        if (isOverridden(method, targetInstance.getClass())) {
+                            continue;
+                        }
+                        method.setAccessible(true);
+                        Object[] args = resolveMethodParameters(method, ctx);
                             method.invoke(targetInstance, args);
                         }
                     }
@@ -352,7 +359,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
 
             // Constructor parameters
             for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
-                if (hasInjectAnnotation(constructor)) {
+                if (isInjectableConstructor(constructor)) {
                     for (java.lang.reflect.Parameter param : constructor.getParameters()) {
                         points.add(new InjectionPointImpl(param, bean));
                     }
@@ -362,7 +369,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             // Fields
             for (Class<?> clazz : hierarchy) {
                 for (Field field : clazz.getDeclaredFields()) {
-                    if (hasInjectAnnotation(field)) {
+                    if (isInjectableField(field)) {
                         points.add(new InjectionPointImpl(field, bean));
                     }
                 }
@@ -371,7 +378,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             // Method parameters
             for (Class<?> clazz : hierarchy) {
                 for (Method method : clazz.getDeclaredMethods()) {
-                    if (hasInjectAnnotation(method)) {
+                    if (isInjectableMethod(method)) {
                         for (java.lang.reflect.Parameter param : method.getParameters()) {
                             points.add(new InjectionPointImpl(param, bean));
                         }
@@ -396,7 +403,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         private Constructor<T> findConstructor(Class<T> clazz) throws NoSuchMethodException {
             // Look for @Inject constructor
             for (Constructor<?> ctor : clazz.getDeclaredConstructors()) {
-                if (hasInjectAnnotation(ctor)) {
+                if (isInjectableConstructor(ctor)) {
                     return (Constructor<T>) ctor;
                 }
             }
@@ -568,6 +575,64 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 current = current.getSuperclass();
             }
 
+            return false;
+        }
+
+        private Set<Constructor<?>> discoverInjectableConstructors() {
+            Set<Constructor<?>> constructors = new LinkedHashSet<Constructor<?>>();
+            for (AnnotatedConstructor<T> constructor : annotatedType.getConstructors()) {
+                if (hasInjectAnnotation(constructor.getAnnotations())) {
+                    constructors.add(constructor.getJavaMember());
+                }
+            }
+            return constructors;
+        }
+
+        private Set<Field> discoverInjectableFields() {
+            Set<Field> fields = new LinkedHashSet<Field>();
+            for (AnnotatedField<? super T> field : annotatedType.getFields()) {
+                if (hasInjectAnnotation(field.getAnnotations())) {
+                    fields.add(field.getJavaMember());
+                }
+            }
+            return fields;
+        }
+
+        private Set<Method> discoverInjectableMethods() {
+            Set<Method> methods = new LinkedHashSet<Method>();
+            for (AnnotatedMethod<? super T> method : annotatedType.getMethods()) {
+                if (hasInjectAnnotation(method.getAnnotations())) {
+                    methods.add(method.getJavaMember());
+                }
+            }
+            return methods;
+        }
+
+        private boolean isInjectableConstructor(Constructor<?> constructor) {
+            return injectableConstructors.contains(constructor) || hasInjectAnnotation(constructor);
+        }
+
+        private boolean isInjectableField(Field field) {
+            return injectableFields.contains(field) || hasInjectAnnotation(field);
+        }
+
+        private boolean isInjectableMethod(Method method) {
+            return injectableMethods.contains(method) || hasInjectAnnotation(method);
+        }
+
+        private boolean hasInjectAnnotation(Set<Annotation> annotations) {
+            if (annotations == null || annotations.isEmpty()) {
+                return false;
+            }
+            for (Annotation annotation : annotations) {
+                if (annotation == null) {
+                    continue;
+                }
+                if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+                        .hasInjectAnnotation(annotation.annotationType())) {
+                    return true;
+                }
+            }
             return false;
         }
 

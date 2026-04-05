@@ -289,11 +289,6 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
             throw new IllegalStateException("Notification callback must be set via notifyWith()");
         }
 
-        System.out.println("[ObserverMethodConfigurator] Created synthetic observer: " +
-                          "observedType=" + observedType +
-                          ", async=" + async +
-                          ", priority=" + priority);
-
         return new SyntheticObserverMethod<>(
             beanClass,
             observedType,
@@ -365,20 +360,22 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
 
         @Override
         public void notify(T event) {
-            if (notifyCallback != null) {
-                // Wrap the event in an EventContext
-                EventContext<T> eventContext = new EventContext<T>() {
-                    @Override
-                    public T getEvent() {
-                        return event;
-                    }
+            notify(new EventContext<T>() {
+                @Override
+                public T getEvent() {
+                    return event;
+                }
 
-                    @Override
-                    public jakarta.enterprise.inject.spi.EventMetadata getMetadata() {
-                        // TODO: Provide proper EventMetadata
-                        return null;
-                    }
-                };
+                @Override
+                public jakarta.enterprise.inject.spi.EventMetadata getMetadata() {
+                    return null;
+                }
+            });
+        }
+
+        @Override
+        public void notify(EventContext<T> eventContext) {
+            if (notifyCallback != null) {
                 try {
                     notifyCallback.accept(eventContext);
                 } catch (Exception e) {

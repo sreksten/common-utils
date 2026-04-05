@@ -42,6 +42,7 @@ import com.threeamigos.common.util.implementations.injection.spi.SyntheticProduc
 import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
 import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
+import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Priority;
@@ -1697,6 +1698,20 @@ public class Syringe {
             return null;
         }
 
+        Integer directPriority = getDirectPriority(candidate);
+        if (directPriority != null) {
+            return directPriority;
+        }
+
+        Set<Integer> stereotypePriorities = collectStereotypePriorityValues(candidate);
+        if (stereotypePriorities.size() == 1) {
+            return stereotypePriorities.iterator().next();
+        }
+
+        return extractPrioritizedInterfacePriority(candidate);
+    }
+
+    private Integer getDirectPriority(Class<?> candidate) {
         Integer directPriority = getPriorityValue(candidate);
         if (directPriority != null) {
             return directPriority;
@@ -1714,6 +1729,106 @@ public class Syringe {
             }
         }
         return null;
+    }
+
+    private Set<Integer> collectStereotypePriorityValues(Class<?> candidate) {
+        Set<Integer> priorities = new LinkedHashSet<Integer>();
+        if (candidate == null) {
+            return priorities;
+        }
+
+        Set<Class<? extends Annotation>> visited = new HashSet<Class<? extends Annotation>>();
+        for (Annotation annotation : effectiveClassAnnotations(candidate)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (hasStereotypeAnnotation(annotationType)) {
+                collectStereotypePriorityValues(annotationType, priorities, visited);
+            }
+        }
+        return priorities;
+    }
+
+    private Set<Integer> collectStereotypePriorityValues(Set<Class<? extends Annotation>> stereotypes) {
+        Set<Integer> priorities = new LinkedHashSet<Integer>();
+        if (stereotypes == null || stereotypes.isEmpty()) {
+            return priorities;
+        }
+        Set<Class<? extends Annotation>> visited = new HashSet<Class<? extends Annotation>>();
+        for (Class<? extends Annotation> stereotype : stereotypes) {
+            if (stereotype == null) {
+                continue;
+            }
+            collectStereotypePriorityValues(stereotype, priorities, visited);
+        }
+        return priorities;
+    }
+
+    private void collectStereotypePriorityValues(Class<? extends Annotation> stereotypeType,
+                                                 Set<Integer> priorities,
+                                                 Set<Class<? extends Annotation>> visited) {
+        if (stereotypeType == null || !visited.add(stereotypeType)) {
+            return;
+        }
+
+        Integer declaredPriority = getPriorityValueFromAnnotations(stereotypeType.getAnnotations());
+        if (declaredPriority == null && knowledgeBase.isRegisteredStereotype(stereotypeType)) {
+            Set<Annotation> definition = knowledgeBase.getStereotypeDefinition(stereotypeType);
+            if (definition != null) {
+                declaredPriority = getPriorityValueFromAnnotations(definition.toArray(new Annotation[0]));
+            }
+        }
+        if (declaredPriority != null) {
+            priorities.add(declaredPriority);
+        }
+
+        for (Annotation meta : stereotypeType.getAnnotations()) {
+            Class<? extends Annotation> metaType = meta.annotationType();
+            if (hasStereotypeAnnotation(metaType)) {
+                collectStereotypePriorityValues(metaType, priorities, visited);
+            }
+        }
+
+        if (knowledgeBase.isRegisteredStereotype(stereotypeType)) {
+            Set<Annotation> definition = knowledgeBase.getStereotypeDefinition(stereotypeType);
+            if (definition != null) {
+                for (Annotation meta : definition) {
+                    if (meta == null) {
+                        continue;
+                    }
+                    Class<? extends Annotation> metaType = meta.annotationType();
+                    if (hasStereotypeAnnotation(metaType)) {
+                        collectStereotypePriorityValues(metaType, priorities, visited);
+                    }
+                }
+            }
+        }
+    }
+
+    private Annotation[] effectiveClassAnnotations(Class<?> candidate) {
+        AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(candidate);
+        if (override != null) {
+            return override.getAnnotations().toArray(new Annotation[0]);
+        }
+        return candidate.getAnnotations();
+    }
+
+    private Integer extractPrioritizedInterfacePriority(Class<?> candidate) {
+        if (candidate == null || !Prioritized.class.isAssignableFrom(candidate)) {
+            return null;
+        }
+        if (candidate.isInterface() || Modifier.isAbstract(candidate.getModifiers())) {
+            return null;
+        }
+
+        try {
+            Constructor<?> constructor = candidate.getDeclaredConstructor();
+            if (!constructor.isAccessible()) {
+                constructor.setAccessible(true);
+            }
+            Prioritized prioritized = (Prioritized) constructor.newInstance();
+            return prioritized.getPriority();
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return null;
+        }
     }
 
     private Integer extractPriorityValue(Annotation annotation) {
@@ -1851,21 +1966,30 @@ public class Syringe {
         processInterceptorAndDecoratorInjectionPoints();
     }
 
-    private void processInjectionPointsForBean(Bean<?> bean, Set<InjectionPoint> injectionPoints) {
+    private Set<InjectionPoint> processInjectionPointsForBean(Bean<?> bean, Set<InjectionPoint> injectionPoints) {
+        if (injectionPoints == null || injectionPoints.isEmpty()) {
+            return Collections.emptySet();
+        }
         List<InjectionPoint> snapshot = new ArrayList<>(injectionPoints);
+        Set<InjectionPoint> updatedPoints = new LinkedHashSet<InjectionPoint>();
         for (InjectionPoint ip : snapshot) {
             ProcessInjectionPointImpl<?, ?> event =
                     new ProcessInjectionPointImpl<>(messageHandler, ip, knowledgeBase);
 
             fireEventToExtensions(event);
+            InjectionPoint updated = event.getInjectionPointInternal();
+            if (updated == null) {
+                updated = ip;
+            }
+            updatedPoints.add(updated);
 
             if (bean != null) {
-                InjectionPoint updated = event.getInjectionPointInternal();
                 if (updated != ip) {
                     updateInjectionPoint(bean, ip, updated);
                 }
             }
         }
+        return updatedPoints;
     }
 
     private void processLifecycleMethodInjectionPoints(Bean<?> bean) {
@@ -1914,6 +2038,8 @@ public class Syringe {
 
     private void processInterceptorAndDecoratorInjectionPoints() {
         Set<Class<?>> lifecycleTypes = new LinkedHashSet<>();
+        lifecycleTypes.addAll(knowledgeBase.getInterceptors());
+        lifecycleTypes.addAll(knowledgeBase.getDecorators());
         for (InterceptorInfo interceptorInfo : knowledgeBase.getInterceptorInfos()) {
             if (interceptorInfo != null && interceptorInfo.getInterceptorClass() != null) {
                 lifecycleTypes.add(interceptorInfo.getInterceptorClass());
@@ -1930,7 +2056,8 @@ public class Syringe {
                 AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(lifecycleType);
                 InjectionTargetFactory<?> factory = new InjectionTargetFactoryImpl<>(annotatedType, beanManager);
                 InjectionTarget<?> injectionTarget = factory.createInjectionTarget(null);
-                processInjectionPointsForBean(null, injectionTarget.getInjectionPoints());
+                Set<InjectionPoint> updated = processInjectionPointsForBean(null, injectionTarget.getInjectionPoints());
+                applyLifecycleTypeInjectionPointUpdates(lifecycleType, updated);
             } catch (DefinitionException e) {
                 throw e;
             } catch (Exception e) {
@@ -1938,6 +2065,78 @@ public class Syringe {
                         lifecycleType.getName(), e);
             }
         }
+    }
+
+    private void applyLifecycleTypeInjectionPointUpdates(Class<?> lifecycleType, Set<InjectionPoint> updatedInjectionPoints) {
+        if (lifecycleType == null || updatedInjectionPoints == null || updatedInjectionPoints.isEmpty()) {
+            return;
+        }
+        if (knowledgeBase.getDecorators().contains(lifecycleType)) {
+            refreshDecoratorInfoFromInjectionPoints(lifecycleType, updatedInjectionPoints);
+        }
+    }
+
+    private void refreshDecoratorInfoFromInjectionPoints(Class<?> decoratorClass, Set<InjectionPoint> updatedInjectionPoints) {
+        DecoratorInfo existing = null;
+        for (DecoratorInfo info : knowledgeBase.getDecoratorInfos()) {
+            if (info != null && decoratorClass.equals(info.getDecoratorClass())) {
+                existing = info;
+                break;
+            }
+        }
+
+        InjectionPoint delegateInjectionPoint = null;
+        for (InjectionPoint injectionPoint : updatedInjectionPoints) {
+            if (injectionPoint != null && injectionPoint.isDelegate()) {
+                delegateInjectionPoint = injectionPoint;
+                break;
+            }
+        }
+
+        if (delegateInjectionPoint == null && existing != null) {
+            delegateInjectionPoint = existing.getDelegateInjectionPoint();
+        }
+        if (delegateInjectionPoint == null) {
+            return;
+        }
+
+        Set<Type> decoratedTypes = existing != null
+                ? existing.getDecoratedTypes()
+                : extractDecoratorDecoratedTypes(decoratorClass);
+        if (decoratedTypes == null || decoratedTypes.isEmpty()) {
+            return;
+        }
+
+        int priority = existing != null ? existing.getPriority() : Integer.MAX_VALUE;
+        Integer configuredPriority = getEffectivePriority(decoratorClass);
+        if (configuredPriority != null) {
+            priority = configuredPriority;
+        }
+
+        if (existing != null) {
+            knowledgeBase.getDecoratorInfos().remove(existing);
+        }
+        knowledgeBase.addDecoratorInfo(new DecoratorInfo(decoratorClass, decoratedTypes, priority, delegateInjectionPoint));
+    }
+
+    private Set<Type> extractDecoratorDecoratedTypes(Class<?> decoratorClass) {
+        if (decoratorClass == null) {
+            return Collections.emptySet();
+        }
+        Set<Type> decoratedTypes = new LinkedHashSet<Type>();
+        for (Type type : TypeClosureHelper.extractTypesFromClass(decoratorClass)) {
+            Class<?> raw = extractRawClass(type);
+            if (raw == null || !raw.isInterface()) {
+                continue;
+            }
+            if (Object.class.equals(raw)
+                    || java.io.Serializable.class.equals(raw)
+                    || jakarta.enterprise.inject.spi.Decorator.class.equals(raw)) {
+                continue;
+            }
+            decoratedTypes.add(type);
+        }
+        return decoratedTypes;
     }
 
     /**
@@ -2968,6 +3167,9 @@ public class Syringe {
             b.setScope(attrs.getScope());
             b.setStereotypes(attrs.getStereotypes());
             b.setTypes(attrs.getTypes());
+            b.setAlternative(attrs.isAlternative());
+            b.setAlternativeEnabled(!attrs.isAlternative() ||
+                    isAlternativeEnabledAfterBeanAttributes(b.getBeanClass(), attrs.getStereotypes()));
         } else if (bean instanceof ProducerBean<?>) {
             ProducerBean<?> b = (ProducerBean<?>) bean;
             b.setName(attrs.getName());
@@ -2975,10 +3177,169 @@ public class Syringe {
             b.setScope(attrs.getScope());
             b.setStereotypes(attrs.getStereotypes());
             b.setTypes(attrs.getTypes());
-            // the alternative flag is final; cannot be changed post-creation
+            b.setAlternative(attrs.isAlternative());
+            b.setAlternativeEnabled(!attrs.isAlternative() ||
+                    isProducerAlternativeEnabledAfterBeanAttributes(b, attrs.getStereotypes()));
         } else {
             // Synthetic or built-in beans: no-op
         }
+    }
+
+    private boolean isProducerAlternativeEnabledAfterBeanAttributes(ProducerBean<?> producerBean,
+                                                                    Set<Class<? extends Annotation>> stereotypes) {
+        if (producerBean == null) {
+            return false;
+        }
+
+        if (resolveProducerMemberPriority(producerBean) != null) {
+            return true;
+        }
+
+        Set<Class<? extends Annotation>> memberStereotypes =
+                (stereotypes == null || stereotypes.isEmpty())
+                        ? resolveProducerMemberStereotypes(producerBean)
+                        : stereotypes;
+
+        if (resolveSingleStereotypePriority(memberStereotypes) != null) {
+            return true;
+        }
+
+        if (memberStereotypes != null) {
+            for (Class<? extends Annotation> stereotype : memberStereotypes) {
+                if (stereotype == null) {
+                    continue;
+                }
+                String stereotypeName = stereotype.getName();
+                if (knowledgeBase.isAlternativeEnabledProgrammatically(stereotypeName) ||
+                        knowledgeBase.isAlternativeEnabledInBeansXml(stereotypeName)) {
+                    return true;
+                }
+            }
+        }
+
+        Class<?> declaringClass = producerBean.getBeanClass();
+        return isAlternativeEnabledAfterBeanAttributes(declaringClass, resolveClassStereotypes(declaringClass));
+    }
+
+    private Integer resolveProducerMemberPriority(ProducerBean<?> producerBean) {
+        if (producerBean == null) {
+            return null;
+        }
+        if (producerBean.getProducerMethod() != null) {
+            return getPriorityValue(producerBean.getProducerMethod());
+        }
+        if (producerBean.getProducerField() != null) {
+            return getPriorityValue(producerBean.getProducerField());
+        }
+        return null;
+    }
+
+    private Set<Class<? extends Annotation>> resolveProducerMemberStereotypes(ProducerBean<?> producerBean) {
+        Set<Class<? extends Annotation>> stereotypes = new LinkedHashSet<Class<? extends Annotation>>();
+        if (producerBean == null) {
+            return stereotypes;
+        }
+
+        AnnotatedElement producerMember = producerBean.getProducerMethod() != null
+                ? producerBean.getProducerMethod()
+                : producerBean.getProducerField();
+        if (producerMember == null) {
+            return stereotypes;
+        }
+
+        for (Annotation annotation : producerMember.getAnnotations()) {
+            if (annotation == null) {
+                continue;
+            }
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (hasStereotypeAnnotation(annotationType)) {
+                stereotypes.add(annotationType);
+            }
+        }
+        return stereotypes;
+    }
+
+    private Integer resolveSingleStereotypePriority(Set<Class<? extends Annotation>> stereotypes) {
+        Set<Integer> priorities = collectStereotypePriorityValues(stereotypes);
+        if (priorities.size() == 1) {
+            return priorities.iterator().next();
+        }
+        return null;
+    }
+
+    private Set<Class<? extends Annotation>> resolveClassStereotypes(Class<?> beanClass) {
+        Set<Class<? extends Annotation>> stereotypes = new LinkedHashSet<Class<? extends Annotation>>();
+        if (beanClass == null) {
+            return stereotypes;
+        }
+        for (Annotation annotation : effectiveClassAnnotations(beanClass)) {
+            if (annotation == null) {
+                continue;
+            }
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (hasStereotypeAnnotation(annotationType)) {
+                stereotypes.add(annotationType);
+            }
+        }
+        return stereotypes;
+    }
+
+    private boolean isAlternativeEnabledAfterBeanAttributes(Class<?> beanClass,
+                                                            Set<Class<? extends Annotation>> stereotypes) {
+        if (beanClass == null) {
+            return false;
+        }
+
+        Integer effectivePriority = resolveEffectivePriorityAfterBeanAttributes(beanClass, stereotypes);
+
+        if (knowledgeBase.hasAfterTypeDiscoveryAlternativesCustomized()) {
+            if (knowledgeBase.getApplicationAlternativeOrder(beanClass) >= 0) {
+                return true;
+            }
+            if (effectivePriority != null) {
+                return false;
+            }
+        }
+
+        if (effectivePriority != null) {
+            return true;
+        }
+        if (knowledgeBase.isAlternativeEnabledProgrammatically(beanClass.getName())) {
+            return true;
+        }
+        if (knowledgeBase.isAlternativeEnabledInBeansXml(beanClass.getName())) {
+            return true;
+        }
+        if (stereotypes != null) {
+            for (Class<? extends Annotation> stereotype : stereotypes) {
+                if (stereotype == null) {
+                    continue;
+                }
+                String stereotypeName = stereotype.getName();
+                if (knowledgeBase.isAlternativeEnabledProgrammatically(stereotypeName) ||
+                        knowledgeBase.isAlternativeEnabledInBeansXml(stereotypeName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private Integer resolveEffectivePriorityAfterBeanAttributes(Class<?> beanClass,
+                                                                Set<Class<? extends Annotation>> stereotypes) {
+        Integer directPriority = getDirectPriority(beanClass);
+        if (directPriority != null) {
+            return directPriority;
+        }
+
+        Set<Integer> stereotypePriorities = (stereotypes == null || stereotypes.isEmpty())
+                ? collectStereotypePriorityValues(beanClass)
+                : collectStereotypePriorityValues(stereotypes);
+        if (stereotypePriorities.size() == 1) {
+            return stereotypePriorities.iterator().next();
+        }
+
+        return extractPrioritizedInterfacePriority(beanClass);
     }
 
     /**
@@ -3462,6 +3823,7 @@ public class Syringe {
         for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
             if (decoratorInfo != null && decoratorInfo.getDecoratorClass() != null) {
                 validatedDecoratorClasses.add(decoratorInfo.getDecoratorClass());
+                validateDecoratorInfoDelegateInjectionPoint(decoratorInfo);
             }
         }
 
@@ -3476,6 +3838,20 @@ public class Syringe {
             }
             validateProgrammaticDecoratorDelegateInjectionPoints(decorator);
         }
+    }
+
+    private void validateDecoratorInfoDelegateInjectionPoint(DecoratorInfo decoratorInfo) {
+        if (decoratorInfo == null || decoratorInfo.getDecoratorClass() == null) {
+            return;
+        }
+        InjectionPoint delegateInjectionPoint = decoratorInfo.getDelegateInjectionPoint();
+        if (delegateInjectionPoint != null && delegateInjectionPoint.isDelegate()) {
+            return;
+        }
+        knowledgeBase.addDefinitionError(
+                decoratorInfo.getDecoratorClass().getName() +
+                        ": Decorator must have exactly one @Delegate injection point (found 0). " +
+                        "Add @Inject @Delegate to a field, method parameter, or constructor parameter.");
     }
 
     private void validateProgrammaticDecoratorDelegateInjectionPoints(Decorator<?> decorator) {
@@ -3949,11 +4325,11 @@ public class Syringe {
                     invocation.extension.getClass().getName() + " for event " +
                     eventType.getSimpleName(), cause);
             } finally {
-                if (extensionAwareInvocationStarted && event instanceof ExtensionAwareObserverInvocation) {
-                    ((ExtensionAwareObserverInvocation) event).exitObserverInvocation();
-                }
                 if (lifecycleInvocationStarted && event instanceof ObserverInvocationLifecycle) {
                     ((ObserverInvocationLifecycle) event).endObserverInvocation();
+                }
+                if (extensionAwareInvocationStarted && event instanceof ExtensionAwareObserverInvocation) {
+                    ((ExtensionAwareObserverInvocation) event).exitObserverInvocation();
                 }
             }
         }

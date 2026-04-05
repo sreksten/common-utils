@@ -23,11 +23,10 @@ public class ProcessAnnotatedTypeImpl<T> extends PhaseAware implements ProcessAn
 
     private AnnotatedType<T> annotatedType;
     private boolean vetoed = false;
-    private boolean setAnnotatedTypeCalled = false;
-    private boolean configureAnnotatedTypeCalled = false;
-    private boolean configuredAnnotatedTypeCompleted = false;
-    private AnnotatedTypeConfigurator<T> configurator;
+    private AnnotatedTypeConfiguratorImpl<T> configurator;
     private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> setCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final ThreadLocal<Boolean> configureCalledInCurrentInvocation = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ProcessAnnotatedTypeImpl(MessageHandler messageHandler, AnnotatedType<T> annotatedType) {
         super(messageHandler);
@@ -46,33 +45,27 @@ public class ProcessAnnotatedTypeImpl<T> extends PhaseAware implements ProcessAn
         if (type == null) {
             throw new IllegalArgumentException("AnnotatedType cannot be null");
         }
-        if (configureAnnotatedTypeCalled) {
+        if (configureCalledInCurrentInvocation.get()) {
             throw new IllegalStateException("setAnnotatedType() and configureAnnotatedType() cannot both be used");
         }
         info(Phase.PROCESS_ANNOTATED_TYPE, "Changing AnnotatedType " + annotatedType.getJavaClass().getName() +
                 " with " + type.getJavaClass().getName());
         this.annotatedType = type;
-        this.setAnnotatedTypeCalled = true;
+        this.configurator = null;
+        this.setCalledInCurrentInvocation.set(Boolean.TRUE);
     }
 
     @Override
     public AnnotatedTypeConfigurator<T> configureAnnotatedType() {
         assertObserverInvocationActive();
-        if (setAnnotatedTypeCalled) {
+        if (setCalledInCurrentInvocation.get()) {
             throw new IllegalStateException("setAnnotatedType() and configureAnnotatedType() cannot both be used");
         }
         info(Phase.PROCESS_ANNOTATED_TYPE, "Creating AnnotatedTypeConfigurator for " +
                 annotatedType.getJavaClass().getName());
-        this.configureAnnotatedTypeCalled = true;
+        this.configureCalledInCurrentInvocation.set(Boolean.TRUE);
         if (configurator == null) {
-            configurator = new AnnotatedTypeConfiguratorImpl<T>(annotatedType) {
-                @Override
-                public AnnotatedType<T> complete() {
-                    AnnotatedType<T> configured = super.complete();
-                    annotatedType = configured;
-                    return configured;
-                }
-            };
+            configurator = new AnnotatedTypeConfiguratorImpl<T>(annotatedType);
         }
         return configurator;
     }
@@ -89,34 +82,31 @@ public class ProcessAnnotatedTypeImpl<T> extends PhaseAware implements ProcessAn
     }
 
     public AnnotatedType<T> getAnnotatedTypeInternal() {
-        completeConfiguredAnnotatedTypeIfNeeded();
         return annotatedType;
     }
 
     @Override
     public void beginObserverInvocation() {
         observerInvocationActive.set(Boolean.TRUE);
+        setCalledInCurrentInvocation.set(Boolean.FALSE);
+        configureCalledInCurrentInvocation.set(Boolean.FALSE);
+        configurator = null;
     }
 
     @Override
     public void endObserverInvocation() {
+        if (configureCalledInCurrentInvocation.get() && configurator != null) {
+            annotatedType = configurator.complete();
+        }
         observerInvocationActive.set(Boolean.FALSE);
+        setCalledInCurrentInvocation.set(Boolean.FALSE);
+        configureCalledInCurrentInvocation.set(Boolean.FALSE);
+        configurator = null;
     }
 
     private void assertObserverInvocationActive() {
         if (!observerInvocationActive.get()) {
             throw new IllegalStateException("ProcessAnnotatedType methods may only be called during observer method invocation");
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void completeConfiguredAnnotatedTypeIfNeeded() {
-        if (!configureAnnotatedTypeCalled || configurator == null || configuredAnnotatedTypeCompleted) {
-            return;
-        }
-        if (configurator instanceof AnnotatedTypeConfiguratorImpl<?>) {
-            annotatedType = ((AnnotatedTypeConfiguratorImpl<T>) configurator).complete();
-        }
-        configuredAnnotatedTypeCompleted = true;
     }
 }

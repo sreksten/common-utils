@@ -3271,6 +3271,10 @@ public class CDI41BeanValidator {
 
         // Validate exactly one @Delegate injection point
         if (delegateCount == 0) {
+            if (countInjectableDecoratorInjectionPoints(clazz) == 1) {
+                // Portable extensions may turn a regular injectable point into a delegate in ProcessInjectionPoint.
+                return;
+            }
             knowledgeBase.addDefinitionError(clazz.getName() +
                     ": Decorator must have exactly one @Delegate injection point (found 0). " +
                     "Add @Inject @Delegate to a field, method parameter, or constructor parameter.");
@@ -4758,6 +4762,63 @@ public class CDI41BeanValidator {
                         return tryCreateInjectionPoint(parameter, null);
                     }
                 }
+            }
+        }
+
+        if (countInjectableDecoratorInjectionPoints(clazz) == 1) {
+            return findSingleInjectableDecoratorInjectionPoint(clazz);
+        }
+        return null;
+    }
+
+    private int countInjectableDecoratorInjectionPoints(Class<?> clazz) {
+        int count = 0;
+
+        for (Field field : clazz.getDeclaredFields()) {
+            if (hasInjectAnnotation(field)) {
+                count++;
+            }
+        }
+
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (!hasInjectAnnotation(method)) {
+                continue;
+            }
+            count += method.getParameterCount();
+        }
+
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            if (!hasInjectAnnotation(constructor)) {
+                continue;
+            }
+            count += constructor.getParameterCount();
+        }
+
+        return count;
+    }
+
+    private InjectionPoint findSingleInjectableDecoratorInjectionPoint(Class<?> clazz) {
+        for (Field field : clazz.getDeclaredFields()) {
+            if (hasInjectAnnotation(field)) {
+                return tryCreateInjectionPoint(field, null);
+            }
+        }
+
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (!hasInjectAnnotation(method)) {
+                continue;
+            }
+            for (Parameter parameter : method.getParameters()) {
+                return tryCreateInjectionPoint(parameter, null);
+            }
+        }
+
+        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
+            if (!hasInjectAnnotation(constructor)) {
+                continue;
+            }
+            for (Parameter parameter : constructor.getParameters()) {
+                return tryCreateInjectionPoint(parameter, null);
             }
         }
 

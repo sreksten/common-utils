@@ -14,6 +14,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.TypeChec
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
+import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
@@ -43,14 +44,18 @@ import java.io.NotSerializableException;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.UndeclaredThrowableException;
@@ -534,13 +539,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
     @Override
     public Event<T> select(Annotation... qualifiers) {
         validateAdditionalQualifiers(qualifiers);
-        Set<Annotation> newQualifiers = new HashSet<>(this.qualifiers);
-        for (Annotation qualifier : qualifiers) {
-            if (qualifier == null) {
-                throw new IllegalArgumentException("Qualifier cannot be null");
-            }
-            newQualifiers.add(qualifier);
-        }
+        Set<Annotation> newQualifiers = mergeSelectedQualifiers(this.qualifiers, qualifiers);
         return new EventImpl<>(eventType, newQualifiers, knowledgeBase, beanResolver, contextManager,
                 transactionServices, tokenProvider, firingInjectionPoint, allowStartupEventDispatch);
     }
@@ -573,13 +572,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         validateEventType(subtype);
         validateAdditionalQualifiers(qualifiers);
 
-        Set<Annotation> newQualifiers = new HashSet<>(this.qualifiers);
-        for (Annotation qualifier : qualifiers) {
-            if (qualifier == null) {
-                throw new IllegalArgumentException("Qualifier cannot be null");
-            }
-            newQualifiers.add(qualifier);
-        }
+        Set<Annotation> newQualifiers = mergeSelectedQualifiers(this.qualifiers, qualifiers);
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
         return new EventImpl<>(subtype, newQualifiers, knowledgeBase, beanResolver, contextManager,
@@ -613,13 +606,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         validateEventType(subtype.getType());
         validateAdditionalQualifiers(qualifiers);
 
-        Set<Annotation> newQualifiers = new HashSet<>(this.qualifiers);
-        for (Annotation qualifier : qualifiers) {
-            if (qualifier == null) {
-                throw new IllegalArgumentException("Qualifier cannot be null");
-            }
-            newQualifiers.add(qualifier);
-        }
+        Set<Annotation> newQualifiers = mergeSelectedQualifiers(this.qualifiers, qualifiers);
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
         return new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager,
@@ -663,6 +650,79 @@ public class EventImpl<T> implements Event<T>, Serializable {
                         "Duplicate non-repeatable qualifier type passed to select(): " + qualifierType.getName());
             }
         }
+    }
+
+    private Set<Annotation> mergeSelectedQualifiers(Set<Annotation> existing, Annotation... additional) {
+        Set<Annotation> merged = new LinkedHashSet<Annotation>();
+        if (existing != null) {
+            for (Annotation qualifier : existing) {
+                if (qualifier == null) {
+                    continue;
+                }
+                merged.add(qualifier);
+            }
+        }
+
+        Map<Class<? extends Annotation>, Annotation> replacements =
+                new LinkedHashMap<Class<? extends Annotation>, Annotation>();
+        Set<Class<? extends Annotation>> replacedNonRepeatableTypes =
+                new HashSet<Class<? extends Annotation>>();
+
+        if (additional != null) {
+            for (Annotation qualifier : additional) {
+                if (qualifier == null) {
+                    throw new IllegalArgumentException("Qualifier cannot be null");
+                }
+                Class<? extends Annotation> qualifierType = qualifier.annotationType();
+                if (isRepeatableQualifier(qualifierType)) {
+                    merged.add(qualifier);
+                    continue;
+                }
+                replacements.put(qualifierType, qualifier);
+                replacedNonRepeatableTypes.add(qualifierType);
+            }
+        }
+
+        if (!replacedNonRepeatableTypes.isEmpty()) {
+            merged.removeIf(existingQualifier ->
+                    existingQualifier != null &&
+                            replacedNonRepeatableTypes.contains(existingQualifier.annotationType()) &&
+                            !isRepeatableQualifier(existingQualifier.annotationType()));
+        }
+
+        merged.addAll(replacements.values());
+
+        if (containsExplicitNonDefaultQualifier(merged)) {
+            merged.removeIf(qualifier -> qualifier != null && isDefaultQualifierType(qualifier.annotationType()));
+        }
+        return merged;
+    }
+
+    private boolean containsExplicitNonDefaultQualifier(Collection<Annotation> qualifiers) {
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            return false;
+        }
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null) {
+                continue;
+            }
+            Class<? extends Annotation> qualifierType = qualifier.annotationType();
+            if (isAnyQualifierType(qualifierType) || isDefaultQualifierType(qualifierType)) {
+                continue;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isDefaultQualifierType(Class<? extends Annotation> qualifierType) {
+        return qualifierType != null &&
+                jakarta.enterprise.inject.Default.class.getName().equals(qualifierType.getName());
+    }
+
+    private boolean isAnyQualifierType(Class<? extends Annotation> qualifierType) {
+        return qualifierType != null &&
+                jakarta.enterprise.inject.Any.class.getName().equals(qualifierType.getName());
     }
 
     private boolean isRepeatableQualifier(Class<? extends Annotation> qualifierType) {
@@ -2056,7 +2116,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         private final Type type;
 
         private EventMetadataImpl(Set<Annotation> qualifiers, InjectionPoint injectionPoint, Type type) {
-            this.qualifiers = Collections.unmodifiableSet(new HashSet<>(qualifiers));
+            this.qualifiers = Collections.unmodifiableSet(withRepeatableQualifierContainers(qualifiers));
             this.injectionPoint = injectionPoint;
             this.type = type;
         }
@@ -2074,6 +2134,132 @@ public class EventImpl<T> implements Event<T>, Serializable {
         @Override
         public Type getType() {
             return type;
+        }
+
+        private static Set<Annotation> withRepeatableQualifierContainers(Set<Annotation> qualifiers) {
+            Set<Annotation> normalized = new LinkedHashSet<Annotation>();
+            if (qualifiers == null || qualifiers.isEmpty()) {
+                return normalized;
+            }
+            normalized.addAll(qualifiers);
+
+            Map<Class<? extends Annotation>, List<Annotation>> repeatablesByContainer =
+                    new LinkedHashMap<Class<? extends Annotation>, List<Annotation>>();
+            for (Annotation qualifier : qualifiers) {
+                if (qualifier == null) {
+                    continue;
+                }
+                Repeatable repeatable = qualifier.annotationType().getAnnotation(Repeatable.class);
+                if (repeatable == null || repeatable.value() == null) {
+                    continue;
+                }
+                Class<? extends Annotation> containerType = repeatable.value();
+                List<Annotation> repeated = repeatablesByContainer.get(containerType);
+                if (repeated == null) {
+                    repeated = new ArrayList<Annotation>();
+                    repeatablesByContainer.put(containerType, repeated);
+                }
+                repeated.add(qualifier);
+            }
+
+            for (Map.Entry<Class<? extends Annotation>, List<Annotation>> entry : repeatablesByContainer.entrySet()) {
+                Class<? extends Annotation> containerType = entry.getKey();
+                if (containsQualifierType(normalized, containerType)) {
+                    continue;
+                }
+                Annotation container = createRepeatableContainerAnnotation(containerType, entry.getValue());
+                if (container != null) {
+                    normalized.add(container);
+                }
+            }
+            return normalized;
+        }
+
+        private static boolean containsQualifierType(Set<Annotation> qualifiers, Class<? extends Annotation> type) {
+            if (qualifiers == null || qualifiers.isEmpty() || type == null) {
+                return false;
+            }
+            for (Annotation qualifier : qualifiers) {
+                if (qualifier != null && type.equals(qualifier.annotationType())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static Annotation createRepeatableContainerAnnotation(Class<? extends Annotation> containerType,
+                                                                      List<Annotation> repeatedQualifiers) {
+            if (containerType == null || repeatedQualifiers == null || repeatedQualifiers.isEmpty()) {
+                return null;
+            }
+
+            final Method valueMethod;
+            try {
+                valueMethod = containerType.getMethod("value");
+            } catch (NoSuchMethodException e) {
+                return null;
+            }
+
+            Class<?> returnType = valueMethod.getReturnType();
+            if (!returnType.isArray()) {
+                return null;
+            }
+
+            Class<?> componentType = returnType.getComponentType();
+            if (componentType == null) {
+                return null;
+            }
+
+            final Object valuesArray = Array.newInstance(componentType, repeatedQualifiers.size());
+            for (int i = 0; i < repeatedQualifiers.size(); i++) {
+                Annotation qualifier = repeatedQualifiers.get(i);
+                if (qualifier == null || !componentType.isAssignableFrom(qualifier.annotationType())) {
+                    return null;
+                }
+                Array.set(valuesArray, i, qualifier);
+            }
+
+            InvocationHandler handler = (proxy, method, args) -> {
+                String name = method.getName();
+                if ("annotationType".equals(name) && method.getParameterCount() == 0) {
+                    return containerType;
+                }
+                if ("value".equals(name) && method.getParameterCount() == 0) {
+                    return cloneArray(valuesArray);
+                }
+                if ("equals".equals(name) && method.getParameterCount() == 1) {
+                    Object other = (args != null && args.length == 1) ? args[0] : null;
+                    return other instanceof Annotation &&
+                            AnnotationComparator.equals((Annotation) proxy, (Annotation) other);
+                }
+                if ("hashCode".equals(name) && method.getParameterCount() == 0) {
+                    return AnnotationComparator.hashCode((Annotation) proxy);
+                }
+                if ("toString".equals(name) && method.getParameterCount() == 0) {
+                    return "@" + containerType.getName() + "(value=" +
+                            Arrays.toString((Object[]) cloneArray(valuesArray)) + ")";
+                }
+                if (method.getParameterCount() == 0 && method.getDefaultValue() != null) {
+                    return method.getDefaultValue();
+                }
+                throw new UnsupportedOperationException("Unsupported method on repeatable container annotation: " + method);
+            };
+
+            return (Annotation) Proxy.newProxyInstance(
+                    containerType.getClassLoader(),
+                    new Class<?>[]{containerType},
+                    handler
+            );
+        }
+
+        private static Object cloneArray(Object array) {
+            if (array == null || !array.getClass().isArray()) {
+                return array;
+            }
+            int length = Array.getLength(array);
+            Object copy = Array.newInstance(array.getClass().getComponentType(), length);
+            System.arraycopy(array, 0, copy, 0, length);
+            return copy;
         }
     }
 

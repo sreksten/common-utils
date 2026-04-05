@@ -12,6 +12,8 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.normalizeBeanQualifiers;
+
 /**
  * Implementation of {@link BeanAttributesConfigurator} used by ProcessBeanAttributes events.
  */
@@ -178,6 +180,7 @@ public class BeanAttributesConfiguratorImpl<T> implements BeanAttributesConfigur
     }
 
     public BeanAttributes<T> complete() {
+        this.qualifiers = new HashSet<>(normalizeBeanQualifiers(this.qualifiers));
         return new BeanAttributesImpl<>(name, qualifiers, scope, stereotypes, types, alternative);
     }
 }

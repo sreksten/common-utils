@@ -109,7 +109,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * CDI 4.1 - 2.7 - Alternative flag.<br/>
      * To be enabled, the Alternative must declare a @Priority or be present in the META-INF/beans.xml file.
      */
-    private final boolean alternative;
+    private boolean alternative;
     private final String passivationId;
     /**
      * Alternative enabled flag - NONSTANDARD feature. It permits enabling an Alternative programmatically.
@@ -412,6 +412,10 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     @Override
     public boolean isAlternative() {
         return alternative;
+    }
+
+    public void setAlternative(boolean alternative) {
+        this.alternative = alternative;
     }
 
     public boolean isAlternativeEnabled() {
