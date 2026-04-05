@@ -15,6 +15,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.ContextManag
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.RequestScopedContext;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
+import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.enterprise.context.Dependent;
@@ -2217,6 +2218,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         if (type == null) {
             return Collections.emptyList();
         }
+        jakarta.enterprise.inject.spi.AnnotatedType<?> override =
+                knowledgeBase != null ? knowledgeBase.getAnnotatedTypeOverride(type) : null;
 
         List<Class<?>> hierarchy = new ArrayList<>();
         Class<?> current = type;
@@ -2228,7 +2231,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         List<Method> methods = new ArrayList<>();
         for (Class<?> hierarchyType : hierarchy) {
             for (Method method : hierarchyType.getDeclaredMethods()) {
-                if (!AnnotationsEnum.hasAroundInvokeAnnotation(method) || Modifier.isStatic(method.getModifiers())) {
+                if (!hasAroundInvokeAnnotation(method, override) || Modifier.isStatic(method.getModifiers())) {
                     continue;
                 }
                 if (method.getParameterCount() == 1 &&
@@ -2239,6 +2242,24 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             }
         }
         return methods;
+    }
+
+    private boolean hasAroundInvokeAnnotation(Method method, jakarta.enterprise.inject.spi.AnnotatedType<?> override) {
+        if (method == null) {
+            return false;
+        }
+        Annotation[] annotations = override != null
+                ? AnnotatedMetadataHelper.annotationsOf(override, method)
+                : method.getAnnotations();
+        if (annotations == null || annotations.length == 0) {
+            return false;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation != null && AnnotationsEnum.AROUND_INVOKE.matches(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<Class<?>> extractLegacyInterceptorClasses(Annotation[] annotations) {

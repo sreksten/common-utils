@@ -593,6 +593,7 @@ public class Syringe {
         dynamicAnnotationsRetained = true;
         beanManager.setLegacyCdi10NewEnabled(legacyCdi10NewEnabled);
         beanManager.registerExtensions(extensions);
+        registerRuntimeExtensionObserverMethods();
         buildCompatibleExtensionRunner = new BuildCompatibleExtensionRunner(
             messageHandler, knowledgeBase, beanManager, bceInvokerRegistry);
 
@@ -1450,6 +1451,9 @@ public class Syringe {
                 if (syntheticAnnotatedTypeClasses.contains(clazz)) {
                     continue;
                 }
+                if (shouldBypassProcessAnnotatedTypeEvent(clazz)) {
+                    continue;
+                }
                 // Step 1: Check if a class is excluded by beans.xml scan filters
                 if (excludeFilter.isExcluded(clazz.getName())) {
                     knowledgeBase.vetoType(clazz);
@@ -1495,6 +1499,10 @@ public class Syringe {
 
         info("Excluded by beans.xml filters: " + excludedCount);
         info("Vetoed types (total): " + knowledgeBase.getVetoedTypes().size());
+    }
+
+    private boolean shouldBypassProcessAnnotatedTypeEvent(Class<?> clazz) {
+        return ActivateRequestContextInterceptor.class.equals(clazz);
     }
 
     private boolean shouldSkipProcessAnnotatedTypeEvent(Class<?> clazz) {
@@ -4045,6 +4053,108 @@ public class Syringe {
                 }
             }
         }
+    }
+
+    private void registerRuntimeExtensionObserverMethods() {
+        if (extensions.isEmpty()) {
+            return;
+        }
+
+        Set<String> existingKeys = new HashSet<String>();
+        for (ObserverMethodInfo info : knowledgeBase.getObserverMethodInfos()) {
+            existingKeys.add(observerInfoKey(info));
+        }
+
+        for (Extension extension : extensions) {
+            Bean<?> declaringBean = resolveExtensionDeclaringBean(extension);
+            if (declaringBean == null) {
+                continue;
+            }
+
+            for (Method method : getExtensionObserverCandidateMethods(extension.getClass())) {
+                Class<?> observedRawType = resolveObservedRawTypeForLifecycleObserver(method, declaringBean);
+                if (observedRawType != null && isContainerLifecycleObservedType(observedRawType)) {
+                    continue;
+                }
+                ObserverMethodInfo info = toObserverInfoForLifecycleDispatch(method, declaringBean);
+                if (info == null) {
+                    continue;
+                }
+                String key = observerInfoKey(info);
+                if (!existingKeys.add(key)) {
+                    continue;
+                }
+                knowledgeBase.addObserverMethodInfo(info);
+            }
+        }
+    }
+
+    private Class<?> resolveObservedRawTypeForLifecycleObserver(Method method, Bean<?> declaringBean) {
+        if (method == null || declaringBean == null || declaringBean.getBeanClass() == null) {
+            return null;
+        }
+
+        int observesCount = 0;
+        int observesAsyncCount = 0;
+        Type observedParameterBaseType = null;
+
+        AnnotatedMethod<?> annotatedMethod = null;
+        AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(declaringBean.getBeanClass());
+        if (override != null) {
+            annotatedMethod = AnnotatedMetadataHelper.findAnnotatedMethod(override, method);
+        }
+
+        Parameter[] parameters = method.getParameters();
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter parameter = parameters[i];
+            AnnotatedParameter<?> annotatedParameter = annotatedMethod != null
+                    ? findAnnotatedParameter(annotatedMethod, i)
+                    : null;
+            Annotation[] parameterAnnotations = annotatedParameter != null
+                    ? annotatedParameter.getAnnotations().toArray(new Annotation[0])
+                    : parameter.getAnnotations();
+            Type parameterBaseType = annotatedParameter != null
+                    ? annotatedParameter.getBaseType()
+                    : parameter.getParameterizedType();
+
+            if (hasObservesAnnotationIn(parameterAnnotations)) {
+                observesCount++;
+                observedParameterBaseType = parameterBaseType;
+            }
+            if (hasObservesAsyncAnnotationIn(parameterAnnotations)) {
+                observesAsyncCount++;
+                observedParameterBaseType = parameterBaseType;
+            }
+        }
+
+        if (observesCount == 0 && observesAsyncCount == 0) {
+            return null;
+        }
+        if (observesCount + observesAsyncCount != 1 || observedParameterBaseType == null) {
+            return null;
+        }
+
+        Type resolvedObservedType = GenericTypeResolver.resolve(
+                observedParameterBaseType,
+                declaringBean.getBeanClass(),
+                method.getDeclaringClass());
+        return extractRawClass(resolvedObservedType);
+    }
+
+    private Bean<?> resolveExtensionDeclaringBean(Extension extension) {
+        if (extension == null) {
+            return null;
+        }
+        Class<?> extensionClass = extension.getClass();
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (bean == null || bean.getBeanClass() == null) {
+                continue;
+            }
+            if (bean.getBeanClass().equals(extensionClass)) {
+                return bean;
+            }
+        }
+        return null;
     }
 
     private boolean isObservedTypeApplicableToEvent(Class<?> observedType, Object event) {

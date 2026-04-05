@@ -263,13 +263,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.injectionPoint.CreateInjectionPointTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.producer.SyntheticProducerTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.unmanaged.UnmanagedInstanceTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.beanManager.unmanaged.broken.UnamangedInstanceIllegalStatesTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.unmanaged.broken.UnamangedInstanceIllegalStatesTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.communication.ExtensionsCommunicationTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.BasicConfiguratorsTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.configurators.BasicConfiguratorsTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.annotatedTypeConfigurator.AnnotatedTypeConfiguratorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.annotatedTypeConfigurator.beforeBeanDiscovery.AnnotatedTypeConfiguratorInBBDTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.bean.BeanConfiguratorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.bean.alternativePriority.BeanConfiguratorAlternativePriorityTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.configurators.annotatedTypeConfigurator.beforeBeanDiscovery.AnnotatedTypeConfiguratorInBBDTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.configurators.bean.BeanConfiguratorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.configurators.bean.alternativePriority.BeanConfiguratorAlternativePriorityTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.beanAttributes.BeanAttributesConfiguratorTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.injectionPoint.InjectionPointConfiguratorTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.injectionTargetFactory.InjectionTargetFactoryConfigureTest

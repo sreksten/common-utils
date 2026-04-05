@@ -81,7 +81,9 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
     public <T> BeanConfigurator<T> addBean() {
         assertObserverInvocationActive();
         info(Phase.AFTER_BEAN_DISCOVERY, "Creating BeanConfigurator for synthetic bean");
-        final BeanConfiguratorImpl<T> configurator = new BeanConfiguratorImpl<>(messageHandler, knowledgeBase);
+        final BeanConfiguratorImpl<T> configurator = new BeanConfiguratorImpl<>(messageHandler, knowledgeBase,
+                beanManager instanceof BeanManagerImpl ? (BeanManagerImpl) beanManager : null,
+                this::fireProcessSyntheticBean);
         final AtomicBoolean applied = new AtomicBoolean(false);
         registerEndOfObserverAction(() -> {
             if (applied.compareAndSet(false, true)) {

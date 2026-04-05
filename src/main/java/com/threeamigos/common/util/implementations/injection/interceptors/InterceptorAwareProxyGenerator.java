@@ -4,7 +4,10 @@ import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.AnnotatedMethod;
+import jakarta.enterprise.inject.spi.AnnotatedType;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
@@ -17,6 +20,7 @@ import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.annotation.Annotation;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
@@ -512,23 +516,77 @@ public class InterceptorAwareProxyGenerator {
 
             Class<?> current = targetClass;
             Method found = null;
-            while (current != null && current != Object.class && found == null) {
-                for (Method candidate : current.getDeclaredMethods()) {
-                    if (AnnotationsEnum.hasAroundInvokeAnnotation(candidate)) {
-                        if (candidate.getParameterCount() == 1 &&
-                                jakarta.interceptor.InvocationContext.class.isAssignableFrom(candidate.getParameterTypes()[0])) {
-                            candidate.setAccessible(true);
-                            found = candidate;
-                            break;
+            AnnotatedType<?> override = resolveAnnotatedTypeOverride(targetClass);
+            if (override != null) {
+                found = findAroundInvokeMethodFromOverride(override);
+            } else {
+                while (current != null && current != Object.class && found == null) {
+                    for (Method candidate : current.getDeclaredMethods()) {
+                        if (AnnotationsEnum.hasAroundInvokeAnnotation(candidate)) {
+                            if (candidate.getParameterCount() == 1 &&
+                                    jakarta.interceptor.InvocationContext.class.isAssignableFrom(candidate.getParameterTypes()[0])) {
+                                candidate.setAccessible(true);
+                                found = candidate;
+                                break;
+                            }
                         }
                     }
+                    current = current.getSuperclass();
                 }
-                current = current.getSuperclass();
             }
 
             Optional<Method> value = Optional.ofNullable(found);
             targetAroundInvokeCache.put(targetClass, value);
             return found;
+        }
+
+        private static AnnotatedType<?> resolveAnnotatedTypeOverride(Class<?> targetClass) {
+            BeanManagerImpl beanManager = BeanManagerImpl.getRegisteredBeanManager(targetClass.getClassLoader());
+            if (beanManager == null || beanManager.getKnowledgeBase() == null) {
+                return null;
+            }
+            Class<?> current = targetClass;
+            while (current != null && current != Object.class) {
+                AnnotatedType<?> override = beanManager.getKnowledgeBase().getAnnotatedTypeOverride(current);
+                if (override != null) {
+                    return override;
+                }
+                current = current.getSuperclass();
+            }
+            return null;
+        }
+
+        private static Method findAroundInvokeMethodFromOverride(AnnotatedType<?> override) {
+            if (override == null) {
+                return null;
+            }
+            for (AnnotatedMethod<?> method : override.getMethods()) {
+                if (method == null || !hasAroundInvokeAnnotation(method.getAnnotations())) {
+                    continue;
+                }
+                Method javaMethod = method.getJavaMember();
+                if (javaMethod == null) {
+                    continue;
+                }
+                if (javaMethod.getParameterCount() == 1 &&
+                        jakarta.interceptor.InvocationContext.class.isAssignableFrom(javaMethod.getParameterTypes()[0])) {
+                    javaMethod.setAccessible(true);
+                    return javaMethod;
+                }
+            }
+            return null;
+        }
+
+        private static boolean hasAroundInvokeAnnotation(Iterable<Annotation> annotations) {
+            if (annotations == null) {
+                return false;
+            }
+            for (Annotation annotation : annotations) {
+                if (annotation != null && AnnotationsEnum.AROUND_INVOKE.matches(annotation.annotationType())) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

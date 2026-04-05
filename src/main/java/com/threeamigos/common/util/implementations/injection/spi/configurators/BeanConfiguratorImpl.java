@@ -16,6 +16,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
@@ -48,6 +49,8 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
 
     private final MessageHandler messageHandler;
     private final KnowledgeBase knowledgeBase;
+    private final BeanManagerImpl owningBeanManager;
+    private final Consumer<SyntheticBean<T>> syntheticBeanCallback;
 
     // Bean configuration
     private Class<?> beanClass;
@@ -68,8 +71,23 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
     private final Set<InjectionPoint> injectionPoints = new LinkedHashSet<>();
 
     public BeanConfiguratorImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase) {
+        this(messageHandler, knowledgeBase, null, null);
+    }
+
+    public BeanConfiguratorImpl(MessageHandler messageHandler,
+                                KnowledgeBase knowledgeBase,
+                                Consumer<SyntheticBean<T>> syntheticBeanCallback) {
+        this(messageHandler, knowledgeBase, null, syntheticBeanCallback);
+    }
+
+    public BeanConfiguratorImpl(MessageHandler messageHandler,
+                                KnowledgeBase knowledgeBase,
+                                BeanManagerImpl owningBeanManager,
+                                Consumer<SyntheticBean<T>> syntheticBeanCallback) {
         this.messageHandler = messageHandler;
         this.knowledgeBase = knowledgeBase;
+        this.owningBeanManager = owningBeanManager;
+        this.syntheticBeanCallback = syntheticBeanCallback;
     }
 
     @Override
@@ -321,6 +339,9 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
     }
 
     private jakarta.enterprise.inject.Instance<Object> resolveInstanceProvider() {
+        if (owningBeanManager != null) {
+            return owningBeanManager.createInstance();
+        }
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         if (classLoader == null) {
             classLoader = BeanConfiguratorImpl.class.getClassLoader();
@@ -419,6 +440,16 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
             qualifiers.add(Any.Literal.INSTANCE);
         }
 
+        if (scope == null) {
+            scope = Dependent.class;
+        }
+        if (Dependent.class.equals(scope) && !stereotypes.isEmpty()) {
+            Class<? extends Annotation> inferredScope = inferScopeFromStereotypes(stereotypes, new HashSet<Class<? extends Annotation>>());
+            if (inferredScope != null) {
+                scope = inferredScope;
+            }
+        }
+
         // Build the synthetic bean
         SyntheticBean<T> syntheticBean = new SyntheticBean<>(
             beanClass,
@@ -435,12 +466,45 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
             injectionPoints
         );
 
+        if (syntheticBeanCallback != null) {
+            syntheticBeanCallback.accept(syntheticBean);
+        }
+
         // Register with knowledge base
         knowledgeBase.addBean(syntheticBean);
 
         messageHandler.handleInfoMessage("[BeanConfigurator] Created synthetic bean: " +
                           beanClass.getSimpleName() +
                           " with scope @" + scope.getSimpleName());
+    }
+
+    private Class<? extends Annotation> inferScopeFromStereotypes(Set<Class<? extends Annotation>> stereotypeTypes,
+                                                                   Set<Class<? extends Annotation>> visited) {
+        for (Class<? extends Annotation> stereotypeType : stereotypeTypes) {
+            if (stereotypeType == null || !visited.add(stereotypeType)) {
+                continue;
+            }
+            for (Annotation annotation : stereotypeType.getAnnotations()) {
+                if (annotation == null) {
+                    continue;
+                }
+                Class<? extends Annotation> annotationType = annotation.annotationType();
+                if (hasNormalScopeAnnotation(annotationType) ||
+                        hasScopeAnnotation(annotationType) ||
+                        hasDependentAnnotation(annotationType)) {
+                    return annotationType;
+                }
+                if (hasStereotypeAnnotation(annotationType)) {
+                    Set<Class<? extends Annotation>> nested = new LinkedHashSet<Class<? extends Annotation>>();
+                    nested.add(annotationType);
+                    Class<? extends Annotation> nestedScope = inferScopeFromStereotypes(nested, visited);
+                    if (nestedScope != null) {
+                        return nestedScope;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private Class<?> inferBeanClassFromTypes() {

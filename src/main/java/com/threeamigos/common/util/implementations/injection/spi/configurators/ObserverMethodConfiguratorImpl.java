@@ -45,6 +45,7 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
     private int priority = ObserverMethod.DEFAULT_PRIORITY;
     private boolean async = false;
     private ObserverMethodConfigurator.EventConsumer<T> notifyCallback;
+    private ObserverMethod<T> originalObserverMethod;
 
     /**
      * Creates an ObserverMethodConfigurator.
@@ -65,6 +66,7 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
         this.reception = Reception.ALWAYS;
         this.transactionPhase = TransactionPhase.IN_PROGRESS;
         this.async = false;
+        this.originalObserverMethod = null;
 
         Parameter[] parameters = method.getParameters();
         Type[] genericTypes = method.getGenericParameterTypes();
@@ -95,6 +97,7 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
         this.reception = Reception.ALWAYS;
         this.transactionPhase = TransactionPhase.IN_PROGRESS;
         this.async = false;
+        this.originalObserverMethod = null;
 
         boolean foundObserverParameter = false;
         for (AnnotatedParameter<?> parameter : method.getParameters()) {
@@ -127,6 +130,7 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
         this.transactionPhase = observerMethod.getTransactionPhase();
         this.priority = observerMethod.getPriority();
         this.async = observerMethod.isAsync();
+        this.originalObserverMethod = observerMethod;
         return this;
     }
 
@@ -277,6 +281,9 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
     public ObserverMethod<T> complete() {
         if (observedType == null) {
             throw new IllegalStateException("Observed type must be set");
+        }
+        if (notifyCallback == null && originalObserverMethod != null) {
+            notifyCallback = eventContext -> originalObserverMethod.notify(eventContext.getEvent());
         }
         if (notifyCallback == null) {
             throw new IllegalStateException("Notification callback must be set via notifyWith()");

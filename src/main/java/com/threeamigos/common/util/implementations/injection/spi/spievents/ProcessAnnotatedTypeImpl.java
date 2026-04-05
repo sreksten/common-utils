@@ -25,6 +25,7 @@ public class ProcessAnnotatedTypeImpl<T> extends PhaseAware implements ProcessAn
     private boolean vetoed = false;
     private boolean setAnnotatedTypeCalled = false;
     private boolean configureAnnotatedTypeCalled = false;
+    private boolean configuredAnnotatedTypeCompleted = false;
     private AnnotatedTypeConfigurator<T> configurator;
     private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
@@ -88,6 +89,7 @@ public class ProcessAnnotatedTypeImpl<T> extends PhaseAware implements ProcessAn
     }
 
     public AnnotatedType<T> getAnnotatedTypeInternal() {
+        completeConfiguredAnnotatedTypeIfNeeded();
         return annotatedType;
     }
 
@@ -105,5 +107,16 @@ public class ProcessAnnotatedTypeImpl<T> extends PhaseAware implements ProcessAn
         if (!observerInvocationActive.get()) {
             throw new IllegalStateException("ProcessAnnotatedType methods may only be called during observer method invocation");
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void completeConfiguredAnnotatedTypeIfNeeded() {
+        if (!configureAnnotatedTypeCalled || configurator == null || configuredAnnotatedTypeCompleted) {
+            return;
+        }
+        if (configurator instanceof AnnotatedTypeConfiguratorImpl<?>) {
+            annotatedType = ((AnnotatedTypeConfiguratorImpl<T>) configurator).complete();
+        }
+        configuredAnnotatedTypeCompleted = true;
     }
 }

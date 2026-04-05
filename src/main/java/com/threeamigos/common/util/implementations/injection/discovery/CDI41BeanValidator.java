@@ -984,6 +984,22 @@ public class CDI41BeanValidator {
         return hasAnnotation(element, OBSERVES_ASYNC);
     }
 
+    private boolean hasPostConstructAnnotation(AnnotatedElement element) {
+        return hasAnnotation(element, POST_CONSTRUCT);
+    }
+
+    private boolean hasPreDestroyAnnotation(AnnotatedElement element) {
+        return hasAnnotation(element, PRE_DESTROY);
+    }
+
+    private boolean hasAroundInvokeAnnotation(AnnotatedElement element) {
+        return hasAnnotation(element, AROUND_INVOKE);
+    }
+
+    private boolean hasAroundConstructAnnotation(AnnotatedElement element) {
+        return hasAnnotation(element, AROUND_CONSTRUCT);
+    }
+
     private boolean hasAnnotation(AnnotatedElement element, AnnotationsEnum annotation) {
         for (Annotation candidate : annotationsOf(element)) {
             if (annotation.matches(candidate.annotationType())) {
