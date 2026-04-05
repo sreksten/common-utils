@@ -2230,6 +2230,7 @@ public class Syringe {
      */
     private void processBeanAttributes() {
         info("Processing bean attributes");
+        suppressSpecializedBeansBeforeProcessBeanAttributes();
 
         List<Bean<?>> vetoed = new ArrayList<>();
         Set<Class<?>> vetoedDeclaringBeanClasses = new HashSet<Class<?>>();
@@ -2311,6 +2312,51 @@ public class Syringe {
         if (!vetoed.isEmpty()) {
             knowledgeBase.getBeans().removeAll(vetoed);
             info("Vetoed " + vetoed.size() + " bean(s) via ProcessBeanAttributes");
+        }
+    }
+
+    private void suppressSpecializedBeansBeforeProcessBeanAttributes() {
+        Set<Class<?>> specializedSuperclasses = new HashSet<Class<?>>();
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            Class<?> beanClass = bean != null ? bean.getBeanClass() : null;
+            if (beanClass == null) {
+                continue;
+            }
+            if (!hasSpecializesAnnotation(beanClass)) {
+                continue;
+            }
+            if (!isBeanEnabledForObserverLifecycle(bean)) {
+                continue;
+            }
+            specializedSuperclasses.addAll(collectSpecializedSuperclasses(beanClass));
+        }
+
+        if (specializedSuperclasses.isEmpty()) {
+            return;
+        }
+
+        List<Bean<?>> specializedBeans = new ArrayList<Bean<?>>();
+        for (Bean<?> bean : knowledgeBase.getBeans()) {
+            if (bean == null) {
+                continue;
+            }
+            Class<?> beanClass = bean.getBeanClass();
+            if (beanClass != null && specializedSuperclasses.contains(beanClass)) {
+                specializedBeans.add(bean);
+                continue;
+            }
+            if (bean instanceof ProducerBean<?>) {
+                Class<?> declaringClass = ((ProducerBean<?>) bean).getDeclaringClass();
+                if (declaringClass != null && specializedSuperclasses.contains(declaringClass)) {
+                    specializedBeans.add(bean);
+                }
+            }
+        }
+
+        if (!specializedBeans.isEmpty()) {
+            knowledgeBase.getBeans().removeAll(specializedBeans);
+            info("Suppressed " + specializedBeans.size() +
+                    " specialized bean(s) before ProcessBeanAttributes");
         }
     }
 
@@ -4715,7 +4761,24 @@ public class Syringe {
             return true;
         }
 
+        if (ProcessBeanAttributes.class.isAssignableFrom((Class<?>) rawType)) {
+            return matchesProcessBeanAttributesTypeArgument(observedTypeArguments[0], discoveredType);
+        }
+
         return matchesObservedTypeArgument(observedTypeArguments[0], discoveredType);
+    }
+
+    private boolean matchesProcessBeanAttributesTypeArgument(Type observedTypeArgument, Class<?> discoveredType) {
+        if (observedTypeArgument instanceof Class<?>) {
+            return observedTypeArgument.equals(discoveredType);
+        }
+
+        if (observedTypeArgument instanceof ParameterizedType) {
+            Type rawObservedType = ((ParameterizedType) observedTypeArgument).getRawType();
+            return rawObservedType instanceof Class<?> && rawObservedType.equals(discoveredType);
+        }
+
+        return matchesObservedTypeArgument(observedTypeArgument, discoveredType);
     }
 
     private boolean matchesProcessObserverMethodTypeArguments(Type[] observedTypeArguments, Object event) {

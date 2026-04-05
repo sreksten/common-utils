@@ -308,14 +308,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidScopeTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidStereotypeTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.invalid.InvalidTypesTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.passivation.PassivationCapabilityErrorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.passivation.PassivationCapableDependencyErrorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.decorator.DecoratorProcessBeanAttributesTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.ignoreFinalMethods.IgnoreFinalMethodsTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.interceptor.InterceptorProcessBeanAttributesTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.modify.SetBeanAttributesTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.modify.broken.SetBeanAttributesTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.specialization.SpecializationTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.passivation.PassivationCapabilityErrorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.broken.passivation.PassivationCapableDependencyErrorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.decorator.DecoratorProcessBeanAttributesTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.ignoreFinalMethods.IgnoreFinalMethodsTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.interceptor.InterceptorProcessBeanAttributesTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.modify.SetBeanAttributesTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.modify.broken.SetBeanAttributesTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.specialization.SpecializationTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.specialization.VetoTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.specialization.broken.TypeConflictDetectionTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.synthetic.ProcessBeanAttributesNotFiredForSyntheticBeanTest

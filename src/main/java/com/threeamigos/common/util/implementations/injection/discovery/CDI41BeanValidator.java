@@ -3574,6 +3574,7 @@ public class CDI41BeanValidator {
 
         String resolvedName = normalizeBeanName(beanName);
         if (resolvedName == null) {
+            normalized.add(existingNamed);
             return normalized;
         }
 

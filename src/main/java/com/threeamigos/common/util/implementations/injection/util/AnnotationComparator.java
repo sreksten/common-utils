@@ -71,6 +71,9 @@ public class AnnotationComparator {
             }
 
             try {
+                if (!method.isAccessible()) {
+                    method.setAccessible(true);
+                }
                 // Get values from both annotations
                 Object value1 = method.invoke(a1);
                 Object value2 = method.invoke(a2);
@@ -166,6 +169,9 @@ public class AnnotationComparator {
             }
 
             try {
+                if (!method.isAccessible()) {
+                    method.setAccessible(true);
+                }
                 Object value = method.invoke(annotation);
                 result = 31 * result + valueHashCode(value);
             } catch (Exception e) {
