@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Decor
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.spi.AnnotatedParameter;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -478,11 +479,12 @@ public class DecoratorAwareProxyGenerator {
             }
             constructor.setAccessible(true);
             Parameter[] parameters = delegateConstructor.getParameters();
+            int delegateParameterPosition = resolveDelegateParameterPosition(delegateInjectionPoint, parameters);
             Object[] args = new Object[parameters.length];
             Bean<?> decoratorBean = createSyntheticDecoratorBean(decoratorClass);
 
             for (int i = 0; i < parameters.length; i++) {
-                if (hasDelegateAnnotation(parameters[i])) {
+                if (i == delegateParameterPosition || hasDelegateAnnotation(parameters[i])) {
                     args[i] = delegate;
                 } else {
                     args[i] = beanManager.getInjectableReference(
@@ -502,6 +504,35 @@ public class DecoratorAwareProxyGenerator {
                     decoratorClass.getName() + ": " + e.getMessage(), e
             );
         }
+    }
+
+    private int resolveDelegateParameterPosition(InjectionPoint delegateInjectionPoint, Parameter[] parameters) {
+        if (delegateInjectionPoint == null || parameters == null || parameters.length == 0) {
+            return -1;
+        }
+        if (!(delegateInjectionPoint.getMember() instanceof Constructor)) {
+            return -1;
+        }
+        if (delegateInjectionPoint.getAnnotated() instanceof AnnotatedParameter<?>) {
+            return ((AnnotatedParameter<?>) delegateInjectionPoint.getAnnotated()).getPosition();
+        }
+
+        Type delegateType = delegateInjectionPoint.getType();
+        if (delegateType == null) {
+            return -1;
+        }
+
+        int matchedPosition = -1;
+        for (int i = 0; i < parameters.length; i++) {
+            if (!delegateType.equals(parameters[i].getParameterizedType())) {
+                continue;
+            }
+            if (matchedPosition >= 0) {
+                return -1;
+            }
+            matchedPosition = i;
+        }
+        return matchedPosition;
     }
 
     /**

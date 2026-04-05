@@ -316,14 +316,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.modify.SetBeanAttributesTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.modify.broken.SetBeanAttributesTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.specialization.SpecializationTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.specialization.VetoTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.specialization.broken.TypeConflictDetectionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.synthetic.ProcessBeanAttributesNotFiredForSyntheticBeanTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.veto.VetoTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.ProcessInjectionPointFiredTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.broken.AddDefinitionErrorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.broken.ThrowExceptionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.modify.InjectionPointOverridingTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.specialization.VetoTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.specialization.broken.TypeConflictDetectionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.synthetic.ProcessBeanAttributesNotFiredForSyntheticBeanTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processBeanAttributes.veto.VetoTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.ProcessInjectionPointFiredTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.broken.AddDefinitionErrorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.broken.ThrowExceptionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.modify.InjectionPointOverridingTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lite.coexistence.BuildCompatibleExtensionSmokeTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.observer.ProcessObserverMethodEventTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.observer.broken.definitionError.ProcessObserverMethodErrorTest
