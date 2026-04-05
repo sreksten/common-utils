@@ -4287,6 +4287,7 @@ public class CDI41BeanValidator {
      */
     private void validateAndRegisterInterceptor(Class<?> clazz) {
         boolean valid = true;
+        boolean interceptorEnabled = isInterceptorEnabledAtDeployment(clazz);
 
         // Extract interceptor bindings
         Set<Annotation> interceptorBindings = extractInterceptorBindings(clazz);
@@ -4311,30 +4312,40 @@ public class CDI41BeanValidator {
         // Validate that at least one interceptor method exists
         if (aroundInvokeMethod == null && aroundConstructMethod == null &&
             postConstructMethod == null && preDestroyMethod == null) {
-            knowledgeBase.addDefinitionError(clazz.getName() +
-                ": @Interceptor must have at least one interceptor method (@AroundInvoke, @AroundConstruct, @PostConstruct, or @PreDestroy)");
+            if (interceptorEnabled) {
+                knowledgeBase.addDefinitionError(clazz.getName() +
+                        ": @Interceptor must have at least one interceptor method (@AroundInvoke, @AroundConstruct, @PostConstruct, or @PreDestroy)");
+            }
             valid = false;
         }
 
-        // Validate signatures per CDI spec
+        // Validate signatures per CDI spec when interceptor is enabled.
         if (aroundInvokeMethod != null && !isValidAroundInvoke(aroundInvokeMethod)) {
-            knowledgeBase.addDefinitionError(fmtMethod(aroundInvokeMethod) +
-                    ": @AroundInvoke must be non-static, return Object, and accept a single InvocationContext parameter");
+            if (interceptorEnabled) {
+                knowledgeBase.addDefinitionError(fmtMethod(aroundInvokeMethod) +
+                        ": @AroundInvoke must be non-static, return Object, and accept a single InvocationContext parameter");
+            }
             valid = false;
         }
         if (aroundConstructMethod != null && !isValidAroundConstruct(aroundConstructMethod)) {
-            knowledgeBase.addDefinitionError(fmtMethod(aroundConstructMethod) +
-                    ": @AroundConstruct must be non-static, return Object, and accept a single InvocationContext parameter");
+            if (interceptorEnabled) {
+                knowledgeBase.addDefinitionError(fmtMethod(aroundConstructMethod) +
+                        ": @AroundConstruct must be non-static, return Object, and accept a single InvocationContext parameter");
+            }
             valid = false;
         }
         if (postConstructMethod != null && !isValidInterceptorLifecycleMethod(postConstructMethod)) {
-            knowledgeBase.addDefinitionError(fmtMethod(postConstructMethod) +
-                    ": @PostConstruct interceptor method must be non-static, void/Object, and take a single InvocationContext parameter");
+            if (interceptorEnabled) {
+                knowledgeBase.addDefinitionError(fmtMethod(postConstructMethod) +
+                        ": @PostConstruct interceptor method must be non-static, void/Object, and take a single InvocationContext parameter");
+            }
             valid = false;
         }
         if (preDestroyMethod != null && !isValidInterceptorLifecycleMethod(preDestroyMethod)) {
-            knowledgeBase.addDefinitionError(fmtMethod(preDestroyMethod) +
-                    ": @PreDestroy interceptor method must be non-static, void/Object, and take a single InvocationContext parameter");
+            if (interceptorEnabled) {
+                knowledgeBase.addDefinitionError(fmtMethod(preDestroyMethod) +
+                        ": @PreDestroy interceptor method must be non-static, void/Object, and take a single InvocationContext parameter");
+            }
             valid = false;
         }
 
@@ -4351,6 +4362,19 @@ public class CDI41BeanValidator {
             );
             knowledgeBase.addInterceptorInfo(info);
         }
+    }
+
+    private boolean isInterceptorEnabledAtDeployment(Class<?> interceptorClass) {
+        if (interceptorClass == null) {
+            return false;
+        }
+        if (knowledgeBase.getApplicationInterceptorOrder(interceptorClass) >= 0) {
+            return true;
+        }
+        if (knowledgeBase.getInterceptorBeansXmlOrder(interceptorClass) >= 0) {
+            return true;
+        }
+        return getPriorityValue(interceptorClass) != null;
     }
 
     private boolean isValidAroundInvoke(Method m) {

@@ -1495,7 +1495,7 @@ public class Syringe {
         if (BeanArchiveMode.EXPLICIT.equals(mode)) {
             return true;
         }
-        // IMPLICIT/TRIMMED discovery only includes Java classes with bean defining annotations.
+        // IMPLICIT and TRIMMED discovery include only bean-defining classes.
         if (clazz.isInterface() || clazz.isEnum() || clazz.isAnnotation()) {
             return false;
         }
@@ -1522,9 +1522,15 @@ public class Syringe {
         if (annotationType == null) {
             return false;
         }
-        return hasScopeAnnotation(annotationType)
-                || hasNormalScopeAnnotation(annotationType)
-                || hasDependentAnnotation(annotationType);
+        if (hasDependentAnnotation(annotationType)) {
+            return true;
+        }
+        if (hasNormalScopeAnnotation(annotationType) || hasBuiltInNormalScopeAnnotation(annotationType)) {
+            return true;
+        }
+        com.threeamigos.common.util.implementations.injection.knowledgebase.ScopeMetadata metadata =
+                knowledgeBase.getScopeMetadata(annotationType);
+        return metadata != null && metadata.isNormal();
     }
 
     private boolean isStereotype(Class<? extends Annotation> annotationType) {

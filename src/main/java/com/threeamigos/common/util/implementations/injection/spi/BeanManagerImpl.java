@@ -1129,6 +1129,10 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return false;
         }
 
+        if (knowledgeBase.getApplicationAlternativeOrder(beanClass) >= 0) {
+            return true;
+        }
+
         Integer classPriority = extractPriorityFromClass(beanClass);
         if (classPriority != null) {
             return true;

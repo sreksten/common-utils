@@ -64,7 +64,8 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
         assertObserverInvocationActive();
         checkNotNull(bean, "Bean");
         info(Phase.AFTER_BEAN_DISCOVERY, "Registering synthetic bean: " + bean.getBeanClass().getSimpleName() +
-                " with types: " + bean.getTypes());
+                " with types: " + bean.getTypes() +
+                " and stereotypes: " + bean.getStereotypes());
         fireProcessSyntheticBean(bean);
         knowledgeBase.addBean(bean);
     }

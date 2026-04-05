@@ -223,14 +223,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.decorators.invocation.producer.method.DecoratorInvocationTest
 - [x] org.jboss.cdi.tck.tests.full.decorators.lookup.clientProxy.unproxyable.decorator.DecoratoredBeanProxyTest
 - [x] org.jboss.cdi.tck.tests.full.decorators.resolution.DecoratorResolutionTest
-- [ ] org.jboss.cdi.tck.tests.full.definition.bean.custom.CustomBeanImplementationTest
-- [ ] org.jboss.cdi.tck.tests.full.deployment.discovery.BeanDiscoveryTest
-- [ ] org.jboss.cdi.tck.tests.full.deployment.exclude.ExcludeFiltersTest
-- [ ] org.jboss.cdi.tck.tests.full.deployment.initialization.ApplicationInitializationLifecycleTest
-- [ ] org.jboss.cdi.tck.tests.full.deployment.trimmed.TrimmedBeanArchiveTest
-- [ ] org.jboss.cdi.tck.tests.full.event.EventTest
-- [ ] org.jboss.cdi.tck.tests.full.event.broken.raw.RawEventCustomBeanTest
-- [ ] org.jboss.cdi.tck.tests.full.event.broken.raw.RawEventProcessInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.definition.bean.custom.CustomBeanImplementationTest
+- [x] org.jboss.cdi.tck.tests.full.deployment.discovery.BeanDiscoveryTest
+- [x] org.jboss.cdi.tck.tests.full.deployment.exclude.ExcludeFiltersTest
+- [x] org.jboss.cdi.tck.tests.full.deployment.initialization.ApplicationInitializationLifecycleTest
+- [x] org.jboss.cdi.tck.tests.full.deployment.trimmed.TrimmedBeanArchiveTest
+- [x] org.jboss.cdi.tck.tests.full.event.EventTest
+- [x] org.jboss.cdi.tck.tests.full.event.broken.raw.RawEventCustomBeanTest
+- [x] org.jboss.cdi.tck.tests.full.event.broken.raw.RawEventProcessInjectionPointTest
 - [ ] org.jboss.cdi.tck.tests.full.event.fires.FireEventTest
 - [ ] org.jboss.cdi.tck.tests.full.event.observer.extension.BeanManagerObserverNotificationTest
 - [ ] org.jboss.cdi.tck.tests.full.event.observer.extension.EventBeanObserverNotificationTest

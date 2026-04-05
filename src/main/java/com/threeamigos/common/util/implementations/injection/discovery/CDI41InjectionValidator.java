@@ -1472,6 +1472,15 @@ public class CDI41InjectionValidator {
             return true;
         }
 
+        // Ensure InjectionPoint#getMember participates in validation flow.
+        // Some custom InjectionPoint implementations rely on this callback for metadata checks.
+        try {
+            if (injectionPoint != null) {
+                injectionPoint.getMember();
+            }
+        } catch (Exception ignored) {
+        }
+
         Type requiredType = injectionPoint.getType();
         Set<Annotation> qualifiers = injectionPoint.getQualifiers();
 

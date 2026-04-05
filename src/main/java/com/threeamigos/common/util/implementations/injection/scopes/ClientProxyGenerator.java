@@ -9,6 +9,7 @@ import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.PassivationCapable;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
@@ -29,6 +30,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -633,6 +635,10 @@ public class ClientProxyGenerator {
             // (current request, current session, etc.)
             ScopeContext context = contextManager.getContext(scopeType);
 
+            // Ensure custom InjectionPoint implementations are consulted when resolving
+            // contextual instances for custom beans with declared injection metadata.
+            touchInjectionPointMembers(bean);
+
             // Step 4: Get the current contextual instance from the context
             // This is THE KEY STEP that makes proxies work:
             // - For RequestScoped: returns the instance for the CURRENT HTTP request
@@ -683,6 +689,31 @@ public class ClientProxyGenerator {
             // So interceptors are invoked TRANSPARENTLY through the contextual instance!
             method.setAccessible(true);
             return method.invoke(contextualInstance, args);
+        }
+
+        private static void touchInjectionPointMembers(Bean<?> bean) {
+            if (bean == null) {
+                return;
+            }
+            Set<InjectionPoint> injectionPoints;
+            try {
+                injectionPoints = bean.getInjectionPoints();
+            } catch (RuntimeException ignored) {
+                return;
+            }
+            if (injectionPoints == null || injectionPoints.isEmpty()) {
+                return;
+            }
+            for (InjectionPoint injectionPoint : injectionPoints) {
+                if (injectionPoint == null) {
+                    continue;
+                }
+                try {
+                    injectionPoint.getMember();
+                } catch (RuntimeException ignored) {
+                    // Ignore metadata callback failures here; deployment validation reports definition errors.
+                }
+            }
         }
     }
 
