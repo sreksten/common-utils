@@ -324,14 +324,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.broken.AddDefinitionErrorTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.broken.ThrowExceptionTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.lifecycle.processInjectionPoint.modify.InjectionPointOverridingTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.lite.coexistence.BuildCompatibleExtensionSmokeTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.observer.ProcessObserverMethodEventTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.observer.broken.definitionError.ProcessObserverMethodErrorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.observer.broken.exception.ProcessObserverMethodExceptionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.observer.priority.ExtensionObserverOrderingTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.processBean.ProcessBeanTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.producer.ProducerTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.producer.broken.injectionTargetError.InjectionTargetDefinitionErrorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.lite.coexistence.BuildCompatibleExtensionSmokeTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.observer.ProcessObserverMethodEventTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.observer.broken.definitionError.ProcessObserverMethodErrorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.observer.broken.exception.ProcessObserverMethodExceptionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.observer.priority.ExtensionObserverOrderingTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.processBean.ProcessBeanTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.producer.ProducerTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.producer.broken.injectionTargetError.InjectionTargetDefinitionErrorTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.producer.broken.processing.ProducerProcessingWithDefinitionErrorTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.producer.broken.processing.ProducerProcessingWithExceptionTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.stereotype.StereotypeExtensionTest

@@ -2981,10 +2981,14 @@ public class Syringe {
                     if (annotatedMethod != null) {
                         // Start with ProcessProducer-wrapped producer, if any.
                         Producer producer = resolveEffectiveProducerForLifecycleEvent(producerBean);
+                        AnnotatedParameter<?> disposedParameter = findAnnotatedDisposedParameter(
+                                annotatedType,
+                                method.getGenericReturnType()
+                        );
 
                         // Create and fire ProcessProducerMethod event
                         ProcessProducerMethodImpl event = new ProcessProducerMethodImpl(messageHandler,
-                                knowledgeBase, producerBean, annotatedMethod, producer, null);
+                                knowledgeBase, producerBean, annotatedMethod, producer, disposedParameter);
 
                         fireEventToExtensions(event);
 
@@ -3005,10 +3009,14 @@ public class Syringe {
                     if (annotatedField != null) {
                         // Start with ProcessProducer-wrapped producer, if any.
                         Producer producer = resolveEffectiveProducerForLifecycleEvent(producerBean);
+                        AnnotatedParameter<?> disposedParameter = findAnnotatedDisposedParameter(
+                                annotatedType,
+                                field.getGenericType()
+                        );
 
                         // Create and fire ProcessProducerField event
                         ProcessProducerFieldImpl event = new ProcessProducerFieldImpl(messageHandler, knowledgeBase,
-                            producerBean, annotatedField, producer, null);
+                            producerBean, annotatedField, producer, disposedParameter);
 
                         fireEventToExtensions(event);
 
@@ -3049,6 +3057,45 @@ public class Syringe {
         for (AnnotatedField<?> af : annotatedType.getFields()) {
             if (af.getJavaMember().equals(field)) {
                 return af;
+            }
+        }
+        return null;
+    }
+
+    private AnnotatedParameter<?> findAnnotatedDisposedParameter(AnnotatedType<?> annotatedType, Type producedType) {
+        if (annotatedType == null || producedType == null) {
+            return null;
+        }
+        for (AnnotatedMethod<?> method : annotatedType.getMethods()) {
+            for (AnnotatedParameter<?> parameter : method.getParameters()) {
+                if (!parameter.isAnnotationPresent(jakarta.enterprise.inject.Disposes.class)) {
+                    continue;
+                }
+                if (isSameRawType(parameter.getBaseType(), producedType)) {
+                    return parameter;
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean isSameRawType(Type left, Type right) {
+        Class<?> leftRawType = extractRawType(left);
+        Class<?> rightRawType = extractRawType(right);
+        if (leftRawType != null && rightRawType != null) {
+            return leftRawType.equals(rightRawType);
+        }
+        return Objects.equals(left, right);
+    }
+
+    private Class<?> extractRawType(Type type) {
+        if (type instanceof Class<?>) {
+            return (Class<?>) type;
+        }
+        if (type instanceof ParameterizedType) {
+            Type rawType = ((ParameterizedType) type).getRawType();
+            if (rawType instanceof Class<?>) {
+                return (Class<?>) rawType;
             }
         }
         return null;
@@ -4795,7 +4842,8 @@ public class Syringe {
             collectExtensionObserverMethods(extension, event, invocations);
         }
 
-        // Sort by @Priority (ascending). Methods without @Priority run last.
+        // Sort by effective priority (ascending). Methods without explicit @Priority
+        // use the CDI default observer priority (APPLICATION + 500).
         invocations.sort(Comparator.comparingInt(inv -> inv.priority));
 
         for (ExtensionObserverInvocation invocation : invocations) {
@@ -5655,7 +5703,7 @@ public class Syringe {
         if (methodPriority != null) {
             return methodPriority;
         }
-        return Integer.MAX_VALUE;
+        return jakarta.interceptor.Interceptor.Priority.APPLICATION + 500;
     }
 
     @SuppressWarnings("unchecked")
