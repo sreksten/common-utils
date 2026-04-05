@@ -332,14 +332,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.processBean.ProcessBeanTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.producer.ProducerTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.producer.broken.injectionTargetError.InjectionTargetDefinitionErrorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.producer.broken.processing.ProducerProcessingWithDefinitionErrorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.producer.broken.processing.ProducerProcessingWithExceptionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.stereotype.StereotypeExtensionTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.BuiltinMetadataBeanTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.injection.BuiltinDecoratorInjectionTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.injection.decorated.DecoratedBeanConstructorInjectionTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.injection.decorated.DecoratedBeanFieldInjectionTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.injection.decorated.DecoratedBeanInitializerInjectionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.producer.broken.processing.ProducerProcessingWithDefinitionErrorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.producer.broken.processing.ProducerProcessingWithExceptionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.stereotype.StereotypeExtensionTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.BuiltinMetadataBeanTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.injection.BuiltinDecoratorInjectionTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.injection.decorated.DecoratedBeanConstructorInjectionTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.injection.decorated.DecoratedBeanFieldInjectionTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.injection.decorated.DecoratedBeanInitializerInjectionTest
 - [ ] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratorTypeParamConstructorTest
 - [ ] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratorTypeParamFieldTest
 - [ ] org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.broken.typeparam.decorator.DecoratorTypeParamInitializerTest

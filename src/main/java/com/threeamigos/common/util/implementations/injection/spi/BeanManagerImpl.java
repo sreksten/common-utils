@@ -4008,6 +4008,23 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             public boolean isAlternative() {
                 return false;
             }
+
+            @Override
+            public boolean equals(Object obj) {
+                if (this == obj) {
+                    return true;
+                }
+                if (!(obj instanceof Bean<?>)) {
+                    return false;
+                }
+                Bean<?> other = (Bean<?>) obj;
+                return Objects.equals(interceptorClass, other.getBeanClass());
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hashCode(interceptorClass);
+            }
         };
     }
 
@@ -4088,6 +4105,23 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 if (creationalContext != null) {
                     creationalContext.release();
                 }
+            }
+
+            @Override
+            public boolean equals(Object obj) {
+                if (this == obj) {
+                    return true;
+                }
+                if (!(obj instanceof Bean<?>)) {
+                    return false;
+                }
+                Bean<?> other = (Bean<?>) obj;
+                return Objects.equals(info.getDecoratorClass(), other.getBeanClass());
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hashCode(info.getDecoratorClass());
             }
         };
     }

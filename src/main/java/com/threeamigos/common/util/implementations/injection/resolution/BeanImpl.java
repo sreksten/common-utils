@@ -233,6 +233,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * Thread-safety: ConcurrentHashMap ensures thread-safe lazy initialization of interceptor instances.
      */
     private final Map<Class<?>, Object> interceptorInstanceCache = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Bean<?>> interceptorMetadataBeanCache = new ConcurrentHashMap<>();
 
     /**
      * InterceptorAwareProxyGenerator - creates proxies that execute interceptor chains.
@@ -2142,6 +2143,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      */
     private Object getOrCreateInterceptorInstance(InterceptorInfo interceptorInfo) {
         Class<?> interceptorClass = interceptorInfo.getInterceptorClass();
+        final Bean<?> interceptorMetadataBean = resolveInterceptorMetadataBean(interceptorInfo);
 
         // Atomic get-or-create using ConcurrentHashMap
         // If the key exists, return the cached value
@@ -2153,16 +2155,16 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 constructor.setAccessible(true);
 
                 // Step 2: Resolve constructor parameters via dependency injection
-                Object[] constructorArgs = resolveConstructorParameters(constructor);
+                Object[] constructorArgs = resolveConstructorParameters(constructor, interceptorMetadataBean);
 
                 // Step 3: Create an instance with injected constructor parameters
                 Object instance = constructor.newInstance(constructorArgs);
 
                 // Step 4: Perform field injection (@Inject fields)
-                injectInterceptorFields(instance, clazz);
+                injectInterceptorFields(instance, clazz, interceptorMetadataBean);
 
                 // Step 5: Perform method injection (@Inject methods)
-                injectInterceptorMethods(instance, clazz);
+                injectInterceptorMethods(instance, clazz, interceptorMetadataBean);
 
                 // Step 6: Call @PostConstruct lifecycle callback (if present)
                 invokeInterceptorPostConstruct(instance, clazz);
@@ -2474,10 +2476,10 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             try {
                 Constructor<?> constructor = selectInterceptorConstructor(clazz);
                 constructor.setAccessible(true);
-                Object[] constructorArgs = resolveConstructorParameters(constructor);
+                Object[] constructorArgs = resolveConstructorParameters(constructor, this);
                 Object instance = constructor.newInstance(constructorArgs);
-                injectInterceptorFields(instance, clazz);
-                injectInterceptorMethods(instance, clazz);
+                injectInterceptorFields(instance, clazz, this);
+                injectInterceptorMethods(instance, clazz, this);
                 invokeInterceptorPostConstruct(instance, clazz);
                 return instance;
             } catch (Exception e) {
@@ -2533,7 +2535,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     /**
      * Resolves constructor parameters via dependency injection.
      */
-    private Object[] resolveConstructorParameters(Constructor<?> constructor) {
+    private Object[] resolveConstructorParameters(Constructor<?> constructor, Bean<?> interceptorMetadataBean) {
         Parameter[] parameters = constructor.getParameters();
         Object[] args = new Object[parameters.length];
 
@@ -2541,10 +2543,23 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             Parameter param = parameters[i];
             Type paramType = param.getParameterizedType();
             Annotation[] paramAnnotations = param.getAnnotations();
+            Bean<?> owningBean = resolveInterceptorInjectionOwningBean(paramAnnotations, interceptorMetadataBean);
+            InjectionPoint injectionPoint = new InjectionPointImpl<>(
+                    param,
+                    castBean(owningBean),
+                    paramType,
+                    paramAnnotations,
+                    null
+            );
 
             // Use dependency resolver to resolve the parameter
             if (dependencyResolver != null) {
-                args[i] = dependencyResolver.resolve(paramType, paramAnnotations);
+                args[i] = resolveInjectionPointWithContext(
+                        paramType,
+                        paramAnnotations,
+                        injectionPoint,
+                        null
+                );
             } else {
                 throw new IllegalStateException(
                     "DependencyResolver not set for bean " + beanClass.getName() +
@@ -2559,7 +2574,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     /**
      * Injects @Inject annotated fields on the interceptor instance.
      */
-    private void injectInterceptorFields(Object instance, Class<?> clazz) throws IllegalAccessException {
+    private void injectInterceptorFields(Object instance, Class<?> clazz, Bean<?> interceptorMetadataBean)
+            throws IllegalAccessException {
         if (dependencyResolver == null) {
             return; // No injection possible without resolver
         }
@@ -2573,9 +2589,22 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
                     Type fieldType = field.getGenericType();
                     Annotation[] fieldAnnotations = field.getAnnotations();
+                    Bean<?> owningBean = resolveInterceptorInjectionOwningBean(fieldAnnotations, interceptorMetadataBean);
+                    InjectionPoint injectionPoint = new InjectionPointImpl<>(
+                            field,
+                            castBean(owningBean),
+                            fieldType,
+                            fieldAnnotations,
+                            null
+                    );
 
                     // Resolve and inject the dependency
-                    Object value = dependencyResolver.resolve(fieldType, fieldAnnotations);
+                    Object value = resolveInjectionPointWithContext(
+                            fieldType,
+                            fieldAnnotations,
+                            injectionPoint,
+                            null
+                    );
                     field.set(instance, value);
                 }
             }
@@ -2586,7 +2615,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     /**
      * Invokes @Inject annotated methods on the interceptor instance.
      */
-    private void injectInterceptorMethods(Object instance, Class<?> clazz) throws Exception {
+    private void injectInterceptorMethods(Object instance, Class<?> clazz, Bean<?> interceptorMetadataBean)
+            throws Exception {
         if (dependencyResolver == null) {
             return; // No injection possible without resolver
         }
@@ -2606,8 +2636,21 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                         Parameter param = parameters[i];
                         Type paramType = param.getParameterizedType();
                         Annotation[] paramAnnotations = param.getAnnotations();
+                        Bean<?> owningBean = resolveInterceptorInjectionOwningBean(paramAnnotations, interceptorMetadataBean);
+                        InjectionPoint injectionPoint = new InjectionPointImpl<>(
+                                param,
+                                castBean(owningBean),
+                                paramType,
+                                paramAnnotations,
+                                null
+                        );
 
-                        args[i] = dependencyResolver.resolve(paramType, paramAnnotations);
+                        args[i] = resolveInjectionPointWithContext(
+                                paramType,
+                                paramAnnotations,
+                                injectionPoint,
+                                null
+                        );
                     }
 
                     // Invoke the injector method
@@ -2616,6 +2659,232 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             }
             currentClass = currentClass.getSuperclass();
         }
+    }
+
+    private Bean<?> resolveInterceptorMetadataBean(InterceptorInfo interceptorInfo) {
+        if (interceptorInfo == null || interceptorInfo.getInterceptorClass() == null) {
+            return this;
+        }
+
+        Class<?> interceptorClass = interceptorInfo.getInterceptorClass();
+        Bean<?> cached = interceptorMetadataBeanCache.get(interceptorClass);
+        if (cached != null) {
+            return cached;
+        }
+
+        if (beanManager instanceof BeanManagerImpl) {
+            InterceptionType interceptionType = resolveMetadataInterceptionType(interceptorInfo);
+            if (interceptionType != null) {
+                Annotation[] bindings = interceptorInfo.getInterceptorBindings().toArray(new Annotation[0]);
+                try {
+                    List<jakarta.enterprise.inject.spi.Interceptor<?>> interceptors =
+                            ((BeanManagerImpl) beanManager).resolveInterceptors(interceptionType, bindings);
+                    for (jakarta.enterprise.inject.spi.Interceptor<?> interceptor : interceptors) {
+                        if (interceptor != null && interceptorClass.equals(interceptor.getBeanClass())) {
+                            interceptorMetadataBeanCache.putIfAbsent(interceptorClass, interceptor);
+                            return interceptor;
+                        }
+                    }
+                } catch (RuntimeException ignored) {
+                    // During bootstrap BeanManager lifecycle guards may reject SPI calls.
+                }
+            }
+        }
+
+        Bean<?> fallback = createInterceptorMetadataFallback(interceptorInfo);
+        interceptorMetadataBeanCache.putIfAbsent(interceptorClass, fallback);
+        return fallback;
+    }
+
+    private InterceptionType resolveMetadataInterceptionType(InterceptorInfo interceptorInfo) {
+        if (interceptorInfo.getAroundInvokeMethod() != null) {
+            return InterceptionType.AROUND_INVOKE;
+        }
+        if (interceptorInfo.getAroundConstructMethod() != null) {
+            return InterceptionType.AROUND_CONSTRUCT;
+        }
+        if (interceptorInfo.getPostConstructMethod() != null) {
+            return InterceptionType.POST_CONSTRUCT;
+        }
+        if (interceptorInfo.getPreDestroyMethod() != null) {
+            return InterceptionType.PRE_DESTROY;
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <I> Bean<?> createInterceptorMetadataFallback(InterceptorInfo interceptorInfo) {
+        final Class<?> interceptorClass = interceptorInfo.getInterceptorClass();
+        final Set<Annotation> bindings = Collections.unmodifiableSet(
+                new HashSet<Annotation>(interceptorInfo.getInterceptorBindings()));
+        return new jakarta.enterprise.inject.spi.Interceptor<I>() {
+            @Override
+            public Set<Annotation> getInterceptorBindings() {
+                return bindings;
+            }
+
+            @Override
+            public boolean intercepts(InterceptionType type) {
+                if (type == null) {
+                    return false;
+                }
+                switch (type) {
+                    case AROUND_INVOKE:
+                        return interceptorInfo.getAroundInvokeMethod() != null;
+                    case AROUND_CONSTRUCT:
+                        return interceptorInfo.getAroundConstructMethod() != null;
+                    case POST_CONSTRUCT:
+                        return interceptorInfo.getPostConstructMethod() != null;
+                    case PRE_DESTROY:
+                        return interceptorInfo.getPreDestroyMethod() != null;
+                    default:
+                        return false;
+                }
+            }
+
+            @Override
+            public Object intercept(InterceptionType type, I instance, jakarta.interceptor.InvocationContext ctx) throws Exception {
+                Method interceptorMethod;
+                switch (type) {
+                    case AROUND_INVOKE:
+                        interceptorMethod = interceptorInfo.getAroundInvokeMethod();
+                        break;
+                    case AROUND_CONSTRUCT:
+                        interceptorMethod = interceptorInfo.getAroundConstructMethod();
+                        break;
+                    case POST_CONSTRUCT:
+                        interceptorMethod = interceptorInfo.getPostConstructMethod();
+                        break;
+                    case PRE_DESTROY:
+                        interceptorMethod = interceptorInfo.getPreDestroyMethod();
+                        break;
+                    default:
+                        interceptorMethod = null;
+                }
+                if (interceptorMethod == null) {
+                    return ctx != null ? ctx.proceed() : null;
+                }
+                if (!interceptorMethod.isAccessible()) {
+                    interceptorMethod.setAccessible(true);
+                }
+                try {
+                    return interceptorMethod.invoke(instance, ctx);
+                } catch (InvocationTargetException e) {
+                    Throwable target = e.getTargetException();
+                    if (target instanceof Exception) {
+                        throw (Exception) target;
+                    }
+                    throw new RuntimeException(target);
+                }
+            }
+
+            @Override
+            public Class<?> getBeanClass() {
+                return interceptorClass;
+            }
+
+            @Override
+            public Set<InjectionPoint> getInjectionPoints() {
+                return Collections.emptySet();
+            }
+
+            @Override
+            public I create(CreationalContext<I> context) {
+                try {
+                    return (I) interceptorClass.getDeclaredConstructor().newInstance();
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to create interceptor metadata fallback for "
+                            + interceptorClass.getName(), e);
+                }
+            }
+
+            @Override
+            public void destroy(I instance, CreationalContext<I> context) {
+                if (context != null) {
+                    context.release();
+                }
+            }
+
+            @Override
+            public Set<Type> getTypes() {
+                Set<Type> types = new HashSet<Type>();
+                types.add(interceptorClass);
+                types.add(Object.class);
+                return Collections.unmodifiableSet(types);
+            }
+
+            @Override
+            public Set<Annotation> getQualifiers() {
+                Set<Annotation> qualifiers = new HashSet<Annotation>();
+                qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
+                qualifiers.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
+                return qualifiers;
+            }
+
+            @Override
+            public Class<? extends Annotation> getScope() {
+                return Dependent.class;
+            }
+
+            @Override
+            public String getName() {
+                return null;
+            }
+
+            @Override
+            public Set<Class<? extends Annotation>> getStereotypes() {
+                return Collections.emptySet();
+            }
+
+            @Override
+            public boolean isAlternative() {
+                return false;
+            }
+
+            @Override
+            public boolean equals(Object obj) {
+                if (this == obj) {
+                    return true;
+                }
+                if (!(obj instanceof Bean<?>)) {
+                    return false;
+                }
+                Bean<?> other = (Bean<?>) obj;
+                return Objects.equals(interceptorClass, other.getBeanClass());
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hashCode(interceptorClass);
+            }
+        };
+    }
+
+    private Bean<?> resolveInterceptorInjectionOwningBean(Annotation[] annotations, Bean<?> interceptorMetadataBean) {
+        if (hasInterceptedQualifier(annotations)) {
+            return this;
+        }
+        if (interceptorMetadataBean != null) {
+            return interceptorMetadataBean;
+        }
+        return this;
+    }
+
+    private boolean hasInterceptedQualifier(Annotation[] annotations) {
+        if (annotations == null) {
+            return false;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation != null && AnnotationsEnum.hasInterceptedAnnotation(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <X> Bean<X> castBean(Bean<?> bean) {
+        return (Bean<X>) bean;
     }
 
     /**

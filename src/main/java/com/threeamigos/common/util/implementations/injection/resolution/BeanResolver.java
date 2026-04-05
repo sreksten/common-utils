@@ -648,13 +648,13 @@ public class BeanResolver implements DependencyResolver {
         if (candidates.size() > 1) {
             Optional<Bean<?>> resolved = resolveByAlternativePrecedence(candidates);
             if (resolved.isPresent()) {
-                return new SerializableBeanMetadata<>(resolved.get());
+                return resolved.get();
             }
             throw new AmbiguousResolutionException("Ambiguous decorated bean metadata for delegate type " +
                     delegateType.getTypeName());
         }
 
-        return new SerializableBeanMetadata<>(candidates.iterator().next());
+        return candidates.iterator().next();
     }
 
     private DecoratorInfo findDecoratorInfo(Class<?> decoratorClass) {
