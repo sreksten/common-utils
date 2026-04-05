@@ -264,9 +264,9 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.producer.SyntheticProducerTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.unmanaged.UnmanagedInstanceTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.beanManager.unmanaged.broken.UnamangedInstanceIllegalStatesTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.communication.ExtensionsCommunicationTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.communication.ExtensionsCommunicationTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.configurators.BasicConfiguratorsTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.configurators.annotatedTypeConfigurator.AnnotatedTypeConfiguratorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.configurators.annotatedTypeConfigurator.AnnotatedTypeConfiguratorTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.configurators.annotatedTypeConfigurator.beforeBeanDiscovery.AnnotatedTypeConfiguratorInBBDTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.configurators.bean.BeanConfiguratorTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.configurators.bean.alternativePriority.BeanConfiguratorAlternativePriorityTest
@@ -278,12 +278,12 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.configurators.producer.ProducerConfiguratorTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.configurators.producer.broken.ModifyingProducerViaConfigureAndSetTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.container.event.broken.processBeanObserverRegistersException.AddDefinitionErrorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.container.event.broken.processBeanObserverThrowsException.ThrowExceptionInProcessBeanObserverTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.InterceptionFactoryTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.broken.BrokenInterceptedInstanceTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.broken.InvalidInterceptionFactoryInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.customBean.CustomBeanWithInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.interceptors.annotation.InterceptorAnnotationExtensionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.container.event.broken.processBeanObserverThrowsException.ThrowExceptionInProcessBeanObserverTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.InterceptionFactoryTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.broken.BrokenInterceptedInstanceTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.broken.InvalidInterceptionFactoryInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.interceptionFactory.customBean.CustomBeanWithInterceptorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.interceptors.annotation.InterceptorAnnotationExtensionTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.interceptors.custom.CustomInterceptorInvocationTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.interceptors.custom.CustomInterceptorRegistrationTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.lifecycle.ExtensionLifecycleTest

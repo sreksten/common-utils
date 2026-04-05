@@ -1668,9 +1668,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         // ========================================================================
         Map<Method, InterceptorChain> chains = new HashMap<>();
         jakarta.enterprise.inject.spi.AnnotatedType<?> beanAnnotatedType = annotatedTypeMetadata;
+        if (beanAnnotatedType == null && knowledgeBase != null) {
+            beanAnnotatedType = knowledgeBase.getAnnotatedTypeOverride(beanClass);
+        }
         this.targetClassAroundInvokeMethods = findTargetClassAroundInvokeMethods(beanClass);
         List<Class<?>> classLevelLegacyInterceptors =
-                extractLegacyInterceptorClasses(beanClass.getAnnotations());
+                extractLegacyInterceptorClasses(resolveLegacyInterceptorClassAnnotations(beanAnnotatedType));
 
         // Iterate through non-private, non-static methods in the bean class hierarchy.
         // Prefer the subclass declaration when a method is overridden.
@@ -1714,7 +1717,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                     continue;
                 }
 
-                List<Class<?>> legacyInterceptors = extractLegacyInterceptorClasses(method.getAnnotations());
+                List<Class<?>> legacyInterceptors =
+                        extractLegacyInterceptorClasses(resolveLegacyInterceptorMethodAnnotations(method, beanAnnotatedType));
                 if (legacyInterceptors.isEmpty()) {
                     legacyInterceptors = classLevelLegacyInterceptors;
                 }
@@ -2246,6 +2250,26 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             }
         }
         return methods;
+    }
+
+    private Annotation[] resolveLegacyInterceptorClassAnnotations(jakarta.enterprise.inject.spi.AnnotatedType<?> beanAnnotatedType) {
+        if (beanAnnotatedType != null) {
+            return beanAnnotatedType.getAnnotations().toArray(new Annotation[0]);
+        }
+        return beanClass.getAnnotations();
+    }
+
+    private Annotation[] resolveLegacyInterceptorMethodAnnotations(
+            Method method,
+            jakarta.enterprise.inject.spi.AnnotatedType<?> beanAnnotatedType
+    ) {
+        if (method == null) {
+            return new Annotation[0];
+        }
+        if (beanAnnotatedType != null) {
+            return AnnotatedMetadataHelper.annotationsOf(beanAnnotatedType, method);
+        }
+        return method.getAnnotations();
     }
 
     private boolean hasAroundInvokeAnnotation(Method method, jakarta.enterprise.inject.spi.AnnotatedType<?> override) {
