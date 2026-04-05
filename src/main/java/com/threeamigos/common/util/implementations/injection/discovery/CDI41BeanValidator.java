@@ -108,6 +108,7 @@ public class CDI41BeanValidator {
         boolean valid = true;
         try {
             currentAnnotatedTypeOverride = annotatedTypeOverride;
+            initializeAnnotatedTypeMemberViews(annotatedTypeOverride);
             overrideAnnotations = annotatedTypeOverride != null
                     ? annotatedTypeOverride.getAnnotations().toArray(new Annotation[0])
                     : null;
@@ -382,6 +383,9 @@ public class CDI41BeanValidator {
         // Build and register Bean (even if invalid, to track all beans)
         // Mark alternative based on annotation; enablement affects resolution elsewhere.
         BeanImpl<T> bean = new BeanImpl<>(clazz, alternative);
+        if (annotatedTypeOverride != null) {
+            bean.setAnnotatedTypeMetadata(annotatedTypeOverride);
+        }
         bean.setAlternativeEnabled(alternativeEnabled);
         bean.setPriority(extractEffectivePriority(clazz));
 
@@ -482,6 +486,17 @@ public class CDI41BeanValidator {
             overrideAnnotations = null;
             overrideAnnotationsClass = null;
         }
+    }
+
+    private void initializeAnnotatedTypeMemberViews(AnnotatedType<?> annotatedTypeOverride) {
+        if (annotatedTypeOverride == null) {
+            return;
+        }
+        // Force member views through replacement AnnotatedType so lifecycle processing
+        // consistently consumes extension-provided metadata across constructors, fields and methods.
+        annotatedTypeOverride.getConstructors();
+        annotatedTypeOverride.getFields();
+        annotatedTypeOverride.getMethods();
     }
 
     private void addGenericSelfTypeForManagedBean(BeanImpl<?> bean, Class<?> beanClass) {

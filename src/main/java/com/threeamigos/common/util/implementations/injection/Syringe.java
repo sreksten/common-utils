@@ -249,6 +249,8 @@ public class Syringe {
     private final Map<Class<? extends Annotation>, Context> customContextsToRegister = new HashMap<>();
     private final Set<String> processedSyntheticAnnotatedTypeIds = new HashSet<String>();
     private final Set<Class<?>> syntheticAnnotatedTypeClasses = new HashSet<Class<?>>();
+    private final Map<String, AnnotatedType<?>> additionalAnnotatedTypesForDiscoveredClasses =
+            new LinkedHashMap<String, AnnotatedType<?>>();
     private InterceptorAwareProxyGenerator runtimeInterceptorAwareProxyGenerator;
     private DecoratorAwareProxyGenerator runtimeDecoratorAwareProxyGenerator;
 
@@ -570,6 +572,7 @@ public class Syringe {
         dynamicAnnotationsRetained = false;
         processedSyntheticAnnotatedTypeIds.clear();
         syntheticAnnotatedTypeClasses.clear();
+        additionalAnnotatedTypesForDiscoveredClasses.clear();
 
         // ============================================================
         // PHASE 1: CONTAINER INITIALIZATION
@@ -1041,6 +1044,7 @@ public class Syringe {
         customContextsToRegister.clear();
         processedSyntheticAnnotatedTypeIds.clear();
         syntheticAnnotatedTypeClasses.clear();
+        additionalAnnotatedTypesForDiscoveredClasses.clear();
         buildCompatibleExtensionRunner = null;
 
         // Drop runtime metadata references eagerly.
@@ -1387,10 +1391,16 @@ public class Syringe {
             // Add the class to KnowledgeBase so it will be processed as a bean candidate.
             // Only mark it as synthetic-only when it was not already discovered on classpath.
             boolean alreadyDiscovered = knowledgeBase.getClasses().contains(clazz);
-            knowledgeBase.add(clazz, effectiveBeanArchiveMode(BeanArchiveMode.IMPLICIT));
-            if (!alreadyDiscovered) {
-                syntheticAnnotatedTypeClasses.add(clazz);
+            if (alreadyDiscovered) {
+                // CDI 4.1: addAnnotatedType() for an already discovered Java class contributes
+                // an additional bean definition. Keep discovered class metadata untouched and
+                // register this AnnotatedType as an extra bean during validation.
+                additionalAnnotatedTypesForDiscoveredClasses.put(id, finalAnnotatedType);
+                processedSyntheticAnnotatedTypeIds.add(id);
+                continue;
             }
+            knowledgeBase.addProgrammatic(clazz, effectiveBeanArchiveMode(BeanArchiveMode.IMPLICIT));
+            syntheticAnnotatedTypeClasses.add(clazz);
             knowledgeBase.setAnnotatedTypeOverride(clazz, finalAnnotatedType);
             processedSyntheticAnnotatedTypeIds.add(id);
         }
@@ -1752,7 +1762,50 @@ public class Syringe {
             }
         }
 
+        validated += registerAdditionalAnnotatedTypeBeans(validator);
+
         info("Validated " + validated + " class(es); registered " + knowledgeBase.getBeans().size() + " bean(s)");
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private int registerAdditionalAnnotatedTypeBeans(CDI41BeanValidator validator) {
+        if (additionalAnnotatedTypesForDiscoveredClasses.isEmpty()) {
+            return 0;
+        }
+
+        int registered = 0;
+        for (Map.Entry<String, AnnotatedType<?>> entry : additionalAnnotatedTypesForDiscoveredClasses.entrySet()) {
+            String id = entry.getKey();
+            AnnotatedType<?> annotatedType = entry.getValue();
+            if (annotatedType == null) {
+                continue;
+            }
+
+            Class<?> clazz = annotatedType.getJavaClass();
+            if (clazz == null || knowledgeBase.isTypeVetoed(clazz)) {
+                continue;
+            }
+
+            try {
+                BeanArchiveMode mode = effectiveBeanArchiveMode(knowledgeBase.getBeanArchiveMode(clazz));
+                BeanImpl<?> bean = validator.validateAndRegisterRaw(clazz, mode, annotatedType);
+                if (bean != null) {
+                    registered++;
+                }
+            } catch (DefinitionException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new DefinitionException(
+                        "Error registering additional AnnotatedType bean " + clazz.getName() +
+                                " (ID: " + id + ")", e);
+            }
+        }
+
+        if (registered > 0) {
+            info("Registered " + registered + " additional bean(s) from registered AnnotatedTypes");
+        }
+
+        return registered;
     }
 
     /**
@@ -1881,7 +1934,10 @@ public class Syringe {
                 Class<?> beanClass = managedBean.getBeanClass();
 
                 try {
-                    AnnotatedType<?> annotatedType = knowledgeBase.getAnnotatedTypeOverride(beanClass);
+                    AnnotatedType<?> annotatedType = managedBean.getAnnotatedTypeMetadata();
+                    if (annotatedType == null) {
+                        annotatedType = knowledgeBase.getAnnotatedTypeOverride(beanClass);
+                    }
                     if (annotatedType == null) {
                         annotatedType = new SimpleAnnotatedType<>(beanClass);
                     }
@@ -2065,7 +2121,10 @@ public class Syringe {
 
         if (bean instanceof BeanImpl<?>) {
             BeanImpl<?> managedBean = (BeanImpl<?>) bean;
-            AnnotatedType<?> annotatedType = knowledgeBase.getAnnotatedTypeOverride(managedBean.getBeanClass());
+            AnnotatedType<?> annotatedType = managedBean.getAnnotatedTypeMetadata();
+            if (annotatedType == null) {
+                annotatedType = knowledgeBase.getAnnotatedTypeOverride(managedBean.getBeanClass());
+            }
             if (annotatedType != null) {
                 return annotatedType;
             }
@@ -2118,7 +2177,10 @@ public class Syringe {
                 } else if (bean instanceof BeanImpl) {
                     // Managed bean - discovered via classpath scanning
                     BeanImpl<?> managedBean = (BeanImpl<?>) bean;
-                    AnnotatedType<?> annotatedType = knowledgeBase.getAnnotatedTypeOverride(managedBean.getBeanClass());
+                    AnnotatedType<?> annotatedType = managedBean.getAnnotatedTypeMetadata();
+                    if (annotatedType == null) {
+                        annotatedType = knowledgeBase.getAnnotatedTypeOverride(managedBean.getBeanClass());
+                    }
                     if (annotatedType == null) {
                         annotatedType = beanManager.createAnnotatedType(managedBean.getBeanClass());
                     }
@@ -4306,6 +4368,20 @@ public class Syringe {
             if (matchesAnyAnnotation(annotatedType.getAnnotations())) {
                 return true;
             }
+            // @WithAnnotations parity: for class-level annotations, Java's @Inherited
+            // semantics must be considered even when AnnotatedType suppresses generic
+            // non-scope inheritance for metadata APIs.
+            Set<Annotation> javaClassAnnotations = new HashSet<Annotation>();
+            for (Annotation annotation : annotatedType.getJavaClass().getAnnotations()) {
+                Class<? extends Annotation> type = annotation.annotationType();
+                if (hasScopeAnnotation(type) || hasNormalScopeAnnotation(type)) {
+                    continue;
+                }
+                javaClassAnnotations.add(annotation);
+            }
+            if (matchesAnyAnnotation(javaClassAnnotations)) {
+                return true;
+            }
             for (AnnotatedField<?> field : annotatedType.getFields()) {
                 if (matchesAnyAnnotation(field.getAnnotations())) {
                     return true;
@@ -4330,6 +4406,24 @@ public class Syringe {
                         return true;
                     }
                 }
+            }
+
+            // CDI TCK parity: constructor-level @WithAnnotations matching must also consider
+            // superclass constructors while processing a subclass PAT event.
+            Class<?> current = annotatedType.getJavaClass().getSuperclass();
+            while (current != null && current != Object.class) {
+                for (Constructor<?> constructor : current.getDeclaredConstructors()) {
+                    if (matchesAnyAnnotation(new HashSet<Annotation>(Arrays.asList(constructor.getAnnotations())))) {
+                        return true;
+                    }
+                    Annotation[][] parameterAnnotations = constructor.getParameterAnnotations();
+                    for (Annotation[] parameterAnnotationArray : parameterAnnotations) {
+                        if (matchesAnyAnnotation(new HashSet<Annotation>(Arrays.asList(parameterAnnotationArray)))) {
+                            return true;
+                        }
+                    }
+                }
+                current = current.getSuperclass();
             }
             return false;
         }

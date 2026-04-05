@@ -286,12 +286,29 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             if (bean != null) {
                 return instance;
             }
-            if (!hasBusinessMethodInterceptors(annotatedType.getJavaClass())) {
+            Set<Annotation> additionalClassBindings = getClassLevelInterceptorBindingsFromAnnotatedType();
+            if (additionalClassBindings.isEmpty() && !hasBusinessMethodInterceptors(annotatedType.getJavaClass())) {
                 return instance;
             }
             InterceptionFactory<T> interceptionFactory =
                     beanManager.createInterceptionFactory(creationalContext, annotatedType.getJavaClass());
+            if (!additionalClassBindings.isEmpty()) {
+                AnnotatedTypeConfigurator<T> configurator = interceptionFactory.configure();
+                for (Annotation binding : additionalClassBindings) {
+                    configurator.add(binding);
+                }
+            }
             return interceptionFactory.createInterceptedInstance(instance);
+        }
+
+        private Set<Annotation> getClassLevelInterceptorBindingsFromAnnotatedType() {
+            Set<Annotation> bindings = new HashSet<Annotation>();
+            for (Annotation annotation : annotatedType.getAnnotations()) {
+                if (beanManager.isInterceptorBinding(annotation.annotationType())) {
+                    bindings.add(annotation);
+                }
+            }
+            return bindings;
         }
 
         private boolean hasBusinessMethodInterceptors(Class<?> beanClass) {

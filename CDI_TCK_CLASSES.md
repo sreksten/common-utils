@@ -239,14 +239,14 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.extensions.afterBeanDiscovery.annotated.GetAnnotatedTypesTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.alternative.deployment.AlternativeInLibraryWithExtensionTest
 - [x] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.AlternativeMetadataTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.annotated.AnnotatedTypeAnnotationsTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.interceptor.AlternativeMetadataInterceptorInjectionTargetTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.interceptor.AlternativeMetadataInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.AlternativeMetaDataTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.ProcessAnnotatedTypeTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.broken.processAnnotatedObserverThrowsException.ProcessAnnotatedTypeEventThrowsExceptionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.broken.processInjectionTargetThrowsException.ProcessInjectionTargetEventThrowsExceptionTest
-- [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.delivery.WithAnnotationsTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.annotated.AnnotatedTypeAnnotationsTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.interceptor.AlternativeMetadataInterceptorInjectionTargetTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.alternative.metadata.interceptor.AlternativeMetadataInterceptorTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.annotated.AlternativeMetaDataTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.annotated.ProcessAnnotatedTypeTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.annotated.broken.processAnnotatedObserverThrowsException.ProcessAnnotatedTypeEventThrowsExceptionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.annotated.broken.processInjectionTargetThrowsException.ProcessInjectionTargetEventThrowsExceptionTest
+- [x] org.jboss.cdi.tck.tests.full.extensions.annotated.delivery.WithAnnotationsTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.delivery.broken.WithAnnotationsAppliedToIllegalContainerLifecycleEventParameterTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.delivery.broken.WithAnnotationsAppliedToIllegalEventParameterTest
 - [ ] org.jboss.cdi.tck.tests.full.extensions.annotated.synthetic.ProcessSyntheticAnnotatedTypeTest

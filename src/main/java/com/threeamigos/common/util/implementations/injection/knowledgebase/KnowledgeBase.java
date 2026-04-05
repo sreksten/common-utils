@@ -143,6 +143,23 @@ public class KnowledgeBase {
         }
     }
 
+    /**
+     * Adds a class programmatically, bypassing discovery exclusions.
+     *
+     * <p>This is used for types explicitly registered via lifecycle events such as
+     * {@code BeforeBeanDiscovery.addAnnotatedType()} and
+     * {@code AfterTypeDiscovery.addAnnotatedType()}.
+     */
+    public void addProgrammatic(Class<?> clazz, BeanArchiveMode mode) {
+        if (clazz == null) {
+            return;
+        }
+        classes.add(clazz);
+        if (mode != null) {
+            classArchiveModes.put(clazz, mode);
+        }
+    }
+
     public Collection<Class<?>> getClasses() {
         return classes;
     }

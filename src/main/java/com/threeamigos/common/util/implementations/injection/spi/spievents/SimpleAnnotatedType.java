@@ -16,6 +16,9 @@ import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -88,24 +91,74 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
 
     @Override
     public Set<Annotation> getAnnotations() {
-        Set<Annotation> annotations = new HashSet<>();
-        // Always include annotations declared directly on the type.
-        java.util.Collections.addAll(annotations, javaClass.getDeclaredAnnotations());
+        Map<Class<? extends Annotation>, Annotation> annotationsByType =
+                new LinkedHashMap<Class<? extends Annotation>, Annotation>();
+        for (Annotation annotation : javaClass.getDeclaredAnnotations()) {
+            annotationsByType.put(annotation.annotationType(), annotation);
+        }
 
-        // CDI 4.1: only special scope inheritance rules are applied on types.
-        if (!hasDeclaredScope(javaClass)) {
-            Class<?> current = javaClass.getSuperclass();
-            while (current != null && current != Object.class) {
-                if (hasDeclaredScope(current)) {
-                    for (Annotation annotation : current.getDeclaredAnnotations()) {
-                        if (isScopeAnnotation(annotation.annotationType())) {
-                            annotations.add(annotation);
-                        }
-                    }
-                    break;
+        // CDI metadata inheritance for type annotations: inherit only CDI-relevant
+        // @Inherited annotations (qualifiers, stereotypes, interceptor bindings).
+        Class<?> current = javaClass.getSuperclass();
+        while (current != null && current != Object.class) {
+            for (Annotation annotation : current.getDeclaredAnnotations()) {
+                Class<? extends Annotation> annotationType = annotation.annotationType();
+                if (annotationsByType.containsKey(annotationType)) {
+                    continue;
                 }
-                current = current.getSuperclass();
+                if (!annotationType.isAnnotationPresent(java.lang.annotation.Inherited.class)) {
+                    continue;
+                }
+                if (!isCdiInheritableTypeAnnotation(annotationType)) {
+                    continue;
+                }
+                annotationsByType.put(annotationType, annotation);
             }
+            current = current.getSuperclass();
+        }
+
+        Set<Annotation> annotations = new HashSet<Annotation>(annotationsByType.values());
+
+        boolean hasDeclaredScope = hasDeclaredScope(javaClass);
+        if (hasDeclaredScope) {
+            Set<Class<? extends Annotation>> declaredScopeTypes = new HashSet<Class<? extends Annotation>>();
+            for (Annotation annotation : javaClass.getDeclaredAnnotations()) {
+                if (isScopeAnnotation(annotation.annotationType())) {
+                    declaredScopeTypes.add(annotation.annotationType());
+                }
+            }
+            Iterator<Annotation> iterator = annotations.iterator();
+            while (iterator.hasNext()) {
+                Annotation annotation = iterator.next();
+                Class<? extends Annotation> annotationType = annotation.annotationType();
+                if (isScopeAnnotation(annotationType) && !declaredScopeTypes.contains(annotationType)) {
+                    iterator.remove();
+                }
+            }
+            return annotations;
+        }
+
+        // CDI special rule: if no scope is declared directly on this type, inherit the nearest
+        // scope from the superclass hierarchy even if that scope annotation is not @Inherited.
+        Iterator<Annotation> iterator = annotations.iterator();
+        while (iterator.hasNext()) {
+            Annotation annotation = iterator.next();
+            if (isScopeAnnotation(annotation.annotationType())) {
+                iterator.remove();
+            }
+        }
+
+        Class<?> scopeSource = javaClass.getSuperclass();
+        while (scopeSource != null && scopeSource != Object.class) {
+            if (hasDeclaredScope(scopeSource)) {
+                for (Annotation annotation : scopeSource.getDeclaredAnnotations()) {
+                    if (isScopeAnnotation(annotation.annotationType())) {
+                        annotations.add(annotation);
+                    }
+                }
+                break;
+            }
+            scopeSource = scopeSource.getSuperclass();
         }
 
         return annotations;
@@ -177,5 +230,17 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
     private boolean isScopeAnnotation(Class<? extends Annotation> annotationType) {
         return AnnotationsEnum.hasScopeAnnotation(annotationType) ||
                 AnnotationsEnum.hasNormalScopeAnnotation(annotationType);
+    }
+
+    private boolean isCdiInheritableTypeAnnotation(Class<? extends Annotation> annotationType) {
+        if (annotationType == null) {
+            return false;
+        }
+        if (isScopeAnnotation(annotationType)) {
+            return true;
+        }
+        return AnnotationsEnum.hasQualifierAnnotation(annotationType)
+                || AnnotationsEnum.hasStereotypeAnnotation(annotationType)
+                || AnnotationsEnum.hasInterceptorBindingAnnotation(annotationType);
     }
 }

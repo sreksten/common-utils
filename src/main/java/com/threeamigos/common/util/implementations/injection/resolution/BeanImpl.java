@@ -267,6 +267,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * internal implementation.
      */
     private InjectionTarget<T> customInjectionTarget;
+    /**
+     * Optional per-bean AnnotatedType metadata.
+     * Used when multiple bean definitions originate from the same Java class with different
+     * type-level metadata (for example via addAnnotatedType/setAnnotatedType).
+     */
+    private jakarta.enterprise.inject.spi.AnnotatedType<T> annotatedTypeMetadata;
 
     public BeanImpl(Class<T> beanClass, boolean alternative) {
         this.beanClass = beanClass;
@@ -312,6 +318,14 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
     public void setCustomInjectionTarget(InjectionTarget<T> injectionTarget) {
         this.customInjectionTarget = injectionTarget;
+    }
+
+    public void setAnnotatedTypeMetadata(jakarta.enterprise.inject.spi.AnnotatedType<T> annotatedTypeMetadata) {
+        this.annotatedTypeMetadata = annotatedTypeMetadata;
+    }
+
+    public jakarta.enterprise.inject.spi.AnnotatedType<T> getAnnotatedTypeMetadata() {
+        return annotatedTypeMetadata;
     }
 
     @Override
@@ -1648,6 +1662,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         // PHASE 2: Build business method interceptor chains (@AroundInvoke)
         // ========================================================================
         Map<Method, InterceptorChain> chains = new HashMap<>();
+        jakarta.enterprise.inject.spi.AnnotatedType<?> beanAnnotatedType = annotatedTypeMetadata;
         this.targetClassAroundInvokeMethods = findTargetClassAroundInvokeMethods(beanClass);
         List<Class<?>> classLevelLegacyInterceptors =
                 extractLegacyInterceptorClasses(beanClass.getAnnotations());
@@ -1678,12 +1693,13 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 List<InterceptorInfo> interceptors = interceptorResolver.resolve(
                     beanClass,
                     method,
+                    beanAnnotatedType,
                     InterceptionType.AROUND_INVOKE
                 );
 
                 // If interceptors were found for this method, build a chain
                 if (!interceptors.isEmpty()) {
-                    Set<Annotation> methodBindings = interceptorResolver.resolveBindings(beanClass, method);
+                    Set<Annotation> methodBindings = interceptorResolver.resolveBindings(beanClass, method, beanAnnotatedType);
                     InterceptorChain chain = buildInterceptorChain(
                             interceptors,
                             InterceptionType.AROUND_INVOKE,
@@ -1724,12 +1740,13 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         List<InterceptorInfo> constructorInterceptors = interceptorResolver.resolveForConstructor(
             beanClass,
             constructorForInterception,
+            beanAnnotatedType,
             InterceptionType.AROUND_CONSTRUCT
         );
 
         if (!constructorInterceptors.isEmpty()) {
             Set<Annotation> constructorBindings =
-                    interceptorResolver.resolveBindingsForConstructor(beanClass, constructorForInterception);
+                    interceptorResolver.resolveBindingsForConstructor(beanClass, constructorForInterception, beanAnnotatedType);
             this.constructorInterceptorChain = buildInterceptorChain(
                 constructorInterceptors,
                 InterceptionType.AROUND_CONSTRUCT,
@@ -1747,9 +1764,10 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         List<InterceptorInfo> postConstructInterceptors = interceptorResolver.resolve(
             beanClass,
             null,  // null method = lifecycle callback
+            beanAnnotatedType,
             InterceptionType.POST_CONSTRUCT
         );
-        Set<Annotation> lifecycleBindings = interceptorResolver.resolveBindings(beanClass, null);
+        Set<Annotation> lifecycleBindings = interceptorResolver.resolveBindings(beanClass, null, beanAnnotatedType);
 
         if (!postConstructInterceptors.isEmpty()) {
             this.postConstructInterceptorChain = buildLifecycleInterceptorChain(
@@ -1765,6 +1783,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         List<InterceptorInfo> preDestroyInterceptors = interceptorResolver.resolve(
             beanClass,
             null,  // null method = lifecycle callback
+            beanAnnotatedType,
             InterceptionType.PRE_DESTROY
         );
 

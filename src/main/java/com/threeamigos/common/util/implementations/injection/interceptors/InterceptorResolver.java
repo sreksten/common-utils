@@ -87,11 +87,19 @@ public class InterceptorResolver {
             Class<?> targetClass,
             Method method,
             InterceptionType interceptionType) {
+        return resolve(targetClass, method, null, interceptionType);
+    }
+
+    public List<InterceptorInfo> resolve(
+            Class<?> targetClass,
+            Method method,
+            AnnotatedType<?> annotatedTypeOverride,
+            InterceptionType interceptionType) {
 
         Objects.requireNonNull(targetClass, "targetClass cannot be null");
         Objects.requireNonNull(interceptionType, "interceptionType cannot be null");
 
-        Set<Annotation> targetBindings = resolveBindings(targetClass, method);
+        Set<Annotation> targetBindings = resolveBindings(targetClass, method, annotatedTypeOverride);
 
         // If no bindings, no interceptors apply
         if (targetBindings.isEmpty()) {
@@ -103,11 +111,17 @@ public class InterceptorResolver {
     }
 
     public Set<Annotation> resolveBindings(Class<?> targetClass, Method method) {
+        return resolveBindings(targetClass, method, null);
+    }
+
+    public Set<Annotation> resolveBindings(Class<?> targetClass,
+                                           Method method,
+                                           AnnotatedType<?> annotatedTypeOverride) {
         Objects.requireNonNull(targetClass, "targetClass cannot be null");
 
-        Set<Annotation> classBindings = extractInterceptorBindings(targetClass);
+        Set<Annotation> classBindings = extractInterceptorBindings(targetClass, targetClass, annotatedTypeOverride);
         Set<Annotation> targetBindings = method != null
-                ? mergeBindings(classBindings, extractInterceptorBindings(method, targetClass))
+                ? mergeBindings(classBindings, extractInterceptorBindings(method, targetClass, annotatedTypeOverride))
                 : classBindings;
 
         if (targetBindings.isEmpty()) {
@@ -140,11 +154,19 @@ public class InterceptorResolver {
             Class<?> targetClass,
             Constructor<?> constructor,
             InterceptionType interceptionType) {
+        return resolveForConstructor(targetClass, constructor, null, interceptionType);
+    }
+
+    public List<InterceptorInfo> resolveForConstructor(
+            Class<?> targetClass,
+            Constructor<?> constructor,
+            AnnotatedType<?> annotatedTypeOverride,
+            InterceptionType interceptionType) {
 
         Objects.requireNonNull(targetClass, "targetClass cannot be null");
         Objects.requireNonNull(interceptionType, "interceptionType cannot be null");
 
-        Set<Annotation> targetBindings = resolveBindingsForConstructor(targetClass, constructor);
+        Set<Annotation> targetBindings = resolveBindingsForConstructor(targetClass, constructor, annotatedTypeOverride);
 
         if (targetBindings.isEmpty()) {
             return Collections.emptyList();
@@ -154,11 +176,17 @@ public class InterceptorResolver {
     }
 
     public Set<Annotation> resolveBindingsForConstructor(Class<?> targetClass, Constructor<?> constructor) {
+        return resolveBindingsForConstructor(targetClass, constructor, null);
+    }
+
+    public Set<Annotation> resolveBindingsForConstructor(Class<?> targetClass,
+                                                         Constructor<?> constructor,
+                                                         AnnotatedType<?> annotatedTypeOverride) {
         Objects.requireNonNull(targetClass, "targetClass cannot be null");
 
-        Set<Annotation> classBindings = extractInterceptorBindings(targetClass);
+        Set<Annotation> classBindings = extractInterceptorBindings(targetClass, targetClass, annotatedTypeOverride);
         Set<Annotation> constructorBindings = constructor != null
-                ? extractInterceptorBindings(constructor, targetClass)
+                ? extractInterceptorBindings(constructor, targetClass, annotatedTypeOverride)
                 : Collections.emptySet();
         Set<Annotation> targetBindings = mergeBindings(classBindings, constructorBindings);
 
@@ -179,30 +207,21 @@ public class InterceptorResolver {
      * @return set of interceptor binding annotations
      */
     private Set<Annotation> extractInterceptorBindings(AnnotatedElement element) {
-        if (element instanceof Class) {
-            return extractInterceptorBindingsFromHierarchy((Class<?>) element);
-        }
-
-        Annotation[] annotations = annotationsOf(element, null);
-        if (annotations == null || annotations.length == 0) {
-            return Collections.emptySet();
-        }
-
-        Map<Class<? extends Annotation>, Annotation> bindings = new LinkedHashMap<>();
-        for (Annotation annotation : annotations) {
-            if (isInterceptorBinding(annotation.annotationType())) {
-                addBindingWithTransitives(annotation, bindings, new HashSet<>(), true);
-            }
-        }
-        return new HashSet<>(bindings.values());
+        return extractInterceptorBindings(element, null, null);
     }
 
     private Set<Annotation> extractInterceptorBindings(AnnotatedElement element, Class<?> targetClass) {
+        return extractInterceptorBindings(element, targetClass, null);
+    }
+
+    private Set<Annotation> extractInterceptorBindings(AnnotatedElement element,
+                                                       Class<?> targetClass,
+                                                       AnnotatedType<?> explicitOverride) {
         if (element instanceof Class<?>) {
-            return extractInterceptorBindings((Class<?>) element);
+            return extractInterceptorBindingsFromHierarchy((Class<?>) element, explicitOverride);
         }
 
-        Annotation[] annotations = annotationsOf(element, targetClass);
+        Annotation[] annotations = annotationsOf(element, targetClass, explicitOverride);
         if (annotations == null || annotations.length == 0) {
             return Collections.emptySet();
         }
@@ -251,13 +270,14 @@ public class InterceptorResolver {
      * only inherited bindings are visible, and a nearer superclass declaration of the same binding
      * type hides farther ancestors. Interface annotations are not inherited.
      */
-    private Set<Annotation> extractInterceptorBindingsFromHierarchy(Class<?> type) {
+    private Set<Annotation> extractInterceptorBindingsFromHierarchy(Class<?> type,
+                                                                    AnnotatedType<?> explicitOverride) {
         java.util.Map<Class<? extends Annotation>, Annotation> bindingsByType = new java.util.LinkedHashMap<>();
         if (type == null) {
             return new HashSet<>();
         }
 
-        Annotation[] classAnnotations = annotationsOf(type, type);
+        Annotation[] classAnnotations = annotationsOf(type, type, explicitOverride);
 
         // 1) Direct class-level interceptor bindings (including inherited Java @Inherited ones)
         // take precedence over bindings declared on stereotypes.
@@ -283,9 +303,14 @@ public class InterceptorResolver {
         return new HashSet<>(bindingsByType.values());
     }
 
-    private Annotation[] annotationsOf(AnnotatedElement element, Class<?> targetClass) {
+    private Annotation[] annotationsOf(AnnotatedElement element,
+                                       Class<?> targetClass,
+                                       AnnotatedType<?> explicitOverride) {
         if (element instanceof Class<?>) {
             Class<?> clazz = (Class<?>) element;
+            if (explicitOverride != null && clazz.equals(explicitOverride.getJavaClass())) {
+                return explicitOverride.getAnnotations().toArray(new Annotation[0]);
+            }
             AnnotatedType<?> override = knowledgeBase.getAnnotatedTypeOverride(clazz);
             if (override != null) {
                 return override.getAnnotations().toArray(new Annotation[0]);
@@ -301,7 +326,13 @@ public class InterceptorResolver {
                 declaringClass = ((Constructor<?>) element).getDeclaringClass();
             }
         }
-        AnnotatedType<?> override = declaringClass != null ? knowledgeBase.getAnnotatedTypeOverride(declaringClass) : null;
+        AnnotatedType<?> override = null;
+        if (declaringClass != null && explicitOverride != null
+                && declaringClass.equals(explicitOverride.getJavaClass())) {
+            override = explicitOverride;
+        } else if (declaringClass != null) {
+            override = knowledgeBase.getAnnotatedTypeOverride(declaringClass);
+        }
         return AnnotatedMetadataHelper.annotationsOf(override, element);
     }
 
