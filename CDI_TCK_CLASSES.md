@@ -492,13 +492,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.invokers.basic.PrimitiveReturnValueInvokerTest
 - [x] org.jboss.cdi.tck.tests.invokers.basic.StaticMethodInvokerTest
 - [x] org.jboss.cdi.tck.tests.invokers.basic.ThrowingInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.VarargsMethodInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.VoidMethodInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.ZeroParametersInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.invalid.ctor.ConstructorInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.invalid.interceptor.InterceptorInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.invalid.method.MethodFromDifferentClassInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.invalid.objmethod.ObjectMethodButNotToStringInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.VarargsMethodInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.VoidMethodInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.ZeroParametersInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.invalid.ctor.ConstructorInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.invalid.interceptor.InterceptorInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.invalid.method.MethodFromDifferentClassInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.invalid.objmethod.ObjectMethodButNotToStringInvokerTest
 - [ ] org.jboss.cdi.tck.tests.invokers.invalid.privatemethod.PrivateMethodInvokerTest
 - [ ] org.jboss.cdi.tck.tests.invokers.invalid.prodfield.ProducerFieldBeanInvokerTest
 - [ ] org.jboss.cdi.tck.tests.invokers.invalid.prodmethod.ProducerMethodBeanInvokerTest
