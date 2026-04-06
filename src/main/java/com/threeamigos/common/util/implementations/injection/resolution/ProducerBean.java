@@ -16,6 +16,7 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
 import java.io.Serializable;
@@ -225,17 +226,19 @@ public class ProducerBean<T> implements Bean<T> {
                 );
             }
 
-            // 1. Get or create the declaring bean instance
-            Object declaringInstance = dependencyResolver.resolveDeclaringBeanInstance(declaringClass);
+            // 1. Get or create the declaring bean instance only when required by the producer member
+            DeclaringInstanceHandle declaringInstanceHandle = resolveDeclaringInstanceHandle(
+                    requiresDeclaringInstanceForProducer()
+            );
 
             // 2. Invoke producer method or access producer field
             if (producerMethod != null) {
-                T produced = invokeProducerMethod(declaringInstance, creationalContext);
+                T produced = invokeProducerMethod(declaringInstanceHandle, creationalContext);
                 validateProducerMethodNullProduct(produced);
                 validatePassivationRequirementsForProducedValue(produced);
                 return produced;
             } else if (producerField != null) {
-                T produced = accessProducerField(declaringInstance);
+                T produced = accessProducerField(declaringInstanceHandle);
                 validateProducerFieldNullProduct(produced);
                 validatePassivationRequirementsForProducedValue(produced);
                 return produced;
@@ -299,7 +302,9 @@ public class ProducerBean<T> implements Bean<T> {
      * Invokes the producer method to create an instance.
      */
     @SuppressWarnings("unchecked")
-    private T invokeProducerMethod(Object declaringInstance, CreationalContext<T> creationalContext) throws Exception {
+    private T invokeProducerMethod(DeclaringInstanceHandle declaringInstanceHandle, CreationalContext<T> creationalContext)
+            throws Exception {
+        Object declaringInstance = declaringInstanceHandle.instance;
         producerMethod.setAccessible(true);
 
         // Resolve method parameters
@@ -327,7 +332,7 @@ public class ProducerBean<T> implements Bean<T> {
             } else {
                 destroyDependentInvocationParameters(parameters, args, false);
             }
-            destroyDependentDeclaringInstance(declaringInstance);
+            destroyDeclaringInstance(declaringInstanceHandle);
         }
     }
 
@@ -335,12 +340,13 @@ public class ProducerBean<T> implements Bean<T> {
      * Accesses the producer field to get an instance.
      */
     @SuppressWarnings("unchecked")
-    private T accessProducerField(Object declaringInstance) throws Exception {
+    private T accessProducerField(DeclaringInstanceHandle declaringInstanceHandle) throws Exception {
+        Object declaringInstance = declaringInstanceHandle.instance;
         producerField.setAccessible(true);
         try {
             return (T) producerField.get(declaringInstance);
         } finally {
-            destroyDependentDeclaringInstance(declaringInstance);
+            destroyDeclaringInstance(declaringInstanceHandle);
         }
     }
 
@@ -468,7 +474,10 @@ public class ProducerBean<T> implements Bean<T> {
         disposerMethod.setAccessible(true);
 
         // Get declaring bean instance
-        Object declaringInstance = dependencyResolver.resolveDeclaringBeanInstance(declaringClass);
+        DeclaringInstanceHandle declaringInstanceHandle = resolveDeclaringInstanceHandle(
+                !Modifier.isStatic(disposerMethod.getModifiers())
+        );
+        Object declaringInstance = declaringInstanceHandle.instance;
 
         // Resolve disposer method parameters
         Parameter[] parameters = disposerMethod.getParameters();
@@ -488,13 +497,13 @@ public class ProducerBean<T> implements Bean<T> {
             invokeOnRuntimeMethod(declaringInstance, disposerMethod, args);
         } finally {
             destroyDependentInvocationParameters(parameters, args, true);
-            destroyDependentDeclaringInstance(declaringInstance);
+            destroyDeclaringInstance(declaringInstanceHandle);
         }
     }
 
     private Object invokeOnRuntimeMethod(Object targetInstance, Method method, Object[] args) throws Exception {
         Method invocable = method;
-        if (targetInstance != null && !java.lang.reflect.Modifier.isStatic(method.getModifiers())) {
+        if (targetInstance != null && !Modifier.isStatic(method.getModifiers())) {
             Method resolved = findMethodInHierarchy(targetInstance.getClass(), method.getName(), method.getParameterTypes());
             if (resolved != null) {
                 invocable = resolved;
@@ -524,6 +533,89 @@ public class ProducerBean<T> implements Bean<T> {
             return;
         }
         LifecycleMethodHelper.invokeLifecycleMethod(declaringInstance, PRE_DESTROY);
+    }
+
+    @SuppressWarnings("unchecked")
+    private DeclaringInstanceHandle resolveDeclaringInstanceHandle(boolean requiresDeclaringInstance) {
+        if (!requiresDeclaringInstance) {
+            if (dependencyResolver instanceof BeanResolver) {
+                BeanResolver resolver = (BeanResolver) dependencyResolver;
+                BeanManagerImpl beanManager = resolver.getOwningBeanManager();
+                if (beanManager != null) {
+                    Bean<?> declaringBean = findDeclaringManagedBean(beanManager);
+                    if (declaringBean != null && hasDependentAnnotation(declaringBean.getScope())) {
+                        return new DeclaringInstanceHandle(null, null, null);
+                    }
+                }
+            }
+
+            Object declaringInstance = dependencyResolver.resolveDeclaringBeanInstance(declaringClass);
+            return new DeclaringInstanceHandle(declaringInstance, null, null);
+        }
+
+        if (!(dependencyResolver instanceof BeanResolver)) {
+            Object declaringInstance = dependencyResolver.resolveDeclaringBeanInstance(declaringClass);
+            return new DeclaringInstanceHandle(declaringInstance, null, null);
+        }
+
+        BeanResolver resolver = (BeanResolver) dependencyResolver;
+        BeanManagerImpl beanManager = resolver.getOwningBeanManager();
+        if (beanManager == null) {
+            Object declaringInstance = dependencyResolver.resolveDeclaringBeanInstance(declaringClass);
+            return new DeclaringInstanceHandle(declaringInstance, null, null);
+        }
+
+        Bean<?> declaringBean = findDeclaringManagedBean(beanManager);
+        if (declaringBean == null) {
+            Object declaringInstance = dependencyResolver.resolveDeclaringBeanInstance(declaringClass);
+            return new DeclaringInstanceHandle(declaringInstance, null, null);
+        }
+
+        if (hasDependentAnnotation(declaringBean.getScope())) {
+            Bean<Object> typedBean = (Bean<Object>) declaringBean;
+            CreationalContext<Object> creationalContext = beanManager.createCreationalContext(typedBean);
+            Object declaringInstance = typedBean.create(creationalContext);
+            return new DeclaringInstanceHandle(declaringInstance, typedBean, creationalContext);
+        }
+
+        Object declaringInstance = dependencyResolver.resolveDeclaringBeanInstance(declaringClass);
+        return new DeclaringInstanceHandle(declaringInstance, null, null);
+    }
+
+    private boolean requiresDeclaringInstanceForProducer() {
+        if (producerMethod != null) {
+            return !Modifier.isStatic(producerMethod.getModifiers());
+        }
+        if (producerField != null) {
+            return !Modifier.isStatic(producerField.getModifiers());
+        }
+        return true;
+    }
+
+    private Bean<?> findDeclaringManagedBean(BeanManagerImpl beanManager) {
+        for (Bean<?> bean : beanManager.getKnowledgeBase().getValidBeans()) {
+            if (bean instanceof ProducerBean<?>) {
+                continue;
+            }
+            if (bean.getBeanClass().equals(declaringClass)) {
+                return bean;
+            }
+        }
+        return null;
+    }
+
+    private void destroyDeclaringInstance(DeclaringInstanceHandle declaringInstanceHandle) throws Exception {
+        if (declaringInstanceHandle == null || declaringInstanceHandle.instance == null) {
+            return;
+        }
+        if (declaringInstanceHandle.declaringBean != null && declaringInstanceHandle.creationalContext != null) {
+            declaringInstanceHandle.declaringBean.destroy(
+                    declaringInstanceHandle.instance,
+                    declaringInstanceHandle.creationalContext
+            );
+            return;
+        }
+        destroyDependentDeclaringInstance(declaringInstanceHandle.instance);
     }
 
     private boolean isDependentDeclaringClass(Class<?> type) {
@@ -696,6 +788,19 @@ public class ProducerBean<T> implements Bean<T> {
             }
         }
         return qualifiers.toArray(new Annotation[qualifiers.size()]);
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static final class DeclaringInstanceHandle {
+        private final Object instance;
+        private final Bean declaringBean;
+        private final CreationalContext creationalContext;
+
+        private DeclaringInstanceHandle(Object instance, Bean declaringBean, CreationalContext creationalContext) {
+            this.instance = instance;
+            this.declaringBean = declaringBean;
+            this.creationalContext = creationalContext;
+        }
     }
 
     private static final class TrackedDependentArgument {
