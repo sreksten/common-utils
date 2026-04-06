@@ -541,13 +541,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.StaticFinalMethodTest
 - [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.interceptor.InterceptedBeanProxyTest
 - [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.primitive.UnproxyableTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.privateConstructor.PrivateConstructorTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dependency.resolution.AmbiguousDependencyResolutionTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dependency.resolution.broken.ambiguous.AmbiguousDependencyTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dependency.resolution.broken.unsatisfied.UnsatisfiedDependencyTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceConstructorInjectionTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceDisposerInjectionTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.privateConstructor.PrivateConstructorTest
+- [x] org.jboss.cdi.tck.tests.lookup.dependency.resolution.AmbiguousDependencyResolutionTest
+- [x] org.jboss.cdi.tck.tests.lookup.dependency.resolution.broken.ambiguous.AmbiguousDependencyTest
+- [x] org.jboss.cdi.tck.tests.lookup.dependency.resolution.broken.unsatisfied.UnsatisfiedDependencyTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceConstructorInjectionTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceDisposerInjectionTest
 - [ ] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceFieldInjectionTest
 - [ ] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceInitMethodInjectionTest
 - [ ] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceObserverInjectionTest
