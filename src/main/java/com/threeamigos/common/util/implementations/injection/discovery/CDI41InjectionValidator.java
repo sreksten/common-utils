@@ -209,18 +209,28 @@ public class CDI41InjectionValidator {
                 continue;
             }
 
-            // Keep this deployment check narrowly focused on the CDI regression case:
-            // beans with bound interceptors must not declare non-private final business methods.
-            // Broader proxyability constraints are enforced elsewhere (e.g. injection-point resolution).
+            // Deployment must fail for intercepted beans that are unproxyable due to
+            // final class declaration or non-private final business methods.
+            boolean finalClass = Modifier.isFinal(beanClass.getModifiers());
             Method finalBusinessMethod = findNonStaticFinalNonPrivateMethod(beanClass);
-            if (finalBusinessMethod == null || knowledgeBase.shouldIgnoreFinalMethods(bean)) {
+            if (knowledgeBase.shouldIgnoreFinalMethods(bean)) {
+                finalBusinessMethod = null;
+            }
+            if (!finalClass && finalBusinessMethod == null) {
                 continue;
             }
 
-            knowledgeBase.addError(
-                    "Managed bean " + beanClass.getName() +
-                            " has bound interceptor(s) but declares non-private final method: " +
-                            finalBusinessMethod.getName());
+            if (finalClass) {
+                knowledgeBase.addError(
+                        "Managed bean " + beanClass.getName() +
+                                " has bound interceptor(s) but is a final class");
+            }
+            if (finalBusinessMethod != null) {
+                knowledgeBase.addError(
+                        "Managed bean " + beanClass.getName() +
+                                " has bound interceptor(s) but declares non-private final method: " +
+                                finalBusinessMethod.getName());
+            }
             allValid = false;
         }
         return allValid;

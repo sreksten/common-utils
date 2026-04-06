@@ -471,20 +471,20 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.nonDependent.NonDependentInterceptorTest
 - [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.observer.InterceptorWithObserverMethodTest
 - [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.observer.async.InterceptorWithAsyncObserverMethodTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.InterceptorBindingInheritanceTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalClassWithInheritedClassLevelInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalClassWithInheritedStereotypeInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalMethodWithInheritedClassLevelInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalMethodWithInheritedStereotypeInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.interceptorOrder.InterceptorOrderTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.member.InterceptorBindingTypeWithMemberTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.invocation.InterceptorInvocationTest
-- [ ] org.jboss.cdi.tck.tests.invokers.SimpleInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.BadInstanceInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.ExcessArgumentsInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.GoodInstanceInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.InstanceMethodInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.InterceptedMethodInvokerTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.InterceptorBindingInheritanceTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalClassWithInheritedClassLevelInterceptorTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalClassWithInheritedStereotypeInterceptorTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalMethodWithInheritedClassLevelInterceptorTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalMethodWithInheritedStereotypeInterceptorTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.interceptorOrder.InterceptorOrderTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.member.InterceptorBindingTypeWithMemberTest
+- [x] org.jboss.cdi.tck.tests.interceptors.invocation.InterceptorInvocationTest
+- [x] org.jboss.cdi.tck.tests.invokers.SimpleInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.BadInstanceInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.ExcessArgumentsInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.GoodInstanceInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.InstanceMethodInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.InterceptedMethodInvokerTest
 - [ ] org.jboss.cdi.tck.tests.invokers.basic.InvokerAssignabilityTest
 - [ ] org.jboss.cdi.tck.tests.invokers.basic.InvokerVisibilityTest
 - [ ] org.jboss.cdi.tck.tests.invokers.basic.MissingArgumentsInvokerTest

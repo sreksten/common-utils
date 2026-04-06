@@ -245,6 +245,10 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
                     return javaMethod.invoke(instance, invocationArgs);
                 } catch (InvocationTargetException e) {
                     Throwable target = e.getTargetException();
+                    while (target instanceof InvocationTargetException
+                            && ((InvocationTargetException) target).getTargetException() != null) {
+                        target = ((InvocationTargetException) target).getTargetException();
+                    }
                     if (target instanceof Exception) {
                         throw (Exception) target;
                     }
