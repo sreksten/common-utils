@@ -3,15 +3,22 @@ package com.threeamigos.common.util.implementations.injection.el;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.el.ELContext;
 import jakarta.el.ELResolver;
+import jakarta.el.ExpressionFactory;
+import jakarta.el.MethodExpression;
+import jakarta.el.MethodInfo;
+import jakarta.el.ValueExpression;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
+import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -31,6 +38,45 @@ public final class ELSupport {
 
     public static ELResolver createELResolver(BeanManagerImpl beanManager) {
         return new BeanManagerELResolver(Objects.requireNonNull(beanManager, "beanManager cannot be null"));
+    }
+
+    public static ExpressionFactory wrapExpressionFactory(BeanManagerImpl beanManager,
+                                                          ExpressionFactory expressionFactory) {
+        if (expressionFactory == null) {
+            return null;
+        }
+        return new WrappedExpressionFactory(
+                Objects.requireNonNull(beanManager, "beanManager cannot be null"),
+                expressionFactory
+        );
+    }
+
+    private static void beginEvaluation(ELContext context) {
+        if (context == null) {
+            return;
+        }
+        ELResolutionState state = getOrCreateResolutionState(context);
+        state.beginEvaluation();
+    }
+
+    private static void endEvaluation(ELContext context) {
+        if (context == null) {
+            return;
+        }
+        ELResolutionState state = (ELResolutionState) context.getContext(ELResolutionState.class);
+        if (state == null) {
+            return;
+        }
+        state.endEvaluation();
+    }
+
+    private static ELResolutionState getOrCreateResolutionState(ELContext context) {
+        ELResolutionState state = (ELResolutionState) context.getContext(ELResolutionState.class);
+        if (state == null) {
+            state = new ELResolutionState();
+            context.putContext(ELResolutionState.class, state);
+        }
+        return state;
     }
 
     private static final class BeanManagerELResolver extends ELResolver {
@@ -138,12 +184,12 @@ public final class ELSupport {
         }
 
         private Object resolveNamedOrNamespace(ELContext context, String qualifiedName) {
-            ELResolutionState state = resolutionState(context);
+            ELResolutionState state = getOrCreateResolutionState(context);
             if (state.values.containsKey(qualifiedName)) {
                 return state.values.get(qualifiedName);
             }
 
-            Object beanReference = resolveNamedBean(qualifiedName);
+            Object beanReference = resolveNamedBean(qualifiedName, state);
             if (beanReference != EL_UNRESOLVED) {
                 state.values.put(qualifiedName, beanReference);
                 return beanReference;
@@ -159,7 +205,7 @@ public final class ELSupport {
             return EL_ABSENT;
         }
 
-        private Object resolveNamedBean(String name) {
+        private Object resolveNamedBean(String name, ELResolutionState state) {
             Set<Bean<?>> beans = getBeansForName(name);
             if (beans.isEmpty()) {
                 return EL_UNRESOLVED;
@@ -177,6 +223,7 @@ public final class ELSupport {
             Class<?> beanClass = resolvedBean.getBeanClass() != null ? resolvedBean.getBeanClass() : Object.class;
             @SuppressWarnings({"rawtypes", "unchecked"})
             Object reference = beanManager.getReference((Bean) resolvedBean, (Class) beanClass, creationalContext);
+            state.trackCreationalContext(creationalContext);
             return reference;
         }
 
@@ -204,15 +251,6 @@ public final class ELSupport {
                 }
             }
             return false;
-        }
-
-        private ELResolutionState resolutionState(ELContext context) {
-            ELResolutionState state = (ELResolutionState) context.getContext(ELResolutionState.class);
-            if (state == null) {
-                state = new ELResolutionState();
-                context.putContext(ELResolutionState.class, state);
-            }
-            return state;
         }
 
         private Object readProperty(Object base, String propertyName) {
@@ -405,9 +443,182 @@ public final class ELSupport {
         }
     }
 
+    private static final class WrappedExpressionFactory extends ExpressionFactory implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private final BeanManagerImpl beanManager;
+        private final ExpressionFactory delegate;
+
+        private WrappedExpressionFactory(BeanManagerImpl beanManager, ExpressionFactory delegate) {
+            this.beanManager = beanManager;
+            this.delegate = delegate;
+        }
+
+        @Override
+        public ValueExpression createValueExpression(ELContext context, String expression, Class<?> expectedType) {
+            ValueExpression valueExpression = delegate.createValueExpression(context, expression, expectedType);
+            if (valueExpression == null) {
+                return null;
+            }
+            return new WrappedValueExpression(valueExpression, beanManager);
+        }
+
+        @Override
+        public ValueExpression createValueExpression(Object instance, Class<?> expectedType) {
+            ValueExpression valueExpression = delegate.createValueExpression(instance, expectedType);
+            if (valueExpression == null) {
+                return null;
+            }
+            return new WrappedValueExpression(valueExpression, beanManager);
+        }
+
+        @Override
+        public MethodExpression createMethodExpression(ELContext context,
+                                                       String expression,
+                                                       Class<?> expectedReturnType,
+                                                       Class<?>[] expectedParamTypes) {
+            MethodExpression methodExpression =
+                    delegate.createMethodExpression(context, expression, expectedReturnType, expectedParamTypes);
+            if (methodExpression == null) {
+                return null;
+            }
+            return new WrappedMethodExpression(methodExpression, beanManager);
+        }
+
+        @Override
+        public <T> T coerceToType(Object o, Class<T> aClass) {
+            return delegate.coerceToType(o, aClass);
+        }
+    }
+
+    private static final class WrappedMethodExpression extends MethodExpression {
+        private static final long serialVersionUID = 1L;
+        private final MethodExpression delegate;
+        @SuppressWarnings("unused")
+        private final BeanManagerImpl beanManager;
+
+        private WrappedMethodExpression(MethodExpression delegate, BeanManagerImpl beanManager) {
+            this.delegate = delegate;
+            this.beanManager = beanManager;
+        }
+
+        @Override
+        public MethodInfo getMethodInfo(ELContext context) {
+            return delegate.getMethodInfo(context);
+        }
+
+        @Override
+        public Object invoke(ELContext context, Object[] params) {
+            beginEvaluation(context);
+            try {
+                return delegate.invoke(context, params);
+            } finally {
+                endEvaluation(context);
+            }
+        }
+
+        @Override
+        public String getExpressionString() {
+            return delegate.getExpressionString();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return delegate.equals(obj);
+        }
+
+        @Override
+        public int hashCode() {
+            return delegate.hashCode();
+        }
+
+        @Override
+        public boolean isLiteralText() {
+            return delegate.isLiteralText();
+        }
+    }
+
+    private static final class WrappedValueExpression extends ValueExpression {
+        private static final long serialVersionUID = 1L;
+        private final ValueExpression delegate;
+        @SuppressWarnings("unused")
+        private final BeanManagerImpl beanManager;
+
+        private WrappedValueExpression(ValueExpression delegate, BeanManagerImpl beanManager) {
+            this.delegate = delegate;
+            this.beanManager = beanManager;
+        }
+
+        @Override
+        public Object getValue(ELContext context) {
+            beginEvaluation(context);
+            try {
+                return delegate.getValue(context);
+            } finally {
+                endEvaluation(context);
+            }
+        }
+
+        @Override
+        public void setValue(ELContext context, Object value) {
+            beginEvaluation(context);
+            try {
+                delegate.setValue(context, value);
+            } finally {
+                endEvaluation(context);
+            }
+        }
+
+        @Override
+        public boolean isReadOnly(ELContext context) {
+            beginEvaluation(context);
+            try {
+                return delegate.isReadOnly(context);
+            } finally {
+                endEvaluation(context);
+            }
+        }
+
+        @Override
+        public Class<?> getType(ELContext context) {
+            beginEvaluation(context);
+            try {
+                return delegate.getType(context);
+            } finally {
+                endEvaluation(context);
+            }
+        }
+
+        @Override
+        public Class<?> getExpectedType() {
+            return delegate.getExpectedType();
+        }
+
+        @Override
+        public String getExpressionString() {
+            return delegate.getExpressionString();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return delegate.equals(obj);
+        }
+
+        @Override
+        public int hashCode() {
+            return delegate.hashCode();
+        }
+
+        @Override
+        public boolean isLiteralText() {
+            return delegate.isLiteralText();
+        }
+    }
+
     private static final class ELResolutionState {
         private final Map<String, Object> values = new HashMap<>();
         private final Map<String, ELNamespace> namespaces = new HashMap<>();
+        private final List<CreationalContext<?>> creationalContexts = new ArrayList<CreationalContext<?>>();
+        private int evaluationDepth;
 
         private ELNamespace namespace(String prefix) {
             ELNamespace existing = namespaces.get(prefix);
@@ -417,6 +628,38 @@ public final class ELSupport {
             ELNamespace created = new ELNamespace(prefix);
             namespaces.put(prefix, created);
             return created;
+        }
+
+        private void trackCreationalContext(CreationalContext<?> creationalContext) {
+            if (creationalContext != null) {
+                creationalContexts.add(creationalContext);
+            }
+        }
+
+        private void beginEvaluation() {
+            evaluationDepth++;
+        }
+
+        private void endEvaluation() {
+            if (evaluationDepth > 0) {
+                evaluationDepth--;
+            }
+            if (evaluationDepth == 0) {
+                for (int i = creationalContexts.size() - 1; i >= 0; i--) {
+                    CreationalContext<?> creationalContext = creationalContexts.get(i);
+                    if (creationalContext == null) {
+                        continue;
+                    }
+                    try {
+                        creationalContext.release();
+                    } catch (Exception ignored) {
+                        // Best-effort destruction only.
+                    }
+                }
+                creationalContexts.clear();
+                values.clear();
+                namespaces.clear();
+            }
         }
     }
 

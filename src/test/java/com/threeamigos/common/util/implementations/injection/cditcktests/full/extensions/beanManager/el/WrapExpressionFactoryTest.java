@@ -53,29 +53,29 @@ class WrapExpressionFactoryTest {
 
     @Test
     void testWrapping() {
-//        ActionSequence.reset();
-//
-//        ExpressionFactory wrappedExpressionFactory = beanManager.wrapExpressionFactory(new DummyExpressionFactory());
-//
-//        MethodExpression methodExpression = wrappedExpressionFactory.createMethodExpression(null, "foo.test", String.class, null);
-//        Object methodElResult = methodExpression.invoke(createELContext(beanManager, wrappedExpressionFactory), null);
-//        assertNotNull(methodElResult);
-//        assertTrue(methodElResult instanceof Integer);
-//        assertEquals(Integer.valueOf(-1), methodElResult);
-//
-//        List<String> fooSingleton = Collections.singletonList(Foo.class.getName());
-//        assertEquals(fooSingleton, ActionSequence.getSequenceData("create"));
-//        assertEquals(fooSingleton, ActionSequence.getSequenceData("destroy"));
-//        ActionSequence.reset();
-//
-//        ValueExpression valueExpression = wrappedExpressionFactory.createValueExpression(null, "foo.test", String.class);
-//        Object valElResult = valueExpression.getValue(createELContext(beanManager, wrappedExpressionFactory));
-//        assertNotNull(valElResult);
-//        assertTrue(valElResult instanceof Integer);
-//        assertEquals(Integer.valueOf(-1), valElResult);
-//
-//        assertEquals(fooSingleton, ActionSequence.getSequenceData("create"));
-//        assertEquals(fooSingleton, ActionSequence.getSequenceData("destroy"));
+        ActionSequence.reset();
+
+        ExpressionFactory wrappedExpressionFactory = beanManager.wrapExpressionFactory(new DummyExpressionFactory());
+
+        MethodExpression methodExpression = wrappedExpressionFactory.createMethodExpression(null, "foo.test", String.class, null);
+        Object methodElResult = methodExpression.invoke(createELContext(beanManager, wrappedExpressionFactory), null);
+        assertNotNull(methodElResult);
+        assertTrue(methodElResult instanceof Integer);
+        assertEquals(Integer.valueOf(-1), methodElResult);
+
+        List<String> fooSingleton = Collections.singletonList(Foo.class.getName());
+        assertEquals(fooSingleton, ActionSequence.getSequenceData("create"));
+        assertEquals(fooSingleton, ActionSequence.getSequenceData("destroy"));
+        ActionSequence.reset();
+
+        ValueExpression valueExpression = wrappedExpressionFactory.createValueExpression(null, "foo.test", String.class);
+        Object valElResult = valueExpression.getValue(createELContext(beanManager, wrappedExpressionFactory));
+        assertNotNull(valElResult);
+        assertTrue(valElResult instanceof Integer);
+        assertEquals(Integer.valueOf(-1), valElResult);
+
+        assertEquals(fooSingleton, ActionSequence.getSequenceData("create"));
+        assertEquals(fooSingleton, ActionSequence.getSequenceData("destroy"));
     }
 
     private static ELContext createELContext(final BeanManager beanManager,

@@ -2862,8 +2862,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
      */
     @Override
     public ExpressionFactory wrapExpressionFactory(ExpressionFactory expressionFactory) {
-        // EL integration is not implemented yet
-        return expressionFactory;
+        return ELSupport.wrapExpressionFactory(this, expressionFactory);
     }
 
     /**
