@@ -457,13 +457,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.implementation.simple.definition.constructorHasAsyncObservesParameter.ConstructorHasAsyncObservesParameterTest
 - [x] org.jboss.cdi.tck.tests.implementation.simple.definition.constructorHasDisposesParameter.ConstructorHasDisposesParameterTest
 - [x] org.jboss.cdi.tck.tests.implementation.simple.definition.constructorHasObservesParameter.ConstructorHasObservesParameterTest
-- [ ] org.jboss.cdi.tck.tests.implementation.simple.definition.normalScopedWithPublicField.NormalScopedWithPublicFieldTest
-- [ ] org.jboss.cdi.tck.tests.implementation.simple.definition.normalScopedWithPublicStaticField.NormalScopedWithPublicStaticFieldTest
-- [ ] org.jboss.cdi.tck.tests.implementation.simple.definition.tooManyInitializerAnnotatedConstructors.TooManyInitializerAnnotatedConstructorsTest
-- [ ] org.jboss.cdi.tck.tests.implementation.simple.lifecycle.SimpleBeanLifecycleTest
-- [ ] org.jboss.cdi.tck.tests.implementation.simple.lifecycle.unproxyable.UnproxyableManagedBeanTest
-- [ ] org.jboss.cdi.tck.tests.inheritance.generics.MemberLevelInheritanceTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.InterceptorDefinitionTest
+- [x] org.jboss.cdi.tck.tests.implementation.simple.definition.normalScopedWithPublicField.NormalScopedWithPublicFieldTest
+- [x] org.jboss.cdi.tck.tests.implementation.simple.definition.normalScopedWithPublicStaticField.NormalScopedWithPublicStaticFieldTest
+- [x] org.jboss.cdi.tck.tests.implementation.simple.definition.tooManyInitializerAnnotatedConstructors.TooManyInitializerAnnotatedConstructorsTest
+- [x] org.jboss.cdi.tck.tests.implementation.simple.lifecycle.SimpleBeanLifecycleTest
+- [x] org.jboss.cdi.tck.tests.implementation.simple.lifecycle.unproxyable.UnproxyableManagedBeanTest
+- [x] org.jboss.cdi.tck.tests.inheritance.generics.MemberLevelInheritanceTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.InterceptorDefinitionTest
 - [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.DependentBeanFinalMethodInterceptorTest
 - [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.FinalClassClassLevelInterceptorTest
 - [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.NormalScopedBeanFinalClassInterceptorTest
