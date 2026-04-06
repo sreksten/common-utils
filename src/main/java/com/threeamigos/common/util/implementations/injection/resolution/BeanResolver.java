@@ -336,7 +336,7 @@ public class BeanResolver implements DependencyResolver {
                 if (!sameRawType(requiredType, beanType)) {
                     continue;
                 }
-                if (typeChecker.isAssignable(requiredType, beanType)) {
+                if (typeChecker.isLookupTypeAssignable(requiredType, beanType)) {
                     typeMatches = true;
                     break;
                 }
@@ -390,7 +390,7 @@ public class BeanResolver implements DependencyResolver {
                 if (!sameRawType(requiredType, beanType)) {
                     continue;
                 }
-                if (typeChecker.isAssignable(requiredType, beanType)) {
+                if (typeChecker.isLookupTypeAssignable(requiredType, beanType)) {
                     typeMatches = true;
                     break;
                 }

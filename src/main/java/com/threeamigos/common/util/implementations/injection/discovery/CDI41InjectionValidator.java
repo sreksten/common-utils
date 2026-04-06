@@ -2349,7 +2349,7 @@ public class CDI41InjectionValidator {
                     continue;
                 }
                 // Use TypeChecker for proper type matching with generic support
-                if (typeChecker.isAssignable(requiredType, beanType)) {
+                if (typeChecker.isLookupTypeAssignable(requiredType, beanType)) {
                     return true;
                 }
             } catch (Exception e) {

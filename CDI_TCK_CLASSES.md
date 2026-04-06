@@ -555,13 +555,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.lookup.dynamic.builtin.BuiltinInstanceTest
 - [x] org.jboss.cdi.tck.tests.lookup.dynamic.destroy.dependent.DestroyingDependentInstanceTest
 - [x] org.jboss.cdi.tck.tests.lookup.dynamic.destroy.normal.DestroyingNormalScopedInstanceTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.handle.InstanceHandleTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injection.any.AnyInjectionTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithActualTypeTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithTypeVariableTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithTypeVariableUpperBoundTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithWildcardTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToRawTypeTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.handle.InstanceHandleTest
+- [x] org.jboss.cdi.tck.tests.lookup.injection.any.AnyInjectionTest
+- [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithActualTypeTest
+- [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithTypeVariableTest
+- [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithTypeVariableUpperBoundTest
+- [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithWildcardTest
+- [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToRawTypeTest
 - [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.broken.raw.ParameterizedTypesInjectionRawAmbiguousTest
 - [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.multiple.bounds.ParameterizedTypesWithTypeVariableWithMultipleBoundsTest
 - [ ] org.jboss.cdi.tck.tests.lookup.injectionpoint.InjectionPointTest

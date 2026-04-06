@@ -189,7 +189,10 @@ public class TypeChecker {
      * where required types may legally contain type variables.
      */
     public boolean isLookupTypeAssignable(Type requiredType, Type beanType) {
-        return isAssignableInternal(requiredType, beanType, false);
+        if (!isAssignableInternal(requiredType, beanType, false)) {
+            return false;
+        }
+        return isLookupTypeVariableCompatible(requiredType, beanType);
     }
 
     /**
@@ -319,6 +322,81 @@ public class TypeChecker {
 
     private boolean isOnlyObjectBound(Type[] bounds) {
         return bounds.length == 1 && Object.class.equals(bounds[0]);
+    }
+
+    private boolean isLookupTypeVariableCompatible(Type requiredType, Type beanType) {
+        if (!(requiredType instanceof ParameterizedType)) {
+            return true;
+        }
+        ParameterizedType requiredParameterized = (ParameterizedType) requiredType;
+        Type[] requiredArgs = requiredParameterized.getActualTypeArguments();
+        if (!containsRequiredTypeVariable(requiredArgs)) {
+            return true;
+        }
+        if (!(requiredParameterized.getRawType() instanceof Class<?>)) {
+            return true;
+        }
+
+        Class<?> requiredRaw = (Class<?>) requiredParameterized.getRawType();
+        Type resolvedBeanType = getExactSuperType(beanType, requiredRaw);
+        if (!(resolvedBeanType instanceof ParameterizedType)) {
+            // Raw bean type compatibility is already handled by isAssignableInternal().
+            return true;
+        }
+
+        Type[] beanArgs = ((ParameterizedType) resolvedBeanType).getActualTypeArguments();
+        if (requiredArgs.length != beanArgs.length) {
+            return false;
+        }
+
+        for (int i = 0; i < requiredArgs.length; i++) {
+            if (!isLookupTypeArgumentCompatible(requiredArgs[i], beanArgs[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean containsRequiredTypeVariable(Type[] arguments) {
+        for (Type argument : arguments) {
+            if (argument instanceof TypeVariable<?>) {
+                return true;
+            }
+            if (argument instanceof ParameterizedType &&
+                    containsRequiredTypeVariable(((ParameterizedType) argument).getActualTypeArguments())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isLookupTypeArgumentCompatible(Type requiredArgument, Type beanArgument) {
+        if (requiredArgument instanceof TypeVariable<?>) {
+            if (beanArgument instanceof TypeVariable<?>) {
+                return isRequiredTypeVariableAssignableToBeanTypeVariable(
+                        (TypeVariable<?>) requiredArgument,
+                        (TypeVariable<?>) beanArgument);
+            }
+            if (beanArgument instanceof WildcardType) {
+                return isWildcardCompatible(requiredArgument, (WildcardType) beanArgument);
+            }
+            return false;
+        }
+
+        if (requiredArgument instanceof ParameterizedType && beanArgument instanceof ParameterizedType) {
+            Type[] requiredNested = ((ParameterizedType) requiredArgument).getActualTypeArguments();
+            Type[] beanNested = ((ParameterizedType) beanArgument).getActualTypeArguments();
+            if (requiredNested.length != beanNested.length) {
+                return false;
+            }
+            for (int i = 0; i < requiredNested.length; i++) {
+                if (!isLookupTypeArgumentCompatible(requiredNested[i], beanNested[i])) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private Class<?> normalizePrimitive(Class<?> type) {

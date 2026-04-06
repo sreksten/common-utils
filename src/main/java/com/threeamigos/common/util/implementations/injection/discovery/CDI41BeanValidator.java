@@ -1472,10 +1472,12 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
+        Type fieldBaseType = baseTypeOf(field);
         boolean allowTypeVariableArguments =
-                hasDecoratorAnnotation(field.getDeclaringClass()) && hasDelegateAnnotation(field);
+                (hasDecoratorAnnotation(field.getDeclaringClass()) && hasDelegateAnnotation(field))
+                        || allowsBeanClassTypeVariableArguments(fieldBaseType, field.getDeclaringClass());
         try {
-            checkInjectionTypeValidity(baseTypeOf(field), allowTypeVariableArguments);
+            checkInjectionTypeValidity(fieldBaseType, allowTypeVariableArguments, field.getDeclaringClass());
         } catch (IllegalArgumentException e) {
             knowledgeBase.addInjectionError(fmtField(field) + ": " + e.getMessage());
             valid = false;
@@ -1564,10 +1566,14 @@ public class CDI41BeanValidator {
             }
 
             try {
+                Type parameterBaseType = baseTypeOf(p);
                 boolean allowTypeVariableArguments =
-                        hasDecoratorAnnotation(p.getDeclaringExecutable().getDeclaringClass()) &&
-                                hasDelegateAnnotation(p);
-                checkInjectionTypeValidity(baseTypeOf(p), allowTypeVariableArguments);
+                        (hasDecoratorAnnotation(p.getDeclaringExecutable().getDeclaringClass()) &&
+                                hasDelegateAnnotation(p))
+                                || allowsBeanClassTypeVariableArguments(parameterBaseType,
+                                p.getDeclaringExecutable().getDeclaringClass());
+                checkInjectionTypeValidity(parameterBaseType, allowTypeVariableArguments,
+                        p.getDeclaringExecutable().getDeclaringClass());
             } catch (IllegalArgumentException e) {
                 knowledgeBase.addInjectionError(fmtParameter(p) + ": " + e.getMessage());
                 valid = false;
@@ -3159,10 +3165,16 @@ public class CDI41BeanValidator {
     }
 
     private void checkInjectionTypeValidity(Type type) {
-        checkInjectionTypeValidity(type, false);
+        checkInjectionTypeValidity(type, false, null);
     }
 
     private void checkInjectionTypeValidity(Type type, boolean allowTypeVariableArguments) {
+        checkInjectionTypeValidity(type, allowTypeVariableArguments, null);
+    }
+
+    private void checkInjectionTypeValidity(Type type,
+                                            boolean allowTypeVariableArguments,
+                                            Class<?> declaringBeanClass) {
         if (type instanceof Class && jakarta.enterprise.inject.Instance.class.equals(type)) {
             throw new DefinitionException("injection point of raw type Instance is not allowed");
         }
@@ -3196,10 +3208,42 @@ public class CDI41BeanValidator {
             ParameterizedType pt = (ParameterizedType) type;
             for (Type arg : pt.getActualTypeArguments()) {
                 if (!allowTypeVariableArguments && arg instanceof TypeVariable) {
+                    if (declaringBeanClass != null &&
+                            isTypeVariableDeclaredByClassOrEnclosing(declaringBeanClass, (TypeVariable<?>) arg)) {
+                        continue;
+                    }
                     throw new DefinitionException("injection point may not contain type variable arguments (" + arg.getTypeName() + ")");
                 }
             }
         }
+    }
+
+    private boolean allowsBeanClassTypeVariableArguments(Type injectionType, Class<?> declaringBeanClass) {
+        if (!(injectionType instanceof ParameterizedType) || declaringBeanClass == null) {
+            return false;
+        }
+        for (Type arg : ((ParameterizedType) injectionType).getActualTypeArguments()) {
+            if (arg instanceof TypeVariable &&
+                    isTypeVariableDeclaredByClassOrEnclosing(declaringBeanClass, (TypeVariable<?>) arg)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isTypeVariableDeclaredByClassOrEnclosing(Class<?> declaringBeanClass, TypeVariable<?> typeVariable) {
+        GenericDeclaration genericDeclaration = typeVariable.getGenericDeclaration();
+        if (!(genericDeclaration instanceof Class)) {
+            return false;
+        }
+        Class<?> current = declaringBeanClass;
+        while (current != null) {
+            if (current.equals(genericDeclaration)) {
+                return true;
+            }
+            current = current.getDeclaringClass();
+        }
+        return false;
     }
 
     // -----------------------
