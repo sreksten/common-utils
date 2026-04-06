@@ -485,13 +485,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.invokers.basic.GoodInstanceInvokerTest
 - [x] org.jboss.cdi.tck.tests.invokers.basic.InstanceMethodInvokerTest
 - [x] org.jboss.cdi.tck.tests.invokers.basic.InterceptedMethodInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.InvokerAssignabilityTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.InvokerVisibilityTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.MissingArgumentsInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.PrimitiveParametersInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.PrimitiveReturnValueInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.StaticMethodInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.basic.ThrowingInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.InvokerAssignabilityTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.InvokerVisibilityTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.MissingArgumentsInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.PrimitiveParametersInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.PrimitiveReturnValueInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.StaticMethodInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.basic.ThrowingInvokerTest
 - [ ] org.jboss.cdi.tck.tests.invokers.basic.VarargsMethodInvokerTest
 - [ ] org.jboss.cdi.tck.tests.invokers.basic.VoidMethodInvokerTest
 - [ ] org.jboss.cdi.tck.tests.invokers.basic.ZeroParametersInvokerTest
