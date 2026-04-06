@@ -47,7 +47,7 @@ public class DependentPseudoScopeInCDIFullTest {
             String response = instance.ping();
             assertTrue(response.startsWith("decorated:"));
 
-            @SuppressWarnings({"rawtypes", "unchecked"})
+            @SuppressWarnings({"rawtypes"})
             Bean rawBean = bean;
             rawBean.destroy(instance, context);
 
