@@ -373,13 +373,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.nonExistantClassInBeansXml.NonExistantClassInBeansXmlTest
 - [x] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.nonInterceptorClassInBeansXml.NonInterceptorClassInBeansXmlTest
 - [x] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.sameClassListedTwiceInBeansXml.SameClassListedTwiceInBeansXmlTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.conflictingenablement.InterceptorConflictingEnablementTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.custom.CustomInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorCalledBeforeDecorator.InterceptorCalledBeforeDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorNotListedInBeansXml.InterceptorNotListedInBeansXmlNotEnabledTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorOrder.InterceptorOrderTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.lifecycle.order.LifecycleInterceptorOrderTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.order.overriden.lifecycleCallback.wrapped.OverridenLifecycleCallbackInterceptorTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.conflictingenablement.InterceptorConflictingEnablementTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.custom.CustomInterceptorTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorCalledBeforeDecorator.InterceptorCalledBeforeDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorNotListedInBeansXml.InterceptorNotListedInBeansXmlNotEnabledTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorOrder.InterceptorOrderTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.lifecycle.order.LifecycleInterceptorOrderTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.order.overriden.lifecycleCallback.wrapped.OverridenLifecycleCallbackInterceptorTest
 - [ ] org.jboss.cdi.tck.tests.full.interceptors.tests.contract.method.MethodLevelInterceptorTest
 - [ ] org.jboss.cdi.tck.tests.full.invokers.SimpleInvokerTest
 - [ ] org.jboss.cdi.tck.tests.full.invokers.invalid.DecoratorInvokerTest

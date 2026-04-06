@@ -646,6 +646,69 @@ public class CDI41BeanValidator {
         return false;
     }
 
+    private boolean isLegacyClassInterceptorLifecycleMethod(Class<?> declaringClass, Method lifecycleMethod) {
+        if (lifecycleMethod.getParameterCount() != 1) {
+            return false;
+        }
+        Class<?> parameterType = lifecycleMethod.getParameterTypes()[0];
+        if (!jakarta.interceptor.InvocationContext.class.isAssignableFrom(parameterType)) {
+            return false;
+        }
+        return isReferencedByInterceptorsAnnotation(declaringClass);
+    }
+
+    private boolean isReferencedByInterceptorsAnnotation(Class<?> interceptorClass) {
+        Collection<Class<?>> classes = knowledgeBase.getClasses();
+        if (classes == null || classes.isEmpty()) {
+            return false;
+        }
+        for (Class<?> candidate : classes) {
+            if (candidate == null) {
+                continue;
+            }
+            if (declaresInterceptorsAnnotation(candidate.getDeclaredAnnotations(), interceptorClass)) {
+                return true;
+            }
+            for (Method method : candidate.getDeclaredMethods()) {
+                if (declaresInterceptorsAnnotation(method.getDeclaredAnnotations(), interceptorClass)) {
+                    return true;
+                }
+            }
+            for (Constructor<?> constructor : candidate.getDeclaredConstructors()) {
+                if (declaresInterceptorsAnnotation(constructor.getDeclaredAnnotations(), interceptorClass)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean declaresInterceptorsAnnotation(Annotation[] annotations, Class<?> interceptorClass) {
+        for (Annotation annotation : annotations) {
+            String annotationName = annotation.annotationType().getName();
+            if (!"jakarta.interceptor.Interceptors".equals(annotationName)
+                    && !"javax.interceptor.Interceptors".equals(annotationName)) {
+                continue;
+            }
+            try {
+                Method valueMethod = annotation.annotationType().getMethod("value");
+                Object rawValue = valueMethod.invoke(annotation);
+                if (!(rawValue instanceof Class[])) {
+                    continue;
+                }
+                Class<?>[] interceptorClasses = (Class<?>[]) rawValue;
+                for (Class<?> declaredInterceptorClass : interceptorClasses) {
+                    if (interceptorClass.equals(declaredInterceptorClass)) {
+                        return true;
+                    }
+                }
+            } catch (Exception ignored) {
+                // Best-effort lookup only; malformed annotations are handled by validation elsewhere.
+            }
+        }
+        return false;
+    }
+
     private void validateStereotypeNamedDeclaration(Class<? extends Annotation> stereotypeType,
                                                     Set<Class<? extends Annotation>> visited) {
         if (!visited.add(stereotypeType)) {
@@ -4097,6 +4160,11 @@ public class CDI41BeanValidator {
                     // - Must not be static
                     // - Return type is ignored (can be void or any type)
                     if (method.getParameterCount() != 0) {
+                        if (isLegacyClassInterceptorLifecycleMethod(currentClass, method)) {
+                            // Methods with InvocationContext on lifecycle callbacks are valid for
+                            // classes declared via @Interceptors, but they are not bean lifecycle callbacks.
+                            continue;
+                        }
                         knowledgeBase.addDefinitionError(
                             fmtMethod(method) + ": " + lifecycleAnnotationName +
                             " method must have no parameters"

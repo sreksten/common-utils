@@ -1784,7 +1784,15 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             this.postConstructInterceptorChain = buildLifecycleInterceptorChain(
                 postConstructInterceptors,
                 InterceptionType.POST_CONSTRUCT,
-                lifecycleBindings
+                lifecycleBindings,
+                classLevelLegacyInterceptors
+            );
+        } else if (!classLevelLegacyInterceptors.isEmpty()) {
+            this.postConstructInterceptorChain = buildLifecycleInterceptorChain(
+                    Collections.<InterceptorInfo>emptyList(),
+                    InterceptionType.POST_CONSTRUCT,
+                    lifecycleBindings,
+                    classLevelLegacyInterceptors
             );
         } else {
             this.postConstructInterceptorChain = null;
@@ -1802,7 +1810,15 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             this.preDestroyInterceptorChain = buildLifecycleInterceptorChain(
                 preDestroyInterceptors,
                 InterceptionType.PRE_DESTROY,
-                lifecycleBindings
+                lifecycleBindings,
+                classLevelLegacyInterceptors
+            );
+        } else if (!classLevelLegacyInterceptors.isEmpty()) {
+            this.preDestroyInterceptorChain = buildLifecycleInterceptorChain(
+                    Collections.<InterceptorInfo>emptyList(),
+                    InterceptionType.PRE_DESTROY,
+                    lifecycleBindings,
+                    classLevelLegacyInterceptors
             );
         } else {
             this.preDestroyInterceptorChain = null;
@@ -1868,11 +1884,14 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     private InterceptorChain buildLifecycleInterceptorChain(
             List<InterceptorInfo> interceptors,
             InterceptionType interceptionType,
-            Set<Annotation> interceptorBindings) {
+            Set<Annotation> interceptorBindings,
+            List<Class<?>> legacyInterceptorClasses) {
 
         // Use the Builder pattern to construct the chain
         InterceptorChain.Builder builder = InterceptorChain.builder()
                 .withInterceptorBindings(interceptorBindings);
+
+        addLegacyInterceptorInvocations(builder, legacyInterceptorClasses, interceptionType);
 
         // Add interceptor lifecycle methods to the chain.
         // Note: The target bean's lifecycle methods are NOT added to the interceptor chain here.
@@ -1881,6 +1900,24 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         addResolvedInterceptorInvocations(builder, interceptors, interceptionType, interceptorBindings);
 
         return builder.build();
+    }
+
+    private void addLegacyInterceptorInvocations(InterceptorChain.Builder builder,
+                                                 List<Class<?>> legacyInterceptorClasses,
+                                                 InterceptionType interceptionType) {
+        if (legacyInterceptorClasses == null || legacyInterceptorClasses.isEmpty()) {
+            return;
+        }
+        for (Class<?> interceptorClass : legacyInterceptorClasses) {
+            if (interceptorClass == null) {
+                continue;
+            }
+            Object interceptorInstance = getOrCreateLegacyInterceptorInstance(interceptorClass);
+            List<Method> lifecycleMethods = findInterceptorMethodsInHierarchy(interceptorClass, interceptionType);
+            for (Method lifecycleMethod : lifecycleMethods) {
+                builder.addInterceptor(interceptorInstance, lifecycleMethod);
+            }
+        }
     }
 
     private void addResolvedInterceptorInvocations(InterceptorChain.Builder builder,
@@ -2195,6 +2232,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         if (interceptorResolver == null) {
             return;
         }
+        List<Class<?>> classLevelLegacyInterceptors =
+                extractLegacyInterceptorClasses(resolveLegacyInterceptorClassAnnotations(annotatedTypeMetadata));
 
         if (postConstructInterceptorChain == null) {
             List<InterceptorInfo> postConstructInterceptors = interceptorResolver.resolve(
@@ -2202,11 +2241,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                     null,
                     InterceptionType.POST_CONSTRUCT
             );
-            if (!postConstructInterceptors.isEmpty()) {
+            if (!postConstructInterceptors.isEmpty() || !classLevelLegacyInterceptors.isEmpty()) {
                 postConstructInterceptorChain = buildLifecycleInterceptorChain(
                         postConstructInterceptors,
                         InterceptionType.POST_CONSTRUCT,
-                        interceptorResolver.resolveBindings(beanClass, null)
+                        interceptorResolver.resolveBindings(beanClass, null),
+                        classLevelLegacyInterceptors
                 );
             }
         }
@@ -2217,11 +2257,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                     null,
                     InterceptionType.PRE_DESTROY
             );
-            if (!preDestroyInterceptors.isEmpty()) {
+            if (!preDestroyInterceptors.isEmpty() || !classLevelLegacyInterceptors.isEmpty()) {
                 preDestroyInterceptorChain = buildLifecycleInterceptorChain(
                         preDestroyInterceptors,
                         InterceptionType.PRE_DESTROY,
-                        interceptorResolver.resolveBindings(beanClass, null)
+                        interceptorResolver.resolveBindings(beanClass, null),
+                        classLevelLegacyInterceptors
                 );
             }
         }
