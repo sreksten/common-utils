@@ -380,6 +380,11 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return instance;
         }
 
+        // Built-in Instance<T> already applies decorators through BeanResolver.
+        if (bean instanceof BuiltInInstanceBean) {
+            return instance;
+        }
+
         // Managed beans already apply decorators during BeanImpl lifecycle.
         if (bean instanceof BeanImpl<?>) {
             return instance;
@@ -662,19 +667,25 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return Collections.emptySet();
         }
         Class<?> rawClass = (Class<?>) rawType;
-        if (!Event.class.equals(rawClass)) {
-            return Collections.emptySet();
-        }
-
         Type[] typeArguments = parameterizedType.getActualTypeArguments();
         if (typeArguments.length != 1) {
             return Collections.emptySet();
         }
-        Set<Annotation> eventBeanQualifiers = normalizeBeanQualifiers(Arrays.asList(
-                qualifiers == null ? new Annotation[0] : qualifiers));
+        Annotation[] requestedQualifiers = qualifiers == null ? new Annotation[0] : qualifiers;
+        Set<Annotation> lookupBeanQualifiers = normalizeBeanQualifiers(Arrays.asList(requestedQualifiers));
         Set<Bean<?>> builtInBeans = new LinkedHashSet<Bean<?>>();
-        builtInBeans.add(new BuiltInEventBean(typeArguments[0], beanType, eventBeanQualifiers, this));
-        return builtInBeans;
+
+        if (Event.class.equals(rawClass)) {
+            builtInBeans.add(new BuiltInEventBean(typeArguments[0], beanType, lookupBeanQualifiers, this));
+            return builtInBeans;
+        }
+        if (Instance.class.equals(rawClass)) {
+            Set<Annotation> resolutionQualifiers = extractQualifiers(requestedQualifiers);
+            builtInBeans.add(new BuiltInInstanceBean(
+                    beanType, lookupBeanQualifiers, resolutionQualifiers, this));
+            return builtInBeans;
+        }
+        return Collections.emptySet();
     }
 
     private boolean qualifiersMatchIncludingBeanName(Set<Annotation> requiredQualifiers, Bean<?> bean) {
@@ -4587,6 +4598,119 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         @Override
         public boolean isAlternative() {
             return false;
+        }
+    }
+
+    private static final class BuiltInInstanceBean implements Bean<Instance<?>> {
+        private final Type requestedBeanType;
+        private final Set<Type> types;
+        private final Set<Annotation> qualifiers;
+        private final Set<Annotation> resolutionQualifiers;
+        private final BeanManagerImpl beanManager;
+
+        private BuiltInInstanceBean(Type requestedBeanType,
+                                    Set<Annotation> qualifiers,
+                                    Set<Annotation> resolutionQualifiers,
+                                    BeanManagerImpl beanManager) {
+            this.requestedBeanType = requestedBeanType;
+            this.beanManager = beanManager;
+
+            Set<Type> resolvedTypes = new LinkedHashSet<Type>();
+            resolvedTypes.add(Instance.class);
+            resolvedTypes.add(Object.class);
+            resolvedTypes.add(requestedBeanType);
+            this.types = Collections.unmodifiableSet(resolvedTypes);
+
+            Set<Annotation> resolvedQualifiers = new LinkedHashSet<Annotation>();
+            if (qualifiers != null) {
+                resolvedQualifiers.addAll(qualifiers);
+            }
+            resolvedQualifiers.add(Any.Literal.INSTANCE);
+            this.qualifiers = Collections.unmodifiableSet(resolvedQualifiers);
+
+            Set<Annotation> requestedResolutionQualifiers = new LinkedHashSet<Annotation>();
+            if (resolutionQualifiers != null) {
+                requestedResolutionQualifiers.addAll(resolutionQualifiers);
+            }
+            this.resolutionQualifiers = Collections.unmodifiableSet(requestedResolutionQualifiers);
+        }
+
+        @Override
+        public Class<?> getBeanClass() {
+            return Instance.class;
+        }
+
+        @Override
+        public Set<InjectionPoint> getInjectionPoints() {
+            return Collections.emptySet();
+        }
+
+        @Override
+        public Instance<?> create(CreationalContext<Instance<?>> context) {
+            Annotation[] qualifierArray = resolutionQualifiers.toArray(new Annotation[resolutionQualifiers.size()]);
+            Object resolved = beanManager.beanResolver.resolve(requestedBeanType, qualifierArray);
+            if (!(resolved instanceof Instance<?>)) {
+                throw new DefinitionException(
+                        "Built-in Instance lookup did not resolve Instance for type " + requestedBeanType);
+            }
+            return (Instance<?>) resolved;
+        }
+
+        @Override
+        public void destroy(Instance<?> instance, CreationalContext<Instance<?>> context) {
+            if (instance != null) {
+                if (instance instanceof InstanceImpl<?>) {
+                    ((InstanceImpl<?>) instance).destroyTrackedDependentInstances();
+                } else {
+                    invokeCloseIfPresent(instance);
+                }
+            }
+            if (context != null) {
+                context.release();
+            }
+        }
+
+        @Override
+        public Set<Type> getTypes() {
+            return types;
+        }
+
+        @Override
+        public Set<Annotation> getQualifiers() {
+            return qualifiers;
+        }
+
+        @Override
+        public Class<? extends Annotation> getScope() {
+            return Dependent.class;
+        }
+
+        @Override
+        public String getName() {
+            return null;
+        }
+
+        @Override
+        public Set<Class<? extends Annotation>> getStereotypes() {
+            return Collections.emptySet();
+        }
+
+        @Override
+        public boolean isAlternative() {
+            return false;
+        }
+
+        private void invokeCloseIfPresent(Instance<?> instance) {
+            try {
+                Method closeMethod = instance.getClass().getMethod("close");
+                if (closeMethod != null) {
+                    closeMethod.invoke(instance);
+                }
+            } catch (NoSuchMethodException ignored) {
+                // Best-effort cleanup for unknown Instance implementations.
+            } catch (Exception ignored) {
+                // Destroy should not fail teardown paths for built-in handles.
+            }
         }
     }
 

@@ -506,13 +506,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupBeanManagerTest
 - [x] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupDependentTest
 - [x] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupEventTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupInstanceTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupEqualToNumberOfParamsTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupGreaterThanNumberOfParamsTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupLessThanZeroTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.InstanceLookupDependentTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.InstanceLookupStaticMethodTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupInstanceTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupEqualToNumberOfParamsTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupGreaterThanNumberOfParamsTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupLessThanZeroTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.InstanceLookupDependentTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.InstanceLookupStaticMethodTest
 - [ ] org.jboss.cdi.tck.tests.invokers.lookup.InstanceLookupTest
 - [ ] org.jboss.cdi.tck.tests.invokers.lookup.LookupAmbiguousTest
 - [ ] org.jboss.cdi.tck.tests.invokers.lookup.LookupUnsatisfiedTest
