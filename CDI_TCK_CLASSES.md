@@ -562,20 +562,20 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithTypeVariableUpperBoundTest
 - [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithWildcardTest
 - [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToRawTypeTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.broken.raw.ParameterizedTypesInjectionRawAmbiguousTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.multiple.bounds.ParameterizedTypesWithTypeVariableWithMultipleBoundsTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injectionpoint.InjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injectionpoint.broken.disposer.DisposerInjectionPointMetadataTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injectionpoint.dynamic.DynamicInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injectionpoint.named.NamedAtInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.lookup.injectionpoint.requiredtype.LegalRequiredTypeTest
-- [ ] org.jboss.cdi.tck.tests.lookup.manager.ManagerTest
-- [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.ResolutionByTypeTest
-- [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.broken.disabled.DisabledBeanNotAvailableForInjectionTest
-- [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.broken.type.variable.TypeVariableInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.interceptor.InterceptorNotResolvedInterModuleTest
-- [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.interceptor.InterceptorNotResolvedTest
-- [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.parameterized.AssignabilityOfRawAndParameterizedTypesTest
+- [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.broken.raw.ParameterizedTypesInjectionRawAmbiguousTest
+- [x] org.jboss.cdi.tck.tests.lookup.injection.parameterized.multiple.bounds.ParameterizedTypesWithTypeVariableWithMultipleBoundsTest
+- [x] org.jboss.cdi.tck.tests.lookup.injectionpoint.InjectionPointTest
+- [x] org.jboss.cdi.tck.tests.lookup.injectionpoint.broken.disposer.DisposerInjectionPointMetadataTest
+- [x] org.jboss.cdi.tck.tests.lookup.injectionpoint.dynamic.DynamicInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.lookup.injectionpoint.named.NamedAtInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.lookup.injectionpoint.requiredtype.LegalRequiredTypeTest
+- [x] org.jboss.cdi.tck.tests.lookup.manager.ManagerTest
+- [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.ResolutionByTypeTest
+- [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.broken.disabled.DisabledBeanNotAvailableForInjectionTest
+- [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.broken.type.variable.TypeVariableInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.interceptor.InterceptorNotResolvedInterModuleTest
+- [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.interceptor.InterceptorNotResolvedTest
+- [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.parameterized.AssignabilityOfRawAndParameterizedTypesTest
 - [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.parameterized.raw.RawBeanTypeParameterizedRequiredTypeTest
 - [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.primitive.PrimitiveInjectionPointTest
 - [ ] org.jboss.cdi.tck.tests.se.container.BootstrapSEContainerTest

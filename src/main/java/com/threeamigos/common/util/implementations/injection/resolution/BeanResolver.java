@@ -114,29 +114,7 @@ public class BeanResolver implements DependencyResolver {
             // Return the current injection point context
             jakarta.enterprise.inject.spi.InjectionPoint ip = resolveContextualInjectionPoint();
             if (ip == null) {
-                throw new IllegalStateException(
-                    "InjectionPoint is not available in this context. " +
-                    "\n\nReason: InjectionPoint provides metadata about the current injection point, but normal-scoped beans " +
-                    "(like @ApplicationScoped, @RequestScoped, @SessionScoped) use client proxies. The proxy cannot capture " +
-                    "the injection point context because it's shared across multiple injection points." +
-                    "\n\nWorkarounds:" +
-                    "\n  1. Use Provider<InjectionPoint> or Instance<InjectionPoint> instead:" +
-                    "\n     @Inject Provider<InjectionPoint> injectionPointProvider;" +
-                    "\n     InjectionPoint ip = injectionPointProvider.get(); // Returns current context" +
-                    "\n" +
-                    "\n  2. Change bean scope to @Dependent (each injection gets its own instance):" +
-                    "\n     @Dependent // Instead of @ApplicationScoped" +
-                    "\n     public class MyBean {" +
-                    "\n         @Inject InjectionPoint injectionPoint; // Now works!" +
-                    "\n     }" +
-                    "\n" +
-                    "\n  3. Inject into producer methods (common pattern for Logger):" +
-                    "\n     @Produces" +
-                    "\n     public Logger createLogger(InjectionPoint ip) {" +
-                    "\n         return Logger.getLogger(ip.getMember().getDeclaringClass().getName());" +
-                    "\n     }" +
-                    "\n" +
-                    "\nSee CDI 4.1 Spec Section 3.10 for more details.");
+                return null;
             }
             return createInjectionPointWrapper(ip, effectiveQualifiers);
         }
@@ -1584,17 +1562,23 @@ public class BeanResolver implements DependencyResolver {
         if (stack.isEmpty()) {
             return null;
         }
-
-        InjectionPoint fallback = null;
+        // Prefer an owning non-InjectionPoint site when available (e.g. dependent
+        // beans instantiated for an outer injection point).
         for (InjectionPoint injectionPoint : stack) {
-            if (fallback == null) {
-                fallback = injectionPoint;
-            }
             if (!isInjectionPointMetadataType(injectionPoint.getType())) {
                 return injectionPoint;
             }
         }
-        return fallback;
+
+        // Dynamic Instance.get()/select() lookups synthesize a configured metadata
+        // injection point that remains valid even without an outer non-metadata site.
+        InjectionPoint active = stack.peek();
+        if (active instanceof ConfiguredInjectionPoint) {
+            return active;
+        }
+
+        // CDI 4.1: if there is no owning injection point, InjectionPoint is null.
+        return null;
     }
 
     private boolean isInjectionPointMetadataType(Type type) {

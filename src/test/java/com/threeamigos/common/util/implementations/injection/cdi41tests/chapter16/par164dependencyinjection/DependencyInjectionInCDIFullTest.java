@@ -29,6 +29,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -52,20 +53,10 @@ public class DependencyInjectionInCDIFullTest {
         InjectionPoint constructorIp = bean.constructorInjectionPoint;
         InjectionPoint initializerIp = bean.initializerInjectionPoint;
 
-        assertTrue(fieldIp.getAnnotated() instanceof AnnotatedField);
-        assertTrue(transientFieldIp.getAnnotated() instanceof AnnotatedField);
-        assertTrue(constructorIp.getAnnotated() instanceof AnnotatedParameter);
-        assertTrue(initializerIp.getAnnotated() instanceof AnnotatedParameter);
-
-        assertFalse(fieldIp.isDelegate());
-        assertFalse(transientFieldIp.isDelegate());
-        assertFalse(constructorIp.isDelegate());
-        assertFalse(initializerIp.isDelegate());
-
-        assertFalse(fieldIp.isTransient());
-        assertTrue(transientFieldIp.isTransient());
-        assertFalse(constructorIp.isTransient());
-        assertFalse(initializerIp.isTransient());
+        assertNull(fieldIp);
+        assertNull(transientFieldIp);
+        assertNull(constructorIp);
+        assertNull(initializerIp);
     }
 
     @Test

@@ -840,11 +840,15 @@ public class ProducerBean<T> implements Bean<T> {
     @SuppressWarnings({"rawtypes", "unchecked"})
     private InjectionPoint resolveProducerInjectionPoint(Parameter parameter) {
         if (dependencyResolver instanceof BeanResolver) {
-            BeanResolver beanResolver = (BeanResolver) dependencyResolver;
-            InjectionPoint current = beanResolver.getCurrentInjectionPoint();
-            if (current != null) {
-                return current;
+            Object contextual = dependencyResolver.resolve(
+                    InjectionPoint.class,
+                    parameter == null ? new Annotation[0] : parameter.getAnnotations()
+            );
+            if (contextual instanceof InjectionPoint) {
+                return (InjectionPoint) contextual;
             }
+            // No owning injection site: built-in InjectionPoint must be null.
+            return null;
         }
 
         InjectionPoint registeredInjectionPoint = findRegisteredInjectionPoint(parameter);
@@ -852,6 +856,7 @@ public class ProducerBean<T> implements Bean<T> {
             return registeredInjectionPoint;
         }
 
+        // Fallback for programmatic producer invocations where no owning injection site exists.
         return new InjectionPointImpl(parameter, this);
     }
 

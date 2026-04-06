@@ -36,6 +36,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -355,39 +356,10 @@ public class DependencyInjectionTest {
 
         InjectionPointMetadataBean bean = syringe.inject(InjectionPointMetadataBean.class);
 
-        assertNotNull(bean.getFieldInjectionPoint());
-        assertNotNull(bean.getConstructorInjectionPoint());
-        assertNotNull(bean.getInitializerInjectionPoint());
-        assertNotNull(bean.getTransientFieldInjectionPoint());
-
-        assertEquals(Field.class, bean.getFieldInjectionPoint().getMember().getClass());
-        assertEquals("fieldInjectionPoint", bean.getFieldInjectionPoint().getMember().getName());
-        if (bean.getFieldInjectionPoint().getBean() != null) {
-            assertEquals(InjectionPointMetadataBean.class, bean.getFieldInjectionPoint().getBean().getBeanClass());
-        }
-        assertEquals("jakarta.enterprise.inject.spi.InjectionPoint", bean.getFieldInjectionPoint().getType().getTypeName());
-        assertFalse(bean.getFieldInjectionPoint().isTransient());
-        assertFalse(bean.getFieldInjectionPoint().isDelegate());
-
-        assertEquals(Constructor.class, bean.getConstructorInjectionPoint().getMember().getClass());
-        if (bean.getConstructorInjectionPoint().getBean() != null) {
-            assertEquals(InjectionPointMetadataBean.class, bean.getConstructorInjectionPoint().getBean().getBeanClass());
-        }
-        assertEquals("jakarta.enterprise.inject.spi.InjectionPoint", bean.getConstructorInjectionPoint().getType().getTypeName());
-        assertFalse(bean.getConstructorInjectionPoint().isTransient());
-        assertFalse(bean.getConstructorInjectionPoint().isDelegate());
-
-        assertEquals(Method.class, bean.getInitializerInjectionPoint().getMember().getClass());
-        assertEquals("initialize", bean.getInitializerInjectionPoint().getMember().getName());
-        if (bean.getInitializerInjectionPoint().getBean() != null) {
-            assertEquals(InjectionPointMetadataBean.class, bean.getInitializerInjectionPoint().getBean().getBeanClass());
-        }
-        assertEquals("jakarta.enterprise.inject.spi.InjectionPoint", bean.getInitializerInjectionPoint().getType().getTypeName());
-        assertFalse(bean.getInitializerInjectionPoint().isTransient());
-        assertFalse(bean.getInitializerInjectionPoint().isDelegate());
-
-        assertTrue(bean.getTransientFieldInjectionPoint().isTransient());
-        assertTrue(containsQualifier(bean.getFieldInjectionPoint().getQualifiers(), "jakarta.enterprise.inject.Default"));
+        assertNull(bean.getFieldInjectionPoint());
+        assertNull(bean.getConstructorInjectionPoint());
+        assertNull(bean.getInitializerInjectionPoint());
+        assertNull(bean.getTransientFieldInjectionPoint());
     }
 
     @Test
@@ -417,9 +389,10 @@ public class DependencyInjectionTest {
         bean.destroy(payload, context);
 
         List<String> events = InjectionPointProducerDisposerRecorder.events();
-        assertTrue(events.contains("producer-member:produce"));
-        assertTrue(events.contains("producer-bean:InjectionPointProducerDisposerBean"));
-        assertTrue(events.contains("producer-type:jakarta.enterprise.inject.spi.InjectionPoint"));
+        assertTrue(events.contains("producer-member:producedInjectionPointPayload"));
+        assertTrue(events.contains("producer-bean:InjectionPointProducerConsumerBean"));
+        assertTrue(events.contains("producer-type:" + ProducedInjectionPointPayload.class.getName()));
+        assertTrue(events.contains("producer-member:null"));
         assertTrue(events.contains("disposer-member:dispose"));
     }
 
@@ -436,9 +409,9 @@ public class DependencyInjectionTest {
         syringe.getBeanManager().getEvent().select(ObserverInjectionPointEvent.class).fire(new ObserverInjectionPointEvent("evt-observer-ip"));
 
         List<String> events = ObserverInjectionPointRecorder.events();
-        assertTrue(events.contains("observer-member:onEvent"));
-        assertTrue(events.contains("observer-bean:ObserverInjectionPointBean"));
-        assertTrue(events.contains("observer-type:jakarta.enterprise.inject.spi.InjectionPoint"));
+        assertTrue(events.contains("observer-member:null"));
+        assertTrue(events.contains("observer-bean:null"));
+        assertTrue(events.contains("observer-type:null"));
         assertTrue(events.contains("observer-event:evt-observer-ip"));
     }
 

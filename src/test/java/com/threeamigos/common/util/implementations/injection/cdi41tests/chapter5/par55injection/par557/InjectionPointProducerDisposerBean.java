@@ -10,10 +10,16 @@ public class InjectionPointProducerDisposerBean {
 
     @Produces
     public ProducedInjectionPointPayload produce(InjectionPoint injectionPoint) {
-        InjectionPointProducerDisposerRecorder.record("producer-member:" + injectionPoint.getMember().getName());
-        InjectionPointProducerDisposerRecorder.record("producer-bean:" +
-                (injectionPoint.getBean() == null ? "null" : injectionPoint.getBean().getBeanClass().getSimpleName()));
-        InjectionPointProducerDisposerRecorder.record("producer-type:" + injectionPoint.getType().getTypeName());
+        if (injectionPoint == null) {
+            InjectionPointProducerDisposerRecorder.record("producer-member:null");
+            InjectionPointProducerDisposerRecorder.record("producer-bean:null");
+            InjectionPointProducerDisposerRecorder.record("producer-type:null");
+        } else {
+            InjectionPointProducerDisposerRecorder.record("producer-member:" + injectionPoint.getMember().getName());
+            InjectionPointProducerDisposerRecorder.record("producer-bean:" +
+                    (injectionPoint.getBean() == null ? "null" : injectionPoint.getBean().getBeanClass().getSimpleName()));
+            InjectionPointProducerDisposerRecorder.record("producer-type:" + injectionPoint.getType().getTypeName());
+        }
         return new ProducedInjectionPointPayload("produced");
     }
 

@@ -1380,16 +1380,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     }
 
     private InjectionPoint resolveContextualInjectionPointFromStack(Deque<InjectionPoint> stack) {
-        InjectionPoint fallback = null;
         for (InjectionPoint candidate : stack) {
-            if (fallback == null) {
-                fallback = candidate;
-            }
             if (!isInjectionPointMetadataType(candidate.getType())) {
                 return candidate;
             }
         }
-        return fallback;
+        return stack.isEmpty() ? null : stack.peek();
     }
 
     /**
