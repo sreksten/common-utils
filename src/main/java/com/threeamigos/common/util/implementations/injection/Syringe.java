@@ -4372,7 +4372,9 @@ public class Syringe {
         }
         return definitionError.contains("matches a decorator but is unproxyable")
                 || definitionError.startsWith("beans.xml <decorators><class>")
-                || definitionError.startsWith("beans.xml decorator class ");
+                || definitionError.startsWith("beans.xml decorator class ")
+                || definitionError.startsWith("beans.xml <interceptors><class>")
+                || definitionError.startsWith("beans.xml interceptor class ");
     }
 
     private void validateProgrammaticDecoratorsConfiguration() {

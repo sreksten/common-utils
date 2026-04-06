@@ -9,7 +9,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.AfterTypeDiscovery;
-import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.util.AnnotationLiteral;
 import jakarta.interceptor.AroundInvoke;
@@ -77,7 +77,7 @@ public class InterceptorEnablingAndOrderingInCDIFullTest {
     void shouldFailDeploymentWhenBeansXmlInterceptorClassDoesNotExist() {
         Syringe syringe = newSyringe(OrderedTargetBean.class, BeansXmlOrderedFirstInterceptor.class);
         addBeansXmlInterceptors(syringe, "com.acme.missing.DoesNotExistInterceptor");
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertThrows(DeploymentException.class, syringe::setup);
     }
 
     @Test
@@ -85,7 +85,7 @@ public class InterceptorEnablingAndOrderingInCDIFullTest {
     void shouldFailDeploymentWhenBeansXmlClassIsNotInterceptor() {
         Syringe syringe = newSyringe(OrderedTargetBean.class, NotAnInterceptorClass.class);
         addBeansXmlInterceptors(syringe, NotAnInterceptorClass.class.getName());
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertThrows(DeploymentException.class, syringe::setup);
     }
 
     @Test
@@ -97,7 +97,7 @@ public class InterceptorEnablingAndOrderingInCDIFullTest {
                 BeansXmlOrderedFirstInterceptor.class.getName(),
                 BeansXmlOrderedFirstInterceptor.class.getName()
         );
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertThrows(DeploymentException.class, syringe::setup);
     }
 
     @Test

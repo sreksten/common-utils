@@ -366,13 +366,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend2.SpecializingBeanExtendsNothingTest
 - [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend3.SpecializingClassExtendsNonSimpleBeanTest
 - [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.types.SpecializingBeanWithoutBeanTypeOfSpecializedBeanTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.contract.invocationContext.InterceptorBindingsWithAtInterceptorsTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.contract.invocationContext.InterceptorBindingsWithInterceptorFactoryTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.contract.lifecycleCallback.wrapped.LifecycleCallbackInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.interceptorCanNotBeDecorator.InterceptorCanNotBeDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.nonExistantClassInBeansXml.NonExistantClassInBeansXmlTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.nonInterceptorClassInBeansXml.NonInterceptorClassInBeansXmlTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.sameClassListedTwiceInBeansXml.SameClassListedTwiceInBeansXmlTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.contract.invocationContext.InterceptorBindingsWithAtInterceptorsTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.contract.invocationContext.InterceptorBindingsWithInterceptorFactoryTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.contract.lifecycleCallback.wrapped.LifecycleCallbackInterceptorTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.interceptorCanNotBeDecorator.InterceptorCanNotBeDecoratorTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.nonExistantClassInBeansXml.NonExistantClassInBeansXmlTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.nonInterceptorClassInBeansXml.NonInterceptorClassInBeansXmlTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.definition.broken.sameClassListedTwiceInBeansXml.SameClassListedTwiceInBeansXmlTest
 - [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.conflictingenablement.InterceptorConflictingEnablementTest
 - [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.custom.CustomInterceptorTest
 - [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorCalledBeforeDecorator.InterceptorCalledBeforeDecoratorTest
