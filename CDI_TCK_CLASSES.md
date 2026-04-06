@@ -415,13 +415,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.interceptor.DisposerMethodOnInterceptorTest
 - [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.multiParams.MultipleDisposeParametersDefinitionTest
 - [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.multiple.MultipleDisposerMethodsForProducerMethodTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.observes.ObserverParameterUnallowedDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.producesUnallowed.ProducesUnallowedDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.unresolvedMethod.UnresolvedDisposalMethodDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.validation.ambiguous.DisposerMethodParameterInjectionValidationTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.validation.unsatisfied.DisposerMethodParameterInjectionValidationTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.inheritance.DisposerMethodInheritanceTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.invocation.DisposesMethodCalledOnceTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.observes.ObserverParameterUnallowedDefinitionTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.producesUnallowed.ProducesUnallowedDefinitionTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.unresolvedMethod.UnresolvedDisposalMethodDefinitionTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.validation.ambiguous.DisposerMethodParameterInjectionValidationTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.validation.unsatisfied.DisposerMethodParameterInjectionValidationTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.inheritance.DisposerMethodInheritanceTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.invocation.DisposesMethodCalledOnceTest
 - [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.parameters.DisposedParameterPositionTest
 - [ ] org.jboss.cdi.tck.tests.implementation.initializer.InitializerMethodTest
 - [ ] org.jboss.cdi.tck.tests.implementation.initializer.broken.generic.GenericInitializerMethodTest
