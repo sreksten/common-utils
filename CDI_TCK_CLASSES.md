@@ -527,13 +527,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.lookup.byname.broken.injectionPointWithNamed3.NamedNonFieldInjectionPointTest
 - [x] org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.ExpandedNamePrefix2Test
 - [x] org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.ExpandedNamePrefixTest
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.NamePrefixTest
-- [ ] org.jboss.cdi.tck.tests.lookup.circular.CircularDependencyTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.ClientProxyTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.array.ArrayTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.beanConstructor.BeanConstructorWithParametersTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalClass.FinalClassTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.NonPrivateNonStaticSuperclassMethodTest
+- [x] org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.NamePrefixTest
+- [x] org.jboss.cdi.tck.tests.lookup.circular.CircularDependencyTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.ClientProxyTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.array.ArrayTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.beanConstructor.BeanConstructorWithParametersTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalClass.FinalClassTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.NonPrivateNonStaticSuperclassMethodTest
 - [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.PackagePrivateFinalMethodNotProxyableTest
 - [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.PrivateFinalMethodTest
 - [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.ProtectedFinalMethodNotProxyableTest
