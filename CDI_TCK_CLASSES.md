@@ -600,14 +600,14 @@ Total classes: 582
 - [x] org.jboss.cdi.tck.interceptors.tests.bindings.multiple.MultipleInterceptorBindingsTest
 - [x] org.jboss.cdi.tck.interceptors.tests.bindings.overriding.InterceptorBindingOverridingTest
 - [x] org.jboss.cdi.tck.interceptors.tests.bindings.resolution.InterceptorBindingResolutionTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.aroundConstruct.AroundConstructTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.aroundConstruct.bindings.AroundConstructTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.aroundInvoke.AroundInvokeAccessInterceptorTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.aroundInvoke.bindings.AroundInvokeInterceptorTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.aroundConstruct.AroundConstructTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.aroundConstruct.bindings.AroundConstructTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.aroundInvoke.AroundInvokeAccessInterceptorTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.aroundInvoke.bindings.AroundInvokeInterceptorTest
 - [x] org.jboss.cdi.tck.interceptors.tests.contract.exceptions.aroundInvoke.ExceptionTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.AroundConstructLifeCycleTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.returnValueIgnored.AroundConstructInterceptorReturnValueTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.withAroundInvoke.SingleInterceptorInstanceTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.AroundConstructLifeCycleTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.returnValueIgnored.AroundConstructInterceptorReturnValueTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.withAroundInvoke.SingleInterceptorInstanceTest
 - [ ] org.jboss.cdi.tck.interceptors.tests.contract.invocationContext.InvocationContextTest
 - [ ] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.LifecycleCallbackInterceptorTest
 - [ ] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.bindings.LifecycleInterceptorDefinitionTest
