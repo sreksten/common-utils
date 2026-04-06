@@ -352,13 +352,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.implementation.producer.method.broken.decorator.ProducerMethodOnDecoratorTest
 - [x] org.jboss.cdi.tck.tests.full.implementation.producer.method.definition.ProducerMethodDefinitionTest
 - [x] org.jboss.cdi.tck.tests.full.implementation.producer.method.lifecycle.ProducerMethodLifecycleTest
-- [ ] org.jboss.cdi.tck.tests.full.implementation.simple.lifecycle.SimpleBeanLifecycleTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.ProducerMethodSpecializationTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.indirectoverride.IndirectOverrideTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.name.SpecializingAndSpecializedBeanHaveNameTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.staticmethod.SpecializesStaticMethodTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.twobeans.TwoBeansSpecializeTheSameBeanTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.qualifiers.SpecializingBeanQualifiersTest
+- [x] org.jboss.cdi.tck.tests.full.implementation.simple.lifecycle.SimpleBeanLifecycleTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.ProducerMethodSpecializationTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.indirectoverride.IndirectOverrideTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.name.SpecializingAndSpecializedBeanHaveNameTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.staticmethod.SpecializesStaticMethodTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.twobeans.TwoBeansSpecializeTheSameBeanTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.qualifiers.SpecializingBeanQualifiersTest
 - [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.SimpleBeanSpecializationTest
 - [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.inconsistent.InconsistentSpecializationTest
 - [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.names.SpecializingAndSpecializedBeanHasNameTest

@@ -72,6 +72,9 @@ public class CDI41BeanValidator {
     private final TypeChecker typeChecker;
     private final boolean cdiFullLegacyInterceptionEnabled;
     private final Map<Class<?>, Class<?>> specializingBeansBySuperclass = new HashMap<>();
+    private final Map<String, Method> specializingProducerMethodsBySpecializedSignature = new HashMap<String, Method>();
+    private final Map<String, ProducerBean<?>> producerBeansByMethodSignature = new HashMap<String, ProducerBean<?>>();
+    private final Set<String> suppressedSpecializedProducerMethodSignatures = new HashSet<String>();
     private Annotation[] overrideAnnotations;
     private Class<?> overrideAnnotationsClass;
     private AnnotatedType<?> currentAnnotatedTypeOverride;
@@ -1741,22 +1744,97 @@ public class CDI41BeanValidator {
             return false;
         }
 
-        Method overridden;
-        try {
-            overridden = directSuperclass.getDeclaredMethod(method.getName(), method.getParameterTypes());
-        } catch (NoSuchMethodException e) {
+        Method overridden = resolveDirectlyOverriddenProducerMethod(method);
+        if (overridden == null) {
             knowledgeBase.addDefinitionError(fmtMethod(method) +
                     ": producer method annotated @Specializes must directly override another producer method");
             return false;
         }
 
-        if (!hasProducesAnnotation(overridden)) {
+        String inheritedName = extractProducerName(overridden);
+        if (inheritedName != null && !inheritedName.isEmpty() && declaresBeanNameExplicitly(method)) {
             knowledgeBase.addDefinitionError(fmtMethod(method) +
-                    ": producer method annotated @Specializes must directly override another producer method");
+                    ": specializing producer method may not explicitly declare @Named when specialized producer has name '" +
+                    inheritedName + "'");
             return false;
+        }
+
+        if (isSpecializingProducerMethodEnabled(method)) {
+            String specializedSignature = producerMethodSpecializationSignature(overridden);
+            Method previousSpecializer = specializingProducerMethodsBySpecializedSignature.get(specializedSignature);
+            if (previousSpecializer != null && !previousSpecializer.equals(method)) {
+                knowledgeBase.addError(fmtMethod(method) +
+                        ": inconsistent specialization. Both " + fmtMethod(previousSpecializer) +
+                        " and " + fmtMethod(method) + " specialize " + fmtMethod(overridden));
+                return false;
+            }
+            specializingProducerMethodsBySpecializedSignature.put(specializedSignature, method);
         }
 
         return true;
+    }
+
+    private Method resolveDirectlyOverriddenProducerMethod(Method method) {
+        if (method == null) {
+            return null;
+        }
+        Class<?> declaringClass = method.getDeclaringClass();
+        Class<?> directSuperclass = declaringClass.getSuperclass();
+        if (directSuperclass == null || Object.class.equals(directSuperclass)) {
+            return null;
+        }
+        try {
+            Method overridden = directSuperclass.getDeclaredMethod(method.getName(), method.getParameterTypes());
+            if (!hasProducesAnnotation(overridden)) {
+                return null;
+            }
+            return overridden;
+        } catch (NoSuchMethodException e) {
+            return null;
+        }
+    }
+
+    private boolean declaresBeanNameExplicitly(AnnotatedElement element) {
+        if (element == null) {
+            return false;
+        }
+        for (Annotation annotation : annotationsOf(element)) {
+            if (annotation != null && hasNamedAnnotation(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isSpecializingProducerMethodEnabled(Method method) {
+        if (method == null) {
+            return false;
+        }
+        Class<?> declaringClass = method.getDeclaringClass();
+        boolean methodAlternative = isAlternativeDeclared(method);
+        boolean classAlternative = isAlternativeDeclared(declaringClass);
+        if (!methodAlternative && !classAlternative) {
+            return true;
+        }
+        AnnotatedElement enablementElement = methodAlternative ? method : declaringClass;
+        return isAlternativeEnabled(enablementElement, declaringClass, true);
+    }
+
+    private String producerMethodSpecializationSignature(Method method) {
+        StringBuilder signature = new StringBuilder();
+        signature.append(method.getDeclaringClass().getName())
+                .append("#")
+                .append(method.getName())
+                .append("(");
+        Class<?>[] parameterTypes = method.getParameterTypes();
+        for (int i = 0; i < parameterTypes.length; i++) {
+            if (i > 0) {
+                signature.append(",");
+            }
+            signature.append(parameterTypes[i].getName());
+        }
+        signature.append(")");
+        return signature.toString();
     }
 
     /**
@@ -3392,10 +3470,25 @@ public class CDI41BeanValidator {
             producerBean = new ProducerBean<>(declaringClass, producerMethod, annotatedAlternative);
             producerBean.setAlternativeEnabled(alternativeEnabled);
 
-            // Set bean attributes from producer method annotations
+            Method specializedProducerMethod = resolveDirectlyOverriddenProducerMethod(producerMethod);
+            boolean specializesProducerMethod = hasSpecializesAnnotation(producerMethod) && specializedProducerMethod != null;
+
             String producerName = extractProducerName(producerMethod);
+            Set<Annotation> producerQualifiers = extractQualifiers(producerMethod);
+
+            if (specializesProducerMethod) {
+                String inheritedName = extractProducerName(specializedProducerMethod);
+                if ((producerName == null || producerName.isEmpty())
+                        && inheritedName != null
+                        && !inheritedName.isEmpty()) {
+                    producerName = inheritedName;
+                }
+                producerQualifiers.addAll(extractQualifiers(specializedProducerMethod));
+            }
+
             producerBean.setName(producerName);
-            producerBean.setQualifiers(synchronizeNamedQualifier(extractQualifiers(producerMethod), producerName));
+            producerBean.setQualifiers(synchronizeNamedQualifier(
+                    QualifiersHelper.normalizeBeanQualifiers(producerQualifiers), producerName));
             producerBean.setScope(extractScope(producerMethod));
             producerBean.setStereotypes(extractStereotypes(producerMethod));
 
@@ -3404,7 +3497,18 @@ public class CDI41BeanValidator {
             for (String error : producerTypes.getDefinitionErrors()) {
                 knowledgeBase.addDefinitionError(fmtMethod(producerMethod) + ": " + error);
             }
-            producerBean.setTypes(resolveProducerMethodBeanTypes(producerMethod, producerTypes.getTypes()));
+            Set<Type> resolvedProducerTypes = new LinkedHashSet<Type>(
+                    resolveProducerMethodBeanTypes(producerMethod, producerTypes.getTypes()));
+            if (specializesProducerMethod) {
+                BeanTypesExtractor.ExtractionResult specializedProducerTypes =
+                        beanTypesExtractor.extractProducerBeanTypes(baseTypeOf(specializedProducerMethod), specializedProducerMethod);
+                for (String error : specializedProducerTypes.getDefinitionErrors()) {
+                    knowledgeBase.addDefinitionError(fmtMethod(specializedProducerMethod) + ": " + error);
+                }
+                resolvedProducerTypes.addAll(
+                        resolveProducerMethodBeanTypes(specializedProducerMethod, specializedProducerTypes.getTypes()));
+            }
+            producerBean.setTypes(resolvedProducerTypes);
 
             // CDI 4.1 Section 3.10: Add InjectionPoint metadata for producer method parameters
             // Producer method parameters are injection points and should have InjectionPoint metadata
@@ -3424,7 +3528,8 @@ public class CDI41BeanValidator {
             // Set bean attributes from producer field annotations
             String producerName = extractProducerName(producerField);
             producerBean.setName(producerName);
-            producerBean.setQualifiers(synchronizeNamedQualifier(extractQualifiers(producerField), producerName));
+            producerBean.setQualifiers(synchronizeNamedQualifier(
+                    QualifiersHelper.normalizeBeanQualifiers(extractQualifiers(producerField)), producerName));
             producerBean.setScope(extractScope(producerField));
             producerBean.setStereotypes(extractStereotypes(producerField));
 
@@ -3473,6 +3578,28 @@ public class CDI41BeanValidator {
         }
         if (priorityValue != null) {
             producerBean.setPriority(priorityValue);
+        }
+
+        if (producerMethod != null) {
+            String producerMethodSignature = producerMethodSpecializationSignature(producerMethod);
+            producerBeansByMethodSignature.put(producerMethodSignature, producerBean);
+
+            if (suppressedSpecializedProducerMethodSignatures.contains(producerMethodSignature)) {
+                return;
+            }
+
+            Method specializedProducerMethod = resolveDirectlyOverriddenProducerMethod(producerMethod);
+            if (hasSpecializesAnnotation(producerMethod)
+                    && specializedProducerMethod != null
+                    && isSpecializingProducerMethodEnabled(producerMethod)) {
+                String specializedSignature = producerMethodSpecializationSignature(specializedProducerMethod);
+                suppressedSpecializedProducerMethodSignatures.add(specializedSignature);
+                ProducerBean<?> specializedProducerBean = producerBeansByMethodSignature.get(specializedSignature);
+                if (specializedProducerBean != null) {
+                    knowledgeBase.getProducerBeans().remove(specializedProducerBean);
+                    knowledgeBase.getBeans().remove(specializedProducerBean);
+                }
+            }
         }
 
         // Register in KnowledgeBase
