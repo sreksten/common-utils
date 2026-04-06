@@ -583,11 +583,11 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.se.container.customClassloader.CustomClassLoaderSETest
 - [x] org.jboss.cdi.tck.tests.se.context.ContextSETest
 - [x] org.jboss.cdi.tck.tests.se.context.activation.interceptor.ActivateRequestContextByInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.se.context.activation.programmatic.ActivateRequestContextProgrammaticallyTest
-- [ ] org.jboss.cdi.tck.tests.se.context.custom.CustomRequestContextSETest
-- [ ] org.jboss.cdi.tck.tests.se.context.request.RequestContextTest
-- [ ] org.jboss.cdi.tck.tests.se.customCDIProvider.CustomCDIProviderTest
-- [ ] org.jboss.cdi.tck.tests.se.discovery.implicit.ImplicitBeanArchiveSETest
+- [x] org.jboss.cdi.tck.tests.se.context.activation.programmatic.ActivateRequestContextProgrammaticallyTest
+- [x] org.jboss.cdi.tck.tests.se.context.custom.CustomRequestContextSETest
+- [x] org.jboss.cdi.tck.tests.se.context.request.RequestContextTest
+- [x] org.jboss.cdi.tck.tests.se.customCDIProvider.CustomCDIProviderTest
+- [x] org.jboss.cdi.tck.tests.se.discovery.implicit.ImplicitBeanArchiveSETest
 - [ ] org.jboss.cdi.tck.tests.se.discovery.implicit.ImplicitBeanArchiveWithSystemPropertyTest
 - [ ] org.jboss.cdi.tck.tests.se.discovery.trimmed.TrimmedBeanArchiveSETest
 - [ ] org.jboss.cdi.tck.tests.se.events.lifecycle.StartupShutdownTest

@@ -5,6 +5,7 @@ import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.discovery.ClasspathScanner;
+import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.enterprise.inject.se.SeContainer;
 import jakarta.enterprise.inject.se.SeContainerInitializer;
 import jakarta.enterprise.inject.spi.Extension;
@@ -193,6 +194,7 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
             }
 
             syringe.start();
+            ((BeanManagerImpl) syringe.getBeanManager()).setRequireActiveContextForGetContext(true);
             return new SyringeSeContainer(syringe);
         } finally {
             Thread.currentThread().setContextClassLoader(previous);

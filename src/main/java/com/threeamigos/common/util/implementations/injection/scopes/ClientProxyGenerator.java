@@ -27,6 +27,7 @@ import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
@@ -688,7 +689,12 @@ public class ClientProxyGenerator {
             //
             // So interceptors are invoked TRANSPARENTLY through the contextual instance!
             method.setAccessible(true);
-            return method.invoke(contextualInstance, args);
+            try {
+                return method.invoke(contextualInstance, args);
+            } catch (InvocationTargetException e) {
+                Throwable cause = e.getCause();
+                throw cause != null ? cause : e;
+            }
         }
 
         private static void touchInjectionPointMembers(Bean<?> bean) {

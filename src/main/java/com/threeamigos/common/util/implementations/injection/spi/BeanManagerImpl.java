@@ -128,6 +128,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     private transient volatile ELResolver beanManagerELResolver;
     private final Map<Class<? extends Annotation>, List<Context>> bceContextInstances =
             new ConcurrentHashMap<Class<? extends Annotation>, List<Context>>();
+    private volatile boolean requireActiveContextForGetContext;
 
     /**
      * Creates a new BeanManager implementation.
@@ -147,6 +148,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         this.decoratorAwareProxyGenerator = new DecoratorAwareProxyGenerator();
         this.registeredExtensions = new ArrayList<>();
         this.legacyCdi10NewEnabled = false;
+        this.requireActiveContextForGetContext = false;
 
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
         if (classLoader == null) {
@@ -187,6 +189,10 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
     public void clearRegisteredExtensions() {
         registeredExtensions.clear();
+    }
+
+    public void setRequireActiveContextForGetContext(boolean requireActiveContextForGetContext) {
+        this.requireActiveContextForGetContext = requireActiveContextForGetContext;
     }
 
     /**
@@ -1767,6 +1773,15 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
         com.threeamigos.common.util.implementations.injection.scopes.ScopeContext scopeContext;
         if (activeContexts.isEmpty()) {
+            if (requireActiveContextForGetContext) {
+                Context bceContext = findActiveBceContext(scopeType);
+                if (bceContext != null) {
+                    return bceContext;
+                }
+                throw new jakarta.enterprise.context.ContextNotActiveException(
+                        "Context not active for scope: " + scopeType.getName());
+            }
+
             Collection<com.threeamigos.common.util.implementations.injection.scopes.ScopeContext> registered =
                     contextManager.getRegisteredContexts(scopeType);
             if (registered.isEmpty()) {
