@@ -513,13 +513,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupLessThanZeroTest
 - [x] org.jboss.cdi.tck.tests.invokers.lookup.InstanceLookupDependentTest
 - [x] org.jboss.cdi.tck.tests.invokers.lookup.InstanceLookupStaticMethodTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.InstanceLookupTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.LookupAmbiguousTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.LookupUnsatisfiedTest
-- [ ] org.jboss.cdi.tck.tests.lookup.binding.members.annotation.BindingAnnotationWithMemberTest
-- [ ] org.jboss.cdi.tck.tests.lookup.binding.members.array.BindingAnnotationWithMemberTest
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.ResolutionByNameTest
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.ambiguous.AmbiguousELNamesTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.InstanceLookupTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.LookupAmbiguousTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.LookupUnsatisfiedTest
+- [x] org.jboss.cdi.tck.tests.lookup.binding.members.annotation.BindingAnnotationWithMemberTest
+- [x] org.jboss.cdi.tck.tests.lookup.binding.members.array.BindingAnnotationWithMemberTest
+- [x] org.jboss.cdi.tck.tests.lookup.byname.ResolutionByNameTest
+- [x] org.jboss.cdi.tck.tests.lookup.byname.ambiguous.AmbiguousELNamesTest
 - [ ] org.jboss.cdi.tck.tests.lookup.byname.ambiguous.broken.AmbiguousELNamesTest
 - [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.duplicity.DuplicitNameTest
 - [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.injectionPointWithNamed.NamedNonFieldInjectionPointTest
