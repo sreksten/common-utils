@@ -1119,7 +1119,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             }
 
             // CDI qualifier matching must honor annotation members and @Nonbinding.
-            if (!QualifiersHelper.qualifiersMatch(observerInfo.getQualifiers(), qualifiers)) {
+            if (!QualifiersHelper.eventQualifiersMatch(observerInfo.getQualifiers(), qualifiers)) {
                 continue;
             }
 
@@ -1139,7 +1139,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             }
 
             // CDI qualifier matching must honor annotation members and @Nonbinding.
-            if (!QualifiersHelper.qualifiersMatch(syntheticObserver.getObservedQualifiers(), qualifiers)) {
+            if (!QualifiersHelper.eventQualifiersMatch(syntheticObserver.getObservedQualifiers(), qualifiers)) {
                 continue;
             }
 

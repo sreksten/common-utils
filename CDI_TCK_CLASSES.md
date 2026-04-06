@@ -359,13 +359,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.staticmethod.SpecializesStaticMethodTest
 - [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.producer.method.broken.twobeans.TwoBeansSpecializeTheSameBeanTest
 - [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.qualifiers.SpecializingBeanQualifiersTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.SimpleBeanSpecializationTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.inconsistent.InconsistentSpecializationTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.names.SpecializingAndSpecializedBeanHasNameTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend1.SpecializingBeanImplementsInterfaceOnlyTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend2.SpecializingBeanExtendsNothingTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend3.SpecializingClassExtendsNonSimpleBeanTest
-- [ ] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.types.SpecializingBeanWithoutBeanTypeOfSpecializedBeanTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.SimpleBeanSpecializationTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.inconsistent.InconsistentSpecializationTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.names.SpecializingAndSpecializedBeanHasNameTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend1.SpecializingBeanImplementsInterfaceOnlyTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend2.SpecializingBeanExtendsNothingTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.noextend3.SpecializingClassExtendsNonSimpleBeanTest
+- [x] org.jboss.cdi.tck.tests.full.inheritance.specialization.simple.broken.types.SpecializingBeanWithoutBeanTypeOfSpecializedBeanTest
 - [ ] org.jboss.cdi.tck.tests.full.interceptors.contract.invocationContext.InterceptorBindingsWithAtInterceptorsTest
 - [ ] org.jboss.cdi.tck.tests.full.interceptors.contract.invocationContext.InterceptorBindingsWithInterceptorFactoryTest
 - [ ] org.jboss.cdi.tck.tests.full.interceptors.contract.lifecycleCallback.wrapped.LifecycleCallbackInterceptorTest

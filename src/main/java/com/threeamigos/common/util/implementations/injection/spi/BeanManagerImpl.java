@@ -2513,7 +2513,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             if (doesNotMatchDecoratorTypes(types, decorator.getDecoratedTypes(), decorator.getDelegateType())) {
                 continue;
             }
-            if (!qualifiersMatch(requiredQualifiers, decorator.getDelegateQualifiers())) {
+            if (!qualifiersMatch(decorator.getDelegateQualifiers(), requiredQualifiers)) {
                 continue;
             }
             matchingDecorators.add(decorator);
@@ -2531,7 +2531,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             if (doesNotMatchDecoratorTypes(types, decorator.getDecoratedTypes(), decorator.getDelegateType())) {
                 continue;
             }
-            if (!qualifiersMatch(requiredQualifiers, decorator.getDelegateQualifiers())) {
+            if (!qualifiersMatch(decorator.getDelegateQualifiers(), requiredQualifiers)) {
                 continue;
             }
             matchingDecorators.add(decorator);

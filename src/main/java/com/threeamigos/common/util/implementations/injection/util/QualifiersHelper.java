@@ -160,10 +160,46 @@ public final class QualifiersHelper {
             if (hasAnyAnnotation(required.annotationType())) {
                 continue;
             }
+            if (hasNamedAnnotation(required.annotationType())) {
+                continue;
+            }
+            boolean found = false;
+            for (Annotation avail : availableQualifiers) {
+                if (qualifiersEqual(required, avail)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Event-observer qualifier matching where @Default observer methods only match
+     * events with no explicit non-default qualifiers.
+     */
+    public static boolean eventQualifiersMatch(Set<Annotation> observedQualifiers, Set<Annotation> eventQualifiers) {
+        Annotation observedNamed = findNamedAnnotation(observedQualifiers);
+        Annotation eventNamed = findNamedAnnotation(eventQualifiers);
+
+        if (observedNamed != null) {
+            if (eventNamed == null) {
+                return false;
+            }
+            if (!getNamedValue(observedNamed).equals(getNamedValue(eventNamed))) {
+                return false;
+            }
+        }
+
+        for (Annotation required : observedQualifiers) {
+            if (hasAnyAnnotation(required.annotationType())) {
+                continue;
+            }
             if (isDefaultQualifier(required)) {
-                // CDI event rule: @Default observer matches events with no qualifiers
-                // or with only @Default (ignoring the implicit/internal @Any).
-                if (hasExplicitNonDefaultQualifier(availableQualifiers)) {
+                if (hasExplicitNonDefaultQualifier(eventQualifiers)) {
                     return false;
                 }
                 continue;
@@ -172,7 +208,7 @@ public final class QualifiersHelper {
                 continue;
             }
             boolean found = false;
-            for (Annotation avail : availableQualifiers) {
+            for (Annotation avail : eventQualifiers) {
                 if (qualifiersEqual(required, avail)) {
                     found = true;
                     break;

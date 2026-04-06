@@ -2635,9 +2635,19 @@ public class CDI41BeanValidator {
 
         Set<Annotation> mergedQualifiers = new HashSet<>(bean.getQualifiers());
         String inheritedName = "";
+        boolean inheritedDefaultQualifier = false;
 
         for (Class<?> ancestor : specializedAncestors) {
-            mergedQualifiers.addAll(extractBeanQualifiers(ancestor));
+            Set<Annotation> ancestorQualifiers = extractBeanQualifiers(ancestor);
+            mergedQualifiers.addAll(ancestorQualifiers);
+            if (!inheritedDefaultQualifier) {
+                for (Annotation qualifier : ancestorQualifiers) {
+                    if (qualifier != null && hasDefaultAnnotation(qualifier.annotationType())) {
+                        inheritedDefaultQualifier = true;
+                        break;
+                    }
+                }
+            }
             if (inheritedName.isEmpty()) {
                 String ancestorName = extractBeanName(ancestor);
                 if (ancestorName != null && !ancestorName.isEmpty()) {
@@ -2655,8 +2665,11 @@ public class CDI41BeanValidator {
             }
         }
 
-        bean.setQualifiers(synchronizeNamedQualifier(QualifiersHelper.normalizeBeanQualifiers(mergedQualifiers),
-                bean.getName()));
+        Set<Annotation> normalizedQualifiers = QualifiersHelper.normalizeBeanQualifiers(mergedQualifiers);
+        if (inheritedDefaultQualifier) {
+            normalizedQualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
+        }
+        bean.setQualifiers(synchronizeNamedQualifier(normalizedQualifiers, bean.getName()));
 
         if (!inheritedName.isEmpty()) {
             if (declaresBeanNameExplicitly(clazz)) {
