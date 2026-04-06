@@ -1080,8 +1080,13 @@ public class BeanResolver implements DependencyResolver {
         } else {
             // For pseudo-scopes like @Dependent, return the actual instance
             ScopeContext context = contextManager.getContext(scope);
-            CreationalContext<T> creationalContext = new CreationalContextImpl<>();
+            CreationalContext<T> creationalContext = owningBeanManager != null
+                    ? owningBeanManager.createCreationalContext(bean)
+                    : new CreationalContextImpl<T>();
             T instance = context.get(bean, creationalContext);
+            if (DEPENDENT.matches(scope) && owningBeanManager != null) {
+                owningBeanManager.registerOwnedTransientReference(bean, instance, creationalContext);
+            }
             return maybeDecorateResolvedInstance(bean, instance, creationalContext);
         }
     }

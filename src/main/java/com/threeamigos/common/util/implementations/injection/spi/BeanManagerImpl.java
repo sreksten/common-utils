@@ -224,6 +224,12 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         return destroyTransientReference(beanManagerId, instance);
     }
 
+    public <T> void registerOwnedTransientReference(Bean<T> bean,
+                                                    T instance,
+                                                    CreationalContext<T> creationalContext) {
+        registerTransientReference(beanManagerId, bean, instance, creationalContext);
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static boolean destroyTransientReference(Object instance) {
         return destroyTransientReference(null, instance);
@@ -4599,6 +4605,23 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         public boolean isAlternative() {
             return false;
         }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof BuiltInEventBean)) {
+                return false;
+            }
+            BuiltInEventBean other = (BuiltInEventBean) obj;
+            return beanManager == other.beanManager;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * System.identityHashCode(beanManager) + BuiltInEventBean.class.hashCode();
+        }
     }
 
     private static final class BuiltInInstanceBean implements Bean<Instance<?>> {
@@ -4698,6 +4721,23 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         @Override
         public boolean isAlternative() {
             return false;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof BuiltInInstanceBean)) {
+                return false;
+            }
+            BuiltInInstanceBean other = (BuiltInInstanceBean) obj;
+            return beanManager == other.beanManager;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * System.identityHashCode(beanManager) + BuiltInInstanceBean.class.hashCode();
         }
 
         private void invokeCloseIfPresent(Instance<?> instance) {

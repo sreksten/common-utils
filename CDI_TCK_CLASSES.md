@@ -548,13 +548,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.lookup.dynamic.DynamicLookupTest
 - [x] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceConstructorInjectionTest
 - [x] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceDisposerInjectionTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceFieldInjectionTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceInitMethodInjectionTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceObserverInjectionTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceProducerMethodInjectionTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.builtin.BuiltinInstanceTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.destroy.dependent.DestroyingDependentInstanceTest
-- [ ] org.jboss.cdi.tck.tests.lookup.dynamic.destroy.normal.DestroyingNormalScopedInstanceTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceFieldInjectionTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceInitMethodInjectionTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceObserverInjectionTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.broken.raw.RawInstanceProducerMethodInjectionTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.builtin.BuiltinInstanceTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.destroy.dependent.DestroyingDependentInstanceTest
+- [x] org.jboss.cdi.tck.tests.lookup.dynamic.destroy.normal.DestroyingNormalScopedInstanceTest
 - [ ] org.jboss.cdi.tck.tests.lookup.dynamic.handle.InstanceHandleTest
 - [ ] org.jboss.cdi.tck.tests.lookup.injection.any.AnyInjectionTest
 - [ ] org.jboss.cdi.tck.tests.lookup.injection.parameterized.ParameterizedTypesInjectionToParameterizedWithActualTypeTest

@@ -243,12 +243,11 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
     @Override
     public void destroy(T instance) {
+        Objects.requireNonNull(instance, "instance cannot be null");
         try {
-            if (instance != null) {
-                trackedDependentInstances().remove(instance);
-                if (!destroyViaBeanManager(instance)) {
-                    strategy().invokePreDestroy(instance);
-                }
+            trackedDependentInstances().remove(instance);
+            if (!destroyViaBeanManager(instance)) {
+                strategy().invokePreDestroy(instance);
             }
         } catch (UnsupportedOperationException e) {
             throw e;
@@ -296,6 +295,12 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         }
 
         try {
+            if (beanManager instanceof BeanManagerImpl) {
+                if (((BeanManagerImpl) beanManager).destroyOwnedTransientReference(instance)) {
+                    return true;
+                }
+            }
+
             Annotation[] qualifierArray = qualifiers.toArray(new Annotation[qualifiers.size()]);
             Set<Bean<?>> beans = beanManager.getBeans(requiredType, qualifierArray);
             if (beans == null || beans.isEmpty()) {

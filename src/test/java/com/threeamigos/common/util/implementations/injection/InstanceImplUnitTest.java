@@ -309,18 +309,35 @@ class InstanceImplUnitTest {
         }
 
         @Test
-        @DisplayName("destroy() should handle null instance gracefully")
-        void destroyShouldHandleNullInstance() throws Exception {
+        @DisplayName("destroy() should throw NullPointerException for null instance")
+        void destroyShouldHandleNullInstance() {
             // Given
-            InstanceImpl.ResolutionStrategy<String> mockStrategy = mock(InstanceImpl.ResolutionStrategy.class);
+            final boolean[] preDestroyInvoked = {false};
+            InstanceImpl.ResolutionStrategy<String> mockStrategy = new InstanceImpl.ResolutionStrategy<String>() {
+                @Override
+                public String resolveInstance(Class<String> type, Collection<Annotation> qualifiers) {
+                    return null;
+                }
+
+                @Override
+                public Collection<Class<? extends String>> resolveImplementations(Class<String> type,
+                                                                                  Collection<Annotation> qualifiers) {
+                    return Collections.emptyList();
+                }
+
+                @Override
+                public void invokePreDestroy(String instance) {
+                    preDestroyInvoked[0] = true;
+                }
+            };
             Collection<Annotation> qualifiers = Collections.singletonList(new DefaultLiteral());
             InstanceImpl<String> wrapper = new InstanceImpl<>(String.class, qualifiers, mockStrategy);
 
             // When
-            wrapper.destroy(null);
+            assertThrows(NullPointerException.class, () -> wrapper.destroy(null));
 
             // Then
-            verify(mockStrategy, never()).invokePreDestroy(any());
+            assertFalse(preDestroyInvoked[0]);
         }
 
         @Test
