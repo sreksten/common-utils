@@ -499,13 +499,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.invokers.invalid.interceptor.InterceptorInvokerTest
 - [x] org.jboss.cdi.tck.tests.invokers.invalid.method.MethodFromDifferentClassInvokerTest
 - [x] org.jboss.cdi.tck.tests.invokers.invalid.objmethod.ObjectMethodButNotToStringInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.invalid.privatemethod.PrivateMethodInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.invalid.prodfield.ProducerFieldBeanInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.invalid.prodmethod.ProducerMethodBeanInvokerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentArraySizeWithLookupTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupBeanManagerTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupDependentTest
-- [ ] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupEventTest
+- [x] org.jboss.cdi.tck.tests.invokers.invalid.privatemethod.PrivateMethodInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.invalid.prodfield.ProducerFieldBeanInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.invalid.prodmethod.ProducerMethodBeanInvokerTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentArraySizeWithLookupTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupBeanManagerTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupDependentTest
+- [x] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupEventTest
 - [ ] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupInstanceTest
 - [ ] org.jboss.cdi.tck.tests.invokers.lookup.ArgumentLookupTest
 - [ ] org.jboss.cdi.tck.tests.invokers.lookup.BadArgumentLookupEqualToNumberOfParamsTest
