@@ -4,6 +4,9 @@ import com.threeamigos.common.util.implementations.injection.util.RawTypeExtract
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.annotation.Nonnull;
+import jakarta.enterprise.context.spi.AlterableContext;
+import jakarta.enterprise.context.spi.Context;
+import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.*;
 import jakarta.enterprise.inject.spi.Bean;
@@ -304,9 +307,24 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                 return false;
             }
 
-            CreationalContext creationalContext = beanManager.createCreationalContext((Bean) resolved);
+            Class<? extends Annotation> scope = resolved.getScope();
+            if (scope != null && beanManager.isNormalScope(scope)) {
+                Context context = beanManager.getContext(scope);
+                if (!(context instanceof AlterableContext)) {
+                    throw new UnsupportedOperationException(
+                            "Cannot destroy instance of normal-scoped bean " + resolved.getBeanClass().getName() +
+                                    " because context @" + scope.getSimpleName() +
+                                    " does not support AlterableContext.destroy(Contextual)");
+                }
+                ((AlterableContext) context).destroy((Contextual<?>) resolved);
+                return true;
+            }
+
+            CreationalContext creationalContext = beanManager.createCreationalContext((Contextual) resolved);
             ((Bean) resolved).destroy(instance, creationalContext);
             return true;
+        } catch (UnsupportedOperationException e) {
+            throw e;
         } catch (Throwable ignored) {
             return false;
         }

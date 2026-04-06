@@ -1,29 +1,30 @@
-package com.threeamigos.common.util.implementations.injection.cditcktests.full.event.broken.raw;
+package com.threeamigos.common.util.implementations.injection.cditcktests.full.invokers.invalid;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
-import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class RawEventCustomBeanTest {
+@Isolated
+class DecoratorInvokerTest {
 
     @Test
-    void testDefinitionError() {
+    void trigger() {
         Syringe syringe = new Syringe(
                 new InMemoryMessageHandler(),
-                Bar.class,
-                AfterBeanDiscoveryObserver.class,
-                CustomBarBean.class,
-                CustomEventInjectionPoint.class
+                MyService.class,
+                MyDecorator.class,
+                TestExtension.class
         );
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
-        syringe.addExtension(AfterBeanDiscoveryObserver.class.getName());
+        syringe.addExtension(TestExtension.class.getName());
 
         try {
-            assertThrows(DefinitionException.class, syringe::setup);
+            assertThrows(DeploymentException.class, syringe::setup);
         } finally {
             syringe.shutdown();
         }

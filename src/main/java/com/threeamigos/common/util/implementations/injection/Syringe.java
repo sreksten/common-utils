@@ -2857,8 +2857,11 @@ public class Syringe {
                         messageHandler, knowledgeBase, syntheticManagedBean, (AnnotatedType) annotatedType, beanManager);
                 fireEventToExtensions(event);
                 managedCount++;
-            } catch (DefinitionException e) {
+            } catch (DeploymentException e) {
                 throw e;
+            } catch (DefinitionException e) {
+                throw new DeploymentException(
+                        "Error processing interceptor/decorator bean " + lifecycleType.getName(), e);
             } catch (Exception e) {
                 throw new DefinitionException(
                         "Error processing interceptor/decorator bean " + lifecycleType.getName(), e);

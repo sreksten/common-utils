@@ -380,13 +380,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.interceptors.definition.interceptorOrder.InterceptorOrderTest
 - [x] org.jboss.cdi.tck.tests.full.interceptors.definition.lifecycle.order.LifecycleInterceptorOrderTest
 - [x] org.jboss.cdi.tck.tests.full.interceptors.order.overriden.lifecycleCallback.wrapped.OverridenLifecycleCallbackInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.tests.contract.method.MethodLevelInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.full.invokers.SimpleInvokerTest
-- [ ] org.jboss.cdi.tck.tests.full.invokers.invalid.DecoratorInvokerTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.byname.ResolutionByNameTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.dynamic.broken.raw.RawInstanceCustomBeanTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.dynamic.broken.raw.RawInstanceProcessInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.dynamic.destroy.normal.DestroyingNormalScopedInstanceTest
+- [x] org.jboss.cdi.tck.tests.full.interceptors.tests.contract.method.MethodLevelInterceptorTest
+- [x] org.jboss.cdi.tck.tests.full.invokers.SimpleInvokerTest
+- [x] org.jboss.cdi.tck.tests.full.invokers.invalid.DecoratorInvokerTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.byname.ResolutionByNameTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.dynamic.broken.raw.RawInstanceCustomBeanTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.dynamic.broken.raw.RawInstanceProcessInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.dynamic.destroy.normal.DestroyingNormalScopedInstanceTest
 - [ ] org.jboss.cdi.tck.tests.full.lookup.el.ResolutionByNameTest
 - [ ] org.jboss.cdi.tck.tests.full.lookup.injection.visibility.InjectionVisibilityTest
 - [ ] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.InjectableReferenceTest

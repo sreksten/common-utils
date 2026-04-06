@@ -1719,9 +1719,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                     }
                 }
 
+                Annotation[] legacyMethodAnnotations =
+                        resolveLegacyInterceptorMethodAnnotations(method, beanAnnotatedType);
                 List<Class<?>> legacyInterceptors =
-                        extractLegacyInterceptorClasses(resolveLegacyInterceptorMethodAnnotations(method, beanAnnotatedType));
-                if (legacyInterceptors.isEmpty()) {
+                        extractLegacyInterceptorClasses(legacyMethodAnnotations);
+                if (legacyInterceptors.isEmpty() &&
+                        !hasExcludeClassInterceptorsAnnotation(legacyMethodAnnotations)) {
                     legacyInterceptors = classLevelLegacyInterceptors;
                 }
                 if (!legacyInterceptors.isEmpty()) {
@@ -2472,6 +2475,23 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             }
         }
         return Collections.emptyList();
+    }
+
+    private boolean hasExcludeClassInterceptorsAnnotation(Annotation[] annotations) {
+        if (annotations == null || annotations.length == 0) {
+            return false;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation == null || annotation.annotationType() == null) {
+                continue;
+            }
+            String annotationTypeName = annotation.annotationType().getName();
+            if ("jakarta.interceptor.ExcludeClassInterceptors".equals(annotationTypeName) ||
+                    "javax.interceptor.ExcludeClassInterceptors".equals(annotationTypeName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private InterceptorChain buildLegacyInterceptorChain(List<Class<?>> interceptorClasses) {

@@ -1484,6 +1484,15 @@ public class CDI41InjectionValidator {
         Type requiredType = injectionPoint.getType();
         Set<Annotation> qualifiers = injectionPoint.getQualifiers();
 
+        if (isRawProgrammaticLookupType(requiredType)) {
+            Class<?> rawType = RawTypeExtractor.getRawType(requiredType);
+            knowledgeBase.addDefinitionError(
+                    formatInjectionPoint(injectionPoint, owningBean) +
+                    ": injection point of raw type " + rawType.getSimpleName() + " is not allowed"
+            );
+            return false;
+        }
+
         // Special handling for Event<T>, Instance<T>, Provider<T> and InterceptionFactory<T>.
         // These are built-in programmatic constructs resolved lazily at runtime.
         if (isEventType(requiredType) || isInstanceOrProvider(requiredType) || isInterceptionFactory(requiredType)) {
@@ -2110,6 +2119,13 @@ public class CDI41InjectionValidator {
     private boolean isInstanceOrProvider(Type type) {
         Class<?> rawType = RawTypeExtractor.getRawType(type);
         return Instance.class.equals(rawType) || Provider.class.equals(rawType);
+    }
+
+    private boolean isRawProgrammaticLookupType(Type type) {
+        if (!(type instanceof Class<?>)) {
+            return false;
+        }
+        return Instance.class.equals(type) || jakarta.enterprise.event.Event.class.equals(type);
     }
 
     private boolean isInterceptionFactory(Type type) {
