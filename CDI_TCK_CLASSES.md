@@ -7,10 +7,11 @@ Selection criteria:
 - File name ends with Test.java
 - Top-level declaration is a non-abstract class matching file name
 
-Total classes: 581
+Total classes: 582
 
 ## Fully Qualified Class Names
 
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.InterceptorLifeCycleTest
 - [x] org.jboss.cdi.tck.tests.alternative.resolution.qualifier.QualifierInheritedTest
 - [x] org.jboss.cdi.tck.tests.alternative.resolution.qualifier.QualifierNotDeclaredTest
 - [x] org.jboss.cdi.tck.tests.alternative.resolution.qualifier.QualifierNotInheritedTest

@@ -228,12 +228,15 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * Cache of interceptor instances.
      * Key: Interceptor class
      * Value: Interceptor instance
-     * Interceptor instances are created once per bean and reused for all method calls.
-     * This is per CDI spec: interceptors are stateful and bound to the bean instance.
-     * Thread-safety: ConcurrentHashMap ensures thread-safe lazy initialization of interceptor instances.
+     * Global fallback cache used when no interception target is available.
      */
     private final Map<Class<?>, Object> interceptorInstanceCache = new ConcurrentHashMap<>();
+    private final Map<Object, Map<Class<?>, Object>> interceptorTargetInstanceCache =
+            Collections.synchronizedMap(new IdentityHashMap<Object, Map<Class<?>, Object>>());
+    private transient ThreadLocal<Map<Class<?>, Object>> constructionInterceptorInstanceCache =
+            new ThreadLocal<Map<Class<?>, Object>>();
     private final Map<Class<?>, Bean<?>> interceptorMetadataBeanCache = new ConcurrentHashMap<>();
+    private final Map<Class<?>, InterceptorInfo> interceptorInfoByClass = new ConcurrentHashMap<Class<?>, InterceptorInfo>();
 
     /**
      * InterceptorAwareProxyGenerator - creates proxies that execute interceptor chains.
@@ -460,6 +463,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                     customInjectionTarget.inject(instance, creationalContext);
                 }
                 invokeCustomInjectionTargetPostConstructWithRequestContext(instance);
+                initializeTargetInterceptorInstances(instance);
 
                 if (hasInterceptors() && isDependent()) {
                     instance = createDecoratorChain(instance, creationalContext);
@@ -484,6 +488,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
             // 4. Call @PostConstruct if present (with request context active per CDI 6.6.1)
             invokePostConstructWithRequestContext(instance);
+            initializeTargetInterceptorInstances(instance);
 
             // 5. PHASE 2 - Wrap with interceptor-aware proxy if needed
             // IMPORTANT: This wrapping is ONLY for @Dependent scoped beans!
@@ -568,6 +573,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         } catch (Exception e) {
             ignored = e;
         } finally {
+            clearTargetInterceptorInstances(instance);
             DestroyedInstanceTracker.markDestroyed(instance);
             try {
                 // 2. Release CreationalContext (destroys dependent objects)
@@ -664,12 +670,25 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         try {
             // PHASE 3: Check for @AroundConstruct interceptors
             if (constructorInterceptorChain != null) {
+                ThreadLocal<Map<Class<?>, Object>> constructionCacheThreadLocal = constructionInterceptorInstanceCache();
+                Map<Class<?>, Object> constructionCache = new HashMap<Class<?>, Object>();
+                constructionCacheThreadLocal.set(constructionCache);
                 // Invoke constructor interceptor chain
                 // The chain will execute all @AroundConstruct interceptors, then invoke the actual constructor
-                Object result = constructorInterceptorChain.invoke(null, constructor, args);
-                @SuppressWarnings("unchecked")
-                T resultT = (T) result;
-                return resultT;
+                try {
+                    Object result = constructorInterceptorChain.invoke(null, constructor, args);
+                    @SuppressWarnings("unchecked")
+                    T resultT = (T) result;
+                    if (resultT != null && !constructionCache.isEmpty()) {
+                        Map<Class<?>, Object> targetCache = getOrCreateTargetInterceptorCache(resultT);
+                        synchronized (targetCache) {
+                            targetCache.putAll(constructionCache);
+                        }
+                    }
+                    return resultT;
+                } finally {
+                    constructionCacheThreadLocal.remove();
+                }
             } else {
                 // No constructor interceptors, invoke directly
                 return constructor.newInstance(args);
@@ -1657,8 +1676,10 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             this.postConstructInterceptorChain = null;
             this.preDestroyInterceptorChain = null;
             this.targetClassAroundInvokeMethods = Collections.emptyList();
+            this.interceptorInfoByClass.clear();
             return;
         }
+        this.interceptorInfoByClass.clear();
 
         // ========================================================================
         // PHASE 2: Build business method interceptor chains (@AroundInvoke)
@@ -1911,10 +1932,14 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             if (interceptorClass == null) {
                 continue;
             }
-            Object interceptorInstance = getOrCreateLegacyInterceptorInstance(interceptorClass);
             List<Method> lifecycleMethods = findInterceptorMethodsInHierarchy(interceptorClass, interceptionType);
             for (Method lifecycleMethod : lifecycleMethods) {
-                builder.addInterceptor(interceptorInstance, lifecycleMethod);
+                final Method interceptorMethod = lifecycleMethod;
+                builder.addInvocation(ctx -> invokeInterceptorMethod(
+                        getOrCreateLegacyInterceptorInstance(interceptorClass, resolveInterceptionTarget(ctx)),
+                        interceptorMethod,
+                        ctx
+                ));
             }
         }
     }
@@ -1996,13 +2021,18 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     private void addInterceptorInfoInvocations(InterceptorChain.Builder builder,
                                                InterceptorInfo interceptorInfo,
                                                InterceptionType interceptionType) {
-        if (interceptorInfo == null) {
+        if (interceptorInfo == null || interceptorInfo.getInterceptorClass() == null) {
             return;
         }
-        Object interceptorInstance = getOrCreateInterceptorInstance(interceptorInfo);
+        interceptorInfoByClass.put(interceptorInfo.getInterceptorClass(), interceptorInfo);
         List<Method> interceptorMethods = getInterceptorMethods(interceptorInfo, interceptionType);
         for (Method interceptorMethod : interceptorMethods) {
-            builder.addInterceptor(interceptorInstance, interceptorMethod);
+            final Method method = interceptorMethod;
+            builder.addInvocation(ctx -> invokeInterceptorMethod(
+                    getOrCreateInterceptorInstance(interceptorInfo, resolveInterceptionTarget(ctx)),
+                    method,
+                    ctx
+            ));
         }
     }
 
@@ -2178,41 +2208,158 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * @throws RuntimeException if instance creation or injection fails
      */
     private Object getOrCreateInterceptorInstance(InterceptorInfo interceptorInfo) {
+        return getOrCreateInterceptorInstance(interceptorInfo, null);
+    }
+
+    private Object getOrCreateInterceptorInstance(InterceptorInfo interceptorInfo, Object interceptionTarget) {
+        if (interceptorInfo == null || interceptorInfo.getInterceptorClass() == null) {
+            return null;
+        }
         Class<?> interceptorClass = interceptorInfo.getInterceptorClass();
         final Bean<?> interceptorMetadataBean = resolveInterceptorMetadataBean(interceptorInfo);
+        Map<Class<?>, Object> cache = resolveInterceptorInstanceCache(interceptionTarget);
 
-        // Atomic get-or-create using ConcurrentHashMap
-        // If the key exists, return the cached value
-        // If not, compute the value (create instance) and cache it atomically
-        return interceptorInstanceCache.computeIfAbsent(interceptorClass, clazz -> {
-            try {
-                // Step 1: Find and select the appropriate constructor
-                Constructor<?> constructor = selectInterceptorConstructor(clazz);
-                constructor.setAccessible(true);
-
-                // Step 2: Resolve constructor parameters via dependency injection
-                Object[] constructorArgs = resolveConstructorParameters(constructor, interceptorMetadataBean);
-
-                // Step 3: Create an instance with injected constructor parameters
-                Object instance = constructor.newInstance(constructorArgs);
-
-                // Step 4: Perform field injection (@Inject fields)
-                injectInterceptorFields(instance, clazz, interceptorMetadataBean);
-
-                // Step 5: Perform method injection (@Inject methods)
-                injectInterceptorMethods(instance, clazz, interceptorMetadataBean);
-
-                // Step 6: Call @PostConstruct lifecycle callback (if present)
-                invokeInterceptorPostConstruct(instance, clazz);
-
-                return instance;
-            } catch (Exception e) {
-                throw new RuntimeException(
-                    "Failed to create interceptor instance of " + clazz.getName() +
-                    " for bean " + beanClass.getName(), e
-                );
+        Object existing = cache.get(interceptorClass);
+        if (existing != null) {
+            return existing;
+        }
+        synchronized (cache) {
+            existing = cache.get(interceptorClass);
+            if (existing != null) {
+                return existing;
             }
-        });
+            Object created = createManagedInterceptorInstance(interceptorClass, interceptorMetadataBean);
+            cache.put(interceptorClass, created);
+            return created;
+        }
+    }
+
+    private Object createManagedInterceptorInstance(Class<?> interceptorClass, Bean<?> interceptorMetadataBean) {
+        try {
+            Constructor<?> constructor = selectInterceptorConstructor(interceptorClass);
+            constructor.setAccessible(true);
+            Object[] constructorArgs = resolveConstructorParameters(constructor, interceptorMetadataBean);
+            Object instance = constructor.newInstance(constructorArgs);
+            injectInterceptorFields(instance, interceptorClass, interceptorMetadataBean);
+            injectInterceptorMethods(instance, interceptorClass, interceptorMetadataBean);
+            invokeInterceptorPostConstruct(instance, interceptorClass);
+            return instance;
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to create interceptor instance of " + interceptorClass.getName() +
+                            " for bean " + beanClass.getName(), e
+            );
+        }
+    }
+
+    private Object createLegacyInterceptorInstance(Class<?> interceptorClass) {
+        try {
+            Constructor<?> constructor = selectInterceptorConstructor(interceptorClass);
+            constructor.setAccessible(true);
+            Object[] constructorArgs = resolveConstructorParameters(constructor, this);
+            Object instance = constructor.newInstance(constructorArgs);
+            injectInterceptorFields(instance, interceptorClass, this);
+            injectInterceptorMethods(instance, interceptorClass, this);
+            invokeInterceptorPostConstruct(instance, interceptorClass);
+            return instance;
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Failed to create legacy interceptor instance of " + interceptorClass.getName() +
+                            " for bean " + beanClass.getName(), e
+            );
+        }
+    }
+
+    private Map<Class<?>, Object> resolveInterceptorInstanceCache(Object interceptionTarget) {
+        Object normalizedTarget = normalizeInterceptionTarget(interceptionTarget);
+        if (normalizedTarget != null) {
+            return getOrCreateTargetInterceptorCache(normalizedTarget);
+        }
+        Map<Class<?>, Object> constructionCache = constructionInterceptorInstanceCache().get();
+        if (constructionCache != null) {
+            return constructionCache;
+        }
+        return interceptorInstanceCache;
+    }
+
+    private Map<Class<?>, Object> getOrCreateTargetInterceptorCache(Object interceptionTarget) {
+        Object normalizedTarget = normalizeInterceptionTarget(interceptionTarget);
+        if (normalizedTarget == null) {
+            return interceptorInstanceCache;
+        }
+        synchronized (interceptorTargetInstanceCache) {
+            Map<Class<?>, Object> targetCache = interceptorTargetInstanceCache.get(normalizedTarget);
+            if (targetCache == null) {
+                targetCache = new ConcurrentHashMap<Class<?>, Object>();
+                interceptorTargetInstanceCache.put(normalizedTarget, targetCache);
+            }
+            return targetCache;
+        }
+    }
+
+    private Object resolveInterceptionTarget(jakarta.interceptor.InvocationContext invocationContext) {
+        if (invocationContext == null) {
+            return null;
+        }
+        return normalizeInterceptionTarget(invocationContext.getTarget());
+    }
+
+    private Object normalizeInterceptionTarget(Object target) {
+        if (target instanceof InterceptorAwareProxyGenerator.InterceptorProxyState) {
+            Object unwrapped = ((InterceptorAwareProxyGenerator.InterceptorProxyState) target).$$_getTargetInstance();
+            if (unwrapped != null) {
+                return unwrapped;
+            }
+        }
+        return target;
+    }
+
+    private Object invokeInterceptorMethod(Object interceptorInstance,
+                                           Method interceptorMethod,
+                                           jakarta.interceptor.InvocationContext invocationContext) throws Exception {
+        if (interceptorInstance == null || interceptorMethod == null) {
+            return invocationContext != null ? invocationContext.proceed() : null;
+        }
+        interceptorMethod.setAccessible(true);
+        try {
+            return interceptorMethod.invoke(interceptorInstance, invocationContext);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getTargetException();
+            if (cause instanceof Exception) {
+                throw (Exception) cause;
+            }
+            if (cause instanceof Error) {
+                throw (Error) cause;
+            }
+            throw new RuntimeException(cause);
+        }
+    }
+
+    private ThreadLocal<Map<Class<?>, Object>> constructionInterceptorInstanceCache() {
+        if (constructionInterceptorInstanceCache == null) {
+            constructionInterceptorInstanceCache = new ThreadLocal<Map<Class<?>, Object>>();
+        }
+        return constructionInterceptorInstanceCache;
+    }
+
+    private void initializeTargetInterceptorInstances(T instance) {
+        Object interceptionTarget = normalizeInterceptionTarget(instance);
+        if (interceptionTarget == null || interceptorInfoByClass.isEmpty()) {
+            return;
+        }
+        for (InterceptorInfo interceptorInfo : interceptorInfoByClass.values()) {
+            getOrCreateInterceptorInstance(interceptorInfo, interceptionTarget);
+        }
+    }
+
+    private void clearTargetInterceptorInstances(Object instance) {
+        Object interceptionTarget = normalizeInterceptionTarget(instance);
+        if (interceptionTarget == null) {
+            return;
+        }
+        synchronized (interceptorTargetInstanceCache) {
+            interceptorTargetInstanceCache.remove(interceptionTarget);
+        }
     }
 
     /**
@@ -2499,10 +2646,14 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             if (interceptorClass == null) {
                 continue;
             }
-            Object interceptorInstance = getOrCreateLegacyInterceptorInstance(interceptorClass);
             Method aroundInvokeMethod = findAroundInvokeMethod(interceptorClass);
             if (aroundInvokeMethod != null) {
-                builder.addInterceptor(interceptorInstance, aroundInvokeMethod);
+                final Method interceptorMethod = aroundInvokeMethod;
+                builder.addInvocation(ctx -> invokeInterceptorMethod(
+                        getOrCreateLegacyInterceptorInstance(interceptorClass, resolveInterceptionTarget(ctx)),
+                        interceptorMethod,
+                        ctx
+                ));
             }
         }
         return builder.build();
@@ -2529,23 +2680,27 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     }
 
     private Object getOrCreateLegacyInterceptorInstance(Class<?> interceptorClass) {
-        return interceptorInstanceCache.computeIfAbsent(interceptorClass, clazz -> {
-            try {
-                Constructor<?> constructor = selectInterceptorConstructor(clazz);
-                constructor.setAccessible(true);
-                Object[] constructorArgs = resolveConstructorParameters(constructor, this);
-                Object instance = constructor.newInstance(constructorArgs);
-                injectInterceptorFields(instance, clazz, this);
-                injectInterceptorMethods(instance, clazz, this);
-                invokeInterceptorPostConstruct(instance, clazz);
-                return instance;
-            } catch (Exception e) {
-                throw new RuntimeException(
-                        "Failed to create legacy interceptor instance of " + clazz.getName() +
-                                " for bean " + beanClass.getName(), e
-                );
+        return getOrCreateLegacyInterceptorInstance(interceptorClass, null);
+    }
+
+    private Object getOrCreateLegacyInterceptorInstance(Class<?> interceptorClass, Object interceptionTarget) {
+        if (interceptorClass == null) {
+            return null;
+        }
+        Map<Class<?>, Object> cache = resolveInterceptorInstanceCache(interceptionTarget);
+        Object existing = cache.get(interceptorClass);
+        if (existing != null) {
+            return existing;
+        }
+        synchronized (cache) {
+            existing = cache.get(interceptorClass);
+            if (existing != null) {
+                return existing;
             }
-        });
+            Object created = createLegacyInterceptorInstance(interceptorClass);
+            cache.put(interceptorClass, created);
+            return created;
+        }
     }
 
     // ====================================================================================

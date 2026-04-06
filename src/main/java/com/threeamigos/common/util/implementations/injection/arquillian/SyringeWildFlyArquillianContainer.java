@@ -28,9 +28,6 @@ import java.net.InetAddress;
  */
 public class SyringeWildFlyArquillianContainer implements DeployableContainer<SyringeWildFlyConfiguration> {
 
-    private static final SyringeDeploymentExceptionTransformer DEPLOYMENT_EXCEPTION_TRANSFORMER =
-            new SyringeDeploymentExceptionTransformer();
-
     private SyringeWildFlyConfiguration configuration;
     private ModelControllerClient client;
 
@@ -81,15 +78,6 @@ public class SyringeWildFlyArquillianContainer implements DeployableContainer<Sy
         try {
             helper.deploy(runtimeName, new ByteArrayInputStream(content));
         } catch (Exception e) {
-            Throwable transformed;
-            try {
-                transformed = DEPLOYMENT_EXCEPTION_TRANSFORMER.transform(e);
-            } catch (Throwable transformError) {
-                throw new DeploymentException("Could not deploy archive " + runtimeName, e);
-            }
-            if (transformed instanceof RuntimeException && isCdiDeploymentThrowable(transformed)) {
-                throw (RuntimeException) transformed;
-            }
             throw new DeploymentException("Could not deploy archive " + runtimeName, e);
         }
 
@@ -164,21 +152,6 @@ public class SyringeWildFlyArquillianContainer implements DeployableContainer<Sy
             root = "/" + root;
         }
         return root;
-    }
-
-    private static boolean isCdiDeploymentThrowable(Throwable throwable) {
-        if (throwable == null) {
-            return false;
-        }
-        String className = throwable.getClass().getName();
-        return "javax.enterprise.inject.spi.DefinitionException".equals(className)
-                || "jakarta.enterprise.inject.spi.DefinitionException".equals(className)
-                || "org.jboss.weld.exceptions.DefinitionException".equals(className)
-                || "javax.enterprise.inject.spi.DeploymentException".equals(className)
-                || "jakarta.enterprise.inject.spi.DeploymentException".equals(className)
-                || "org.jboss.weld.exceptions.DeploymentException".equals(className)
-                || "org.jboss.weld.exceptions.UnserializableDependencyException".equals(className)
-                || "org.jboss.weld.exceptions.InconsistentSpecializationException".equals(className);
     }
 
     /**

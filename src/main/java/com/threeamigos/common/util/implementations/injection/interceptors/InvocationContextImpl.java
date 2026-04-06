@@ -269,13 +269,23 @@ public class InvocationContextImpl implements InvocationContext {
     @Override
     public Object proceed() throws Exception {
         if (currentPosition < chain.getInvocations().size()) {
-            // Execute next interceptor in the chain
-            InterceptorChain.InterceptorInvocation nextInterceptor = chain.getInvocations().get(currentPosition++);
-            return nextInterceptor.invoke(this);
-        } else {
-            // All interceptors executed - invoke target method/constructor
-            return targetInvocation.invoke(this);
+            // Advance the position only for successful navigation to the next chain element.
+            // If invocation throws, restore the position so callers can catch and retry proceed().
+            int interceptorPosition = currentPosition;
+            InterceptorChain.InterceptorInvocation nextInterceptor = chain.getInvocations().get(interceptorPosition);
+            currentPosition = interceptorPosition + 1;
+            try {
+                return nextInterceptor.invoke(this);
+            } catch (Exception e) {
+                currentPosition = interceptorPosition;
+                throw e;
+            } catch (Error e) {
+                currentPosition = interceptorPosition;
+                throw e;
+            }
         }
+        // All interceptors executed - invoke target method/constructor
+        return targetInvocation.invoke(this);
     }
 
     /**

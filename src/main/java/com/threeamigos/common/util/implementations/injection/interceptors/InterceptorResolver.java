@@ -123,6 +123,7 @@ public class InterceptorResolver {
         Set<Annotation> targetBindings = method != null
                 ? mergeBindings(classBindings, extractInterceptorBindings(method, targetClass, annotatedTypeOverride))
                 : classBindings;
+        targetBindings = filterOutInterceptorBindingMetaAnnotations(targetBindings);
 
         if (targetBindings.isEmpty()) {
             return Collections.emptySet();
@@ -189,6 +190,7 @@ public class InterceptorResolver {
                 ? extractInterceptorBindings(constructor, targetClass, annotatedTypeOverride)
                 : Collections.emptySet();
         Set<Annotation> targetBindings = mergeBindings(classBindings, constructorBindings);
+        targetBindings = filterOutInterceptorBindingMetaAnnotations(targetBindings);
 
         if (targetBindings.isEmpty()) {
             return Collections.emptySet();
@@ -352,7 +354,7 @@ public class InterceptorResolver {
                                            Set<Class<? extends Annotation>> visiting,
                                            boolean overrideExisting) {
         Class<? extends Annotation> bindingType = binding.annotationType();
-        if (!isInterceptorBinding(bindingType)) {
+        if (!isInterceptorBinding(bindingType) || isInterceptorBindingMetaAnnotation(bindingType)) {
             return;
         }
 
@@ -411,6 +413,28 @@ public class InterceptorResolver {
         return AnnotationsEnum.hasActivateRequestContextAnnotation(annotationType) ||
                AnnotationsEnum.hasInterceptorBindingAnnotation(annotationType) ||
                knowledgeBase.isRegisteredInterceptorBinding(annotationType);
+    }
+
+    private Set<Annotation> filterOutInterceptorBindingMetaAnnotations(Set<Annotation> bindings) {
+        if (bindings == null || bindings.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<Annotation> filtered = new HashSet<>();
+        for (Annotation binding : bindings) {
+            if (binding != null && !isInterceptorBindingMetaAnnotation(binding.annotationType())) {
+                filtered.add(binding);
+            }
+        }
+        return filtered;
+    }
+
+    private boolean isInterceptorBindingMetaAnnotation(Class<? extends Annotation> annotationType) {
+        if (annotationType == null) {
+            return false;
+        }
+        String name = annotationType.getName();
+        return "jakarta.interceptor.InterceptorBinding".equals(name)
+                || "javax.interceptor.InterceptorBinding".equals(name);
     }
 
     /**
