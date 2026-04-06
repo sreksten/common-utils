@@ -588,7 +588,7 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.se.context.request.RequestContextTest
 - [x] org.jboss.cdi.tck.tests.se.customCDIProvider.CustomCDIProviderTest
 - [x] org.jboss.cdi.tck.tests.se.discovery.implicit.ImplicitBeanArchiveSETest
-- [ ] org.jboss.cdi.tck.tests.se.discovery.implicit.ImplicitBeanArchiveWithSystemPropertyTest
-- [ ] org.jboss.cdi.tck.tests.se.discovery.trimmed.TrimmedBeanArchiveSETest
-- [ ] org.jboss.cdi.tck.tests.se.events.lifecycle.StartupShutdownTest
-- [ ] org.jboss.cdi.tck.tests.vetoed.VetoedTest
+- [x] org.jboss.cdi.tck.tests.se.discovery.implicit.ImplicitBeanArchiveWithSystemPropertyTest
+- [x] org.jboss.cdi.tck.tests.se.discovery.trimmed.TrimmedBeanArchiveSETest
+- [x] org.jboss.cdi.tck.tests.se.events.lifecycle.StartupShutdownTest
+- [x] org.jboss.cdi.tck.tests.vetoed.VetoedTest

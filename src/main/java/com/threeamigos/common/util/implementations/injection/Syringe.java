@@ -253,6 +253,11 @@ public class Syringe {
     private final Map<Class<? extends Annotation>, Context> customContextsToRegister = new HashMap<>();
     private final Set<String> processedSyntheticAnnotatedTypeIds = new HashSet<String>();
     private final Set<Class<?>> syntheticAnnotatedTypeClasses = new HashSet<Class<?>>();
+    /**
+     * Classes explicitly supplied via addDiscoveredClass(...).
+     * Used to preserve deterministic archive-mode behavior in managed bootstrap paths.
+     */
+    private final Set<Class<?>> explicitlyAddedDiscoveredClasses = new HashSet<Class<?>>();
     private final Map<String, AnnotatedType<?>> additionalAnnotatedTypesForDiscoveredClasses =
             new LinkedHashMap<String, AnnotatedType<?>>();
     private final Map<ProducerBean<?>, Producer<?>> deferredProducerReplacements =
@@ -578,6 +583,7 @@ public class Syringe {
         dynamicAnnotationsRetained = false;
         processedSyntheticAnnotatedTypeIds.clear();
         syntheticAnnotatedTypeClasses.clear();
+        explicitlyAddedDiscoveredClasses.clear();
         additionalAnnotatedTypesForDiscoveredClasses.clear();
 
         // ============================================================
@@ -711,6 +717,7 @@ public class Syringe {
         }
         BeanArchiveMode mode = beanArchiveMode != null ? beanArchiveMode : BeanArchiveMode.IMPLICIT;
         knowledgeBase.add(clazz, effectiveBeanArchiveMode(mode));
+        explicitlyAddedDiscoveredClasses.add(clazz);
     }
 
     /**
@@ -1055,6 +1062,7 @@ public class Syringe {
         customContextsToRegister.clear();
         processedSyntheticAnnotatedTypeIds.clear();
         syntheticAnnotatedTypeClasses.clear();
+        explicitlyAddedDiscoveredClasses.clear();
         additionalAnnotatedTypesForDiscoveredClasses.clear();
         deferredProducerReplacements.clear();
         buildCompatibleExtensionRunner = null;
@@ -1532,7 +1540,21 @@ public class Syringe {
         if (BeanArchiveMode.EXPLICIT.equals(mode)) {
             return true;
         }
-        // IMPLICIT and TRIMMED discovery include only bean-defining classes.
+        // TRIMMED mode behavior differs by bootstrap path:
+        // - forced/manual trimmed discovery is already narrowed to bean-defining types
+        // - scanner-derived trimmed discovery keeps PAT visibility of discovered types
+        boolean trimAtTypeDiscovery = BeanArchiveMode.TRIMMED.equals(forcedBeanArchiveMode)
+                || explicitlyAddedDiscoveredClasses.contains(clazz);
+        if (BeanArchiveMode.TRIMMED.equals(mode)) {
+            if (!trimAtTypeDiscovery) {
+                return true;
+            }
+            if (clazz.isInterface() || clazz.isEnum() || clazz.isAnnotation()) {
+                return false;
+            }
+            return hasBeanDefiningAnnotation(clazz);
+        }
+        // IMPLICIT discovery includes only bean-defining classes.
         if (clazz.isInterface() || clazz.isEnum() || clazz.isAnnotation()) {
             return false;
         }
