@@ -14,6 +14,7 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -27,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("17.3 - Dependent pseudo-scope in CDI full test")
+@Isolated
 public class DependentPseudoScopeInCDIFullTest {
 
     @Test
@@ -34,21 +36,25 @@ public class DependentPseudoScopeInCDIFullTest {
     void shouldDestroyDecoratorWhenDecoratedDependentBeanIsDestroyed() {
         DecoratorLifecycleRecorder.reset();
         Syringe syringe = newSyringe(DependentDecoratedService.class, TrackingDependentDecorator.class);
-        BeanManager beanManager = syringe.getBeanManager();
+        try {
+            BeanManager beanManager = syringe.getBeanManager();
 
-        Bean<DependentDecoratedService> bean = resolveBean(beanManager, DependentDecoratedService.class);
-        CreationalContext<DependentDecoratedService> context = beanManager.createCreationalContext(bean);
-        DependentDecoratedContract instance =
-                (DependentDecoratedContract) beanManager.getReference(bean, DependentDecoratedContract.class, context);
+            Bean<DependentDecoratedService> bean = resolveBean(beanManager, DependentDecoratedService.class);
+            CreationalContext<DependentDecoratedService> context = beanManager.createCreationalContext(bean);
+            DependentDecoratedContract instance =
+                    (DependentDecoratedContract) beanManager.getReference(bean, DependentDecoratedContract.class, context);
 
-        String response = instance.ping();
-        assertTrue(response.startsWith("decorated:"));
+            String response = instance.ping();
+            assertTrue(response.startsWith("decorated:"));
 
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        Bean rawBean = bean;
-        rawBean.destroy(instance, context);
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Bean rawBean = bean;
+            rawBean.destroy(instance, context);
 
-        assertEquals(1, DecoratorLifecycleRecorder.destroyedIds().size());
+            assertEquals(1, DecoratorLifecycleRecorder.destroyedIds().size());
+        } finally {
+            syringe.shutdown();
+        }
     }
 
     @Test
@@ -56,30 +62,34 @@ public class DependentPseudoScopeInCDIFullTest {
     void shouldCreateDistinctDecoratorInstancesForDistinctDependentBeanInstances() {
         DecoratorLifecycleRecorder.reset();
         Syringe syringe = newSyringe(DependentDecoratedService.class, TrackingDependentDecorator.class);
-        BeanManager beanManager = syringe.getBeanManager();
+        try {
+            BeanManager beanManager = syringe.getBeanManager();
 
-        Bean<DependentDecoratedService> bean = resolveBean(beanManager, DependentDecoratedService.class);
+            Bean<DependentDecoratedService> bean = resolveBean(beanManager, DependentDecoratedService.class);
 
-        CreationalContext<DependentDecoratedService> contextOne = beanManager.createCreationalContext(bean);
-        DependentDecoratedContract first =
-                (DependentDecoratedContract) beanManager.getReference(bean, DependentDecoratedContract.class, contextOne);
-        String firstDecoratorId = decoratorIdFrom(first.ping());
+            CreationalContext<DependentDecoratedService> contextOne = beanManager.createCreationalContext(bean);
+            DependentDecoratedContract first =
+                    (DependentDecoratedContract) beanManager.getReference(bean, DependentDecoratedContract.class, contextOne);
+            String firstDecoratorId = decoratorIdFrom(first.ping());
 
-        CreationalContext<DependentDecoratedService> contextTwo = beanManager.createCreationalContext(bean);
-        DependentDecoratedContract second =
-                (DependentDecoratedContract) beanManager.getReference(bean, DependentDecoratedContract.class, contextTwo);
-        String secondDecoratorId = decoratorIdFrom(second.ping());
+            CreationalContext<DependentDecoratedService> contextTwo = beanManager.createCreationalContext(bean);
+            DependentDecoratedContract second =
+                    (DependentDecoratedContract) beanManager.getReference(bean, DependentDecoratedContract.class, contextTwo);
+            String secondDecoratorId = decoratorIdFrom(second.ping());
 
-        assertNotEquals(firstDecoratorId, secondDecoratorId);
+            assertNotEquals(firstDecoratorId, secondDecoratorId);
 
-        @SuppressWarnings({"rawtypes", "unchecked"})
-        Bean rawBean = bean;
-        rawBean.destroy(first, contextOne);
-        rawBean.destroy(second, contextTwo);
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Bean rawBean = bean;
+            rawBean.destroy(first, contextOne);
+            rawBean.destroy(second, contextTwo);
 
-        assertTrue(DecoratorLifecycleRecorder.destroyedIds().size() >= 2);
-        assertTrue(DecoratorLifecycleRecorder.uniqueDestroyedIds().contains(firstDecoratorId));
-        assertTrue(DecoratorLifecycleRecorder.uniqueDestroyedIds().contains(secondDecoratorId));
+            assertTrue(DecoratorLifecycleRecorder.destroyedIds().size() >= 2);
+            assertTrue(DecoratorLifecycleRecorder.uniqueDestroyedIds().contains(firstDecoratorId));
+            assertTrue(DecoratorLifecycleRecorder.uniqueDestroyedIds().contains(secondDecoratorId));
+        } finally {
+            syringe.shutdown();
+        }
     }
 
     private String decoratorIdFrom(String value) {

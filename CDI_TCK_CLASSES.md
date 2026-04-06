@@ -394,13 +394,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.broken.reference.ambiguous.AmbiguousInjectableReferenceTest
 - [x] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.broken.reference.unresolved.UnsatisfiedInjectableReferenceTest
 - [x] org.jboss.cdi.tck.tests.full.lookup.typesafe.resolution.decorator.DecoratorNotInjectedTest
-- [ ] org.jboss.cdi.tck.tests.full.vetoed.VetoedTest
-- [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.BuiltinInterceptorInjectionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.intercepted.InterceptedBeanConstructorInjectionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.intercepted.InterceptedBeanFieldInjectionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.intercepted.InterceptedBeanInitializerInjectionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.BeanTypeParamConstructorTest
-- [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.BeanTypeParamDisposerTest
+- [x] org.jboss.cdi.tck.tests.full.vetoed.VetoedTest
+- [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.BuiltinInterceptorInjectionTest
+- [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.intercepted.InterceptedBeanConstructorInjectionTest
+- [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.intercepted.InterceptedBeanFieldInjectionTest
+- [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.intercepted.InterceptedBeanInitializerInjectionTest
+- [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.BeanTypeParamConstructorTest
+- [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.BeanTypeParamDisposerTest
 - [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.BeanTypeParamFieldTest
 - [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.BeanTypeParamInitializerTest
 - [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.BeanTypeParamProducerTest
