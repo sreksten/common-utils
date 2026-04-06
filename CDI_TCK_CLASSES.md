@@ -534,13 +534,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.beanConstructor.BeanConstructorWithParametersTest
 - [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalClass.FinalClassTest
 - [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.NonPrivateNonStaticSuperclassMethodTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.PackagePrivateFinalMethodNotProxyableTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.PrivateFinalMethodTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.ProtectedFinalMethodNotProxyableTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.PublicFinalMethodNotProxyableTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.StaticFinalMethodTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.interceptor.InterceptedBeanProxyTest
-- [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.primitive.UnproxyableTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.PackagePrivateFinalMethodNotProxyableTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.PrivateFinalMethodTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.ProtectedFinalMethodNotProxyableTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.PublicFinalMethodNotProxyableTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.finalMethod.StaticFinalMethodTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.interceptor.InterceptedBeanProxyTest
+- [x] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.primitive.UnproxyableTest
 - [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.unproxyable.privateConstructor.PrivateConstructorTest
 - [ ] org.jboss.cdi.tck.tests.lookup.dependency.resolution.AmbiguousDependencyResolutionTest
 - [ ] org.jboss.cdi.tck.tests.lookup.dependency.resolution.broken.ambiguous.AmbiguousDependencyTest
