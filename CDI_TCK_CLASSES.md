@@ -429,13 +429,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.implementation.initializer.broken.parameterAnnotatedAsyncObserves.ParameterAnnotatedAsyncObservesTest
 - [x] org.jboss.cdi.tck.tests.implementation.initializer.broken.parameterAnnotatedDisposes.ParameterAnnotatedDisposesTest
 - [x] org.jboss.cdi.tck.tests.implementation.initializer.broken.parameterAnnotatedObserves.ParameterAnnotatedObservesTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.field.definition.ProducerFieldDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.array.ProducerFieldArrayTypeVariableTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.array.ProducerFieldArrayWildcardTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.inject.InjectAnnotatedProducerFieldTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.interceptor.ProducerFieldOnInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.typeVariable.ProducerFieldWithTypeVariableTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.typeVariable2.RequestScopedProducerFieldWithTypeVariableTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.field.definition.ProducerFieldDefinitionTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.array.ProducerFieldArrayTypeVariableTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.array.ProducerFieldArrayWildcardTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.inject.InjectAnnotatedProducerFieldTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.interceptor.ProducerFieldOnInterceptorTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.typeVariable.ProducerFieldWithTypeVariableTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.typeVariable2.RequestScopedProducerFieldWithTypeVariableTest
 - [ ] org.jboss.cdi.tck.tests.implementation.producer.field.definition.broken.wildcard.ProducerFieldTypeWithWildcardTest
 - [ ] org.jboss.cdi.tck.tests.implementation.producer.field.lifecycle.ProducerFieldLifecycleTest
 - [ ] org.jboss.cdi.tck.tests.implementation.producer.method.broken.array.ProducerMethodArrayTypeVariableTest
