@@ -443,13 +443,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.implementation.producer.method.broken.interceptor.ProducerMethodOnInterceptorTest
 - [x] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterAnnotatedDisposes.ParameterAnnotatedDisposesTest
 - [x] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterAnnotatedObserves.ParameterAnnotatedObservesTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterAnnotatedObservesAsync.ParameterAnnotatedAsyncObservesTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterizedTypeWithTypeParameter.ParameterizedReturnTypeWithTypeVariableTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterizedTypeWithTypeParameter.ParametrizedReturnTypeWithTypeVariable02Test
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterizedTypeWithWildcard.ParameterizedTypeWithWildcardTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterizedTypeWithWildcard.ParametrizedTypeWithWildcard02Test
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.method.broken.typeVariableReturnType.TypeVariableReturnTypeTest
-- [ ] org.jboss.cdi.tck.tests.implementation.producer.method.definition.ProducerMethodDefinitionTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterAnnotatedObservesAsync.ParameterAnnotatedAsyncObservesTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterizedTypeWithTypeParameter.ParameterizedReturnTypeWithTypeVariableTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterizedTypeWithTypeParameter.ParametrizedReturnTypeWithTypeVariable02Test
+- [x] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterizedTypeWithWildcard.ParameterizedTypeWithWildcardTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.method.broken.parameterizedTypeWithWildcard.ParametrizedTypeWithWildcard02Test
+- [x] org.jboss.cdi.tck.tests.implementation.producer.method.broken.typeVariableReturnType.TypeVariableReturnTypeTest
+- [x] org.jboss.cdi.tck.tests.implementation.producer.method.definition.ProducerMethodDefinitionTest
 - [ ] org.jboss.cdi.tck.tests.implementation.producer.method.definition.name.ProducerMethodWithDefaultNameTest
 - [ ] org.jboss.cdi.tck.tests.implementation.producer.method.lifecycle.ProducerMethodLifecycleTest
 - [ ] org.jboss.cdi.tck.tests.implementation.simple.definition.SimpleBeanDefinitionTest

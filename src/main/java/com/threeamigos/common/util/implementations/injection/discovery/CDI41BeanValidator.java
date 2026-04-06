@@ -2377,6 +2377,32 @@ public class CDI41BeanValidator {
         return false;
     }
 
+    private boolean hasOnlyStaticProducersAndDisposers(Class<?> clazz) {
+        boolean foundProducerOrDisposer = false;
+
+        for (Field field : clazz.getDeclaredFields()) {
+            if (!hasProducesAnnotation(field)) {
+                continue;
+            }
+            foundProducerOrDisposer = true;
+            if (!Modifier.isStatic(field.getModifiers())) {
+                return false;
+            }
+        }
+
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (!hasProducesAnnotation(method) && !hasDisposesParameter(method)) {
+                continue;
+            }
+            foundProducerOrDisposer = true;
+            if (!Modifier.isStatic(method.getModifiers())) {
+                return false;
+            }
+        }
+
+        return foundProducerOrDisposer;
+    }
+
     /**
      * Returns true when a class is declared as an alternative directly or via stereotype.
      */
@@ -3206,12 +3232,18 @@ public class CDI41BeanValidator {
                 // Kept for backward compatibility with existing discovery behavior in this implementation.
                 || hasDecoratorAnnotation(clazz)
                 || hasAlternativeAnnotation(clazz)) {
-            // CDI compatibility: disposer methods declared on a non-bean class are ignored.
-            // A class that only declares disposer methods but has no valid bean constructor
-            // must therefore not be treated as a discovered bean.
-            if (!hasNoArgsConstructor(clazz) && !hasInjectConstructor(clazz)
-                    && hasAnyDisposer(clazz) && !hasAnyProducer(clazz)) {
-                return false;
+            if (!hasNoArgsConstructor(clazz) && !hasInjectConstructor(clazz)) {
+                // CDI compatibility: disposer methods declared on a non-bean class are ignored.
+                // A class that only declares disposer methods but has no valid bean constructor
+                // must therefore not be treated as a discovered bean.
+                if (hasAnyDisposer(clazz) && !hasAnyProducer(clazz)) {
+                    return false;
+                }
+                // CDI compatibility: static producer/disposer members declared on a non-bean class
+                // are ignored.
+                if (hasOnlyStaticProducersAndDisposers(clazz)) {
+                    return false;
+                }
             }
             return true;
         }
