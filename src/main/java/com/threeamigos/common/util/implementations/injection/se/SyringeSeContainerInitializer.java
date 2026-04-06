@@ -49,7 +49,7 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
 
     @Override
     public SeContainerInitializer addPackages(Class<?>... packageClasses) {
-        return addPackages(true, packageClasses);
+        return addPackages(false, packageClasses);
     }
 
     @Override
@@ -66,7 +66,7 @@ public class SyringeSeContainerInitializer extends SeContainerInitializer {
 
     @Override
     public SeContainerInitializer addPackages(Package... packages) {
-        return addPackages(true, packages);
+        return addPackages(false, packages);
     }
 
     @Override

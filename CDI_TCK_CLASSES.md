@@ -576,13 +576,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.interceptor.InterceptorNotResolvedInterModuleTest
 - [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.interceptor.InterceptorNotResolvedTest
 - [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.parameterized.AssignabilityOfRawAndParameterizedTypesTest
-- [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.parameterized.raw.RawBeanTypeParameterizedRequiredTypeTest
-- [ ] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.primitive.PrimitiveInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.se.container.BootstrapSEContainerTest
-- [ ] org.jboss.cdi.tck.tests.se.container.contextualReference.InvalidContextualReferenceTest
-- [ ] org.jboss.cdi.tck.tests.se.container.customClassloader.CustomClassLoaderSETest
-- [ ] org.jboss.cdi.tck.tests.se.context.ContextSETest
-- [ ] org.jboss.cdi.tck.tests.se.context.activation.interceptor.ActivateRequestContextByInterceptorTest
+- [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.parameterized.raw.RawBeanTypeParameterizedRequiredTypeTest
+- [x] org.jboss.cdi.tck.tests.lookup.typesafe.resolution.primitive.PrimitiveInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.se.container.BootstrapSEContainerTest
+- [x] org.jboss.cdi.tck.tests.se.container.contextualReference.InvalidContextualReferenceTest
+- [x] org.jboss.cdi.tck.tests.se.container.customClassloader.CustomClassLoaderSETest
+- [x] org.jboss.cdi.tck.tests.se.context.ContextSETest
+- [x] org.jboss.cdi.tck.tests.se.context.activation.interceptor.ActivateRequestContextByInterceptorTest
 - [ ] org.jboss.cdi.tck.tests.se.context.activation.programmatic.ActivateRequestContextProgrammaticallyTest
 - [ ] org.jboss.cdi.tck.tests.se.context.custom.CustomRequestContextSETest
 - [ ] org.jboss.cdi.tck.tests.se.context.request.RequestContextTest
