@@ -387,13 +387,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.full.lookup.dynamic.broken.raw.RawInstanceCustomBeanTest
 - [x] org.jboss.cdi.tck.tests.full.lookup.dynamic.broken.raw.RawInstanceProcessInjectionPointTest
 - [x] org.jboss.cdi.tck.tests.full.lookup.dynamic.destroy.normal.DestroyingNormalScopedInstanceTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.el.ResolutionByNameTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.injection.visibility.InjectionVisibilityTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.InjectableReferenceTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.InjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.broken.reference.ambiguous.AmbiguousInjectableReferenceTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.broken.reference.unresolved.UnsatisfiedInjectableReferenceTest
-- [ ] org.jboss.cdi.tck.tests.full.lookup.typesafe.resolution.decorator.DecoratorNotInjectedTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.el.ResolutionByNameTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.injection.visibility.InjectionVisibilityTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.InjectableReferenceTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.InjectionPointTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.broken.reference.ambiguous.AmbiguousInjectableReferenceTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.injectionpoint.broken.reference.unresolved.UnsatisfiedInjectableReferenceTest
+- [x] org.jboss.cdi.tck.tests.full.lookup.typesafe.resolution.decorator.DecoratorNotInjectedTest
 - [ ] org.jboss.cdi.tck.tests.full.vetoed.VetoedTest
 - [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.BuiltinInterceptorInjectionTest
 - [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.injection.intercepted.InterceptedBeanConstructorInjectionTest

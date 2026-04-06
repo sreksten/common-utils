@@ -11,6 +11,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.*;
 import com.threeamigos.common.util.implementations.injection.resolution.LegacyNewBeanAdapter;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.CustomContextAdapter;
+import com.threeamigos.common.util.implementations.injection.el.ELSupport;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -23,7 +24,6 @@ import com.threeamigos.common.util.implementations.injection.util.LifecycleMetho
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
-import jakarta.el.ELContext;
 import jakarta.el.ELResolver;
 import jakarta.el.ExpressionFactory;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -112,32 +112,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             new ConcurrentHashMap<>();
     private static final Map<Object, DependentReference<?>> TRANSIENT_DEPENDENT_REFERENCE_REGISTRY =
             Collections.synchronizedMap(new IdentityHashMap<Object, DependentReference<?>>());
-    private static final ELResolver NOOP_EL_RESOLVER = new ELResolver() {
-        @Override
-        public Object getValue(ELContext context, Object base, Object property) {
-            return null;
-        }
-
-        @Override
-        public Class<?> getType(ELContext context, Object base, Object property) {
-            return null;
-        }
-
-        @Override
-        public void setValue(ELContext context, Object base, Object property, Object value) {
-            // no-op
-        }
-
-        @Override
-        public boolean isReadOnly(ELContext context, Object base, Object property) {
-            return true;
-        }
-
-        @Override
-        public Class<?> getCommonPropertyType(ELContext context, Object base) {
-            return Object.class;
-        }
-    };
 
     private final KnowledgeBase knowledgeBase;
     private final BeanResolver beanResolver;
@@ -151,6 +125,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     private volatile boolean legacyCdi10NewEnabled;
     private volatile boolean afterBeanDiscoveryFired;
     private volatile boolean afterDeploymentValidationFired;
+    private transient volatile ELResolver beanManagerELResolver;
     private final Map<Class<? extends Annotation>, List<Context>> bceContextInstances =
             new ConcurrentHashMap<Class<? extends Annotation>, List<Context>>();
 
@@ -2296,10 +2271,23 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             }
 
             if (DEPENDENT.matches(bean.getScope()) && ctx instanceof CreationalContextImpl) {
+                if (isUnconstructibleManagedBean(bean)) {
+                    throw new jakarta.enterprise.inject.UnsatisfiedResolutionException(
+                            "No constructible bean found for injection point: " + injectionPoint);
+                }
                 @SuppressWarnings("unchecked")
                 Bean<Object> dependentBean = (Bean<Object>) bean;
                 CreationalContext<Object> childContext = createCreationalContext(dependentBean);
-                Object instance = dependentBean.create(childContext);
+                Object instance;
+                try {
+                    instance = dependentBean.create(childContext);
+                } catch (jakarta.enterprise.inject.CreationException creationException) {
+                    if (isUnconstructibleManagedBean(bean) || hasCause(creationException, NoSuchMethodException.class)) {
+                        throw new jakarta.enterprise.inject.UnsatisfiedResolutionException(
+                                "No constructible bean found for injection point: " + injectionPoint);
+                    }
+                    throw creationException;
+                }
                 if (isTransientReferenceInjectionPoint(injectionPoint)) {
                     registerTransientReference(beanManagerId, dependentBean, instance, childContext);
                 } else {
@@ -2316,6 +2304,40 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 beanResolver.clearCurrentInjectionPoint();
             }
         }
+    }
+
+    private boolean isUnconstructibleManagedBean(Bean<?> bean) {
+        if (!(bean instanceof BeanImpl<?>)) {
+            return false;
+        }
+        BeanImpl<?> managedBean = (BeanImpl<?>) bean;
+        if (managedBean.getInjectConstructor() != null) {
+            return false;
+        }
+        Class<?> beanClass = managedBean.getBeanClass();
+        if (beanClass == null) {
+            return true;
+        }
+        for (Constructor<?> constructor : beanClass.getDeclaredConstructors()) {
+            if (constructor.getParameterCount() == 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean hasCause(Throwable throwable, Class<? extends Throwable> expectedType) {
+        if (throwable == null || expectedType == null) {
+            return false;
+        }
+        Throwable current = throwable;
+        while (current != null) {
+            if (expectedType.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private boolean isDefaultQualified(Set<Annotation> qualifiers) {
@@ -2812,15 +2834,21 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     /**
      * Returns an ELResolver for CDI beans.
      *
-     * <p><b>Note:</b> EL integration not yet implemented.
-     *
      * @return EL resolver
-     * @throws UnsupportedOperationException always
      * @deprecated EL integration deprecated in CDI 4.1
      */
     @Override
     public ELResolver getELResolver() {
-        return NOOP_EL_RESOLVER;
+        ELResolver resolver = beanManagerELResolver;
+        if (resolver != null) {
+            return resolver;
+        }
+        synchronized (this) {
+            if (beanManagerELResolver == null) {
+                beanManagerELResolver = ELSupport.createELResolver(this);
+            }
+            return beanManagerELResolver;
+        }
     }
 
     /**
@@ -4055,10 +4083,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
             @Override
             public Set<InjectionPoint> getInjectionPoints() {
-                if (info.getDelegateInjectionPoint() == null) {
-                    return Collections.emptySet();
-                }
-                return Collections.<InjectionPoint>singleton(info.getDelegateInjectionPoint());
+                return resolveDecoratorInjectionPoints(info, this);
             }
 
             @Override
@@ -4124,6 +4149,134 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 return Objects.hashCode(info.getDecoratorClass());
             }
         };
+    }
+
+    @SuppressWarnings("unchecked")
+    private Set<InjectionPoint> resolveDecoratorInjectionPoints(DecoratorInfo info, Bean<?> metadataBean) {
+        Set<InjectionPoint> resolved = new LinkedHashSet<>();
+        if (info == null) {
+            return Collections.emptySet();
+        }
+
+        Bean<Object> decoratorMetadataBean = (Bean<Object>) metadataBean;
+        InjectionPoint delegateInjectionPoint = info.getDelegateInjectionPoint();
+        Member delegateMember = delegateInjectionPoint != null ? delegateInjectionPoint.getMember() : null;
+
+        Class<?> decoratorClass = info.getDecoratorClass();
+        if (decoratorClass != null) {
+            for (Bean<?> bean : knowledgeBase.getBeans()) {
+                if (!(bean instanceof Decorator<?>)) {
+                    continue;
+                }
+                if (!decoratorClass.equals(bean.getBeanClass())) {
+                    continue;
+                }
+                Set<InjectionPoint> candidateInjectionPoints = bean.getInjectionPoints();
+                if (candidateInjectionPoints != null) {
+                    resolved.addAll(candidateInjectionPoints);
+                }
+            }
+
+            // Fallback for metadata-only decorators: derive injection points from class members.
+            for (Class<?> current = decoratorClass;
+                 current != null && !Object.class.equals(current);
+                 current = current.getSuperclass()) {
+                for (Field field : current.getDeclaredFields()) {
+                    if (Modifier.isStatic(field.getModifiers()) || !hasInjectMarker(field.getAnnotations())) {
+                        continue;
+                    }
+                    if (delegateMember instanceof Field && delegateMember.equals(field)) {
+                        if (delegateInjectionPoint != null) {
+                            resolved.add(delegateInjectionPoint);
+                        }
+                        continue;
+                    }
+                    resolved.add(new InjectionPointImpl<Object>(field, decoratorMetadataBean));
+                }
+
+                for (Method method : current.getDeclaredMethods()) {
+                    if (!hasInjectMarker(method.getAnnotations())) {
+                        continue;
+                    }
+                    Parameter[] parameters = method.getParameters();
+                    for (int i = 0; i < parameters.length; i++) {
+                        Parameter parameter = parameters[i];
+                        if (matchesDelegateParameter(delegateInjectionPoint, parameter, i) ||
+                                hasDelegateMarker(parameter.getAnnotations())) {
+                            if (delegateInjectionPoint != null) {
+                                resolved.add(delegateInjectionPoint);
+                            }
+                            continue;
+                        }
+                        resolved.add(new InjectionPointImpl<Object>(parameter, decoratorMetadataBean));
+                    }
+                }
+            }
+
+            for (Constructor<?> constructor : decoratorClass.getDeclaredConstructors()) {
+                if (!hasInjectMarker(constructor.getAnnotations())) {
+                    continue;
+                }
+                Parameter[] parameters = constructor.getParameters();
+                for (int i = 0; i < parameters.length; i++) {
+                    Parameter parameter = parameters[i];
+                    if (matchesDelegateParameter(delegateInjectionPoint, parameter, i) ||
+                            hasDelegateMarker(parameter.getAnnotations())) {
+                        if (delegateInjectionPoint != null) {
+                            resolved.add(delegateInjectionPoint);
+                        }
+                        continue;
+                    }
+                    resolved.add(new InjectionPointImpl<Object>(parameter, decoratorMetadataBean));
+                }
+            }
+        }
+        if (resolved.isEmpty() && delegateInjectionPoint != null) {
+            resolved.add(delegateInjectionPoint);
+        }
+        return Collections.unmodifiableSet(resolved);
+    }
+
+    private boolean matchesDelegateParameter(InjectionPoint delegateInjectionPoint,
+                                             Parameter parameter,
+                                             int parameterIndex) {
+        if (delegateInjectionPoint == null || parameter == null) {
+            return false;
+        }
+
+        Member delegateMember = delegateInjectionPoint.getMember();
+        if (!(delegateMember instanceof java.lang.reflect.Executable)) {
+            return false;
+        }
+
+        java.lang.reflect.Executable executable = parameter.getDeclaringExecutable();
+        if (!delegateMember.equals(executable)) {
+            return false;
+        }
+
+        Annotated annotated = delegateInjectionPoint.getAnnotated();
+        if (annotated instanceof AnnotatedParameter<?>) {
+            return ((AnnotatedParameter<?>) annotated).getPosition() == parameterIndex;
+        }
+
+        return executable.getParameterCount() == 1;
+    }
+
+    private boolean hasInjectMarker(Annotation[] annotations) {
+        if (annotations == null) {
+            return false;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation == null) {
+                continue;
+            }
+            String annotationTypeName = annotation.annotationType().getName();
+            if ("jakarta.inject.Inject".equals(annotationTypeName) ||
+                    "javax.inject.Inject".equals(annotationTypeName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
