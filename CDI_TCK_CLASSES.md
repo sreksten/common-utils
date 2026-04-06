@@ -464,13 +464,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.implementation.simple.lifecycle.unproxyable.UnproxyableManagedBeanTest
 - [x] org.jboss.cdi.tck.tests.inheritance.generics.MemberLevelInheritanceTest
 - [x] org.jboss.cdi.tck.tests.interceptors.definition.InterceptorDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.DependentBeanFinalMethodInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.FinalClassClassLevelInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.NormalScopedBeanFinalClassInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.NormalScopedBeanFinalMethodInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.nonDependent.NonDependentInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.observer.InterceptorWithObserverMethodTest
-- [ ] org.jboss.cdi.tck.tests.interceptors.definition.broken.observer.async.InterceptorWithAsyncObserverMethodTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.DependentBeanFinalMethodInterceptorTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.FinalClassClassLevelInterceptorTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.NormalScopedBeanFinalClassInterceptorTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.finalClassInterceptor.NormalScopedBeanFinalMethodInterceptorTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.nonDependent.NonDependentInterceptorTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.observer.InterceptorWithObserverMethodTest
+- [x] org.jboss.cdi.tck.tests.interceptors.definition.broken.observer.async.InterceptorWithAsyncObserverMethodTest
 - [ ] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.InterceptorBindingInheritanceTest
 - [ ] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalClassWithInheritedClassLevelInterceptorTest
 - [ ] org.jboss.cdi.tck.tests.interceptors.definition.inheritance.broken.binding.FinalClassWithInheritedStereotypeInterceptorTest

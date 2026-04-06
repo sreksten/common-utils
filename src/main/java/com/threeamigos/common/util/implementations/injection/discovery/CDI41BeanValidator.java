@@ -4669,6 +4669,10 @@ public class CDI41BeanValidator {
             valid = false;
         }
 
+        if (declaresObserverMethod(clazz)) {
+            valid = false;
+        }
+
         // Only register if valid
         if (valid) {
             InterceptorInfo info = new InterceptorInfo(
@@ -4682,6 +4686,20 @@ public class CDI41BeanValidator {
             );
             knowledgeBase.addInterceptorInfo(info);
         }
+    }
+
+    private boolean declaresObserverMethod(Class<?> clazz) {
+        for (Method method : clazz.getDeclaredMethods()) {
+            for (Parameter parameter : method.getParameters()) {
+                if (hasObservesAnnotation(parameter) || hasObservesAsyncAnnotation(parameter)) {
+                    knowledgeBase.addDefinitionError(clazz.getName()
+                            + ": interceptors may not declare observer methods. Found observer parameter in "
+                            + fmtMethod(method));
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private boolean isInterceptorEnabledAtDeployment(Class<?> interceptorClass) {
