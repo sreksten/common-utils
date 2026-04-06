@@ -2368,6 +2368,15 @@ public class CDI41BeanValidator {
         return false;
     }
 
+    private boolean hasAnyDisposer(Class<?> clazz) {
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (hasDisposesParameter(method)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Returns true when a class is declared as an alternative directly or via stereotype.
      */
@@ -3197,6 +3206,13 @@ public class CDI41BeanValidator {
                 // Kept for backward compatibility with existing discovery behavior in this implementation.
                 || hasDecoratorAnnotation(clazz)
                 || hasAlternativeAnnotation(clazz)) {
+            // CDI compatibility: disposer methods declared on a non-bean class are ignored.
+            // A class that only declares disposer methods but has no valid bean constructor
+            // must therefore not be treated as a discovered bean.
+            if (!hasNoArgsConstructor(clazz) && !hasInjectConstructor(clazz)
+                    && hasAnyDisposer(clazz) && !hasAnyProducer(clazz)) {
+                return false;
+            }
             return true;
         }
 

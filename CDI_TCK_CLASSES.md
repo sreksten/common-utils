@@ -408,13 +408,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.interceptor.InterceptedBeanTypeParamFieldTest
 - [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.interceptor.InterceptedBeanTypeParamInitializerTest
 - [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.interceptor.InterceptorTypeParamConstructorTest
-- [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.interceptor.InterceptorTypeParamFieldTest
-- [ ] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.interceptor.InterceptorTypeParamInitializerTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.DisposalMethodDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.initializerUnallowed.InitializerUnallowedDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.interceptor.DisposerMethodOnInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.multiParams.MultipleDisposeParametersDefinitionTest
-- [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.multiple.MultipleDisposerMethodsForProducerMethodTest
+- [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.interceptor.InterceptorTypeParamFieldTest
+- [x] org.jboss.cdi.tck.tests.implementation.builtin.metadata.broken.typeparam.interceptor.InterceptorTypeParamInitializerTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.DisposalMethodDefinitionTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.initializerUnallowed.InitializerUnallowedDefinitionTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.interceptor.DisposerMethodOnInterceptorTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.multiParams.MultipleDisposeParametersDefinitionTest
+- [x] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.multiple.MultipleDisposerMethodsForProducerMethodTest
 - [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.observes.ObserverParameterUnallowedDefinitionTest
 - [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.producesUnallowed.ProducesUnallowedDefinitionTest
 - [ ] org.jboss.cdi.tck.tests.implementation.disposal.method.definition.broken.unresolvedMethod.UnresolvedDisposalMethodDefinitionTest
