@@ -593,3 +593,32 @@ Total classes: 582
 - [x] org.jboss.cdi.tck.tests.se.discovery.trimmed.TrimmedBeanArchiveSETest
 - [x] org.jboss.cdi.tck.tests.se.events.lifecycle.StartupShutdownTest
 - [x] org.jboss.cdi.tck.tests.vetoed.VetoedTest
+- [x] org.jboss.cdi.tck.interceptors.tests.bindings.aroundConstruct.ConstructorInterceptionTest
+- [x] org.jboss.cdi.tck.interceptors.tests.bindings.broken.InvalidStereotypeInterceptorBindingAnnotationsTest
+- [x] org.jboss.cdi.tck.interceptors.tests.bindings.broken.InvalidTransitiveInterceptorBindingAnnotationsTest
+- [x] org.jboss.cdi.tck.interceptors.tests.bindings.members.InterceptorBindingTypeWithMemberTest
+- [x] org.jboss.cdi.tck.interceptors.tests.bindings.multiple.MultipleInterceptorBindingsTest
+- [x] org.jboss.cdi.tck.interceptors.tests.bindings.overriding.InterceptorBindingOverridingTest
+- [x] org.jboss.cdi.tck.interceptors.tests.bindings.resolution.InterceptorBindingResolutionTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.aroundConstruct.AroundConstructTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.aroundConstruct.bindings.AroundConstructTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.aroundInvoke.AroundInvokeAccessInterceptorTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.aroundInvoke.bindings.AroundInvokeInterceptorTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.exceptions.aroundInvoke.ExceptionTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.AroundConstructLifeCycleTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.returnValueIgnored.AroundConstructInterceptorReturnValueTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.withAroundInvoke.SingleInterceptorInstanceTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.invocationContext.InvocationContextTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.LifecycleCallbackInterceptorTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.bindings.LifecycleInterceptorDefinitionTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.exceptions.LifecycleCallbackInterceptorExceptionTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.order.aroundConstruct.AroundConstructOrderTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.order.aroundInvoke.AroundInvokeOrderTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.order.lifecycleCallback.PostConstructOrderTest
+- [ ] org.jboss.cdi.tck.interceptors.tests.order.overriden.lifecycleCallback.OverridenLifecycleCallbackInterceptorTest
+- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.AbstractInvalidExtensionParamTest
+- [ ] org.jboss.cdi.tck.tests.event.select.SystemTest
+- [ ] org.jboss.cdi.tck.tests.full.decorators.AbstractDecoratorTest
+- [ ] org.jboss.cdi.tck.tests.full.event.observer.extension.AbstractObserverNotificationTest
+- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.conflictingenablement.Test
+- [ ] org.jboss.cdi.tck.tests.lookup.injectionpoint.broken.normal.scope.NormalScopedBeanWithInjectionPoint

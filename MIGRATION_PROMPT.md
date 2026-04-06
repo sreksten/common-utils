@@ -17,6 +17,7 @@ Source of truth:
 - Read class list from `CDI_TCK_CLASSES.md`.
 - Original TCK source files are reference-only under project root `org/jboss/...` (not under `src/test/java`).
 - Do NOT delete or alter in any way original `org.jboss...` classes.
+- If the original class represents an abstract class and not a test, remove the row from `CDI_TCK_CLASSES.md`. 
 - Python is not available in this environment; use shell tools only (`grep`, `sed`, `head`, `awk`) when selecting pending classes.
 - Track status in that file only:
     - Pending: `- [ ] org.jboss.cdi.tck.tests....TestClass`
