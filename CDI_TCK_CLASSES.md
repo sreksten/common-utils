@@ -520,13 +520,13 @@ Total classes: 581
 - [x] org.jboss.cdi.tck.tests.lookup.binding.members.array.BindingAnnotationWithMemberTest
 - [x] org.jboss.cdi.tck.tests.lookup.byname.ResolutionByNameTest
 - [x] org.jboss.cdi.tck.tests.lookup.byname.ambiguous.AmbiguousELNamesTest
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.ambiguous.broken.AmbiguousELNamesTest
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.duplicity.DuplicitNameTest
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.injectionPointWithNamed.NamedNonFieldInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.injectionPointWithNamed2.NamedNonFieldInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.injectionPointWithNamed3.NamedNonFieldInjectionPointTest
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.ExpandedNamePrefix2Test
-- [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.ExpandedNamePrefixTest
+- [x] org.jboss.cdi.tck.tests.lookup.byname.ambiguous.broken.AmbiguousELNamesTest
+- [x] org.jboss.cdi.tck.tests.lookup.byname.broken.duplicity.DuplicitNameTest
+- [x] org.jboss.cdi.tck.tests.lookup.byname.broken.injectionPointWithNamed.NamedNonFieldInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.lookup.byname.broken.injectionPointWithNamed2.NamedNonFieldInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.lookup.byname.broken.injectionPointWithNamed3.NamedNonFieldInjectionPointTest
+- [x] org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.ExpandedNamePrefix2Test
+- [x] org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.ExpandedNamePrefixTest
 - [ ] org.jboss.cdi.tck.tests.lookup.byname.broken.prefix.NamePrefixTest
 - [ ] org.jboss.cdi.tck.tests.lookup.circular.CircularDependencyTest
 - [ ] org.jboss.cdi.tck.tests.lookup.clientProxy.ClientProxyTest

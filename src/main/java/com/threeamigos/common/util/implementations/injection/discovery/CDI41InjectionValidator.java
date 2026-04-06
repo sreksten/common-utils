@@ -2767,6 +2767,13 @@ public class CDI41InjectionValidator {
             if (parameter == observedParameter) {
                 continue;
             }
+            Annotation namedQualifier = findNamedQualifier(parameter.annotations);
+            if (namedQualifier != null && extractNamedValue(namedQualifier).trim().isEmpty()) {
+                knowledgeBase.addDefinitionError(
+                        formatObserverParameter(parameter.parameter, method, declaringBean) +
+                                ": @Named injection point must declare a non-empty value on non-field injection points");
+                return false;
+            }
             Type parameterType = GenericTypeResolver.resolve(
                     parameter.baseType,
                     declaringBean.getBeanClass(),
@@ -2823,6 +2830,35 @@ public class CDI41InjectionValidator {
             knowledgeBase.addObserverMethodInfo(observerMethodInfo);
         }
         return true;
+    }
+
+    private String formatObserverParameter(Parameter parameter, Method method, Bean<?> declaringBean) {
+        String parameterName = parameter != null ? safeParameterName(parameter) : "<param>";
+        return "Parameter " + parameterName + " of " + method.getName() + " of class " +
+                (declaringBean != null ? declaringBean.getBeanClass().getName() : method.getDeclaringClass().getName());
+    }
+
+    private Annotation findNamedQualifier(Annotation[] annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation != null && hasNamedAnnotation(annotation.annotationType())) {
+                return annotation;
+            }
+        }
+        return null;
+    }
+
+    private String safeParameterName(Parameter parameter) {
+        if (parameter == null) {
+            return "<param>";
+        }
+        String name = parameter.getName();
+        if (name == null || name.trim().isEmpty()) {
+            return "<param>";
+        }
+        return name;
     }
 
     /**
