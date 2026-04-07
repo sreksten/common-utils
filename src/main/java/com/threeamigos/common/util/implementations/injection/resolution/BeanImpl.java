@@ -1168,7 +1168,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * <b>Interceptors Specification 1.2+ / CDI 4.1 Section 7.1:</b>
      * <ul>
      *   <li>All @PreDestroy methods in the class hierarchy are invoked</li>
-     *   <li>Execution order: <b>subclass → superclass</b> (reverse of @PostConstruct!)</li>
+     *   <li>Execution order: <b>superclass → subclass</b></li>
      *   <li>If a subclass overrides a parent's @PreDestroy, only the overriding method is called</li>
      *   <li>Interceptor @PreDestroy methods run before all target bean methods</li>
      * </ul>
@@ -1178,24 +1178,21 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      * <ol>
      *   <li>Interceptor 1 @PreDestroy</li>
      *   <li>Interceptor 2 @PreDestroy</li>
-     *   <li>Target bean subclass @PreDestroy</li>
      *   <li>Target bean superclass @PreDestroy</li>
+     *   <li>Target bean subclass @PreDestroy</li>
      * </ol>
      */
     private void invokePreDestroy(T instance) throws Exception {
         ensureLifecycleInterceptorChainsInitialized();
         // PHASE 4: Check for @PreDestroy interceptors
         if (preDestroyInterceptorChain != null) {
-            // Invoke the interceptor chain which will then invoke all target @PreDestroy methods.
-            // Methods must be in reverse order for @PreDestroy: subclass → superclass
-            List<Method> reversedMethods = new ArrayList<>(preDestroyMethods);
-            Collections.reverse(reversedMethods);
-            preDestroyInterceptorChain.invokeLifecycleChain(instance, reversedMethods);
+            // Invoke interceptor chain and then target @PreDestroy callbacks in
+            // discovery order (superclass -> subclass).
+            preDestroyInterceptorChain.invokeLifecycleChain(instance, preDestroyMethods);
         } else if (!preDestroyMethods.isEmpty()) {
-            // No interceptors, invoke target @PreDestroy methods directly
-            // Must reverse the order: subclass → superclass (opposite of @PostConstruct)
-            for (int i = preDestroyMethods.size() - 1; i >= 0; i--) {
-                Method method = preDestroyMethods.get(i);
+            // No interceptors, invoke target @PreDestroy callbacks directly in
+            // discovery order (superclass -> subclass).
+            for (Method method : preDestroyMethods) {
                 method.setAccessible(true);
                 method.invoke(instance);
             }
@@ -2123,44 +2120,95 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             current = current.getSuperclass();
         }
 
-        List<Method> methods = new ArrayList<>();
-        for (Class<?> type : hierarchy) {
+        List<Method> methods = new ArrayList<Method>();
+        for (int index = 0; index < hierarchy.size(); index++) {
+            Class<?> type = hierarchy.get(index);
             for (Method method : type.getDeclaredMethods()) {
                 if (Modifier.isStatic(method.getModifiers())) {
                     continue;
                 }
-                if (interceptionType == InterceptionType.AROUND_INVOKE &&
-                        AnnotationsEnum.hasAroundInvokeAnnotation(method)) {
-                    if (method.getParameterCount() == 1 &&
-                            jakarta.interceptor.InvocationContext.class.isAssignableFrom(method.getParameterTypes()[0])) {
-                        method.setAccessible(true);
-                        methods.add(method);
-                    }
-                } else if (interceptionType == InterceptionType.AROUND_CONSTRUCT &&
-                        AnnotationsEnum.hasAroundConstructAnnotation(method)) {
-                    if (method.getParameterCount() == 1 &&
-                            jakarta.interceptor.InvocationContext.class.isAssignableFrom(method.getParameterTypes()[0])) {
-                        method.setAccessible(true);
-                        methods.add(method);
-                    }
-                } else if (interceptionType == InterceptionType.POST_CONSTRUCT &&
-                        AnnotationsEnum.hasPostConstructAnnotation(method)) {
-                    if (method.getParameterCount() == 1 &&
-                            jakarta.interceptor.InvocationContext.class.isAssignableFrom(method.getParameterTypes()[0])) {
-                        method.setAccessible(true);
-                        methods.add(method);
-                    }
-                } else if (interceptionType == InterceptionType.PRE_DESTROY &&
-                        AnnotationsEnum.hasPreDestroyAnnotation(method)) {
-                    if (method.getParameterCount() == 1 &&
-                            jakarta.interceptor.InvocationContext.class.isAssignableFrom(method.getParameterTypes()[0])) {
-                        method.setAccessible(true);
-                        methods.add(method);
-                    }
+                if (!isInterceptorMethodForType(method, interceptionType)) {
+                    continue;
                 }
+                if (isOverriddenBySubclass(method, hierarchy, index + 1)) {
+                    continue;
+                }
+                method.setAccessible(true);
+                methods.add(method);
             }
         }
         return methods;
+    }
+
+    private boolean isInterceptorMethodForType(Method method, InterceptionType interceptionType) {
+        if (method.getParameterCount() != 1) {
+            return false;
+        }
+        if (!jakarta.interceptor.InvocationContext.class.isAssignableFrom(method.getParameterTypes()[0])) {
+            return false;
+        }
+        if (interceptionType == InterceptionType.AROUND_INVOKE) {
+            return AnnotationsEnum.hasAroundInvokeAnnotation(method);
+        }
+        if (interceptionType == InterceptionType.AROUND_CONSTRUCT) {
+            return AnnotationsEnum.hasAroundConstructAnnotation(method);
+        }
+        if (interceptionType == InterceptionType.POST_CONSTRUCT) {
+            return AnnotationsEnum.hasPostConstructAnnotation(method);
+        }
+        if (interceptionType == InterceptionType.PRE_DESTROY) {
+            return AnnotationsEnum.hasPreDestroyAnnotation(method);
+        }
+        return false;
+    }
+
+    private boolean isOverriddenBySubclass(Method method, List<Class<?>> hierarchy, int startIndex) {
+        if (Modifier.isPrivate(method.getModifiers())) {
+            return false;
+        }
+
+        for (int i = startIndex; i < hierarchy.size(); i++) {
+            Class<?> subclass = hierarchy.get(i);
+            Method candidate = findDeclaredMethod(subclass, method.getName(), method.getParameterTypes());
+            if (candidate == null) {
+                continue;
+            }
+            if (Modifier.isStatic(candidate.getModifiers())) {
+                continue;
+            }
+            if (isOverridableFromSubclass(method, subclass)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private Method findDeclaredMethod(Class<?> clazz, String methodName, Class<?>[] parameterTypes) {
+        try {
+            return clazz.getDeclaredMethod(methodName, parameterTypes);
+        } catch (NoSuchMethodException ignored) {
+            return null;
+        }
+    }
+
+    private boolean isOverridableFromSubclass(Method method, Class<?> subclass) {
+        int modifiers = method.getModifiers();
+
+        if (Modifier.isPublic(modifiers) || Modifier.isProtected(modifiers)) {
+            return true;
+        }
+
+        if (Modifier.isPrivate(modifiers)) {
+            return false;
+        }
+
+        return packageName(method.getDeclaringClass()).equals(packageName(subclass));
+    }
+
+    private String packageName(Class<?> clazz) {
+        Package pkg = clazz.getPackage();
+        return pkg == null ? "" : pkg.getName();
     }
 
     /**

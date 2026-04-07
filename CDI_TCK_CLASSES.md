@@ -608,13 +608,13 @@ Total classes: 582
 - [x] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.AroundConstructLifeCycleTest
 - [x] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.returnValueIgnored.AroundConstructInterceptorReturnValueTest
 - [x] org.jboss.cdi.tck.interceptors.tests.contract.interceptorLifeCycle.aroundConstruct.withAroundInvoke.SingleInterceptorInstanceTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.invocationContext.InvocationContextTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.LifecycleCallbackInterceptorTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.bindings.LifecycleInterceptorDefinitionTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.exceptions.LifecycleCallbackInterceptorExceptionTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.order.aroundConstruct.AroundConstructOrderTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.order.aroundInvoke.AroundInvokeOrderTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.order.lifecycleCallback.PostConstructOrderTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.invocationContext.InvocationContextTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.LifecycleCallbackInterceptorTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.bindings.LifecycleInterceptorDefinitionTest
+- [x] org.jboss.cdi.tck.interceptors.tests.contract.lifecycleCallback.exceptions.LifecycleCallbackInterceptorExceptionTest
+- [x] org.jboss.cdi.tck.interceptors.tests.order.aroundConstruct.AroundConstructOrderTest
+- [x] org.jboss.cdi.tck.interceptors.tests.order.aroundInvoke.AroundInvokeOrderTest
+- [x] org.jboss.cdi.tck.interceptors.tests.order.lifecycleCallback.PostConstructOrderTest
 - [ ] org.jboss.cdi.tck.interceptors.tests.order.overriden.lifecycleCallback.OverridenLifecycleCallbackInterceptorTest
 - [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.AbstractInvalidExtensionParamTest
 - [ ] org.jboss.cdi.tck.tests.event.select.SystemTest

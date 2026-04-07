@@ -657,6 +657,52 @@ public class CDI41BeanValidator {
         return isReferencedByInterceptorsAnnotation(declaringClass);
     }
 
+    private boolean isCdiInterceptorLifecycleMethod(Class<?> rootClass, Method lifecycleMethod) {
+        if (lifecycleMethod.getParameterCount() != 1) {
+            return false;
+        }
+        Class<?> parameterType = lifecycleMethod.getParameterTypes()[0];
+        if (!jakarta.interceptor.InvocationContext.class.isAssignableFrom(parameterType)) {
+            return false;
+        }
+
+        if (isInterceptorClass(rootClass)) {
+            return true;
+        }
+
+        Class<?> declaringClass = lifecycleMethod.getDeclaringClass();
+        if (declaringClass != null && isInterceptorClass(declaringClass)) {
+            return true;
+        }
+
+        // Superclasses in interceptor hierarchies may declare lifecycle callback methods
+        // with InvocationContext. Treat them as interceptor lifecycle methods even if the
+        // superclass itself is not annotated with @Interceptor.
+        return isInInterceptorHierarchy(rootClass) || isInInterceptorHierarchy(declaringClass);
+    }
+
+    private boolean isInInterceptorHierarchy(Class<?> candidateType) {
+        if (candidateType == null) {
+            return false;
+        }
+        Collection<Class<?>> classes = knowledgeBase.getClasses();
+        if (classes == null || classes.isEmpty()) {
+            return false;
+        }
+        for (Class<?> discoveredClass : classes) {
+            if (discoveredClass == null) {
+                continue;
+            }
+            if (!isInterceptorClass(discoveredClass)) {
+                continue;
+            }
+            if (candidateType.isAssignableFrom(discoveredClass)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean isReferencedByInterceptorsAnnotation(Class<?> interceptorClass) {
         Collection<Class<?>> classes = knowledgeBase.getClasses();
         if (classes == null || classes.isEmpty()) {
@@ -4255,6 +4301,11 @@ public class CDI41BeanValidator {
                         if (isLegacyClassInterceptorLifecycleMethod(currentClass, method)) {
                             // Methods with InvocationContext on lifecycle callbacks are valid for
                             // classes declared via @Interceptors, but they are not bean lifecycle callbacks.
+                            continue;
+                        }
+                        if (isCdiInterceptorLifecycleMethod(clazz, method)) {
+                            // CDI interceptor lifecycle callback methods use InvocationContext
+                            // and are validated separately by interceptor-specific validation.
                             continue;
                         }
                         knowledgeBase.addDefinitionError(
