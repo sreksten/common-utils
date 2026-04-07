@@ -316,6 +316,28 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
         return isTransient;
     }
 
+    private static Class<?> loadClassWithContextClassLoader(String className) throws ClassNotFoundException {
+        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+        if (tccl != null) {
+            try {
+                return Class.forName(className, false, tccl);
+            } catch (ClassNotFoundException ignored) {
+                // Fall through to module classloader.
+            }
+        }
+
+        ClassLoader fallback = InjectionPointImpl.class.getClassLoader();
+        if (fallback != null && fallback != tccl) {
+            try {
+                return Class.forName(className, false, fallback);
+            } catch (ClassNotFoundException ignored) {
+                // Fall through to default resolution.
+            }
+        }
+
+        return Class.forName(className);
+    }
+
     private Object writeReplace() {
         return new SerializedInjectionPoint(this);
     }
@@ -438,7 +460,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
             }
 
             try {
-                Class<?> beanClass = Class.forName(beanClassName);
+                Class<?> beanClass = InjectionPointImpl.loadClassWithContextClassLoader(beanClassName);
                 @SuppressWarnings({"rawtypes", "unchecked"})
                 Set<Bean<?>> beans = (Set) beanManager.getBeans(beanClass);
                 if (beans == null || beans.isEmpty()) {
@@ -582,7 +604,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
                 return null;
             }
             try {
-                Class<?> declaringClass = Class.forName(declaringClassName);
+                Class<?> declaringClass = InjectionPointImpl.loadClassWithContextClassLoader(declaringClassName);
                 if (constructor) {
                     Class<?>[] parameterTypes = loadParameterTypes();
                     Constructor<?> ctor = declaringClass.getDeclaredConstructor(parameterTypes);
@@ -620,7 +642,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
             if ("float".equals(name)) return float.class;
             if ("double".equals(name)) return double.class;
             if ("char".equals(name)) return char.class;
-            return Class.forName(name);
+            return InjectionPointImpl.loadClassWithContextClassLoader(name);
         }
     }
 }
