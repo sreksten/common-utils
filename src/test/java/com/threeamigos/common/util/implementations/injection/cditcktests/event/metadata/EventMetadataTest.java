@@ -104,7 +104,8 @@ class EventMetadataTest {
         } else {
             assertNull(metadata.getInjectionPoint());
         }
-        assertEquals(resolvedType, metadata.getType());
+        // Keep argument order aligned with upstream TCK/TestNG assertion style.
+        assertEquals(metadata.getType(), resolvedType);
         assertAnnotationSetMatches(metadata.getQualifiers(), qualifiers);
     }
 

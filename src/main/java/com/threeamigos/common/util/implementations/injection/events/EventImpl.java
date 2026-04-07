@@ -880,22 +880,11 @@ public class EventImpl<T> implements Event<T>, Serializable {
             if (!changed) {
                 return type;
             }
-            return new ParameterizedType() {
-                @Override
-                public Type[] getActualTypeArguments() {
-                    return resolvedArguments.clone();
-                }
-
-                @Override
-                public Type getRawType() {
-                    return parameterizedType.getRawType();
-                }
-
-                @Override
-                public Type getOwnerType() {
-                    return resolvedOwnerType;
-                }
-            };
+            return new SerializableParameterizedType(
+                    parameterizedType.getRawType(),
+                    resolvedOwnerType,
+                    resolvedArguments
+            );
         }
 
         if (type instanceof GenericArrayType) {
@@ -905,12 +894,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             if (Objects.equals(componentType, resolvedComponentType)) {
                 return type;
             }
-            return new GenericArrayType() {
-                @Override
-                public Type getGenericComponentType() {
-                    return resolvedComponentType;
-                }
-            };
+            return new SerializableGenericArrayType(resolvedComponentType);
         }
 
         if (type instanceof WildcardType) {
@@ -937,17 +921,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             if (!changed) {
                 return type;
             }
-            return new WildcardType() {
-                @Override
-                public Type[] getUpperBounds() {
-                    return resolvedUpperBounds.clone();
-                }
-
-                @Override
-                public Type[] getLowerBounds() {
-                    return resolvedLowerBounds.clone();
-                }
-            };
+            return new SerializableWildcardType(resolvedUpperBounds, resolvedLowerBounds);
         }
 
         return type;
