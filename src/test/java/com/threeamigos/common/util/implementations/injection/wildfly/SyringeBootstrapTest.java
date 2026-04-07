@@ -1,6 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.wildfly;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -15,6 +17,7 @@ import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptors;
 import jakarta.interceptor.InvocationContext;
 
+import java.io.ByteArrayInputStream;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
@@ -22,6 +25,8 @@ import java.lang.annotation.ElementType;
 import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -61,6 +66,12 @@ public class SyringeBootstrapTest {
     public static class LegacyInterceptedBean {
         public String ping() {
             return "pong";
+        }
+    }
+
+    public static class PlainManagedBean {
+        public String value() {
+            return "plain";
         }
     }
 
@@ -138,5 +149,29 @@ public class SyringeBootstrapTest {
         Syringe syringe = assertDoesNotThrow(bootstrap::bootstrap);
         assertNotNull(syringe);
         bootstrap.shutdown();
+    }
+
+    @Test
+    public void testManagedBootstrapHonorsBeansXmlAllDiscoveryMode() {
+        Set<Class<?>> classes = new HashSet<Class<?>>();
+        classes.add(PlainManagedBean.class);
+        String beansXmlContent = "<beans xmlns=\"https://jakarta.ee/xml/ns/jakartaee\" " +
+                "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" " +
+                "xsi:schemaLocation=\"https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/beans_3_0.xsd\" " +
+                "version=\"3.0\" bean-discovery-mode=\"all\"></beans>";
+        BeansXml beansXml = new BeansXmlParser().parse(
+                new ByteArrayInputStream(beansXmlContent.getBytes(StandardCharsets.UTF_8)));
+
+        SyringeBootstrap bootstrap = new SyringeBootstrap(
+                classes,
+                Thread.currentThread().getContextClassLoader(),
+                Collections.singletonList(beansXml));
+        Syringe syringe = bootstrap.bootstrap();
+        try {
+            PlainManagedBean bean = syringe.getBeanManager().createInstance().select(PlainManagedBean.class).get();
+            assertEquals("plain", bean.value());
+        } finally {
+            bootstrap.shutdown();
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.wildfly;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
+import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvider;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.inject.spi.DefinitionException;
@@ -103,8 +104,9 @@ public class SyringeBootstrap {
             registerBeansXmlConfigurations();
 
             // 3. Feed discovered classes to the container
+            BeanArchiveMode managedArchiveMode = resolveManagedArchiveMode();
             for (Class<?> clazz : discoveredClasses) {
-                syringe.addDiscoveredClass(clazz);
+                syringe.addDiscoveredClass(clazz, managedArchiveMode);
             }
 
             // 4. Complete the initialization flow (processing, validation)
@@ -203,6 +205,19 @@ public class SyringeBootstrap {
         for (BeansXml beansXml : preDiscoveredBeansXmlConfigurations) {
             syringe.addBeansXmlConfiguration(beansXml);
         }
+    }
+
+    private BeanArchiveMode resolveManagedArchiveMode() {
+        for (BeansXml beansXml : preDiscoveredBeansXmlConfigurations) {
+            if (beansXml == null) {
+                continue;
+            }
+            String discoveryMode = beansXml.getBeanDiscoveryMode();
+            if (discoveryMode != null && "all".equalsIgnoreCase(discoveryMode.trim())) {
+                return beansXml.isTrimEnabled() ? BeanArchiveMode.TRIMMED : BeanArchiveMode.EXPLICIT;
+            }
+        }
+        return BeanArchiveMode.IMPLICIT;
     }
 
     private void mirrorProviderStateToDeploymentClassLoader(CDI<Object> cdi) {
