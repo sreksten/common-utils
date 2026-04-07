@@ -297,8 +297,15 @@ public class ClientProxyGenerator {
         Class<?> beanClass = resolveProxyBaseClass(bean);
         validateProxyableBeanType(bean, beanClass);
 
-        // Get or generate the proxy class
-        Class<?> proxyClass = proxyClassCache.computeIfAbsent(beanClass, this::generateProxyClass);
+        Class<?> proxyClass;
+        if (beanClass != null && (beanClass.isInterface() || beanClass == Object.class)) {
+            // Interface/object-based beans are frequently loaded from parent modules (e.g. CDI API);
+            // generate against the active deployment loader to avoid module visibility issues.
+            proxyClass = generateProxyClass(beanClass);
+        } else {
+            // Get or generate the proxy class
+            proxyClass = proxyClassCache.computeIfAbsent(beanClass, this::generateProxyClass);
+        }
 
         try {
             // Create an instance of the proxy
@@ -516,15 +523,27 @@ public class ClientProxyGenerator {
      */
     private Class<?> generateProxyClass(Class<?> beanClass) {
         try {
-            return new ByteBuddy()
-                // Create a subclass of the target bean class
-                // IMPORTANT: Use DEFAULT constructor strategy to handle parent constructors.
-                // This will create a constructor that calls the super constructor with default values:
-                // - null for object parameters
-                // - 0 for numeric primitives
-                // - false for boolean
-                // This is safe because the proxy never uses the parent's state - it only delegates.
-                .subclass(beanClass, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
+            ByteBuddy byteBuddy = new ByteBuddy();
+            net.bytebuddy.dynamic.DynamicType.Builder<?> builder;
+            if (beanClass != null && beanClass.isInterface()) {
+                builder = byteBuddy
+                        .subclass(Object.class, ConstructorStrategy.Default.DEFAULT_CONSTRUCTOR)
+                        .implement(beanClass);
+            } else if (beanClass == Object.class) {
+                builder = byteBuddy.subclass(Object.class, ConstructorStrategy.Default.DEFAULT_CONSTRUCTOR);
+            } else {
+                builder = byteBuddy
+                        // Create a subclass of the target bean class
+                        // IMPORTANT: Use DEFAULT constructor strategy to handle parent constructors.
+                        // This will create a constructor that calls the super constructor with default values:
+                        // - null for object parameters
+                        // - 0 for numeric primitives
+                        // - false for boolean
+                        // This is safe because the proxy never uses the parent's state - it only delegates.
+                        .subclass(beanClass, ConstructorStrategy.Default.IMITATE_SUPER_CLASS);
+            }
+
+            return builder
 
                 // Add fields to store the bean and contextManager
                 .defineField("$$_bean", Bean.class, net.bytebuddy.description.modifier.Visibility.PRIVATE)
@@ -568,10 +587,43 @@ public class ClientProxyGenerator {
 
                 // Load the class into the same classloader as the target class
                 .make()
-                .load(beanClass.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                .load(resolveProxyClassLoader(beanClass), ClassLoadingStrategy.Default.INJECTION)
                 .getLoaded();
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate proxy class for: " + beanClass.getName(), e);
+        }
+    }
+
+    private ClassLoader resolveProxyClassLoader(Class<?> beanClass) {
+        if (beanClass != null && beanClass.isInterface()) {
+            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+            if (canLoadType(tccl, beanClass)) {
+                return tccl;
+            }
+            ClassLoader own = ClientProxyGenerator.class.getClassLoader();
+            if (canLoadType(own, beanClass)) {
+                return own;
+            }
+        }
+        ClassLoader beanLoader = beanClass != null ? beanClass.getClassLoader() : null;
+        if (beanLoader != null) {
+            return beanLoader;
+        }
+        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+        if (tccl != null) {
+            return tccl;
+        }
+        return ClientProxyGenerator.class.getClassLoader();
+    }
+
+    private boolean canLoadType(ClassLoader classLoader, Class<?> type) {
+        if (classLoader == null) {
+            return type.getClassLoader() == null;
+        }
+        try {
+            return Class.forName(type.getName(), false, classLoader) == type;
+        } catch (ClassNotFoundException e) {
+            return false;
         }
     }
 

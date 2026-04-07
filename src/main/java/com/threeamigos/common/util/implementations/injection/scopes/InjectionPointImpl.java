@@ -2,11 +2,16 @@ package com.threeamigos.common.util.implementations.injection.scopes;
 
 import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.spi.spievents.SimpleAnnotatedType;
+import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedConstructorWrapper;
 import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
+import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedMethodWrapper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedParameterWrapper;
 import jakarta.enterprise.inject.spi.Annotated;
+import jakarta.enterprise.inject.spi.AnnotatedParameter;
+import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.PassivationCapable;
@@ -26,6 +31,7 @@ import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -355,9 +361,13 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
         private final Type annotatedBaseType;
         private final Set<Type> annotatedTypeClosure;
         private final Set<Annotation> annotatedAnnotations;
+        private final AnnotatedKind annotatedKind;
+        private final int annotatedParameterPosition;
+        private final String annotatedJavaClassName;
 
         private transient Bean<?> bean;
         private transient Member member;
+        private transient Annotated annotated;
 
         private SerializedInjectionPoint(InjectionPoint injectionPoint) {
             this.type = injectionPoint.getType();
@@ -385,6 +395,14 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
                 this.annotatedTypeClosure = Collections.<Type>singleton(this.annotatedBaseType);
                 this.annotatedAnnotations = new LinkedHashSet<Annotation>();
             }
+            this.annotatedKind = AnnotatedKind.of(annotated);
+            this.annotatedParameterPosition = annotated instanceof AnnotatedParameter<?>
+                    ? ((AnnotatedParameter<?>) annotated).getPosition()
+                    : -1;
+            this.annotatedJavaClassName = annotated instanceof AnnotatedType<?>
+                    ? ((AnnotatedType<?>) annotated).getJavaClass().getName()
+                    : null;
+            this.annotated = annotated;
             this.member = injectionPoint.getMember();
         }
 
@@ -483,6 +501,46 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
 
         @Override
         public Annotated getAnnotated() {
+            if (annotated != null) {
+                return annotated;
+            }
+            annotated = restoreAnnotated();
+            return annotated;
+        }
+
+        private Annotated restoreAnnotated() {
+            if (annotatedKind == AnnotatedKind.FIELD) {
+                Member resolvedMember = getMember();
+                if (resolvedMember instanceof Field) {
+                    return new AnnotatedFieldWrapper<Object>((Field) resolvedMember, null);
+                }
+            } else if (annotatedKind == AnnotatedKind.PARAMETER) {
+                Member resolvedMember = getMember();
+                if (resolvedMember instanceof Method) {
+                    List<AnnotatedParameter<Object>> parameters =
+                            new AnnotatedMethodWrapper<Object>((Method) resolvedMember, null).getParameters();
+                    if (annotatedParameterPosition >= 0 && annotatedParameterPosition < parameters.size()) {
+                        return parameters.get(annotatedParameterPosition);
+                    }
+                } else if (resolvedMember instanceof Constructor) {
+                    @SuppressWarnings("unchecked")
+                    Constructor<Object> constructor = (Constructor<Object>) resolvedMember;
+                    List<AnnotatedParameter<Object>> parameters =
+                            new AnnotatedConstructorWrapper<Object>(constructor, null).getParameters();
+                    if (annotatedParameterPosition >= 0 && annotatedParameterPosition < parameters.size()) {
+                        return parameters.get(annotatedParameterPosition);
+                    }
+                }
+            } else if (annotatedKind == AnnotatedKind.TYPE && annotatedJavaClassName != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Class<Object> javaClass =
+                            (Class<Object>) InjectionPointImpl.loadClassWithContextClassLoader(annotatedJavaClassName);
+                    return new SimpleAnnotatedType<Object>(javaClass);
+                } catch (Exception ignored) {
+                    // Fall through to metadata-only fallback.
+                }
+            }
             return new AnnotatedBaseTypeOnly(annotatedBaseType, annotatedTypeClosure, annotatedAnnotations);
         }
 
@@ -494,6 +552,26 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
         @Override
         public boolean isTransient() {
             return trans;
+        }
+    }
+
+    private enum AnnotatedKind {
+        FIELD,
+        PARAMETER,
+        TYPE,
+        OTHER;
+
+        private static AnnotatedKind of(Annotated annotated) {
+            if (annotated instanceof jakarta.enterprise.inject.spi.AnnotatedField<?>) {
+                return FIELD;
+            }
+            if (annotated instanceof AnnotatedParameter<?>) {
+                return PARAMETER;
+            }
+            if (annotated instanceof AnnotatedType<?>) {
+                return TYPE;
+            }
+            return OTHER;
         }
     }
 

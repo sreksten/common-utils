@@ -10,6 +10,10 @@ import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.Annotated;
+import jakarta.enterprise.inject.spi.AnnotatedMember;
+import jakarta.enterprise.inject.spi.AnnotatedParameter;
+import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -105,7 +109,24 @@ class BuiltinBeanPassivationDependencyTckParityTest {
         assertEquals(originalInjectionPoint.getQualifiers(), copy.getInjectionPoint().getQualifiers());
         assertEquals(originalInjectionPoint.getBean(), copy.getInjectionPoint().getBean());
         assertEquals(originalInjectionPoint.getMember(), copy.getInjectionPoint().getMember());
+        assertEquals(
+                unwrapAnnotated(copy.getInjectionPoint().getAnnotated()),
+                unwrapAnnotated(originalInjectionPoint.getAnnotated()));
         assertTrue(copy.getInjectionPoint().getAnnotated().getBaseType().equals(originalInjectionPoint.getAnnotated().getBaseType()));
+        assertEquals(copy.getInjectionPoint().getAnnotated().getAnnotations(), originalInjectionPoint.getAnnotated().getAnnotations());
+    }
+
+    private Object unwrapAnnotated(Annotated annotated) {
+        if (annotated instanceof AnnotatedMember) {
+            return ((AnnotatedMember<?>) annotated).getJavaMember();
+        }
+        if (annotated instanceof AnnotatedParameter) {
+            return ((AnnotatedParameter<?>) annotated).getJavaParameter();
+        }
+        if (annotated instanceof AnnotatedType) {
+            return ((AnnotatedType<?>) annotated).getJavaClass();
+        }
+        throw new UnsupportedOperationException("Unknown Annotated instance: " + annotated);
     }
 
     private Syringe newSyringe(Class<?>... classes) {

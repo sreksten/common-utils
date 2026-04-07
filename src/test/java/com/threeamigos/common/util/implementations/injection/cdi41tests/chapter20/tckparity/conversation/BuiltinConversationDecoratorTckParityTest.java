@@ -12,8 +12,11 @@ import jakarta.decorator.Delegate;
 import jakarta.enterprise.context.Conversation;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Default;
+import jakarta.enterprise.inject.Vetoed;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.InjectionTarget;
+import jakarta.enterprise.inject.spi.InjectionTargetFactory;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +32,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -80,6 +84,22 @@ class BuiltinConversationDecoratorTckParityTest {
             beanManager.getContextManager().deactivateRequest();
             ConversationImpl.clearCurrentConversation();
         }
+    }
+
+    @Test
+    @DisplayName("20.4 / BuiltinConversationDecoratorTest - Arquillian-style member injection of Conversation succeeds")
+    void shouldSupportArquillianStyleMemberInjection() {
+        Syringe syringe = newSyringe();
+        BeanManager beanManager = syringe.getBeanManager();
+
+        InjectionTargetFactory<ArquillianLikeTestCase> factory =
+                beanManager.getInjectionTargetFactory(beanManager.createAnnotatedType(ArquillianLikeTestCase.class));
+        InjectionTarget<ArquillianLikeTestCase> injectionTarget = factory.createInjectionTarget(null);
+        ArquillianLikeTestCase testCase = new ArquillianLikeTestCase();
+
+        assertDoesNotThrow(() -> injectionTarget.inject(testCase, beanManager.createCreationalContext(null)));
+        assertNotNull(testCase.conversation);
+        assertNotNull(testCase.conversationObserver);
     }
 
     private Syringe newSyringe() {
@@ -161,5 +181,14 @@ class BuiltinConversationDecoratorTckParityTest {
             return observer.getDecoratedConversationId();
         }
 
+    }
+
+    @Vetoed
+    private static class ArquillianLikeTestCase {
+        @Inject
+        Conversation conversation;
+
+        @Inject
+        ConversationObserver conversationObserver;
     }
 }

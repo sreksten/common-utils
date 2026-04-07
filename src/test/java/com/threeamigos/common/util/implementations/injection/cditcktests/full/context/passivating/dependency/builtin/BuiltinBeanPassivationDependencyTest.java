@@ -7,6 +7,7 @@ import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessag
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.AnnotatedMember;
 import jakarta.enterprise.inject.spi.AnnotatedParameter;
+import jakarta.enterprise.inject.spi.AnnotatedType;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -135,6 +136,7 @@ class BuiltinBeanPassivationDependencyTest {
     private void assertAnnotatedEquals(Annotated expected, Annotated actual) {
         assertNotNull(expected);
         assertNotNull(actual);
+        assertEquals(unwrapAnnotated(expected), unwrapAnnotated(actual));
         assertEquals(expected.getBaseType(), actual.getBaseType());
         assertEquals(expected.getAnnotations(), actual.getAnnotations());
 
@@ -150,6 +152,19 @@ class BuiltinBeanPassivationDependencyTest {
             assertEquals(expectedParameter.getPosition(), actualParameter.getPosition());
             assertAnnotatedEquals(expectedParameter.getDeclaringCallable(), actualParameter.getDeclaringCallable());
         }
+    }
+
+    private Object unwrapAnnotated(Annotated annotated) {
+        if (annotated instanceof AnnotatedMember) {
+            return ((AnnotatedMember<?>) annotated).getJavaMember();
+        }
+        if (annotated instanceof AnnotatedParameter) {
+            return ((AnnotatedParameter<?>) annotated).getJavaParameter();
+        }
+        if (annotated instanceof AnnotatedType) {
+            return ((AnnotatedType<?>) annotated).getJavaClass();
+        }
+        throw new UnsupportedOperationException("Unknown Annotated instance: " + annotated);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
