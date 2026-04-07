@@ -615,10 +615,5 @@ Total classes: 582
 - [x] org.jboss.cdi.tck.interceptors.tests.order.aroundConstruct.AroundConstructOrderTest
 - [x] org.jboss.cdi.tck.interceptors.tests.order.aroundInvoke.AroundInvokeOrderTest
 - [x] org.jboss.cdi.tck.interceptors.tests.order.lifecycleCallback.PostConstructOrderTest
-- [ ] org.jboss.cdi.tck.interceptors.tests.order.overriden.lifecycleCallback.OverridenLifecycleCallbackInterceptorTest
-- [ ] org.jboss.cdi.tck.tests.build.compatible.extensions.invalid.AbstractInvalidExtensionParamTest
-- [ ] org.jboss.cdi.tck.tests.event.select.SystemTest
-- [ ] org.jboss.cdi.tck.tests.full.decorators.AbstractDecoratorTest
-- [ ] org.jboss.cdi.tck.tests.full.event.observer.extension.AbstractObserverNotificationTest
-- [ ] org.jboss.cdi.tck.tests.full.interceptors.definition.conflictingenablement.Test
-- [ ] org.jboss.cdi.tck.tests.lookup.injectionpoint.broken.normal.scope.NormalScopedBeanWithInjectionPoint
+- [x] org.jboss.cdi.tck.interceptors.tests.order.overriden.lifecycleCallback.OverridenLifecycleCallbackInterceptorTest
+- [x] org.jboss.cdi.tck.tests.lookup.injectionpoint.broken.normal.scope.NormalScopedBeanWithInjectionPoint
