@@ -31,11 +31,11 @@ class LifecycleCallbackInterceptorTest {
                 assertTrue(Goat.isPostConstructInterceptorCalled());
                 assertTrue(AnimalInterceptor.isPostConstructInterceptorCalled(Goat.GOAT));
 
-                getContextualReference(syringe, Hen.class).getAnimalType();
+                getContextualReference(syringe, Hen.class).toString();
                 assertTrue(Hen.isPostConstructInterceptorCalled());
                 assertTrue(AnimalInterceptor.isPostConstructInterceptorCalled(Hen.HEN));
 
-                getContextualReference(syringe, Cow.class).getAnimalType();
+                getContextualReference(syringe, Cow.class).toString();
                 assertTrue(Cow.isPostConstructInterceptorCalled());
                 assertTrue(AnimalInterceptor.isPostConstructInterceptorCalled(Cow.COW));
             } finally {

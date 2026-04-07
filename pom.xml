@@ -43,7 +43,6 @@
             <groupId>jakarta.enterprise</groupId>
             <artifactId>cdi-tck-api</artifactId>
             <version>4.1.0</version>
-            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>jakarta.el</groupId>
@@ -300,6 +299,30 @@
                                 <include>META-INF/services/org.jboss.arquillian.container.spi.client.container.DeploymentExceptionTransformer</include>
                                 <include>META-INF/services/org.jboss.arquillian.container.spi.client.deployment.DeploymentExceptionTransformer</include>
                             </includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <id>arquillian-fat</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>arquillian-fat</shadedClassifierName>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <artifactSet>
+                                <includes>
+                                    <include>jakarta.enterprise:cdi-tck-api</include>
+                                </includes>
+                            </artifactSet>
                         </configuration>
                     </execution>
                 </executions>

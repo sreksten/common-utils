@@ -553,12 +553,17 @@ public class ClientProxyGenerator {
                 .defineMethod("writeReplace", Object.class, net.bytebuddy.description.modifier.Visibility.PRIVATE)
                 .intercept(MethodDelegation.to(SerializationInterceptor.class))
 
-                // Intercept ALL business methods (not Object methods, not ProxyState methods)
-                // and delegate them to our ContextualInstanceInterceptor
-                .method(ElementMatchers.any()
-                    .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class)))
-                    .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(ProxyState.class)))
-                    .and(ElementMatchers.not(ElementMatchers.named("writeReplace"))))
+                // Intercept all non-Object methods plus Object.toString().
+                // TCK uses toString() on normal-scoped contextual references to trigger bean creation.
+                .method(
+                    ElementMatchers.named("toString").and(ElementMatchers.takesArguments(0))
+                        .or(
+                            ElementMatchers.any()
+                                .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(Object.class)))
+                                .and(ElementMatchers.not(ElementMatchers.isDeclaredBy(ProxyState.class)))
+                                .and(ElementMatchers.not(ElementMatchers.named("writeReplace")))
+                        )
+                )
                 .intercept(MethodDelegation.to(ContextualInstanceInterceptor.class))
 
                 // Load the class into the same classloader as the target class
