@@ -142,6 +142,11 @@ public class SyringeBootstrap {
         if (deploymentMarker.isEmpty()) {
             return classLoader;
         }
+        final String deploymentBaseMarker = deploymentMarker.endsWith(".war")
+                || deploymentMarker.endsWith(".jar")
+                || deploymentMarker.endsWith(".ear")
+                ? deploymentMarker.substring(0, deploymentMarker.length() - 4)
+                : deploymentMarker;
         return new ClassLoader(classLoader) {
             @Override
             public URL getResource(String name) {
@@ -162,14 +167,26 @@ public class SyringeBootstrap {
                 if (!requiresDeploymentScoping(name)) {
                     return delegateResources;
                 }
+                List<URL> all = new ArrayList<URL>();
                 List<URL> filtered = new ArrayList<URL>();
                 while (delegateResources.hasMoreElements()) {
                     URL url = delegateResources.nextElement();
-                    if (url != null && url.toExternalForm().contains(deploymentMarker)) {
+                    if (url == null) {
+                        continue;
+                    }
+                    all.add(url);
+                    String external = url.toExternalForm();
+                    if (external.contains(deploymentMarker)
+                            || (!deploymentBaseMarker.isEmpty() && external.contains(deploymentBaseMarker))) {
                         filtered.add(url);
                     }
                 }
-                return Collections.enumeration(filtered);
+                if (!filtered.isEmpty()) {
+                    return Collections.enumeration(filtered);
+                }
+                // Some VFS/resource URLs do not encode the deployment file name.
+                // In that case, fall back to all service resources instead of hiding extensions.
+                return Collections.enumeration(all);
             }
         };
     }

@@ -11,6 +11,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
+import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
@@ -840,13 +841,22 @@ public class BeanResolver implements DependencyResolver {
             }
             return producerBean.isAlternativeEnabled();
         }
+        if (bean instanceof SyntheticProducerBeanImpl) {
+            Bean<?> originalBean = findOriginalProducerBean(bean);
+            if (originalBean instanceof ProducerBean) {
+                return isBeanEnabledForResolution(originalBean);
+            }
+        }
         if (!bean.isAlternative()) {
             return true;
+        }
+        if (bean instanceof SyntheticBean) {
+            return ((SyntheticBean<?>) bean).getPriority() != null || isAlternativeSelectedByClassOrStereotype(bean);
         }
         if (bean instanceof BeanImpl) {
             return ((BeanImpl<?>) bean).isAlternativeEnabled();
         }
-        return true;
+        return isAlternativeSelectedByClassOrStereotype(bean);
     }
 
     private Bean<?> findDeclaringBean(Class<?> declaringClass) {
@@ -864,6 +874,22 @@ public class BeanResolver implements DependencyResolver {
         return null;
     }
 
+    private Bean<?> findOriginalProducerBean(Bean<?> syntheticBean) {
+        for (ProducerBean<?> producerBean : knowledgeBase.getProducerBeans()) {
+            if (!Objects.equals(producerBean.getBeanClass(), syntheticBean.getBeanClass())) {
+                continue;
+            }
+            if (!Objects.equals(producerBean.getTypes(), syntheticBean.getTypes())) {
+                continue;
+            }
+            if (!Objects.equals(producerBean.getQualifiers(), syntheticBean.getQualifiers())) {
+                continue;
+            }
+            return producerBean;
+        }
+        return null;
+    }
+
     private boolean isEffectivelyAlternative(Bean<?> bean) {
         if (bean == null) {
             return false;
@@ -875,6 +901,105 @@ public class BeanResolver implements DependencyResolver {
             ProducerBean<?> producerBean = (ProducerBean<?>) bean;
             Bean<?> declaringBean = findDeclaringBean(producerBean.getDeclaringClass());
             return declaringBean != null && declaringBean.isAlternative();
+        }
+        if (bean instanceof SyntheticProducerBeanImpl) {
+            Bean<?> originalBean = findOriginalProducerBean(bean);
+            return isEffectivelyAlternative(originalBean);
+        }
+        return false;
+    }
+
+    private boolean isAlternativeSelectedByClassOrStereotype(Bean<?> bean) {
+        if (bean instanceof SyntheticProducerBeanImpl) {
+            Bean<?> originalBean = findOriginalProducerBean(bean);
+            if (originalBean instanceof ProducerBean) {
+                ProducerBean<?> producerBean = (ProducerBean<?>) originalBean;
+
+                if (extractPriorityFromProducerMember(producerBean) != null) {
+                    return true;
+                }
+                if (producerBean.getPriority() != null) {
+                    return true;
+                }
+
+                Class<?> declaringClass = producerBean.getDeclaringClass();
+                if (declaringClass != null) {
+                    Integer declaringPriority = extractPriorityFromClass(declaringClass);
+                    if (declaringPriority != null) {
+                        return true;
+                    }
+
+                    String declaringClassName = declaringClass.getName();
+                    if (knowledgeBase.isAlternativeEnabledProgrammatically(declaringClassName) ||
+                            knowledgeBase.isAlternativeEnabledInBeansXml(declaringClassName)) {
+                        return true;
+                    }
+
+                    for (Annotation annotation : declaringClass.getAnnotations()) {
+                        Class<? extends Annotation> annotationType = annotation.annotationType();
+                        if (hasStereotypeAnnotation(annotationType)) {
+                            String stereotypeName = annotationType.getName();
+                            if (knowledgeBase.isAlternativeEnabledProgrammatically(stereotypeName) ||
+                                    knowledgeBase.isAlternativeEnabledInBeansXml(stereotypeName)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                Set<Class<? extends Annotation>> producerStereotypes = producerBean.getStereotypes();
+                if (producerStereotypes != null) {
+                    for (Class<? extends Annotation> stereotype : producerStereotypes) {
+                        String stereotypeName = stereotype.getName();
+                        if (knowledgeBase.isAlternativeEnabledProgrammatically(stereotypeName) ||
+                                knowledgeBase.isAlternativeEnabledInBeansXml(stereotypeName)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        Class<?> beanClass = bean.getBeanClass();
+        if (beanClass == null) {
+            return false;
+        }
+
+        if (knowledgeBase.getApplicationAlternativeOrder(beanClass) >= 0) {
+            return true;
+        }
+
+        Integer classPriority = extractPriorityFromClass(beanClass);
+        if (classPriority != null) {
+            return true;
+        }
+
+        String className = beanClass.getName();
+        if (knowledgeBase.isAlternativeEnabledProgrammatically(className) ||
+                knowledgeBase.isAlternativeEnabledInBeansXml(className)) {
+            return true;
+        }
+
+        Set<Class<? extends Annotation>> stereotypes = bean.getStereotypes();
+        if (stereotypes != null) {
+            for (Class<? extends Annotation> stereotype : stereotypes) {
+                String stereotypeName = stereotype.getName();
+                if (knowledgeBase.isAlternativeEnabledProgrammatically(stereotypeName) ||
+                        knowledgeBase.isAlternativeEnabledInBeansXml(stereotypeName)) {
+                    return true;
+                }
+            }
+        }
+
+        for (Annotation annotation : beanClass.getAnnotations()) {
+            Class<? extends Annotation> type = annotation.annotationType();
+            if (hasStereotypeAnnotation(type)) {
+                String stereotypeName = type.getName();
+                if (knowledgeBase.isAlternativeEnabledProgrammatically(stereotypeName) ||
+                        knowledgeBase.isAlternativeEnabledInBeansXml(stereotypeName)) {
+                    return true;
+                }
+            }
         }
         return false;
     }

@@ -4,6 +4,7 @@ import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import org.junit.jupiter.api.AfterAll;
@@ -20,7 +21,6 @@ import java.lang.annotation.Annotation;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -80,16 +80,9 @@ class CustomBeanImplementationTest {
 
     @Test
     void testCustomBeanNotAutomaticallySelected() {
-        Set<Bean<?>> beans = beanManager.getBeans(SomeBean.class);
-        Bean<?> resolved = beanManager.resolve(beans);
-        assertNotNull(resolved);
-
-        SomeBean someBean = SomeBean.class.cast(beanManager.getReference(
-                resolved,
-                SomeBean.class,
-                beanManager.createCreationalContext(resolved)
-        ));
-        assertEquals(SomeBean.class.getSimpleName(), someBean.whoAmI());
+        Instance<SomeBean> instance = beanManager.createInstance().select(SomeBean.class);
+        assertTrue(instance.isResolvable());
+        assertEquals(SomeBean.class.getSimpleName(), instance.get().whoAmI());
     }
 
     @Test

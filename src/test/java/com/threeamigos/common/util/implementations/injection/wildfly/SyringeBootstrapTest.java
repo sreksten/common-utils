@@ -12,6 +12,11 @@ import org.junit.jupiter.api.Test;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.spi.Extension;
+import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
+import jakarta.inject.Inject;
 import jakarta.enterprise.inject.Stereotype;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptors;
@@ -26,6 +31,8 @@ import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -72,6 +79,21 @@ public class SyringeBootstrapTest {
     public static class PlainManagedBean {
         public String value() {
             return "plain";
+        }
+    }
+
+    @Dependent
+    public static class ServiceLoadedInvalidBean {
+        @Inject
+        ServiceLoadedMissingDependency missing;
+    }
+
+    public static class ServiceLoadedMissingDependency {
+    }
+
+    public static class ServiceLoadedVetoExtension implements Extension {
+        public void vetoInvalidBean(@Observes ProcessAnnotatedType<ServiceLoadedInvalidBean> event) {
+            event.veto();
         }
     }
 
@@ -172,6 +194,35 @@ public class SyringeBootstrapTest {
             assertEquals("plain", bean.value());
         } finally {
             bootstrap.shutdown();
+        }
+    }
+
+    @Test
+    public void testManagedBootstrapLoadsExtensionServicesWhenScopedResourcePathDoesNotContainDeploymentName() throws Exception {
+        Path tempRoot = Files.createTempDirectory("syringe-bootstrap-extension");
+        Path serviceDir = tempRoot.resolve("META-INF/services");
+        Files.createDirectories(serviceDir);
+        Path serviceFile = serviceDir.resolve("jakarta.enterprise.inject.spi.Extension");
+        Files.write(serviceFile,
+                Collections.singletonList(ServiceLoadedVetoExtension.class.getName()),
+                StandardCharsets.UTF_8);
+
+        URLClassLoader serviceLoader = new URLClassLoader(
+                new URL[]{tempRoot.toUri().toURL()},
+                Thread.currentThread().getContextClassLoader());
+        try {
+            Set<Class<?>> classes = new HashSet<Class<?>>();
+            classes.add(ServiceLoadedInvalidBean.class);
+            SyringeBootstrap bootstrap = new SyringeBootstrap(
+                    classes,
+                    serviceLoader,
+                    null,
+                    "CustomDecoratorTestfd9d4c94cdd2798a5138811e31f24b6be667beb.war");
+            Syringe syringe = assertDoesNotThrow(bootstrap::bootstrap);
+            assertNotNull(syringe);
+            bootstrap.shutdown();
+        } finally {
+            serviceLoader.close();
         }
     }
 }
