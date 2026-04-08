@@ -5,8 +5,10 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Resolves generic type variables declared on superclasses to the concrete type arguments
@@ -190,6 +192,32 @@ public final class GenericTypeResolver {
             }
             return builder.toString();
         }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof ParameterizedType)) {
+                return false;
+            }
+            ParameterizedType that = (ParameterizedType) other;
+            return Objects.equals(rawType, that.getRawType())
+                    && Objects.equals(ownerType, that.getOwnerType())
+                    && Arrays.equals(actualTypeArguments, that.getActualTypeArguments());
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(actualTypeArguments)
+                    ^ Objects.hashCode(ownerType)
+                    ^ Objects.hashCode(rawType);
+        }
+
+        @Override
+        public String toString() {
+            return getTypeName();
+        }
     }
 
     private static final class ResolvedGenericArrayType implements GenericArrayType {
@@ -208,6 +236,28 @@ public final class GenericTypeResolver {
         @Override
         public String getTypeName() {
             return componentType.getTypeName() + "[]";
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof GenericArrayType)) {
+                return false;
+            }
+            GenericArrayType that = (GenericArrayType) other;
+            return Objects.equals(componentType, that.getGenericComponentType());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(componentType);
+        }
+
+        @Override
+        public String toString() {
+            return getTypeName();
         }
     }
 
@@ -242,6 +292,29 @@ public final class GenericTypeResolver {
             }
 
             return "? extends " + upperBounds[0].getTypeName();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof WildcardType)) {
+                return false;
+            }
+            WildcardType that = (WildcardType) other;
+            return Arrays.equals(upperBounds, that.getUpperBounds())
+                    && Arrays.equals(lowerBounds, that.getLowerBounds());
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(upperBounds) ^ Arrays.hashCode(lowerBounds);
+        }
+
+        @Override
+        public String toString() {
+            return getTypeName();
         }
     }
 }
