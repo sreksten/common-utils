@@ -4420,7 +4420,17 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             if (!(contextual instanceof Bean)) {
                 return null;
             }
-            return scopeContext.getIfExists((Bean<T>) contextual);
+            Bean<T> bean = (Bean<T>) contextual;
+            if (hasDependentAnnotation(scope)) {
+                // CDI dependent context contract expects null for managed dependent beans when
+                // no CreationalContext is supplied. Producer beans are a special case used by
+                // lifecycle TCK flows that invoke destroy() after Context#get(Contextual).
+                if (bean instanceof ProducerBean<?> || bean instanceof SyntheticProducerBeanImpl<?>) {
+                    return scopeContext.get(bean, null);
+                }
+                return null;
+            }
+            return scopeContext.getIfExists(bean);
         }
 
         @Override

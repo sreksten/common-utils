@@ -118,7 +118,7 @@ class AlternativeMetadataTest {
         withBootedSyringe((syringe, bm) -> {
             Bean<Bill> billBean = resolveBean(bm, Bill.class, new CheapLiteral());
             CreationalContext<Bill> cc = bm.createCreationalContext(billBean);
-            Bill bill = billBean.create(cc);
+            Bill bill = bm.getContext(billBean.getScope()).get(billBean);
             billBean.destroy(bill, cc);
 
             Grocery grocery = getContextualReference(bm, Grocery.class, ANY);

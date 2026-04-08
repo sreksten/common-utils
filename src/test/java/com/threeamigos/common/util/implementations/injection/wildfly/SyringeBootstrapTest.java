@@ -5,10 +5,14 @@ import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.AnnotatedConstructor;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.enterprise.inject.spi.ProcessBeanAttributes;
+import jakarta.enterprise.util.AnnotationLiteral;
 import org.junit.jupiter.api.Test;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -18,17 +22,20 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
 import jakarta.inject.Inject;
+import jakarta.inject.Qualifier;
 import jakarta.enterprise.inject.Stereotype;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptors;
 import jakarta.interceptor.InvocationContext;
 
 import java.io.ByteArrayInputStream;
+import java.lang.annotation.Annotation;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.annotation.ElementType;
 import java.lang.reflect.Field;
+import java.lang.reflect.Type;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
@@ -128,6 +135,101 @@ public class SyringeBootstrapTest {
 
         public void observeBikeProducerPba(@Observes ProcessBeanAttributes<TrimmedBikeProducer> event) {
             bikeProducerPbaFired.set(true);
+        }
+    }
+
+    @Qualifier
+    @Target({ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER, ElementType.TYPE})
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface ManagedCheap {
+    }
+
+    @Qualifier
+    @Target({ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER, ElementType.TYPE})
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface ManagedExpensive {
+    }
+
+    public static final class ManagedCheapLiteral extends AnnotationLiteral<ManagedCheap> implements ManagedCheap {
+        private static final long serialVersionUID = 1L;
+    }
+
+    public static final class ManagedExpensiveLiteral extends AnnotationLiteral<ManagedExpensive> implements ManagedExpensive {
+        private static final long serialVersionUID = 1L;
+    }
+
+    @Dependent
+    public static class ManagedAlternativeSausage {
+        @Produces
+        @ManagedCheap
+        ManagedAlternativeSausage cheap = new ManagedAlternativeSausage();
+
+        @Produces
+        @ManagedExpensive
+        ManagedAlternativeSausage grill() {
+            return new ManagedAlternativeSausage();
+        }
+    }
+
+    public static class ManagedAlternativeMetadataExtension implements Extension {
+        public void observeSausagePat(@Observes ProcessAnnotatedType<ManagedAlternativeSausage> event) {
+            final AnnotatedConstructor<ManagedAlternativeSausage> originalConstructor =
+                    event.getAnnotatedType().getConstructors().iterator().next();
+
+            event.setAnnotatedType(new jakarta.enterprise.inject.spi.AnnotatedType<ManagedAlternativeSausage>() {
+                @Override
+                public <T extends Annotation> Set<T> getAnnotations(Class<T> annotationType) {
+                    return Collections.emptySet();
+                }
+
+                @Override
+                public boolean isAnnotationPresent(Class<? extends Annotation> annotationType) {
+                    return false;
+                }
+
+                @Override
+                public Set<Type> getTypeClosure() {
+                    Set<Type> typeClosure = new HashSet<Type>();
+                    typeClosure.add(ManagedAlternativeSausage.class);
+                    typeClosure.add(Object.class);
+                    return typeClosure;
+                }
+
+                @Override
+                public Type getBaseType() {
+                    return ManagedAlternativeSausage.class;
+                }
+
+                @Override
+                public Set<Annotation> getAnnotations() {
+                    return Collections.emptySet();
+                }
+
+                @Override
+                public <T extends Annotation> T getAnnotation(Class<T> annotationType) {
+                    return null;
+                }
+
+                @Override
+                public Set<jakarta.enterprise.inject.spi.AnnotatedMethod<? super ManagedAlternativeSausage>> getMethods() {
+                    return Collections.emptySet();
+                }
+
+                @Override
+                public Class<ManagedAlternativeSausage> getJavaClass() {
+                    return ManagedAlternativeSausage.class;
+                }
+
+                @Override
+                public Set<jakarta.enterprise.inject.spi.AnnotatedField<? super ManagedAlternativeSausage>> getFields() {
+                    return Collections.emptySet();
+                }
+
+                @Override
+                public Set<AnnotatedConstructor<ManagedAlternativeSausage>> getConstructors() {
+                    return Collections.singleton(originalConstructor);
+                }
+            });
         }
     }
 
@@ -232,6 +334,27 @@ public class SyringeBootstrapTest {
     }
 
     @Test
+    public void testManagedBootstrapTreatsLegacyBeansXmlWithoutDiscoveryModeAsAll() {
+        Set<Class<?>> classes = new HashSet<Class<?>>();
+        classes.add(PlainManagedBean.class);
+        String beansXmlContent = "<beans xmlns=\"http://java.sun.com/xml/ns/javaee\"></beans>";
+        BeansXml beansXml = new BeansXmlParser().parse(
+                new ByteArrayInputStream(beansXmlContent.getBytes(StandardCharsets.UTF_8)));
+
+        SyringeBootstrap bootstrap = new SyringeBootstrap(
+                classes,
+                Thread.currentThread().getContextClassLoader(),
+                Collections.singletonList(beansXml));
+        Syringe syringe = bootstrap.bootstrap();
+        try {
+            PlainManagedBean bean = syringe.getBeanManager().createInstance().select(PlainManagedBean.class).get();
+            assertEquals("plain", bean.value());
+        } finally {
+            bootstrap.shutdown();
+        }
+    }
+
+    @Test
     public void testManagedBootstrapLoadsExtensionServicesWhenScopedResourcePathDoesNotContainDeploymentName() throws Exception {
         Path tempRoot = Files.createTempDirectory("syringe-bootstrap-extension");
         Path serviceDir = tempRoot.resolve("META-INF/services");
@@ -300,6 +423,50 @@ public class SyringeBootstrapTest {
                 assertFalse(TrimmedPatRecorderExtension.bikeProducerPbaFired.get());
                 assertEquals(0, syringe.getBeanManager().getBeans(TrimmedBike.class).size());
                 assertEquals(1, syringe.getBeanManager().getBeans(TrimmedBus.class).size());
+            } finally {
+                bootstrap.shutdown();
+            }
+        } finally {
+            serviceLoader.close();
+        }
+    }
+
+    @Test
+    public void testManagedBootstrapAnnotatedArchiveRetainsOriginallyBeanDefiningTypeAfterPatReplacement() throws Exception {
+        Path tempRoot = Files.createTempDirectory("syringe-bootstrap-managed-alternative-metadata");
+        Path serviceDir = tempRoot.resolve("META-INF/services");
+        Files.createDirectories(serviceDir);
+        Path serviceFile = serviceDir.resolve("jakarta.enterprise.inject.spi.Extension");
+        Files.write(serviceFile,
+                Collections.singletonList(ManagedAlternativeMetadataExtension.class.getName()),
+                StandardCharsets.UTF_8);
+
+        URLClassLoader serviceLoader = new URLClassLoader(
+                new URL[]{tempRoot.toUri().toURL()},
+                Thread.currentThread().getContextClassLoader());
+        try {
+            Set<Class<?>> classes = new HashSet<Class<?>>();
+            classes.add(ManagedAlternativeSausage.class);
+
+            String beansXmlContent = "<beans xmlns=\"https://jakarta.ee/xml/ns/jakartaee\" " +
+                    "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" " +
+                    "xsi:schemaLocation=\"https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/beans_3_0.xsd\" " +
+                    "version=\"3.0\" bean-discovery-mode=\"annotated\"></beans>";
+            BeansXml beansXml = new BeansXmlParser().parse(
+                    new ByteArrayInputStream(beansXmlContent.getBytes(StandardCharsets.UTF_8)));
+
+            SyringeBootstrap bootstrap = new SyringeBootstrap(
+                    classes,
+                    serviceLoader,
+                    Collections.singletonList(beansXml),
+                    "AlternativeMetadataTest1234567890abcdef1234567890abcdef12345678.war");
+
+            Syringe syringe = bootstrap.bootstrap();
+            try {
+                BeanManager bm = syringe.getBeanManager();
+                assertEquals(1, bm.getBeans(ManagedAlternativeSausage.class, Any.Literal.INSTANCE).size());
+                assertTrue(bm.getBeans(ManagedAlternativeSausage.class, new ManagedCheapLiteral()).isEmpty());
+                assertTrue(bm.getBeans(ManagedAlternativeSausage.class, new ManagedExpensiveLiteral()).isEmpty());
             } finally {
                 bootstrap.shutdown();
             }

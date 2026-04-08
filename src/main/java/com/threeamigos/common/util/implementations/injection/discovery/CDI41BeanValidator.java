@@ -3318,7 +3318,14 @@ public class CDI41BeanValidator {
         // - stereotypes
         // - @Dependent
         // Note: pseudo-scopes (except @Dependent) are NOT bean-defining annotations.
-        if (hasBeanDefiningAnnotation(clazz)
+        boolean beanDefining = hasBeanDefiningAnnotation(clazz);
+        // ProcessAnnotatedType#setAnnotatedType() replaces metadata, but in annotated archives
+        // a type already discovered as bean-defining must not be dropped if replacement metadata
+        // suppresses bean-defining annotations.
+        if (isCurrentValidatedTypeOverridden(clazz)) {
+            beanDefining = beanDefining || hasBeanDefiningAnnotationFromReflection(clazz);
+        }
+        if (beanDefining
                 // Kept for backward compatibility with existing discovery behavior in this implementation.
                 || hasDecoratorAnnotation(clazz)
                 || hasAlternativeAnnotation(clazz)) {
@@ -3354,15 +3361,33 @@ public class CDI41BeanValidator {
     }
 
     private boolean hasBeanDefiningAnnotation(Class<?> clazz) {
+        return hasBeanDefiningAnnotationFrom(annotationsOf(clazz), declaredAnnotationsOf(clazz));
+    }
+
+    private boolean hasBeanDefiningAnnotationFromReflection(Class<?> clazz) {
+        return hasBeanDefiningAnnotationFrom(clazz.getAnnotations(), clazz.getDeclaredAnnotations());
+    }
+
+    private boolean hasBeanDefiningAnnotationFrom(Annotation[] effectiveAnnotations, Annotation[] declaredAnnotations) {
         Set<Class<? extends Annotation>> declaredTypes = new HashSet<>();
-        for (Annotation declared : clazz.getDeclaredAnnotations()) {
-            declaredTypes.add(declared.annotationType());
+        if (declaredAnnotations != null) {
+            for (Annotation declared : declaredAnnotations) {
+                if (declared != null) {
+                    declaredTypes.add(declared.annotationType());
+                }
+            }
         }
 
         // Bean-defining annotations can be inherited via Java @Inherited semantics.
         // Use the effective annotation view so inherited stereotype/scope metadata
         // participates in candidate discovery.
-        for (Annotation annotation : annotationsOf(clazz)) {
+        if (effectiveAnnotations == null) {
+            return false;
+        }
+        for (Annotation annotation : effectiveAnnotations) {
+            if (annotation == null) {
+                continue;
+            }
             Class<? extends Annotation> annotationType = annotation.annotationType();
 
             // Inherited @Dependent must not, by itself, turn a subtype into a discovered bean.
@@ -3375,6 +3400,13 @@ public class CDI41BeanValidator {
             }
         }
         return false;
+    }
+
+    private boolean isCurrentValidatedTypeOverridden(Class<?> clazz) {
+        return clazz != null
+                && currentAnnotatedTypeOverride != null
+                && overrideAnnotationsClass != null
+                && overrideAnnotationsClass.equals(clazz);
     }
 
     private boolean isBeanDefiningAnnotationType(Class<? extends Annotation> annotationType) {

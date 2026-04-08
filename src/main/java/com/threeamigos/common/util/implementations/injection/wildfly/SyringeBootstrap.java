@@ -230,11 +230,40 @@ public class SyringeBootstrap {
                 continue;
             }
             String discoveryMode = beansXml.getBeanDiscoveryMode();
-            if (discoveryMode != null && "all".equalsIgnoreCase(discoveryMode.trim())) {
+            if (discoveryMode == null) {
+                continue;
+            }
+            String normalizedMode = discoveryMode.trim().toLowerCase();
+            if ("none".equals(normalizedMode)) {
+                return BeanArchiveMode.NONE;
+            }
+            if ("all".equals(normalizedMode) || isLegacyAllByDefaultDescriptor(beansXml, normalizedMode)) {
                 return beansXml.isTrimEnabled() ? BeanArchiveMode.TRIMMED : BeanArchiveMode.EXPLICIT;
             }
         }
         return BeanArchiveMode.IMPLICIT;
+    }
+
+    private boolean isLegacyAllByDefaultDescriptor(BeansXml beansXml, String normalizedMode) {
+        if (beansXml == null || !"annotated".equals(normalizedMode)) {
+            return false;
+        }
+        String version = beansXml.getVersion();
+        if (version == null || version.trim().isEmpty()) {
+            return true;
+        }
+        String trimmed = version.trim();
+        if ("1".equals(trimmed) || "1.0".equals(trimmed)) {
+            return true;
+        }
+        try {
+            String[] parts = trimmed.split("\\.");
+            int major = Integer.parseInt(parts[0]);
+            int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            return major < 1 || (major == 1 && minor == 0);
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
     }
 
     private void mirrorProviderStateToDeploymentClassLoader(CDI<Object> cdi) {
