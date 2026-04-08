@@ -56,6 +56,8 @@ import jakarta.xml.bind.annotation.XmlRootElement;
 @XmlAccessorType(XmlAccessType.FIELD)
 public class BeansXml {
 
+    static final String LEGACY_JAVA_SUN_NAMESPACE = "http://java.sun.com/xml/ns/javaee";
+
     /**
      * The bean discovery mode.
      *
@@ -79,6 +81,11 @@ public class BeansXml {
      */
     @XmlAttribute(name = "version")
     private String version;
+
+    // Metadata captured by parser from the original descriptor source.
+    // Not part of beans.xml schema and not unmarshalled by JAXB.
+    private transient String sourceNamespace;
+    private transient boolean beanDiscoveryModeDeclared;
 
     /**
      * Alternative beans and stereotypes to enable.
@@ -176,6 +183,18 @@ public class BeansXml {
         return version;
     }
 
+    public String getSourceNamespace() {
+        return sourceNamespace;
+    }
+
+    public boolean isBeanDiscoveryModeDeclared() {
+        return beanDiscoveryModeDeclared;
+    }
+
+    public boolean isLegacyJavaSunDescriptor() {
+        return LEGACY_JAVA_SUN_NAMESPACE.equals(sourceNamespace);
+    }
+
     public Alternatives getAlternatives() {
         return alternatives;
     }
@@ -220,6 +239,14 @@ public class BeansXml {
                decorators == null &&
                scan == null &&
                trim == null;
+    }
+
+    void setSourceNamespace(String sourceNamespace) {
+        this.sourceNamespace = sourceNamespace;
+    }
+
+    void setBeanDiscoveryModeDeclared(boolean beanDiscoveryModeDeclared) {
+        this.beanDiscoveryModeDeclared = beanDiscoveryModeDeclared;
     }
 
     @Override

@@ -64,8 +64,14 @@ import java.util.regex.Pattern;
 public class BeansXmlParser {
 
     private static final String JAKARTA_NAMESPACE = "https://jakarta.ee/xml/ns/jakartaee";
+    private static final String JCP_NAMESPACE = "http://xmlns.jcp.org/xml/ns/javaee";
+    private static final String JAVA_SUN_NAMESPACE = "http://java.sun.com/xml/ns/javaee";
     private static final Pattern ROOT_BEANS_TAG_PATTERN =
             Pattern.compile("(?is)<beans\\b([^>]*)>");
+    private static final Pattern XMLNS_ATTRIBUTE_PATTERN =
+            Pattern.compile("(?is)\\bxmlns\\s*=\\s*['\"]([^'\"]+)['\"]");
+    private static final Pattern BEAN_DISCOVERY_MODE_ATTRIBUTE_PATTERN =
+            Pattern.compile("(?is)\\bbean-discovery-mode\\s*=\\s*['\"][^'\"]*['\"]");
 
     /**
      * JAXB context cache for performance.
@@ -146,10 +152,14 @@ public class BeansXmlParser {
         }
 
         try {
-            return parseInternal(new ByteArrayInputStream(rawBytes));
+            BeansXml beansXml = parseInternal(new ByteArrayInputStream(rawBytes));
+            applySourceDescriptorMetadata(rawBytes, beansXml);
+            return beansXml;
         } catch (Exception primaryFailure) {
             try {
-                return parseWithDomFallback(rawBytes, false, null);
+                BeansXml beansXml = parseWithDomFallback(rawBytes, false, null);
+                applySourceDescriptorMetadata(rawBytes, beansXml);
+                return beansXml;
             } catch (Exception domFailure) {
                 if (!(primaryFailure instanceof BeansXmlParseException
                         && domFailure instanceof BeansXmlParseException)) {
@@ -182,11 +192,15 @@ public class BeansXmlParser {
 
         try {
             setSchemaUrl(schemaUrl);
-            return parseInternal(new ByteArrayInputStream(rawBytes));
+            BeansXml beansXml = parseInternal(new ByteArrayInputStream(rawBytes));
+            applySourceDescriptorMetadata(rawBytes, beansXml);
+            return beansXml;
         } catch (Exception primaryFailure) {
             try {
                 Schema schema = createSchema(schemaUrl);
-                return parseWithDomFallback(rawBytes, true, schema);
+                BeansXml beansXml = parseWithDomFallback(rawBytes, true, schema);
+                applySourceDescriptorMetadata(rawBytes, beansXml);
+                return beansXml;
             } catch (Exception domFailure) {
                 primaryFailure.addSuppressed(domFailure);
                 throw new BeansXmlParseException("Failed to parse and validate beans.xml", primaryFailure);
@@ -534,6 +548,38 @@ public class BeansXmlParser {
         System.err.println("[Syringe][BeansXmlParser] beans.xml preview: " + normalized);
         primaryFailure.printStackTrace(System.err);
         domFailure.printStackTrace(System.err);
+    }
+
+    private void applySourceDescriptorMetadata(byte[] rawBytes, BeansXml beansXml) {
+        if (rawBytes == null || beansXml == null) {
+            return;
+        }
+        String xml = new String(rawBytes, StandardCharsets.UTF_8);
+        Matcher matcher = ROOT_BEANS_TAG_PATTERN.matcher(xml);
+        if (!matcher.find()) {
+            return;
+        }
+
+        String attributes = matcher.group(1);
+        if (attributes == null) {
+            return;
+        }
+
+        Matcher xmlnsMatcher = XMLNS_ATTRIBUTE_PATTERN.matcher(attributes);
+        if (xmlnsMatcher.find()) {
+            String namespace = xmlnsMatcher.group(1);
+            if (namespace != null) {
+                String normalized = namespace.trim();
+                if (JCP_NAMESPACE.equals(normalized)
+                        || JAVA_SUN_NAMESPACE.equals(normalized)
+                        || JAKARTA_NAMESPACE.equals(normalized)) {
+                    beansXml.setSourceNamespace(normalized);
+                }
+            }
+        }
+
+        beansXml.setBeanDiscoveryModeDeclared(
+                BEAN_DISCOVERY_MODE_ATTRIBUTE_PATTERN.matcher(attributes).find());
     }
 
     /**
