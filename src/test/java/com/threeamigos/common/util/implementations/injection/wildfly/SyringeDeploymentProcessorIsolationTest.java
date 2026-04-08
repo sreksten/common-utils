@@ -140,13 +140,16 @@ class SyringeDeploymentProcessorIsolationTest {
         List<String> relativePaths = Arrays.asList(
                 "WEB-INF/lib/tck-support.jar/org/jboss/cdi/tck/tests/alternative/selection/FooProducer.class",
                 "WEB-INF/lib/bravo.jar/META-INF/beans.xml",
+                "WEB-INF/lib/charlie.jar!/META-INF/beans.xml",
                 "WEB-INF/lib/bravo.jar/org/jboss/cdi/tck/tests/alternative/selection/Foo.class",
+                "WEB-INF/lib/charlie.jar!/org/jboss/cdi/tck/tests/alternative/selection/Bar.class",
                 "WEB-INF/classes/org/jboss/cdi/tck/tests/alternative/selection/SelectedAlternative01Test.class"
         );
 
         Set<String> beanArchiveLibraries = SyringeDeploymentProcessor.collectBeanArchiveLibraryPrefixes(relativePaths);
-        assertEquals(1, beanArchiveLibraries.size());
+        assertEquals(2, beanArchiveLibraries.size());
         assertTrue(beanArchiveLibraries.contains("WEB-INF/lib/bravo.jar/"));
+        assertTrue(beanArchiveLibraries.contains("WEB-INF/lib/charlie.jar!/"));
 
         assertNull(SyringeDeploymentProcessor.toDeploymentClassEntry(
                 "WEB-INF/lib/tck-support.jar/org/jboss/cdi/tck/tests/alternative/selection/FooProducer.class",
@@ -163,6 +166,12 @@ class SyringeDeploymentProcessorIsolationTest {
                 SyringeDeploymentProcessor.toDeploymentClassEntry(
                         "WEB-INF/classes/org/jboss/cdi/tck/tests/alternative/selection/SelectedAlternative01Test.class",
                         beanArchiveLibraries));
+
+        assertEquals(
+                "org/jboss/cdi/tck/tests/alternative/selection/Bar.class",
+                SyringeDeploymentProcessor.toDeploymentClassEntry(
+                        "WEB-INF/lib/charlie.jar!/org/jboss/cdi/tck/tests/alternative/selection/Bar.class",
+                        beanArchiveLibraries));
     }
 
     @Test
@@ -171,6 +180,7 @@ class SyringeDeploymentProcessorIsolationTest {
         assertTrue(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("WEB-INF/beans.xml"));
         assertTrue(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("WEB-INF/classes/META-INF/beans.xml"));
         assertTrue(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("WEB-INF/lib/bravo.jar/META-INF/beans.xml"));
+        assertTrue(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("WEB-INF/lib/charlie.jar!/META-INF/beans.xml"));
 
         assertFalse(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("WEB-INF/lib/bravo.jar/beans.xml"));
         assertFalse(SyringeDeploymentProcessor.isDeploymentBeansXmlPath("META-INF/services/jakarta.enterprise.inject.spi.Extension"));

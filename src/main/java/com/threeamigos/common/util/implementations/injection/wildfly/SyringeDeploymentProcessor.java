@@ -413,13 +413,17 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         }
 
         String normalizedPath = trimLeadingSlashes(relativePath.replace('\\', '/'));
-        int jarSeparator = normalizedPath.indexOf(".jar/");
+        int jarSeparator = findJarSeparator(normalizedPath);
         if (jarSeparator >= 0) {
-            String jarPrefix = normalizedPath.substring(0, jarSeparator + ".jar/".length());
+            int jarSeparatorLength = jarSeparatorLength(normalizedPath, jarSeparator);
+            if (jarSeparatorLength <= 0) {
+                return null;
+            }
+            String jarPrefix = normalizedPath.substring(0, jarSeparator + jarSeparatorLength);
             if (!beanArchiveLibraryPrefixes.contains(jarPrefix)) {
                 return null;
             }
-            normalizedPath = normalizedPath.substring(jarSeparator + ".jar/".length());
+            normalizedPath = normalizedPath.substring(jarSeparator + jarSeparatorLength);
         } else {
             normalizedPath = trimToWebInfClasses(normalizedPath);
             if (normalizedPath == null) {
@@ -451,11 +455,15 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             if (!isBeanArchiveLibraryBeansXmlPath(normalized)) {
                 continue;
             }
-            int jarSeparator = normalized.indexOf(".jar/");
+            int jarSeparator = findJarSeparator(normalized);
             if (jarSeparator < 0) {
                 continue;
             }
-            prefixes.add(normalized.substring(0, jarSeparator + ".jar/".length()));
+            int jarSeparatorLength = jarSeparatorLength(normalized, jarSeparator);
+            if (jarSeparatorLength <= 0) {
+                continue;
+            }
+            prefixes.add(normalized.substring(0, jarSeparator + jarSeparatorLength));
         }
         return prefixes;
     }
@@ -687,13 +695,45 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         if (!normalizedPath.endsWith("/META-INF/beans.xml")) {
             return false;
         }
-        int jarSeparator = normalizedPath.indexOf(".jar/");
+        int jarSeparator = findJarSeparator(normalizedPath);
         if (jarSeparator < 0) {
             return false;
         }
-        String jarPrefix = normalizedPath.substring(0, jarSeparator + ".jar/".length());
+        int jarSeparatorLength = jarSeparatorLength(normalizedPath, jarSeparator);
+        if (jarSeparatorLength <= 0) {
+            return false;
+        }
+        String jarPrefix = normalizedPath.substring(0, jarSeparator + jarSeparatorLength);
         return jarPrefix.startsWith("WEB-INF/lib/")
                 || jarPrefix.contains("/WEB-INF/lib/");
+    }
+
+    private static int findJarSeparator(String normalizedPath) {
+        if (normalizedPath == null || normalizedPath.isEmpty()) {
+            return -1;
+        }
+        int bang = normalizedPath.indexOf(".jar!/");
+        int slash = normalizedPath.indexOf(".jar/");
+        if (bang < 0) {
+            return slash;
+        }
+        if (slash < 0) {
+            return bang;
+        }
+        return Math.min(bang, slash);
+    }
+
+    private static int jarSeparatorLength(String normalizedPath, int separatorIndex) {
+        if (normalizedPath == null || separatorIndex < 0 || separatorIndex >= normalizedPath.length()) {
+            return -1;
+        }
+        if (normalizedPath.startsWith(".jar!/", separatorIndex)) {
+            return ".jar!/".length();
+        }
+        if (normalizedPath.startsWith(".jar/", separatorIndex)) {
+            return ".jar/".length();
+        }
+        return -1;
     }
 
 }
