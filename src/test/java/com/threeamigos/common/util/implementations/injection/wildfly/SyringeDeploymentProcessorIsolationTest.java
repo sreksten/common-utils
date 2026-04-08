@@ -47,6 +47,29 @@ class SyringeDeploymentProcessorIsolationTest {
     }
 
     @Test
+    @DisplayName("Chapter 27.2 deployment isolation: deployment-local class lists keep anchor subpackages")
+    void shouldKeepSubpackagesWhenDeploymentClassListIsAvailable() {
+        Set<Class<?>> candidates = new HashSet<Class<?>>();
+        candidates.add(DynamicLookupTestAnchor.class);
+        candidates.add(DynamicLookupBrokenSubpackageBean.class);
+
+        String deploymentName = "DynamicLookupTestAnchor1234567890abcdef1234567890abcdef12345678.war";
+        List<String> deploymentClassNames = Arrays.asList(
+                DynamicLookupTestAnchor.class.getName(),
+                DynamicLookupBrokenSubpackageBean.class.getName()
+        );
+
+        Set<Class<?>> filtered = SyringeDeploymentProcessor.applyHashedDeploymentIsolation(
+                candidates,
+                deploymentName,
+                deploymentClassNames);
+
+        assertEquals(2, filtered.size());
+        assertTrue(filtered.contains(DynamicLookupTestAnchor.class));
+        assertTrue(filtered.contains(DynamicLookupBrokenSubpackageBean.class));
+    }
+
+    @Test
     @DisplayName("Chapter 27.2 deployment isolation: non-hashed archives keep original candidate set")
     void shouldKeepOriginalCandidatesForNonHashedArchiveNames() {
         Set<Class<?>> candidates = new HashSet<Class<?>>();

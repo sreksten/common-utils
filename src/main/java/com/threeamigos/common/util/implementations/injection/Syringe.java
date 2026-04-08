@@ -255,7 +255,7 @@ public class Syringe {
     private final Set<Class<?>> syntheticAnnotatedTypeClasses = new HashSet<Class<?>>();
     /**
      * Classes explicitly supplied via addDiscoveredClass(...).
-     * Used to preserve deterministic archive-mode behavior in managed bootstrap paths.
+     * These classes apply strict archive-mode filtering already at ProcessAnnotatedType time.
      */
     private final Set<Class<?>> explicitlyAddedDiscoveredClasses = new HashSet<Class<?>>();
     private final Map<String, AnnotatedType<?>> additionalAnnotatedTypesForDiscoveredClasses =
@@ -704,6 +704,26 @@ public class Syringe {
     }
 
     public void addDiscoveredClass(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
+        addDiscoveredClassInternal(clazz, beanArchiveMode, true);
+    }
+
+    /**
+     * Adds a class discovered by an external scanner/host runtime.
+     *
+     * <p>Unlike {@link #addDiscoveredClass(Class, BeanArchiveMode)}, this path keeps
+     * trimmed archive {@code ProcessAnnotatedType} visibility aligned with scanner-driven discovery:
+     * non bean-defining types still get PAT, but they are filtered before bean registration/PBA.
+     *
+     * @param clazz discovered class to add
+     * @param beanArchiveMode archive mode associated with the class
+     */
+    public void addExternallyDiscoveredClass(Class<?> clazz, BeanArchiveMode beanArchiveMode) {
+        addDiscoveredClassInternal(clazz, beanArchiveMode, false);
+    }
+
+    private void addDiscoveredClassInternal(Class<?> clazz,
+                                            BeanArchiveMode beanArchiveMode,
+                                            boolean explicitlyAdded) {
         if (initialized) {
             throw new IllegalStateException("Container already initialized");
         }
@@ -717,7 +737,9 @@ public class Syringe {
         }
         BeanArchiveMode mode = beanArchiveMode != null ? beanArchiveMode : BeanArchiveMode.IMPLICIT;
         knowledgeBase.add(clazz, effectiveBeanArchiveMode(mode));
-        explicitlyAddedDiscoveredClasses.add(clazz);
+        if (explicitlyAdded) {
+            explicitlyAddedDiscoveredClasses.add(clazz);
+        }
     }
 
     /**

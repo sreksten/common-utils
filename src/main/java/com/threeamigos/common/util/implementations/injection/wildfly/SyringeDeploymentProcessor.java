@@ -63,11 +63,14 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             return;
         }
         List<String> deploymentClassNames = collectDeploymentClassNames(deploymentUnit);
+        boolean applyHashedDeploymentIsolation = shouldApplyHashedDeploymentIsolation(deploymentClassNames);
         if (!deploymentClassNames.isEmpty()) {
             indexedClassNames = deploymentClassNames;
         }
 
-        String scopedPackagePrefix = resolveScopedPackagePrefix(indexedClassNames, deploymentUnit.getName());
+        String scopedPackagePrefix = applyHashedDeploymentIsolation
+                ? resolveScopedPackagePrefix(indexedClassNames, deploymentUnit.getName())
+                : null;
 
         // 1. Discover classes via Jandex
         Set<Class<?>> discoveredClasses = new HashSet<>();
@@ -92,7 +95,10 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         }
 
         // Narrow discovered classes to deployment-local test package for TCK-generated archives.
-        discoveredClasses = narrowToDeploymentScope(discoveredClasses, deploymentUnit.getName());
+        discoveredClasses = applyHashedDeploymentIsolation(
+                discoveredClasses,
+                deploymentUnit.getName(),
+                deploymentClassNames);
 
         if (discoveredClasses.isEmpty()) {
             return;
@@ -297,6 +303,19 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         }
 
         return filtered.isEmpty() ? candidates : filtered;
+    }
+
+    static boolean shouldApplyHashedDeploymentIsolation(List<String> deploymentClassNames) {
+        return deploymentClassNames == null || deploymentClassNames.isEmpty();
+    }
+
+    static Set<Class<?>> applyHashedDeploymentIsolation(Set<Class<?>> candidates,
+                                                        String deploymentName,
+                                                        List<String> deploymentClassNames) {
+        if (!shouldApplyHashedDeploymentIsolation(deploymentClassNames)) {
+            return candidates;
+        }
+        return narrowToDeploymentScope(candidates, deploymentName);
     }
 
     private static Class<?> findAnchorClass(String baseName, Set<Class<?>> candidates) {

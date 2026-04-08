@@ -106,7 +106,7 @@ public class SyringeBootstrap {
             // 3. Feed discovered classes to the container
             BeanArchiveMode managedArchiveMode = resolveManagedArchiveMode();
             for (Class<?> clazz : discoveredClasses) {
-                syringe.addDiscoveredClass(clazz, managedArchiveMode);
+                syringe.addExternallyDiscoveredClass(clazz, managedArchiveMode);
             }
 
             // 4. Complete the initialization flow (processing, validation)
