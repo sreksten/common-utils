@@ -7,11 +7,14 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
+import jakarta.enterprise.util.Nonbinding;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasNonbindingAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.registerDynamicNonbindingMember;
 import static com.threeamigos.common.util.implementations.injection.util.AnnotationHelper.toList;
 
 /**
@@ -108,8 +111,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
         checkNotNull(qualifier, "Qualifier");
         info(Phase.BEFORE_BEAN_DISCOVERY, "Adding qualifier from AnnotatedType: " +
                 qualifier.getJavaClass().getSimpleName());
-        // Extract the qualifier class from the AnnotatedType and register it
-        knowledgeBase.addQualifier(qualifier.getJavaClass());
+        registerQualifierMetadata(qualifier.getJavaClass(), qualifier);
     }
 
     /**
@@ -135,15 +137,7 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
             public AnnotatedType<T> complete() {
                 AnnotatedType<T> configured = super.complete();
                 if (applied.compareAndSet(false, true)) {
-                    // After configuration, register this as a qualifier if not already one
-                    if (!knowledgeBase.isRegisteredQualifier(qualifier)) {
-                        knowledgeBase.addQualifier(qualifier);
-                        info(Phase.BEFORE_BEAN_DISCOVERY, "Completed qualifier configuration: " +
-                                qualifier.getSimpleName());
-                    } else {
-                        info(Phase.BEFORE_BEAN_DISCOVERY, "Qualifier already configured: " +
-                                qualifier.getSimpleName());
-                    }
+                    registerQualifierMetadata(qualifier, configured);
                 }
                 return configured;
             }
@@ -159,6 +153,41 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
         info(Phase.BEFORE_BEAN_DISCOVERY, "Adding scope: " + scopeType.getSimpleName() +
                 " (normal=" + normal + ", passivating=" + passivating + ")");
         knowledgeBase.addScope(scopeType, normal, passivating);
+    }
+
+    private void registerQualifierMetadata(Class<? extends Annotation> qualifierType,
+                                           AnnotatedType<? extends Annotation> qualifierAnnotatedType) {
+        if (qualifierType == null) {
+            return;
+        }
+
+        boolean alreadyRegistered = knowledgeBase.isRegisteredQualifier(qualifierType);
+        if (!alreadyRegistered) {
+            knowledgeBase.addQualifier(qualifierType);
+            info(Phase.BEFORE_BEAN_DISCOVERY, "Completed qualifier configuration: " +
+                    qualifierType.getSimpleName());
+        } else {
+            info(Phase.BEFORE_BEAN_DISCOVERY, "Qualifier already configured: " +
+                    qualifierType.getSimpleName());
+        }
+
+        if (qualifierAnnotatedType == null) {
+            return;
+        }
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        java.util.Set<AnnotatedMethod<?>> methods =
+                (java.util.Set) qualifierAnnotatedType.getMethods();
+        for (AnnotatedMethod<?> method : methods) {
+            if (method == null || method.getJavaMember() == null) {
+                continue;
+            }
+            if (!qualifierType.equals(method.getJavaMember().getDeclaringClass())) {
+                continue;
+            }
+            if (method.isAnnotationPresent(Nonbinding.class) || hasNonbindingAnnotation(method.getJavaMember())) {
+                registerDynamicNonbindingMember(qualifierType, method.getJavaMember().getName());
+            }
+        }
     }
 
     @Override

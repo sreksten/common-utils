@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.lifecycle.bbd;
 
+import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.alternative.metadata.support.annotated.AnnotatedMethodWrapper;
+import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.alternative.metadata.support.annotated.AnnotatedTypeWrapper;
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.lifecycle.bbd.lib.Baz;
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.lifecycle.bbd.lib.Boss;
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.lifecycle.bbd.lib.Pro;
@@ -7,10 +9,14 @@ import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.literal.InjectLiteral;
+import jakarta.enterprise.inject.spi.AnnotatedMethod;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.BeforeBeanDiscovery;
 import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.util.Nonbinding;
+
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * BeforeBeanDiscovery observer used by lifecycle.bbd tests.
@@ -40,11 +46,33 @@ public class BeforeBeanDiscoveryObserver implements Extension {
     public void addQualifierByAnnotatedType(@Observes BeforeBeanDiscovery beforeBeanDiscovery, BeanManager beanManager) {
         setObserved(true);
 
-        // Register @Skill as qualifier and mark level() as @Nonbinding.
-        beforeBeanDiscovery.configureQualifier(Skill.class)
-                .filterMethods(annotatedMethod -> "level".equals(annotatedMethod.getJavaMember().getName()))
-                .findFirst()
-                .ifPresent(annotatedMethodConfigurator -> annotatedMethodConfigurator.add(Nonbinding.Literal.INSTANCE));
+        // Register @Skill as qualifier and mark level() as @Nonbinding via AnnotatedType metadata.
+        beforeBeanDiscovery.addQualifier(new AnnotatedTypeWrapper<Skill>(beanManager.createAnnotatedType(Skill.class), true) {
+
+            final Set<AnnotatedMethod<? super Skill>> methods = new HashSet<AnnotatedMethod<? super Skill>>();
+
+            {
+                for (AnnotatedMethod<? super Skill> method : super.getMethods()) {
+                    if ("level".equals(method.getJavaMember().getName())) {
+                        methods.add(new AnnotatedMethodWrapper<Skill>(
+                                (AnnotatedMethod<Skill>) method,
+                                this,
+                                true,
+                                new Nonbinding.Literal()));
+                    } else {
+                        methods.add(new AnnotatedMethodWrapper<Skill>(
+                                (AnnotatedMethod<Skill>) method,
+                                this,
+                                true));
+                    }
+                }
+            }
+
+            @Override
+            public Set<AnnotatedMethod<? super Skill>> getMethods() {
+                return methods;
+            }
+        });
     }
 
     public void addAnnotatedType(@Observes BeforeBeanDiscovery event, BeanManager beanManager) {

@@ -1404,6 +1404,7 @@ public class Syringe {
             AnnotatedType<?> annotatedType = entry.getValue();
             Class<?> clazz = annotatedType.getJavaClass();
             boolean alreadyDiscovered = knowledgeBase.getClasses().contains(clazz);
+            Extension sourceExtension = knowledgeBase.getRegisteredAnnotatedTypeSource(id);
 
             info("Processing registered AnnotatedType: " + clazz.getName() + " (ID: " + id + ")");
 
@@ -1419,7 +1420,7 @@ public class Syringe {
             ProcessSyntheticAnnotatedTypeImpl<?> event = new ProcessSyntheticAnnotatedTypeImpl(
                     messageHandler,
                     annotatedType,
-                    knowledgeBase.getRegisteredAnnotatedTypeSource(id));
+                    sourceExtension);
             fireEventToExtensions(event);
 
             if (event.isVetoed()) {
@@ -1445,13 +1446,97 @@ public class Syringe {
                 processedSyntheticAnnotatedTypeIds.add(id);
                 continue;
             }
-            knowledgeBase.addProgrammatic(clazz, effectiveBeanArchiveMode(BeanArchiveMode.IMPLICIT));
+            knowledgeBase.addProgrammatic(
+                    clazz,
+                    resolveProgrammaticAnnotatedTypeArchiveMode(clazz, sourceExtension));
             syntheticAnnotatedTypeClasses.add(clazz);
             knowledgeBase.setAnnotatedTypeOverride(clazz, finalAnnotatedType);
             processedSyntheticAnnotatedTypeIds.add(id);
         }
 
         info("Total classes after registered types: " + knowledgeBase.getClasses().size());
+    }
+
+    private BeanArchiveMode resolveProgrammaticAnnotatedTypeArchiveMode(Class<?> clazz,
+                                                                        Extension sourceExtension) {
+        if (forcedBeanArchiveMode != null) {
+            return forcedBeanArchiveMode;
+        }
+
+        BeanArchiveMode classMode = modeOfKnownClass(clazz);
+        if (classMode != null) {
+            return effectiveBeanArchiveMode(classMode);
+        }
+
+        if (sourceExtension != null) {
+            BeanArchiveMode sourceMode = modeOfKnownClass(sourceExtension.getClass());
+            if (sourceMode != null) {
+                return effectiveBeanArchiveMode(sourceMode);
+            }
+        }
+
+        BeanArchiveMode beansXmlMode = resolveProgrammaticArchiveModeFromBeansXml();
+        if (beansXmlMode != null) {
+            return effectiveBeanArchiveMode(beansXmlMode);
+        }
+
+        return effectiveBeanArchiveMode(BeanArchiveMode.IMPLICIT);
+    }
+
+    private BeanArchiveMode modeOfKnownClass(Class<?> candidate) {
+        if (candidate == null || !knowledgeBase.getClasses().contains(candidate)) {
+            return null;
+        }
+        return knowledgeBase.getBeanArchiveMode(candidate);
+    }
+
+    private BeanArchiveMode resolveProgrammaticArchiveModeFromBeansXml() {
+        BeanArchiveMode resolvedMode = null;
+        for (BeansXml beansXml : knowledgeBase.getBeansXmlConfigurations()) {
+            if (beansXml == null) {
+                continue;
+            }
+            String discoveryMode = beansXml.getBeanDiscoveryMode();
+            if (discoveryMode == null) {
+                continue;
+            }
+            String normalizedMode = discoveryMode.trim().toLowerCase(Locale.ROOT);
+            if ("all".equals(normalizedMode) || isLegacyAllByDefaultDescriptor(beansXml, normalizedMode)) {
+                BeanArchiveMode mode = beansXml.isTrimEnabled() ? BeanArchiveMode.TRIMMED : BeanArchiveMode.EXPLICIT;
+                if (BeanArchiveMode.TRIMMED.equals(mode)) {
+                    return mode;
+                }
+                resolvedMode = mode;
+            }
+        }
+        return resolvedMode;
+    }
+
+    private boolean isLegacyAllByDefaultDescriptor(BeansXml beansXml, String normalizedMode) {
+        if (beansXml == null || !"annotated".equals(normalizedMode)) {
+            return false;
+        }
+        // CDI 1.0 legacy descriptor semantics (java.sun namespace + no discovery mode attribute)
+        // default to "all"; modern empty beans.xml defaults to "annotated".
+        if (beansXml.isBeanDiscoveryModeDeclared() || !beansXml.isLegacyJavaSunDescriptor()) {
+            return false;
+        }
+        String version = beansXml.getVersion();
+        if (version == null || version.trim().isEmpty()) {
+            return true;
+        }
+        String trimmed = version.trim();
+        if ("1".equals(trimmed) || "1.0".equals(trimmed)) {
+            return true;
+        }
+        try {
+            String[] parts = trimmed.split("\\.");
+            int major = Integer.parseInt(parts[0]);
+            int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            return major < 1 || (major == 1 && minor == 0);
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
     }
 
     /**

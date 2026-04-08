@@ -22,13 +22,10 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
-import jakarta.enterprise.util.Nonbinding;
-
 @Retention(RUNTIME)
 @Target({ METHOD, FIELD, PARAMETER, TYPE })
 public @interface Skill {
     String language();
 
-    @Nonbinding
     String level();
 }
