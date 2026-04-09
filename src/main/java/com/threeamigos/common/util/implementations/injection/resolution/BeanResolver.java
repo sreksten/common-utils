@@ -691,6 +691,23 @@ public class BeanResolver implements DependencyResolver {
         public T create(CreationalContext<T> creationalContext) { return delegate.create(creationalContext); }
         @Override
         public void destroy(T instance, CreationalContext<T> creationalContext) { delegate.destroy(instance, creationalContext); }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof Bean<?>)) {
+                return false;
+            }
+            Bean<?> other = (Bean<?>) obj;
+            return Objects.equals(getBeanClass(), other.getBeanClass());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(getBeanClass());
+        }
     }
 
     private static final class SerializableDecoratorMetadata<T> extends SerializableBeanMetadata<T>

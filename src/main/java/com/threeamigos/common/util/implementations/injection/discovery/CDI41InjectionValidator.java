@@ -1014,6 +1014,12 @@ public class CDI41InjectionValidator {
                 "javax.inject.Provider".equals(rawTypeName) ||
                 "jakarta.enterprise.event.Event".equals(rawTypeName) ||
                 "javax.enterprise.event.Event".equals(rawTypeName) ||
+                "jakarta.enterprise.inject.spi.Bean".equals(rawTypeName) ||
+                "javax.enterprise.inject.spi.Bean".equals(rawTypeName) ||
+                "jakarta.enterprise.inject.spi.Decorator".equals(rawTypeName) ||
+                "javax.enterprise.inject.spi.Decorator".equals(rawTypeName) ||
+                "jakarta.enterprise.inject.spi.Interceptor".equals(rawTypeName) ||
+                "javax.enterprise.inject.spi.Interceptor".equals(rawTypeName) ||
                 "jakarta.enterprise.inject.spi.InjectionPoint".equals(rawTypeName) ||
                 "javax.enterprise.inject.spi.InjectionPoint".equals(rawTypeName) ||
                 "jakarta.enterprise.inject.spi.BeanManager".equals(rawTypeName) ||
@@ -1297,7 +1303,13 @@ public class CDI41InjectionValidator {
 
         Set<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
         if (candidates.isEmpty()) {
-            return true;
+            knowledgeBase.addError(
+                    "Bean " + owningPassivatingBean.getBeanClass().getName() +
+                            " has passivation-capable scope @" + owningPassivatingBean.getScope().getSimpleName() +
+                            " and declares unsatisfied dependency at " + location +
+                            " for type " + requiredType.getTypeName() +
+                            " with qualifiers " + qualifiers);
+            return false;
         }
 
         Bean<?> resolvedBean;

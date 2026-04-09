@@ -3,6 +3,10 @@ package com.threeamigos.common.util.implementations.injection.wildfly;
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
+import com.threeamigos.common.util.implementations.injection.cditcktests.full.context.passivating.broken.decorator.field.CityDecorator;
+import com.threeamigos.common.util.implementations.injection.cditcktests.full.context.passivating.broken.decorator.field.CityInterface;
+import com.threeamigos.common.util.implementations.injection.cditcktests.full.context.passivating.broken.decorator.field.NonPassivating;
+import com.threeamigos.common.util.implementations.injection.cditcktests.full.context.passivating.broken.decorator.field.UnderwaterCity;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.enterprise.inject.Any;
@@ -529,6 +533,32 @@ public class SyringeBootstrapTest {
         Syringe syringe = assertDoesNotThrow(bootstrap::bootstrap);
         assertNotNull(syringe);
         bootstrap.shutdown();
+    }
+
+    @Test
+    public void testManagedBootstrapRejectsDecoratorWithNonPassivatingInjectedField() {
+        Set<Class<?>> classes = new HashSet<Class<?>>();
+        classes.add(CityDecorator.class);
+        classes.add(CityInterface.class);
+        classes.add(NonPassivating.class);
+        classes.add(UnderwaterCity.class);
+
+        String beansXmlContent = "<beans xmlns=\"https://jakarta.ee/xml/ns/jakartaee\" " +
+                "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" " +
+                "xsi:schemaLocation=\"https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/beans_3_0.xsd\" " +
+                "version=\"3.0\" bean-discovery-mode=\"annotated\">" +
+                "<decorators><class>" + CityDecorator.class.getName() + "</class></decorators>" +
+                "</beans>";
+        BeansXml beansXml = new BeansXmlParser().parse(
+                new ByteArrayInputStream(beansXmlContent.getBytes(StandardCharsets.UTF_8)));
+
+        SyringeBootstrap bootstrap = new SyringeBootstrap(
+                classes,
+                Thread.currentThread().getContextClassLoader(),
+                Collections.singletonList(beansXml),
+                "DecoratorWithNonPassivatingInjectedFieldTest1234567890abcdef1234567890abcdef12345678.war");
+
+        assertThrows(DeploymentException.class, bootstrap::bootstrap);
     }
 
     @Test

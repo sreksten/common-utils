@@ -114,7 +114,9 @@ class BuiltinMetadataBeanTest {
         MilkProductDecorator instance = yoghurt.getDecoratorInstance();
 
         assertEquals(decorator, instance.getBean());
+        assertEquals(instance.getBean(), decorator);
         assertEquals(decorator, instance.getDecorator());
+        assertEquals(instance.getDecorator(), decorator);
         assertEquals(bean, instance.getDecoratedBean());
     }
 

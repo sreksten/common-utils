@@ -124,6 +124,8 @@ class BuiltinMetadataAndInjectionParityTckTest {
         decoratedTypes.add(MilkProduct.class);
         Decorator<?> decorator = syringe.getBeanManager().resolveDecorators(decoratedTypes).iterator().next();
         assertEquals(MilkProductDecorator.class, decorator.getBeanClass());
+        assertEquals(decorator, MilkProductDecorator.lastDecoratorMetadata);
+        assertEquals(MilkProductDecorator.lastDecoratorMetadata, decorator);
 
     }
 

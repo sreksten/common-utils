@@ -654,6 +654,23 @@ public class DecoratorAwareProxyGenerator {
             public void destroy(Object instance, CreationalContext<Object> creationalContext) {
                 // no-op
             }
+
+            @Override
+            public boolean equals(Object obj) {
+                if (this == obj) {
+                    return true;
+                }
+                if (!(obj instanceof Bean<?>)) {
+                    return false;
+                }
+                Bean<?> other = (Bean<?>) obj;
+                return decoratorClass.equals(other.getBeanClass());
+            }
+
+            @Override
+            public int hashCode() {
+                return decoratorClass.hashCode();
+            }
         };
     }
 

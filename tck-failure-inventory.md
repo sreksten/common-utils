@@ -38,13 +38,7 @@
 - [ ] **org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticObserver.SyntheticObserverTest**
 - [ ] **org.jboss.cdi.tck.tests.full.extensions.lite.coexistence.BuildCompatibleExtensionSmokeTest**
 
-### Unclassified (6)
-- [ ] **org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.BuiltinMetadataBeanTest**
-
 ### Core DI resolution & injection (3)
 - [ ] **org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBeanWithLookup.SyntheticBeanWithLookupTest**
 - [ ] **org.jboss.cdi.tck.tests.lookup.injectionpoint.requiredtype.LegalRequiredTypeTest**
 - [ ] **org.jboss.cdi.tck.tests.invokers.basic.GoodInstanceInvokerTest**
-
-### Contexts/scopes (1)
-- [ ] **org.jboss.cdi.tck.tests.full.context.passivating.broken.decorator.field.DecoratorWithNonPassivatingInjectedFieldTest**
