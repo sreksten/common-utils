@@ -47,11 +47,7 @@
 - [ ] **org.jboss.cdi.tck.tests.invokers.basic.GoodInstanceInvokerTest**
 
 ### Decorators (2)
-- [ ] **org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonDependent.NonDependentDecoratorTest**
 - [ ] **org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes3Test**
-
-### Interceptors (1)
-- [ ] **org.jboss.cdi.tck.tests.interceptors.definition.broken.nonDependent.NonDependentInterceptorTest**
 
 ### Contexts/scopes (1)
 - [ ] **org.jboss.cdi.tck.tests.full.context.passivating.broken.decorator.field.DecoratorWithNonPassivatingInjectedFieldTest**

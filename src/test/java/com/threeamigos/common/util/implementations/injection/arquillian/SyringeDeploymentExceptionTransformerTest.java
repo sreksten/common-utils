@@ -23,6 +23,20 @@ class SyringeDeploymentExceptionTransformerTest {
     }
 
     @Test
+    void shouldWrapNonPortableBehaviourMarkerAsDefinitionDeploymentException() {
+        RuntimeException containerFailure = new RuntimeException(
+                "WFLYCTL0080 ... Caused by: " +
+                        "com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException: " +
+                        "interceptor declares scope @RequestScoped");
+
+        Throwable transformed = transformer.transform(containerFailure);
+
+        jakarta.enterprise.inject.spi.DeploymentException deploymentException =
+                assertInstanceOf(jakarta.enterprise.inject.spi.DeploymentException.class, transformed);
+        assertInstanceOf(jakarta.enterprise.inject.spi.DefinitionException.class, deploymentException.getCause());
+    }
+
+    @Test
     void shouldWrapDefinitionMarkerInsideDeploymentExceptionMessage() {
         jakarta.enterprise.inject.spi.DeploymentException deploymentException =
                 new jakarta.enterprise.inject.spi.DeploymentException(

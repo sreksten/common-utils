@@ -13,6 +13,11 @@ import org.jboss.arquillian.container.spi.client.container.DeploymentExceptionTr
  */
 public class SyringeDeploymentExceptionTransformer implements DeploymentExceptionTransformer {
 
+    private static final String JAKARTA_DEFINITION_EXCEPTION_MARKER =
+            "jakarta.enterprise.inject.spi.DefinitionException";
+    private static final String NON_PORTABLE_BEHAVIOUR_EXCEPTION_MARKER =
+            "com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException";
+
     @Override
     public Throwable transform(final Throwable throwable) {
         if (throwable == null) {
@@ -23,8 +28,7 @@ public class SyringeDeploymentExceptionTransformer implements DeploymentExceptio
             return throwable;
         }
 
-        String definitionMessage =
-                findJakartaExceptionMarkerMessage(throwable, "jakarta.enterprise.inject.spi.DefinitionException");
+        String definitionMessage = findDefinitionFailureMessage(throwable);
         if (definitionMessage != null) {
             RuntimeException definition = new jakarta.enterprise.inject.spi.DefinitionException(definitionMessage);
             return new jakarta.enterprise.inject.spi.DeploymentException(definitionMessage, definition);
@@ -41,6 +45,14 @@ public class SyringeDeploymentExceptionTransformer implements DeploymentExceptio
         }
 
         return throwable;
+    }
+
+    private static String findDefinitionFailureMessage(Throwable throwable) {
+        String jakartaDefinitionMessage = findJakartaExceptionMarkerMessage(throwable, JAKARTA_DEFINITION_EXCEPTION_MARKER);
+        if (jakartaDefinitionMessage != null) {
+            return jakartaDefinitionMessage;
+        }
+        return findJakartaExceptionMarkerMessage(throwable, NON_PORTABLE_BEHAVIOUR_EXCEPTION_MARKER);
     }
 
     private static boolean containsDefinitionException(Throwable throwable) {
