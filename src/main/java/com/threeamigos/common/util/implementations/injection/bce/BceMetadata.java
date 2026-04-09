@@ -122,11 +122,29 @@ public final class BceMetadata {
         if (classInfo instanceof ReflectionClassInfo) {
             return ((ReflectionClassInfo) classInfo).clazz;
         }
+        String className = classInfo.name();
         try {
-            return Class.forName(classInfo.name());
+            return resolveClass(className);
         } catch (ClassNotFoundException e) {
-            throw new IllegalArgumentException("Cannot resolve ClassInfo to runtime class: " + classInfo.name(), e);
+            throw new IllegalArgumentException("Cannot resolve ClassInfo to runtime class: " + className, e);
         }
+    }
+
+    private static Class<?> resolveClass(String className) throws ClassNotFoundException {
+        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+        if (tccl != null) {
+            try {
+                return Class.forName(className, false, tccl);
+            } catch (ClassNotFoundException ignored) {
+                // Fall through to this module class loader.
+            }
+        }
+
+        ClassLoader fallback = BceMetadata.class.getClassLoader();
+        if (fallback != null && fallback != tccl) {
+            return Class.forName(className, false, fallback);
+        }
+        return Class.forName(className);
     }
 
     static Class<?> unwrapType(Type type) {
@@ -1012,7 +1030,7 @@ public final class BceMetadata {
         @Override
         public Collection<MethodInfo> methods() {
             List<MethodInfo> out = new ArrayList<>();
-            for (Method method : clazz.getDeclaredMethods()) {
+            for (Method method : declaredMethodsInTypeClosure(clazz)) {
                 out.add(new ReflectionMethodInfo(method));
             }
             return Collections.unmodifiableList(out);
@@ -1021,7 +1039,7 @@ public final class BceMetadata {
         @Override
         public Collection<FieldInfo> fields() {
             List<FieldInfo> out = new ArrayList<>();
-            for (Field field : clazz.getDeclaredFields()) {
+            for (Field field : declaredFieldsInTypeClosure(clazz)) {
                 out.add(new ReflectionFieldInfo(field));
             }
             return Collections.unmodifiableList(out);
@@ -1057,6 +1075,86 @@ public final class BceMetadata {
         @Override
         public boolean equals(Object other) {
             return other instanceof ReflectionClassInfo && clazz.equals(((ReflectionClassInfo) other).clazz);
+        }
+
+        private static Collection<Method> declaredMethodsInTypeClosure(Class<?> root) {
+            List<Method> methods = new ArrayList<Method>();
+            if (root == null) {
+                return methods;
+            }
+
+            Class<?> current = root;
+            while (current != null) {
+                if (current == Object.class && root != Object.class) {
+                    break;
+                }
+                Collections.addAll(methods, current.getDeclaredMethods());
+                current = current.getSuperclass();
+            }
+
+            collectInterfaceMethods(root, methods, new LinkedHashSet<Class<?>>());
+            return methods;
+        }
+
+        private static void collectInterfaceMethods(Class<?> type,
+                                                    List<Method> sink,
+                                                    Set<Class<?>> visitedInterfaces) {
+            if (type == null) {
+                return;
+            }
+
+            Class<?>[] interfaces = type.getInterfaces();
+            for (Class<?> interfaceType : interfaces) {
+                if (interfaceType == null || !visitedInterfaces.add(interfaceType)) {
+                    continue;
+                }
+                Collections.addAll(sink, interfaceType.getDeclaredMethods());
+                collectInterfaceMethods(interfaceType, sink, visitedInterfaces);
+            }
+
+            if (!type.isInterface()) {
+                collectInterfaceMethods(type.getSuperclass(), sink, visitedInterfaces);
+            }
+        }
+
+        private static Collection<Field> declaredFieldsInTypeClosure(Class<?> root) {
+            List<Field> fields = new ArrayList<Field>();
+            if (root == null) {
+                return fields;
+            }
+
+            Class<?> current = root;
+            while (current != null) {
+                if (current == Object.class && root != Object.class) {
+                    break;
+                }
+                Collections.addAll(fields, current.getDeclaredFields());
+                current = current.getSuperclass();
+            }
+
+            collectInterfaceFields(root, fields, new LinkedHashSet<Class<?>>());
+            return fields;
+        }
+
+        private static void collectInterfaceFields(Class<?> type,
+                                                   List<Field> sink,
+                                                   Set<Class<?>> visitedInterfaces) {
+            if (type == null) {
+                return;
+            }
+
+            Class<?>[] interfaces = type.getInterfaces();
+            for (Class<?> interfaceType : interfaces) {
+                if (interfaceType == null || !visitedInterfaces.add(interfaceType)) {
+                    continue;
+                }
+                Collections.addAll(sink, interfaceType.getDeclaredFields());
+                collectInterfaceFields(interfaceType, sink, visitedInterfaces);
+            }
+
+            if (!type.isInterface()) {
+                collectInterfaceFields(type.getSuperclass(), sink, visitedInterfaces);
+            }
         }
     }
 

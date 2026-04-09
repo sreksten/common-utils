@@ -38,6 +38,7 @@ class LegalRequiredTypeTckParityTest {
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.initialize();
         syringe.addDiscoveredClass(Forest.class, BeanArchiveMode.EXPLICIT);
+        syringe.addDiscoveredClass(Conifer.class, BeanArchiveMode.EXPLICIT);
         syringe.addDiscoveredClass(Spruce.class, BeanArchiveMode.EXPLICIT);
         syringe.addDiscoveredClass(Leaf.class, BeanArchiveMode.EXPLICIT);
         syringe.addDiscoveredClass(Needle.class, BeanArchiveMode.EXPLICIT);

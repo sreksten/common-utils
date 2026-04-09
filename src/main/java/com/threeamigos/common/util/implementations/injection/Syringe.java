@@ -730,13 +730,20 @@ public class Syringe {
         if (knowledgeBase == null) {
             throw new IllegalStateException("Container not yet initialized. Call initialize() first.");
         }
+        BeanArchiveMode mode = beanArchiveMode != null ? beanArchiveMode : BeanArchiveMode.IMPLICIT;
+        BeanArchiveMode effectiveMode = effectiveBeanArchiveMode(mode);
         if (knowledgeBase.getClasses().contains(clazz)) {
+            if (!explicitlyAdded) {
+                // Managed runtimes can report classes already added during BCE discovery.
+                // Keep this path idempotent and update archive mode from external discovery metadata.
+                knowledgeBase.add(clazz, effectiveMode);
+                return;
+            }
             throw new NonPortableBehaviourException(
                     "Non-portable behavior: bean class " + clazz.getName() +
                             " was already discovered in another bean archive");
         }
-        BeanArchiveMode mode = beanArchiveMode != null ? beanArchiveMode : BeanArchiveMode.IMPLICIT;
-        knowledgeBase.add(clazz, effectiveBeanArchiveMode(mode));
+        knowledgeBase.add(clazz, effectiveMode);
         if (explicitlyAdded) {
             explicitlyAddedDiscoveredClasses.add(clazz);
         }

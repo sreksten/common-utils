@@ -72,7 +72,7 @@ class GoodInstanceInvokerTest {
             bean.declaringClass()
                 .methods()
                 .stream()
-                .filter(it -> "hello".equals(it.name()) || "helloInterface".equals(it.name()) || it.declaringClass().isInterface())
+                .filter(it -> "hello".equals(it.name()) || it.declaringClass().isInterface())
                 .forEach(it -> registerInvoker(it.name(), invokers.createInvoker(bean, it).build()));
         }
 

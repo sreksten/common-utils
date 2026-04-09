@@ -179,7 +179,7 @@ public class CDI41BeanValidator {
                     abstractProducerOrDisposerFound = true;
                 }
             }
-            if (explicitlyBeanDefining) {
+            if (explicitlyBeanDefining && !hasConcreteDiscoveredSubtype(clazz)) {
                 knowledgeBase.addDefinitionError(clazz.getName() + ": bean class must not be abstract");
             } else if (!abstractProducerOrDisposerFound) {
                 return null;
@@ -640,6 +640,28 @@ public class CDI41BeanValidator {
                 "javax.interceptor.ExcludeClassInterceptors".equals(annotationName) ||
                 "jakarta.interceptor.ExcludeDefaultInterceptors".equals(annotationName) ||
                 "javax.interceptor.ExcludeDefaultInterceptors".equals(annotationName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasConcreteDiscoveredSubtype(Class<?> abstractType) {
+        if (abstractType == null) {
+            return false;
+        }
+        for (Class<?> candidate : knowledgeBase.getClasses()) {
+            if (candidate == null || candidate.equals(abstractType)) {
+                continue;
+            }
+            if (Modifier.isAbstract(candidate.getModifiers())) {
+                continue;
+            }
+            if (!abstractType.isAssignableFrom(candidate)) {
+                continue;
+            }
+            BeanArchiveMode candidateMode = knowledgeBase.getBeanArchiveMode(candidate);
+            if (isCandidateBeanClass(candidate, candidateMode)) {
                 return true;
             }
         }
