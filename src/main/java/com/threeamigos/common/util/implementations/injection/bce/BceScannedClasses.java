@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
+import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.inject.build.compatible.spi.ScannedClasses;
@@ -18,7 +19,11 @@ final class BceScannedClasses implements ScannedClasses {
     public void add(String className) {
         try {
             Class<?> clazz = resolveClass(className);
-            knowledgeBase.add(clazz);
+            // ScannedClasses#add is a programmatic discovery hook.
+            // Per CDI behavior this must make the class participate in discovery even
+            // when archive defaults are annotated/implicit or the class was pre-discovered
+            // with a restrictive mode (e.g. NONE in managed bootstrap).
+            knowledgeBase.addProgrammatic(clazz, BeanArchiveMode.EXPLICIT);
             messageHandler.handleInfoMessage("[BCE] Added scanned class " + className);
         } catch (ClassNotFoundException e) {
             throw new IllegalArgumentException("Cannot add scanned class " + className, e);

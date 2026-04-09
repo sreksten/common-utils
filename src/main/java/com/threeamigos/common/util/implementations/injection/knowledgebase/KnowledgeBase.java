@@ -139,7 +139,36 @@ public class KnowledgeBase {
                 classArchiveModes.put(clazz, mode);
             }
         } else if (!excludedClasses.contains(clazz) && mode != null) {
-            classArchiveModes.put(clazz, mode);
+            BeanArchiveMode currentMode = classArchiveModes.get(clazz);
+            classArchiveModes.put(clazz, mergeBeanArchiveMode(currentMode, mode));
+        }
+    }
+
+    private BeanArchiveMode mergeBeanArchiveMode(BeanArchiveMode currentMode, BeanArchiveMode incomingMode) {
+        if (incomingMode == null) {
+            return currentMode;
+        }
+        if (currentMode == null) {
+            return incomingMode;
+        }
+        return beanArchiveModeRank(incomingMode) > beanArchiveModeRank(currentMode) ? incomingMode : currentMode;
+    }
+
+    private int beanArchiveModeRank(BeanArchiveMode mode) {
+        if (mode == null) {
+            return -1;
+        }
+        switch (mode) {
+            case NONE:
+                return 0;
+            case IMPLICIT:
+                return 1;
+            case TRIMMED:
+                return 2;
+            case EXPLICIT:
+                return 3;
+            default:
+                return -1;
         }
     }
 
