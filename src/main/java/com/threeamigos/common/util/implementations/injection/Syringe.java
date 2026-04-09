@@ -4527,8 +4527,43 @@ public class Syringe {
             if (decoratorClass != null && validatedDecoratorClasses.contains(decoratorClass)) {
                 continue;
             }
+            validateProgrammaticDecoratorDecoratedTypes(decorator);
             validateProgrammaticDecoratorDelegateInjectionPoints(decorator);
         }
+    }
+
+    private void validateProgrammaticDecoratorDecoratedTypes(Decorator<?> decorator) {
+        if (decorator == null) {
+            return;
+        }
+        Set<Type> decoratedTypes = decorator.getDecoratedTypes();
+        if (hasAtLeastOneValidDecoratedType(decoratedTypes)) {
+            return;
+        }
+        Class<?> beanClass = decorator.getBeanClass();
+        String decoratorName = beanClass != null ? beanClass.getName() : decorator.getClass().getName();
+        knowledgeBase.addDefinitionError(
+                "Custom decorator '" + decoratorName +
+                        "' must declare at least one decorated type (interface bean type excluding java.io.Serializable)");
+    }
+
+    private boolean hasAtLeastOneValidDecoratedType(Set<Type> decoratedTypes) {
+        if (decoratedTypes == null || decoratedTypes.isEmpty()) {
+            return false;
+        }
+        for (Type decoratedType : decoratedTypes) {
+            Class<?> rawType = extractRawClass(decoratedType);
+            if (rawType == null) {
+                continue;
+            }
+            if (Object.class.equals(rawType)
+                    || java.io.Serializable.class.equals(rawType)
+                    || jakarta.enterprise.inject.spi.Decorator.class.equals(rawType)) {
+                continue;
+            }
+            return true;
+        }
+        return false;
     }
 
     private void validateDecoratorInfoDelegateInjectionPoint(DecoratorInfo decoratorInfo) {

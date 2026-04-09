@@ -20,17 +20,25 @@ import jakarta.enterprise.inject.spi.DefinitionException;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DecoratorWithNoDecoratedTypes3Test {
 
     @Test
     void testDeploymentFails() {
-        Syringe syringe = new Syringe(new InMemoryMessageHandler(), Glue.class, GlueDecorator.class, GlueDecoratorExtension.class);
+        InMemoryMessageHandler messageHandler = new InMemoryMessageHandler();
+        Syringe syringe = new Syringe(messageHandler, Glue.class, GlueDecorator.class, GlueDecoratorExtension.class);
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.addExtension(GlueDecoratorExtension.class.getName());
 
         try {
             assertThrows(DefinitionException.class, syringe::setup);
+            boolean hasExpectedDefinitionError = messageHandler.getAllErrorMessages().stream()
+                    .anyMatch(message -> message.contains("must declare at least one decorated type"));
+            assertTrue(
+                    hasExpectedDefinitionError,
+                    "Expected programmatic decorator definition error was not reported. Errors: " +
+                            messageHandler.getAllErrorMessages());
         } finally {
             syringe.shutdown();
         }

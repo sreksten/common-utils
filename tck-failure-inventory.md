@@ -46,8 +46,5 @@
 - [ ] **org.jboss.cdi.tck.tests.lookup.injectionpoint.requiredtype.LegalRequiredTypeTest**
 - [ ] **org.jboss.cdi.tck.tests.invokers.basic.GoodInstanceInvokerTest**
 
-### Decorators (2)
-- [ ] **org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes3Test**
-
 ### Contexts/scopes (1)
 - [ ] **org.jboss.cdi.tck.tests.full.context.passivating.broken.decorator.field.DecoratorWithNonPassivatingInjectedFieldTest**

@@ -7,6 +7,8 @@ import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyG
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Produces;
+import jakarta.decorator.Decorator;
+import jakarta.decorator.Delegate;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.AnnotatedConstructor;
 import jakarta.enterprise.inject.spi.DefinitionException;
@@ -43,6 +45,7 @@ import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -181,6 +184,15 @@ public class SyringeBootstrapTest {
     }
 
     public static class AsyncPriorityEvent {
+    }
+
+    @Decorator
+    @Priority(10)
+    public static class ManagedSerializableOnlyDecorator implements Serializable {
+        @Inject
+        @Delegate
+        @Any
+        Serializable delegate;
     }
 
     public static class ManagedAlternativeMetadataExtension implements Extension {
@@ -517,5 +529,53 @@ public class SyringeBootstrapTest {
         Syringe syringe = assertDoesNotThrow(bootstrap::bootstrap);
         assertNotNull(syringe);
         bootstrap.shutdown();
+    }
+
+    @Test
+    public void testManagedBootstrapRejectsDecoratorWithNoDecoratedTypesAsDefinitionError() {
+        Set<Class<?>> classes = new HashSet<Class<?>>();
+        classes.add(ManagedSerializableOnlyDecorator.class);
+
+        SyringeBootstrap bootstrap = new SyringeBootstrap(
+                classes,
+                Thread.currentThread().getContextClassLoader(),
+                null,
+                "DecoratorWithNoDecoratedTypesManaged1234567890abcdef1234567890abcdef12345678.war");
+
+        assertThrows(DefinitionException.class, bootstrap::bootstrap);
+    }
+
+    @Test
+    public void testManagedBootstrapRejectsProgrammaticDecoratorWithNoDecoratedTypesAsDefinitionError() throws Exception {
+        Path tempRoot = Files.createTempDirectory("syringe-bootstrap-programmatic-decorator-nodecoratedtypes");
+        Path serviceDir = tempRoot.resolve("META-INF/services");
+        Files.createDirectories(serviceDir);
+        Path serviceFile = serviceDir.resolve("jakarta.enterprise.inject.spi.Extension");
+        Files.write(
+                serviceFile,
+                Collections.singletonList(
+                        com.threeamigos.common.util.implementations.injection.cditcktests.full.decorators.definition.broken.nodecoratedtypes.GlueDecoratorExtension.class.getName()),
+                StandardCharsets.UTF_8);
+
+        URLClassLoader serviceLoader = new URLClassLoader(
+                new URL[]{tempRoot.toUri().toURL()},
+                Thread.currentThread().getContextClassLoader());
+        try {
+            Set<Class<?>> classes = new HashSet<Class<?>>();
+            classes.add(
+                    com.threeamigos.common.util.implementations.injection.cditcktests.full.decorators.definition.broken.nodecoratedtypes.Glue.class);
+            classes.add(
+                    com.threeamigos.common.util.implementations.injection.cditcktests.full.decorators.definition.broken.nodecoratedtypes.GlueDecorator.class);
+
+            SyringeBootstrap bootstrap = new SyringeBootstrap(
+                    classes,
+                    serviceLoader,
+                    null,
+                    "DecoratorWithNoDecoratedTypes1Test1234567890abcdef1234567890abcdef12345678.war");
+
+            assertThrows(DefinitionException.class, bootstrap::bootstrap);
+        } finally {
+            serviceLoader.close();
+        }
     }
 }
