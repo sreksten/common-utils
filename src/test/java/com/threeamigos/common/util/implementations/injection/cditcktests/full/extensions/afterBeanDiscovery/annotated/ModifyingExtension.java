@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.injection.cditcktests.full.e
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.afterBeanDiscovery.annotated.Alpha.AlphaLiteral;
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.afterBeanDiscovery.annotated.Bravo.BravoLiteral;
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.afterBeanDiscovery.annotated.Charlie.CharlieLiteral;
+import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.afterBeanDiscovery.annotated.support.AddForwardingAnnotatedTypeAction;
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.afterBeanDiscovery.annotated.support.annotated.AnnotatedTypeWrapper;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Any;
@@ -17,6 +18,8 @@ import jakarta.enterprise.inject.spi.ProcessSyntheticAnnotatedType;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.afterBeanDiscovery.annotated.support.AddForwardingAnnotatedTypeAction.buildId;
+
 public class ModifyingExtension implements Extension {
 
     private static final String BASE_ID_BRAVO = ModifyingExtension.class.getName() + "_b";
@@ -29,20 +32,38 @@ public class ModifyingExtension implements Extension {
     private final List<AnnotatedType<Foo>> allFoo = new ArrayList<AnnotatedType<Foo>>();
 
     public void observeBeforeBeanDiscovery(@Observes BeforeBeanDiscovery event, final BeanManager beanManager) {
-        AnnotatedType<Foo> bravoType = new AnnotatedTypeWrapper<Foo>(
-                beanManager.createAnnotatedType(Foo.class),
-                false,
-                BravoLiteral.INSTANCE,
-                Any.Literal.INSTANCE
-        );
-        event.addAnnotatedType(bravoType, buildId(BASE_ID_BRAVO, Foo.class));
+        new AddForwardingAnnotatedTypeAction<Foo>() {
+            @Override
+            public String getBaseId() {
+                return BASE_ID_BRAVO;
+            }
 
-        AnnotatedType<Foo> charlieType = new AnnotatedTypeWrapper<Foo>(
-                beanManager.createAnnotatedType(Foo.class),
-                false,
-                CharlieLiteral.INSTANCE
-        );
-        event.addAnnotatedType(charlieType, buildId(BASE_ID_CHARLIE, Foo.class));
+            @Override
+            public AnnotatedType<Foo> delegate() {
+                return new AnnotatedTypeWrapper<Foo>(
+                        beanManager.createAnnotatedType(Foo.class),
+                        false,
+                        BravoLiteral.INSTANCE,
+                        Any.Literal.INSTANCE
+                );
+            }
+        }.perform(event);
+
+        new AddForwardingAnnotatedTypeAction<Foo>() {
+            @Override
+            public String getBaseId() {
+                return BASE_ID_CHARLIE;
+            }
+
+            @Override
+            public AnnotatedType<Foo> delegate() {
+                return new AnnotatedTypeWrapper<Foo>(
+                        beanManager.createAnnotatedType(Foo.class),
+                        false,
+                        CharlieLiteral.INSTANCE
+                );
+            }
+        }.perform(event);
     }
 
     public void observeProcessAnnotatedType(@Observes ProcessAnnotatedType<Foo> event) {
@@ -81,7 +102,4 @@ public class ModifyingExtension implements Extension {
         return bar;
     }
 
-    private static String buildId(String baseId, Class<?> javaClass) {
-        return baseId + "_" + javaClass.getName();
-    }
 }

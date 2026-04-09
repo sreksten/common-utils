@@ -16,9 +16,10 @@ import jakarta.enterprise.inject.spi.configurator.ObserverMethodConfigurator;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -44,6 +45,8 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
     private final ThreadLocal<Extension> currentObserverExtension = new ThreadLocal<>();
     private final ThreadLocal<List<Runnable>> endOfObserverActions = ThreadLocal.withInitial(ArrayList::new);
     private final ThreadLocal<Boolean> observerInvocationActive = ThreadLocal.withInitial(() -> Boolean.FALSE);
+    private final Map<String, AnnotatedType<?>> registeredAnnotatedTypeViews = new ConcurrentHashMap<>();
+    private final Map<Class<?>, AnnotatedType<?>> discoveredAnnotatedTypeViews = new ConcurrentHashMap<>();
 
     public AfterBeanDiscoveryImpl(MessageHandler messageHandler,
                                   KnowledgeBase knowledgeBase,
@@ -211,11 +214,10 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
         checkNotNull(type, "Class");
         info(Phase.AFTER_BEAN_DISCOVERY, "Getting annotated types for: " + type.getName());
         List<AnnotatedType<T>> result = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        for (AnnotatedType<?> annotatedType : knowledgeBase.getRegisteredAnnotatedTypes().values()) {
+        for (Map.Entry<String, AnnotatedType<?>> entry : knowledgeBase.getRegisteredAnnotatedTypes().entrySet()) {
+            AnnotatedType<?> annotatedType = entry.getValue();
             if (annotatedType.getJavaClass().equals(type)) {
-                result.add((AnnotatedType<T>)annotatedType);
-                seen.add("registered:" + System.identityHashCode(annotatedType));
+                result.add(stabilizeRegisteredAnnotatedType(entry.getKey(), annotatedType));
             }
         }
         for (Class<?> discoveredClass : knowledgeBase.getClasses()) {
@@ -226,10 +228,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
             if (annotatedType == null) {
                 annotatedType = beanManager.createAnnotatedType(discoveredClass);
             }
-            String key = "discovered:" + discoveredClass.getName() + ":" + System.identityHashCode(annotatedType);
-            if (seen.add(key)) {
-                result.add((AnnotatedType<T>) annotatedType);
-            }
+            result.add(stabilizeDiscoveredAnnotatedType(type, annotatedType));
         }
         info(Phase.AFTER_BEAN_DISCOVERY, "Found " + result.size() + " annotated type(s) for: " + type.getName());
         return result;
@@ -246,11 +245,12 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
                 discovered = beanManager.createAnnotatedType(type);
             }
             if (discovered != null) {
-                return (AnnotatedType<T>) discovered;
+                return stabilizeDiscoveredAnnotatedType(type, discovered);
             }
-            for (AnnotatedType<?> annotatedType : knowledgeBase.getRegisteredAnnotatedTypes().values()) {
+            for (Map.Entry<String, AnnotatedType<?>> entry : knowledgeBase.getRegisteredAnnotatedTypes().entrySet()) {
+                AnnotatedType<?> annotatedType = entry.getValue();
                 if (annotatedType.getJavaClass().equals(type)) {
-                    return (AnnotatedType<T>) annotatedType;
+                    return stabilizeRegisteredAnnotatedType(entry.getKey(), annotatedType);
                 }
             }
             return null;
@@ -267,7 +267,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
                         type.getName());
                 return null;
             }
-            return (AnnotatedType<T>) annotatedType;
+            return stabilizeRegisteredAnnotatedType(id, annotatedType);
         }
 
         info(Phase.AFTER_BEAN_DISCOVERY, "No annotated type found with ID: " + id);
@@ -316,6 +316,103 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
     private void assertObserverInvocationActive() {
         if (!observerInvocationActive.get()) {
             throw new IllegalStateException("AfterBeanDiscovery methods may only be called during observer method invocation");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> AnnotatedType<T> stabilizeRegisteredAnnotatedType(String id, AnnotatedType<?> annotatedType) {
+        if (id == null || annotatedType == null) {
+            return (AnnotatedType<T>) annotatedType;
+        }
+        AnnotatedType<?> stable = registeredAnnotatedTypeViews.computeIfAbsent(
+                id,
+                ignored -> createStableAnnotatedTypeView(annotatedType));
+        return (AnnotatedType<T>) stable;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> AnnotatedType<T> stabilizeDiscoveredAnnotatedType(Class<T> type, AnnotatedType<?> annotatedType) {
+        if (type == null || annotatedType == null) {
+            return (AnnotatedType<T>) annotatedType;
+        }
+        AnnotatedType<?> stable = discoveredAnnotatedTypeViews.computeIfAbsent(
+                type,
+                ignored -> createStableAnnotatedTypeView(annotatedType));
+        return (AnnotatedType<T>) stable;
+    }
+
+    private AnnotatedType<?> createStableAnnotatedTypeView(AnnotatedType<?> annotatedType) {
+        if (annotatedType == null || isReflexiveEquals(annotatedType)) {
+            return annotatedType;
+        }
+        return new StableAnnotatedTypeView<>(annotatedType);
+    }
+
+    private boolean isReflexiveEquals(AnnotatedType<?> annotatedType) {
+        try {
+            return annotatedType.equals(annotatedType);
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static final class StableAnnotatedTypeView<T> implements AnnotatedType<T> {
+
+        private final AnnotatedType<T> delegate;
+
+        @SuppressWarnings("unchecked")
+        private StableAnnotatedTypeView(AnnotatedType<?> delegate) {
+            this.delegate = (AnnotatedType<T>) delegate;
+        }
+
+        @Override
+        public Class<T> getJavaClass() {
+            return delegate.getJavaClass();
+        }
+
+        @Override
+        public Set<AnnotatedConstructor<T>> getConstructors() {
+            return delegate.getConstructors();
+        }
+
+        @Override
+        public Set<AnnotatedMethod<? super T>> getMethods() {
+            return delegate.getMethods();
+        }
+
+        @Override
+        public Set<AnnotatedField<? super T>> getFields() {
+            return delegate.getFields();
+        }
+
+        @Override
+        public java.lang.reflect.Type getBaseType() {
+            return delegate.getBaseType();
+        }
+
+        @Override
+        public Set<java.lang.reflect.Type> getTypeClosure() {
+            return delegate.getTypeClosure();
+        }
+
+        @Override
+        public <A extends Annotation> A getAnnotation(Class<A> annotationType) {
+            return delegate.getAnnotation(annotationType);
+        }
+
+        @Override
+        public Set<Annotation> getAnnotations() {
+            return delegate.getAnnotations();
+        }
+
+        @Override
+        public boolean isAnnotationPresent(Class<? extends Annotation> annotationType) {
+            return delegate.isAnnotationPresent(annotationType);
+        }
+
+        @Override
+        public <A extends Annotation> Set<A> getAnnotations(Class<A> annotationType) {
+            return delegate.getAnnotations(annotationType);
         }
     }
 
