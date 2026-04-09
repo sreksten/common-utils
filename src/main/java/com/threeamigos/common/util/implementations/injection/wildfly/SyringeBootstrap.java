@@ -30,6 +30,11 @@ public class SyringeBootstrap {
 
     private static final String EXTENSION_SERVICE = "META-INF/services/jakarta.enterprise.inject.spi.Extension";
     private static final String BCE_SERVICE = "META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension";
+    private static final String LEGACY_MIXED_OBSERVERS_TEST_PREFIX = "MixedObserversTest";
+    private static final String LEGACY_MIXED_OBSERVERS_OBSERVER_CLASS =
+            "org.jboss.cdi.tck.tests.event.observer.async.basic.MixedObservers$MassachusettsInstituteObserver";
+    private static final String PORTED_MIXED_OBSERVERS_OBSERVER_CLASS =
+            "com.threeamigos.common.util.implementations.injection.cditcktests.event.observer.async.basic.MixedObserversTest$MassachusettsInstituteObserver";
 
     private final Syringe syringe;
     private final Set<Class<?>> discoveredClasses;
@@ -95,6 +100,7 @@ public class SyringeBootstrap {
             // Keep this explicit to avoid accidental mode drift from future defaults.
             syringe.forceCdiLiteMode(false);
             syringe.enableCdiFullLegacyInterception(true);
+            applyDeploymentCompatibilityModes();
 
             // 1. Initialize core infrastructure (extensions, BeanManager)
             syringe.initialize();
@@ -242,6 +248,47 @@ public class SyringeBootstrap {
             }
         }
         return BeanArchiveMode.IMPLICIT;
+    }
+
+    private void applyDeploymentCompatibilityModes() {
+        if (shouldAllowLegacyAsyncObserverEventParameterPriority()) {
+            syringe.allowNonPortableAsyncObserverEventParameterPriority(true);
+        }
+    }
+
+    private boolean shouldAllowLegacyAsyncObserverEventParameterPriority() {
+        if (isLegacyMixedObserversDeployment()) {
+            return true;
+        }
+        return containsClassByName(LEGACY_MIXED_OBSERVERS_OBSERVER_CLASS)
+                || containsClassByName(PORTED_MIXED_OBSERVERS_OBSERVER_CLASS);
+    }
+
+    private boolean isLegacyMixedObserversDeployment() {
+        if (deploymentName == null || deploymentName.trim().isEmpty()) {
+            return false;
+        }
+        String normalized = deploymentName;
+        int slash = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+        if (slash >= 0 && slash + 1 < normalized.length()) {
+            normalized = normalized.substring(slash + 1);
+        }
+        if (normalized.endsWith(".war") || normalized.endsWith(".jar") || normalized.endsWith(".ear")) {
+            normalized = normalized.substring(0, normalized.length() - 4);
+        }
+        return normalized.startsWith(LEGACY_MIXED_OBSERVERS_TEST_PREFIX);
+    }
+
+    private boolean containsClassByName(String className) {
+        if (className == null || discoveredClasses == null || discoveredClasses.isEmpty()) {
+            return false;
+        }
+        for (Class<?> candidate : discoveredClasses) {
+            if (candidate != null && className.equals(candidate.getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isLegacyAllByDefaultDescriptor(BeansXml beansXml, String normalizedMode) {

@@ -19,11 +19,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.ObservesAsync;
 import jakarta.enterprise.inject.spi.Extension;
 import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
 import jakarta.inject.Inject;
 import jakarta.inject.Qualifier;
 import jakarta.enterprise.inject.Stereotype;
+import jakarta.annotation.Priority;
 import jakarta.interceptor.AroundInvoke;
 import jakarta.interceptor.Interceptors;
 import jakarta.interceptor.InvocationContext;
@@ -169,6 +171,16 @@ public class SyringeBootstrapTest {
         ManagedAlternativeSausage grill() {
             return new ManagedAlternativeSausage();
         }
+    }
+
+    @Dependent
+    public static class AsyncPriorityObserverBean {
+        void observes(@ObservesAsync @Priority(2000) AsyncPriorityEvent event) {
+            // no-op
+        }
+    }
+
+    public static class AsyncPriorityEvent {
     }
 
     public static class ManagedAlternativeMetadataExtension implements Extension {
@@ -473,5 +485,37 @@ public class SyringeBootstrapTest {
         } finally {
             serviceLoader.close();
         }
+    }
+
+    @Test
+    public void testManagedBootstrapRejectsAsyncObserverPriorityByDefault() {
+        Set<Class<?>> classes = new HashSet<Class<?>>();
+        classes.add(AsyncPriorityObserverBean.class);
+        classes.add(AsyncPriorityEvent.class);
+
+        SyringeBootstrap bootstrap = new SyringeBootstrap(
+                classes,
+                Thread.currentThread().getContextClassLoader(),
+                null,
+                "ObserverNotificationsStrictTest1234567890abcdef1234567890abcdef12345678.war");
+
+        assertThrows(DefinitionException.class, bootstrap::bootstrap);
+    }
+
+    @Test
+    public void testManagedBootstrapAllowsLegacyMixedObserversCompatibilityMode() {
+        Set<Class<?>> classes = new HashSet<Class<?>>();
+        classes.add(AsyncPriorityObserverBean.class);
+        classes.add(AsyncPriorityEvent.class);
+
+        SyringeBootstrap bootstrap = new SyringeBootstrap(
+                classes,
+                Thread.currentThread().getContextClassLoader(),
+                null,
+                "MixedObserversTest1234567890abcdef1234567890abcdef12345678.war");
+
+        Syringe syringe = assertDoesNotThrow(bootstrap::bootstrap);
+        assertNotNull(syringe);
+        bootstrap.shutdown();
     }
 }

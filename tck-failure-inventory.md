@@ -39,11 +39,6 @@
 - [ ] **org.jboss.cdi.tck.tests.full.extensions.lite.coexistence.BuildCompatibleExtensionSmokeTest**
 
 ### Unclassified (6)
-- [ ] **org.jboss.cdi.tck.tests.full.deployment.discovery.BeanDiscoveryTest**
-- [ ] **org.jboss.cdi.tck.tests.full.deployment.discovery.BeanDiscoveryTest**
-- [ ] **org.jboss.cdi.tck.tests.full.deployment.discovery.BeanDiscoveryTest**
-- [ ] **org.jboss.cdi.tck.tests.full.deployment.discovery.BeanDiscoveryTest**
-- [ ] **org.jboss.cdi.tck.tests.full.deployment.discovery.BeanDiscoveryTest**
 - [ ] **org.jboss.cdi.tck.tests.full.implementation.builtin.metadata.BuiltinMetadataBeanTest**
 
 ### Core DI resolution & injection (3)
@@ -54,13 +49,6 @@
 ### Decorators (2)
 - [ ] **org.jboss.cdi.tck.tests.full.decorators.definition.broken.nonDependent.NonDependentDecoratorTest**
 - [ ] **org.jboss.cdi.tck.tests.full.decorators.definition.broken.nodecoratedtypes.DecoratorWithNoDecoratedTypes3Test**
-
-### Bean definition/typing (2)
-- [ ] **org.jboss.cdi.tck.tests.inheritance.generics.MemberLevelInheritanceTest**
-- [ ] **org.jboss.cdi.tck.tests.inheritance.generics.MemberLevelInheritanceTest**
-
-### Events/observers (1)
-- [ ] **org.jboss.cdi.tck.tests.event.observer.async.basic.MixedObserversTest**
 
 ### Interceptors (1)
 - [ ] **org.jboss.cdi.tck.tests.interceptors.definition.broken.nonDependent.NonDependentInterceptorTest**
