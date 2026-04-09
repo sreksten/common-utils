@@ -32,8 +32,8 @@ class BuildCompatibleExtensionSmokeTest {
             syringe.setup();
 
             assertTrue(syringe.getBeanManager().createInstance().select(DummyBean.class).isResolvable());
-            // Syringe executes an additional registration callback after synthesis.
-            assertEquals(6, StandardBuildCompatibleExtension.TIMES_INVOKED);
+            // Registration phase runs twice, but non-synthetic components are not re-delivered.
+            assertEquals(5, StandardBuildCompatibleExtension.TIMES_INVOKED);
             assertEquals(0, OverridenBuildCompatibleExtension.TIMES_INVOKED);
             assertEquals(3, OverridingPortableExtension.TIMES_INVOKED);
             assertTrue(StandardPortableExtension.INVOKED);

@@ -11,6 +11,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import static com.threeamigos.common.util.implementations.injection.spi.SPIUtils.isAnnotation;
 
@@ -29,8 +30,10 @@ public class BceParameters implements Parameters {
 
     @Override
     public <T> T get(String name, Class<T> type) {
+        Objects.requireNonNull(name, "key cannot be null");
+        Objects.requireNonNull(type, "type cannot be null");
         if (!values.containsKey(name)) {
-            throw new IllegalArgumentException("Missing parameter '" + name + "'");
+            return null;
         }
         Object raw = values.get(name);
         return convert(name, type, raw);
@@ -38,6 +41,8 @@ public class BceParameters implements Parameters {
 
     @Override
     public <T> T get(String name, Class<T> type, T defaultValue) {
+        Objects.requireNonNull(name, "key cannot be null");
+        Objects.requireNonNull(type, "type cannot be null");
         if (!values.containsKey(name)) {
             return defaultValue;
         }
@@ -84,21 +89,21 @@ public class BceParameters implements Parameters {
         }
 
         if (converted != null && !type.isInstance(converted)) {
+            Class<?> effectiveType = boxedPrimitive(type);
             if (converted instanceof Annotation[] &&
-                type.isArray() &&
-                isAnnotation(type.getComponentType())) {
+                effectiveType.isArray() &&
+                isAnnotation(effectiveType.getComponentType())) {
                 Annotation[] source = (Annotation[]) converted;
-                Object typedArray = Array.newInstance(type.getComponentType(), source.length);
+                Object typedArray = Array.newInstance(effectiveType.getComponentType(), source.length);
                 for (int i = 0; i < source.length; i++) {
                     Array.set(typedArray, i, source[i]);
                 }
                 converted = typedArray;
             }
-        }
-
-        if (converted != null && !type.isInstance(converted)) {
-            throw new IllegalArgumentException("Parameter '" + name + "' is not of expected type " +
-                type.getName() + " (actual: " + converted.getClass().getName() + ")");
+            if (converted != null && !effectiveType.isInstance(converted)) {
+                throw new ClassCastException("Parameter '" + name + "' cannot be cast to " +
+                    type.getName() + " (actual: " + converted.getClass().getName() + ")");
+            }
         }
         return (T) converted;
     }
@@ -109,5 +114,36 @@ public class BceParameters implements Parameters {
             throw new IllegalStateException("No invoker registry available to materialize InvokerInfo");
         }
         return (Invoker<Object, Object>) invokerRegistry.resolve(info);
+    }
+
+    private Class<?> boxedPrimitive(Class<?> type) {
+        if (type == null || !type.isPrimitive()) {
+            return type;
+        }
+        if (type == boolean.class) {
+            return Boolean.class;
+        }
+        if (type == byte.class) {
+            return Byte.class;
+        }
+        if (type == short.class) {
+            return Short.class;
+        }
+        if (type == int.class) {
+            return Integer.class;
+        }
+        if (type == long.class) {
+            return Long.class;
+        }
+        if (type == float.class) {
+            return Float.class;
+        }
+        if (type == double.class) {
+            return Double.class;
+        }
+        if (type == char.class) {
+            return Character.class;
+        }
+        return type;
     }
 }

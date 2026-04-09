@@ -52,7 +52,7 @@ final class BceTypes implements Types {
     @Override
     public ClassType ofClass(String className) {
         try {
-            return BceMetadata.type(Class.forName(className)).asClass();
+            return BceMetadata.type(resolveClass(className)).asClass();
         } catch (ClassNotFoundException e) {
             throw new IllegalArgumentException("Cannot resolve class " + className, e);
         }
@@ -160,6 +160,23 @@ final class BceTypes implements Types {
         } catch (IllegalArgumentException e) {
             return Object.class;
         }
+    }
+
+    private Class<?> resolveClass(String className) throws ClassNotFoundException {
+        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+        if (tccl != null) {
+            try {
+                return Class.forName(className, false, tccl);
+            } catch (ClassNotFoundException ignored) {
+                // Fall through to the container/module class loader.
+            }
+        }
+
+        ClassLoader fallback = BceTypes.class.getClassLoader();
+        if (fallback != null && fallback != tccl) {
+            return Class.forName(className, false, fallback);
+        }
+        return Class.forName(className);
     }
 
     private static final class ReflectParameterizedType implements java.lang.reflect.ParameterizedType {

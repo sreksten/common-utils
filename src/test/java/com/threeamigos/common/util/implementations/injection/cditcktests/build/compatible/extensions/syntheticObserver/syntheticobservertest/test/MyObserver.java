@@ -10,7 +10,7 @@ public class MyObserver implements SyntheticObserver<MyEvent> {
 
     @Override
     public void observe(EventContext<MyEvent> event, Parameters params) {
-        String name = params.get("name", String.class, null);
+        String name = params.get("name", String.class);
         ObservedMessages.add(event.getEvent().getPayload() + " with " + name);
     }
 

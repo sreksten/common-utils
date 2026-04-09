@@ -20,7 +20,6 @@ import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.SkipIfPortableExtensionPresent;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
-import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.build.compatible.spi.Validation;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 
@@ -48,7 +47,7 @@ public class OverridenBuildCompatibleExtension implements BuildCompatibleExtensi
     }
 
     @Synthesis
-    public void synthesis(SyntheticComponents components) {
+    public void synthesis() {
         TIMES_INVOKED++;
     }
 

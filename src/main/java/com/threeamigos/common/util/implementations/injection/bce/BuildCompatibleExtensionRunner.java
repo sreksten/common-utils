@@ -131,12 +131,6 @@ public class BuildCompatibleExtensionRunner {
             applyEnhancementModelState(enhancementModelState);
         }
 
-        if (phase == BceSupportedPhase.SYNTHESIS && !invocations.isEmpty()) {
-            synchronized (deliveredRegistrationModels) {
-                deliveredRegistrationModels.clear();
-            }
-        }
-
         if (syntheticComponents != null) {
             syntheticComponents.complete();
         }
@@ -257,7 +251,7 @@ public class BuildCompatibleExtensionRunner {
                 )) {
                     throw new DefinitionException("Invalid BCE " + phase + " method " +
                         method.getDeclaringClass().getName() + "." + method.getName() +
-                        ": supported parameters are from {BuildServices, Types, Messages, MetaAnnotations, ScannedClasses}.");
+                        ": supported parameters are from {Types, Messages, MetaAnnotations, ScannedClasses}.");
                 }
                 break;
             case ENHANCEMENT:
@@ -268,25 +262,20 @@ public class BuildCompatibleExtensionRunner {
                 validateRegistrationOrValidationSignature(method, phase);
                 break;
             case SYNTHESIS:
-                if (parameterTypes.length == 0 || parameterTypes.length > 4) {
-                    throw new DefinitionException("Invalid BCE SYNTHESIS method " +
-                        method.getDeclaringClass().getName() + "." + method.getName() +
-                        ": expected SyntheticComponents and optional parameters from {BuildServices, Types, Messages}.");
-                }
-                if (!isSeenSyntheticComponents(method, parameterTypes)) {
-                    throw new DefinitionException("Invalid BCE SYNTHESIS method " +
-                        method.getDeclaringClass().getName() + "." + method.getName() +
-                        ": missing SyntheticComponents parameter.");
-                }
+                validateSynthesisSignature(method, parameterTypes);
                 break;
             default:
                 break;
         }
     }
 
-    private static boolean isSeenSyntheticComponents(Method method, Class<?>[] parameterTypes) {
+    private static void validateSynthesisSignature(Method method, Class<?>[] parameterTypes) {
+        if (parameterTypes.length > 3) {
+            throw new DefinitionException("Invalid BCE SYNTHESIS method " +
+                method.getDeclaringClass().getName() + "." + method.getName() +
+                ": too many parameters.");
+        }
         boolean seenSyntheticComponents = false;
-        boolean seenBuildServices = false;
         boolean seenTypes = false;
         boolean seenMessages = false;
         for (Class<?> parameterType : parameterTypes) {
@@ -297,15 +286,6 @@ public class BuildCompatibleExtensionRunner {
                         ": duplicate SyntheticComponents parameter.");
                 }
                 seenSyntheticComponents = true;
-                continue;
-            }
-            if (BuildServices.class.isAssignableFrom(parameterType)) {
-                if (seenBuildServices) {
-                    throw new DefinitionException("Invalid BCE SYNTHESIS method " +
-                        method.getDeclaringClass().getName() + "." + method.getName() +
-                        ": duplicate BuildServices parameter.");
-                }
-                seenBuildServices = true;
                 continue;
             }
             if (Types.class.isAssignableFrom(parameterType)) {
@@ -330,7 +310,6 @@ public class BuildCompatibleExtensionRunner {
                 method.getDeclaringClass().getName() + "." + method.getName() +
                 ": unsupported parameter type " + parameterType.getName());
         }
-        return seenSyntheticComponents;
     }
 
     private static int getPhaseAnnotationCount(Method method) {
@@ -356,19 +335,9 @@ public class BuildCompatibleExtensionRunner {
     private void validateEnhancementSignature(Method method) {
         Class<?>[] parameterTypes = method.getParameterTypes();
         int modelParamCount = 0;
-        boolean seenBuildServices = false;
         boolean seenTypes = false;
         boolean seenMessages = false;
         for (Class<?> parameterType : parameterTypes) {
-            if (BuildServices.class.isAssignableFrom(parameterType)) {
-                if (seenBuildServices) {
-                    throw new DefinitionException("Invalid BCE ENHANCEMENT method " +
-                        method.getDeclaringClass().getName() + "." + method.getName() +
-                        ": duplicate BuildServices parameter.");
-                }
-                seenBuildServices = true;
-                continue;
-            }
             if (Types.class.isAssignableFrom(parameterType)) {
                 if (seenTypes) {
                     throw new DefinitionException("Invalid BCE ENHANCEMENT method " +
@@ -475,10 +444,10 @@ public class BuildCompatibleExtensionRunner {
 
         throw new DefinitionException("Unsupported BCE " + phase + " method signature: " +
             method.getDeclaringClass().getName() + "." + method.getName() +
-            " - currently supported signatures are no-arg or BuildServices for Discovery/Enhancement/Validation, " +
-            "@Registration methods with parameters from {BeanInfo, ObserverInfo, InvokerFactory, BceRegistrationContext, BuildServices, Types, Messages}, " +
-            "@Validation methods with parameters from {BeanInfo, ObserverInfo, BuildServices, Types, Messages}, and " +
-            "@Synthesis methods with SyntheticComponents and optional parameters from {BuildServices, Types, Messages}.");
+            " - currently supported signatures are no-arg for Discovery/Enhancement/Validation, " +
+            "@Registration methods with parameters from {BeanInfo, ObserverInfo, InvokerFactory, BceRegistrationContext, Types, Messages}, " +
+            "@Validation methods with parameters from {BeanInfo, ObserverInfo, Types, Messages}, and " +
+            "@Synthesis methods with optional parameters from {SyntheticComponents, Types, Messages}.");
     }
 
     private void validateRegistrationOrValidationSignature(Method method,
@@ -486,7 +455,6 @@ public class BuildCompatibleExtensionRunner {
         Class<?>[] parameterTypes = getClasses(method, phase);
         boolean seenInvokerFactory = false;
         boolean seenContext = false;
-        boolean seenBuildServices = false;
         boolean seenTypes = false;
         boolean seenMessages = false;
         int modelCount = 0;
@@ -503,13 +471,6 @@ public class BuildCompatibleExtensionRunner {
                     throw invalidRegistrationOrValidationParameter(method, phase, parameterType, "duplicate/illegal BceRegistrationContext");
                 }
                 seenContext = true;
-                continue;
-            }
-            if (BuildServices.class.isAssignableFrom(parameterType)) {
-                if (seenBuildServices) {
-                    throw invalidRegistrationOrValidationParameter(method, phase, parameterType, "duplicate BuildServices");
-                }
-                seenBuildServices = true;
                 continue;
             }
             if (Types.class.isAssignableFrom(parameterType)) {
@@ -538,7 +499,7 @@ public class BuildCompatibleExtensionRunner {
                 ": at most one model parameter is allowed from {BeanInfo, ObserverInfo, InterceptorInfo, InjectionPointInfo, DisposerInfo, ScopeInfo, StereotypeInfo}.");
         }
         if (phase == BceSupportedPhase.REGISTRATION && modelCount == 0 &&
-            !isRegistrationWithoutModelAllowed(method, seenInvokerFactory, seenContext, seenBuildServices,
+            !isRegistrationWithoutModelAllowed(method, seenInvokerFactory, seenContext,
                 seenTypes, seenMessages)) {
             throw new DefinitionException("Invalid BCE " + phase + " method " +
                 method.getDeclaringClass().getName() + "." + method.getName() +
@@ -549,11 +510,10 @@ public class BuildCompatibleExtensionRunner {
     private boolean isRegistrationWithoutModelAllowed(Method method,
                                                       boolean seenInvokerFactory,
                                                       boolean seenContext,
-                                                      boolean seenBuildServices,
                                                       boolean seenTypes,
                                                       boolean seenMessages) {
         // Service-driven registration callbacks are allowed without a direct model parameter.
-        if (seenInvokerFactory || seenContext || seenBuildServices) {
+        if (seenInvokerFactory || seenContext) {
             return true;
         }
 
@@ -1636,7 +1596,7 @@ public class BuildCompatibleExtensionRunner {
         List<Class<?>> seen = new ArrayList<>();
         for (Class<?> parameterType : parameterTypes) {
             Class<?> matched = null;
-            for (Class<?> allowedType : new Class<?>[]{BuildServices.class, Types.class, Messages.class, MetaAnnotations.class, ScannedClasses.class}) {
+            for (Class<?> allowedType : new Class<?>[]{Types.class, Messages.class, MetaAnnotations.class, ScannedClasses.class}) {
                 if (allowedType.isAssignableFrom(parameterType)) {
                     matched = allowedType;
                     break;
@@ -1654,9 +1614,6 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private Object resolveCommonServiceArgument(Class<?> parameterType) {
-        if (isBuildServices(parameterType)) {
-            return buildServices;
-        }
         if (isTypes(parameterType)) {
             return types;
         }

@@ -1223,9 +1223,23 @@ public class EventImpl<T> implements Event<T>, Serializable {
         Method method = observerInfo.getObserverMethod();
         String methodKey;
         if (method != null) {
-            methodKey = method.getDeclaringClass().getName() + "#" + method.getName() + "/" + method.getParameterCount();
+            StringBuilder signature = new StringBuilder();
+            signature.append(method.getDeclaringClass().getName())
+                    .append('#')
+                    .append(method.getName())
+                    .append('(');
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            for (int i = 0; i < parameterTypes.length; i++) {
+                if (i > 0) {
+                    signature.append(',');
+                }
+                signature.append(parameterTypes[i].getName());
+            }
+            signature.append(')');
+            methodKey = signature.toString();
         } else if (observerInfo.getSyntheticObserver() != null) {
-            methodKey = "synthetic:" + observerInfo.getSyntheticObserver().getClass().getName();
+            methodKey = "synthetic:" + Integer.toHexString(
+                    System.identityHashCode(observerInfo.getSyntheticObserver()));
         } else {
             methodKey = "unknown";
         }
@@ -1234,7 +1248,25 @@ public class EventImpl<T> implements Event<T>, Serializable {
                 ? observerInfo.getDeclaringBean().getBeanClass().getName()
                 : "";
         return methodKey + "|" + declaringBeanClass + "|" + observerInfo.getEventType() + "|" +
-                observerInfo.isAsync() + "|" + observerInfo.getTransactionPhase();
+                qualifierIdentity(observerInfo.getQualifiers()) + "|" + observerInfo.getReception() + "|" +
+                observerInfo.isAsync() + "|" + observerInfo.getTransactionPhase() + "|" +
+                observerInfo.getPriority();
+    }
+
+    private String qualifierIdentity(Set<Annotation> qualifiers) {
+        if (qualifiers == null || qualifiers.isEmpty()) {
+            return "";
+        }
+
+        List<String> entries = new ArrayList<>();
+        for (Annotation qualifier : qualifiers) {
+            if (qualifier == null || qualifier.annotationType() == null) {
+                continue;
+            }
+            entries.add(qualifier.annotationType().getName() + ":" + AnnotationComparator.hashCode(qualifier));
+        }
+        Collections.sort(entries);
+        return String.join(",", entries);
     }
 
     /**

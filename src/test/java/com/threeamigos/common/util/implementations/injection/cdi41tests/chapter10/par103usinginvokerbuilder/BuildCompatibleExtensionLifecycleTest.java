@@ -49,6 +49,7 @@ import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.ElementType.TYPE;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -172,19 +173,18 @@ public class BuildCompatibleExtensionLifecycleTest {
     }
 
     @Test
-    @DisplayName("10.3 - BuildServices is available to BCE phases and through BuildServicesResolver")
-    public void shouldExposeBuildServicesDuringBcePhases() {
+    @DisplayName("10.3 - BuildServicesResolver is available during BCE phase callbacks")
+    public void shouldExposeBuildServicesResolverDuringBcePhases() {
         BuildServicesRecorder.reset();
         Syringe syringe = newSyringe();
-        syringe.addBuildCompatibleExtension(BuildServicesExtension.class.getName());
+        syringe.addBuildCompatibleExtension(BuildServicesResolverExtension.class.getName());
 
         syringe.setup();
 
-        assertTrue(BuildServicesRecorder.discoveryAvailable);
-        assertTrue(BuildServicesRecorder.registrationAvailable);
-        assertTrue(BuildServicesRecorder.synthesisAvailable);
-        assertTrue(BuildServicesRecorder.validationAvailable);
-        assertTrue(BuildServicesRecorder.resolverBoundInDiscovery);
+        assertTrue(BuildServicesRecorder.discoveryResolverAvailable);
+        assertTrue(BuildServicesRecorder.registrationResolverAvailable);
+        assertTrue(BuildServicesRecorder.synthesisResolverAvailable);
+        assertTrue(BuildServicesRecorder.validationResolverAvailable);
         assertTrue(BuildServicesRecorder.annotationBuilderWorked);
     }
 
@@ -239,12 +239,12 @@ public class BuildCompatibleExtensionLifecycleTest {
     }
 
     @Test
-    @DisplayName("10.3 - Synthesis methods must declare SyntheticComponents")
-    public void shouldRejectSynthesisMethodWithoutSyntheticComponents() {
+    @DisplayName("10.3 - Synthesis methods may omit SyntheticComponents")
+    public void shouldAllowSynthesisMethodWithoutSyntheticComponents() {
         Syringe syringe = newSyringe();
-        syringe.addBuildCompatibleExtension(InvalidSynthesisMissingSyntheticComponentsExtension.class.getName());
+        syringe.addBuildCompatibleExtension(SynthesisWithoutSyntheticComponentsExtension.class.getName());
 
-        assertThrows(DefinitionException.class, syringe::setup);
+        assertDoesNotThrow(syringe::setup);
     }
 
     @Test
@@ -350,10 +350,37 @@ public class BuildCompatibleExtensionLifecycleTest {
     }
 
     @Test
-    @DisplayName("10.3 - Registration methods reject duplicate BuildServices parameters")
-    public void shouldRejectDuplicateRegistrationBuildServicesParameters() {
+    @DisplayName("10.3 - Registration methods reject BuildServices parameter")
+    public void shouldRejectRegistrationBuildServicesParameter() {
         Syringe syringe = newSyringe();
-        syringe.addBuildCompatibleExtension(InvalidRegistrationDuplicateBuildServicesExtension.class.getName());
+        syringe.addBuildCompatibleExtension(InvalidRegistrationBuildServicesExtension.class.getName());
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("10.3 - Discovery methods reject BuildServices parameter")
+    public void shouldRejectDiscoveryBuildServicesParameter() {
+        Syringe syringe = newSyringe();
+        syringe.addBuildCompatibleExtension(InvalidDiscoveryBuildServicesExtension.class.getName());
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("10.3 - Synthesis methods reject BuildServices parameter")
+    public void shouldRejectSynthesisBuildServicesParameter() {
+        Syringe syringe = newSyringe();
+        syringe.addBuildCompatibleExtension(InvalidSynthesisBuildServicesExtension.class.getName());
+
+        assertThrows(DefinitionException.class, syringe::setup);
+    }
+
+    @Test
+    @DisplayName("10.3 - Validation methods reject BuildServices parameter")
+    public void shouldRejectValidationBuildServicesParameter() {
+        Syringe syringe = newSyringe();
+        syringe.addBuildCompatibleExtension(InvalidValidationBuildServicesExtension.class.getName());
 
         assertThrows(DefinitionException.class, syringe::setup);
     }
@@ -616,16 +643,15 @@ public class BuildCompatibleExtensionLifecycleTest {
     }
 
     @Test
-    @DisplayName("10.3 - Enhancement allows model plus BuildServices/Types/Messages")
-    public void shouldAllowEnhancementModelWithServices() {
+    @DisplayName("10.3 - Enhancement allows model plus Types/Messages")
+    public void shouldAllowEnhancementModelWithSupportedServices() {
         EnhancementServiceModelRecorder.reset();
         Syringe syringe = newSyringe();
-        syringe.addBuildCompatibleExtension(EnhancementModelWithServicesExtension.class.getName());
+        syringe.addBuildCompatibleExtension(EnhancementModelWithSupportedServicesExtension.class.getName());
 
         syringe.setup();
 
         assertTrue(EnhancementServiceModelRecorder.modelInjected);
-        assertTrue(EnhancementServiceModelRecorder.buildServicesInjected);
         assertTrue(EnhancementServiceModelRecorder.typesInjected);
         assertTrue(EnhancementServiceModelRecorder.messagesInjected);
     }
@@ -682,10 +708,10 @@ public class BuildCompatibleExtensionLifecycleTest {
     }
 
     @Test
-    @DisplayName("10.3 - Enhancement methods reject duplicate BuildServices parameters")
-    public void shouldRejectDuplicateEnhancementBuildServicesParameters() {
+    @DisplayName("10.3 - Enhancement methods reject BuildServices parameter")
+    public void shouldRejectEnhancementBuildServicesParameter() {
         Syringe syringe = newSyringe();
-        syringe.addBuildCompatibleExtension(InvalidEnhancementDuplicateBuildServicesExtension.class.getName());
+        syringe.addBuildCompatibleExtension(InvalidEnhancementBuildServicesExtension.class.getName());
 
         assertThrows(DefinitionException.class, syringe::setup);
     }
@@ -1030,11 +1056,11 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
     }
 
-    public static class BuildServicesExtension implements BuildCompatibleExtension {
+    public static class BuildServicesResolverExtension implements BuildCompatibleExtension {
         @Discovery
-        public void discovery(BuildServices buildServices) {
-            BuildServicesRecorder.discoveryAvailable = buildServices != null;
-            BuildServicesRecorder.resolverBoundInDiscovery = isResolverBound(buildServices);
+        public void discovery(Messages messages) {
+            BuildServices buildServices = resolveBuildServices();
+            BuildServicesRecorder.discoveryResolverAvailable = messages != null && buildServices != null;
             jakarta.enterprise.lang.model.AnnotationInfo built =
                 buildServices.annotationBuilderFactory().create(SampleQualifier.class).build();
             BuildServicesRecorder.annotationBuilderWorked =
@@ -1042,29 +1068,31 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
 
         @Registration(types = TrackedBean.class)
-        public void registration(BuildServices buildServices) {
-            BuildServicesRecorder.registrationAvailable = buildServices != null;
+        public void registration(jakarta.enterprise.inject.build.compatible.spi.BeanInfo beanInfo) {
+            BuildServicesRecorder.registrationResolverAvailable =
+                beanInfo != null && resolveBuildServices() != null;
         }
 
         @Synthesis
-        public void synthesis(SyntheticComponents components,
-                       BuildServices buildServices) {
-            BuildServicesRecorder.synthesisAvailable = buildServices != null;
+        public void synthesis(SyntheticComponents components) {
+            BuildServicesRecorder.synthesisResolverAvailable =
+                components != null && resolveBuildServices() != null;
         }
 
         @Validation
-        public void validation(BuildServices buildServices) {
-            BuildServicesRecorder.validationAvailable = buildServices != null;
+        public void validation(Messages messages) {
+            BuildServicesRecorder.validationResolverAvailable =
+                messages != null && resolveBuildServices() != null;
         }
 
-        private boolean isResolverBound(BuildServices expected) {
+        private BuildServices resolveBuildServices() {
             try {
                 Method getMethod = BuildServicesResolver.class.getDeclaredMethod("get");
                 getMethod.setAccessible(true);
                 Object resolved = getMethod.invoke(null);
-                return resolved == expected;
+                return resolved instanceof BuildServices ? (BuildServices) resolved : null;
             } catch (Exception e) {
-                return false;
+                return null;
             }
         }
     }
@@ -1138,10 +1166,10 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
     }
 
-    public static class InvalidSynthesisMissingSyntheticComponentsExtension implements BuildCompatibleExtension {
+    public static class SynthesisWithoutSyntheticComponentsExtension implements BuildCompatibleExtension {
         @Synthesis
         public void synthesis(Types types, Messages messages) {
-            // invalid by contract: missing SyntheticComponents parameter
+            // valid by contract: SyntheticComponents is optional in synthesis.
         }
     }
 
@@ -1166,10 +1194,31 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
     }
 
-    public static class InvalidRegistrationDuplicateBuildServicesExtension implements BuildCompatibleExtension {
+    public static class InvalidRegistrationBuildServicesExtension implements BuildCompatibleExtension {
         @Registration(types = Object.class)
-        public void registration(BuildServices one, BuildServices two) {
-            // invalid by contract: duplicate BuildServices parameter
+        public void registration(BuildServices buildServices) {
+            // invalid by contract: BuildServices parameter not supported in phase callbacks
+        }
+    }
+
+    public static class InvalidDiscoveryBuildServicesExtension implements BuildCompatibleExtension {
+        @Discovery
+        public void discovery(BuildServices buildServices) {
+            // invalid by contract: BuildServices parameter not supported in phase callbacks
+        }
+    }
+
+    public static class InvalidSynthesisBuildServicesExtension implements BuildCompatibleExtension {
+        @Synthesis
+        public void synthesis(BuildServices buildServices) {
+            // invalid by contract: BuildServices parameter not supported in phase callbacks
+        }
+    }
+
+    public static class InvalidValidationBuildServicesExtension implements BuildCompatibleExtension {
+        @Validation
+        public void validation(BuildServices buildServices) {
+            // invalid by contract: BuildServices parameter not supported in phase callbacks
         }
     }
 
@@ -1635,14 +1684,12 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
     }
 
-    public static class EnhancementModelWithServicesExtension implements BuildCompatibleExtension {
+    public static class EnhancementModelWithSupportedServicesExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class, withSubtypes = false, withAnnotations = EnhancedMarker.class)
         public void enhance(jakarta.enterprise.lang.model.declarations.MethodInfo methodInfo,
-                     BuildServices buildServices,
                      Types types,
                      Messages messages) {
             EnhancementServiceModelRecorder.modelInjected = methodInfo != null;
-            EnhancementServiceModelRecorder.buildServicesInjected = buildServices != null;
             EnhancementServiceModelRecorder.typesInjected = types != null;
             EnhancementServiceModelRecorder.messagesInjected = messages != null;
         }
@@ -1685,10 +1732,10 @@ public class BuildCompatibleExtensionLifecycleTest {
         }
     }
 
-    public static class InvalidEnhancementDuplicateBuildServicesExtension implements BuildCompatibleExtension {
+    public static class InvalidEnhancementBuildServicesExtension implements BuildCompatibleExtension {
         @Enhancement(types = EnhancementTargetBean.class)
-        public void enhance(BuildServices one, BuildServices two) {
-            // invalid by contract: duplicate BuildServices
+        public void enhance(BuildServices buildServices) {
+            // invalid by contract: BuildServices parameter not supported in phase callbacks
         }
     }
 
@@ -1971,19 +2018,17 @@ public class BuildCompatibleExtensionLifecycleTest {
     }
 
     public static class BuildServicesRecorder {
-        private static boolean discoveryAvailable;
-        private static boolean registrationAvailable;
-        private static boolean synthesisAvailable;
-        private static boolean validationAvailable;
-        private static boolean resolverBoundInDiscovery;
+        private static boolean discoveryResolverAvailable;
+        private static boolean registrationResolverAvailable;
+        private static boolean synthesisResolverAvailable;
+        private static boolean validationResolverAvailable;
         private static boolean annotationBuilderWorked;
 
         static synchronized void reset() {
-            discoveryAvailable = false;
-            registrationAvailable = false;
-            synthesisAvailable = false;
-            validationAvailable = false;
-            resolverBoundInDiscovery = false;
+            discoveryResolverAvailable = false;
+            registrationResolverAvailable = false;
+            synthesisResolverAvailable = false;
+            validationResolverAvailable = false;
             annotationBuilderWorked = false;
         }
     }
@@ -2096,13 +2141,11 @@ public class BuildCompatibleExtensionLifecycleTest {
 
     public static class EnhancementServiceModelRecorder {
         private static boolean modelInjected;
-        private static boolean buildServicesInjected;
         private static boolean typesInjected;
         private static boolean messagesInjected;
 
         static synchronized void reset() {
             modelInjected = false;
-            buildServicesInjected = false;
             typesInjected = false;
             messagesInjected = false;
         }

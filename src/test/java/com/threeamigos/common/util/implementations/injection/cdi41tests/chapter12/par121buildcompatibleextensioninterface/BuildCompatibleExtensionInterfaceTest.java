@@ -9,7 +9,6 @@ import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessag
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
-import jakarta.enterprise.inject.build.compatible.spi.BuildServices;
 import jakarta.enterprise.inject.build.compatible.spi.Discovery;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.Messages;
@@ -118,14 +117,13 @@ public class BuildCompatibleExtensionInterfaceTest {
     }
 
     @Test
-    @DisplayName("12.1 - Extension methods may declare arbitrary number of supported parameters per phase")
+    @DisplayName("12.1 - Discovery methods inject supported service parameters")
     void shouldInjectSupportedDiscoveryParameters() {
         ServiceParametersRecorder.reset();
         Syringe syringe = newSyringe();
         syringe.addBuildCompatibleExtension(SupportedDiscoveryParametersExtension.class.getName());
         syringe.setup();
 
-        assertTrue(ServiceParametersRecorder.buildServicesInjected);
         assertTrue(ServiceParametersRecorder.typesInjected);
         assertTrue(ServiceParametersRecorder.messagesInjected);
         assertTrue(ServiceParametersRecorder.metaAnnotationsInjected);
@@ -318,14 +316,12 @@ public class BuildCompatibleExtensionInterfaceTest {
     }
 
     public static class ServiceParametersRecorder {
-        static boolean buildServicesInjected;
         static boolean typesInjected;
         static boolean messagesInjected;
         static boolean metaAnnotationsInjected;
         static boolean scannedClassesInjected;
 
         static void reset() {
-            buildServicesInjected = false;
             typesInjected = false;
             messagesInjected = false;
             metaAnnotationsInjected = false;
@@ -335,12 +331,10 @@ public class BuildCompatibleExtensionInterfaceTest {
 
     public static class SupportedDiscoveryParametersExtension implements BuildCompatibleExtension {
         @Discovery
-        public void discovery(BuildServices buildServices,
-                              Types types,
+        public void discovery(Types types,
                               Messages messages,
                               MetaAnnotations metaAnnotations,
                               ScannedClasses scannedClasses) {
-            ServiceParametersRecorder.buildServicesInjected = buildServices != null;
             ServiceParametersRecorder.typesInjected = types != null;
             ServiceParametersRecorder.messagesInjected = messages != null;
             ServiceParametersRecorder.metaAnnotationsInjected = metaAnnotations != null;

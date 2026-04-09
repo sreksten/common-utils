@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.injection.bce;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.event.TransactionPhase;
-import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.build.compatible.spi.InvokerInfo;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticObserver;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticObserverBuilder;
@@ -61,10 +60,11 @@ final class BceSyntheticObserverBuilderImpl<T> implements SyntheticObserverBuild
             return this;
         }
         try {
-            Annotation annotation = qualifier.getDeclaredConstructor().newInstance();
+            Annotation annotation = BceMetadata.unwrapAnnotationInfo(
+                    new BceAnnotationBuilderFactory().create(qualifier).build());
             this.qualifiers.add(annotation);
             return this;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             throw new IllegalArgumentException("Cannot instantiate qualifier " + qualifier.getName() +
                 ". Use qualifier(Annotation) or qualifier(AnnotationInfo).", e);
         }
@@ -249,9 +249,6 @@ final class BceSyntheticObserverBuilderImpl<T> implements SyntheticObserverBuild
             throw new IllegalStateException("Synthetic observer implementation is required via observeWith()");
         }
         Set<Annotation> effectiveQualifiers = new LinkedHashSet<>(qualifiers);
-        if (effectiveQualifiers.isEmpty()) {
-            effectiveQualifiers.add(Default.Literal.INSTANCE);
-        }
         BceSyntheticObserverMethod<T> observerMethod = new BceSyntheticObserverMethod<>(
                 declaringClass,
                 observedClass,
