@@ -7,8 +7,6 @@
 ## By Functional Area
 
 ### Extensions SPI & lifecycle (10)
-- [ ] **org.jboss.cdi.tck.tests.full.extensions.afterBeanDiscovery.annotated.GetAnnotatedTypesTest**
-- [ ] **org.jboss.cdi.tck.tests.full.extensions.annotated.AlternativeMetaDataTest**
 - [ ] **org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticBean.SyntheticBeanTest**
 - [ ] **org.jboss.cdi.tck.tests.build.compatible.extensions.syntheticObserver.SyntheticObserverTest**
 - [ ] **org.jboss.cdi.tck.tests.full.extensions.lite.coexistence.BuildCompatibleExtensionSmokeTest**

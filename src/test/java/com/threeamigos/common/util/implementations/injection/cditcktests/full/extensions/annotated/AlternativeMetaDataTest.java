@@ -35,6 +35,7 @@ class AlternativeMetaDataTest {
         syringe.forceBeanArchiveMode(BeanArchiveMode.EXPLICIT);
         syringe.initialize();
         syringe.addDiscoveredClass(AbstractC.class, BeanArchiveMode.EXPLICIT);
+        syringe.addDiscoveredClass(WildCat.class, BeanArchiveMode.EXPLICIT);
         syringe.start();
     }
 

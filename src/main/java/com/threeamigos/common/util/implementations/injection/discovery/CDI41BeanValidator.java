@@ -2677,6 +2677,11 @@ public class CDI41BeanValidator {
      */
     private void validateManagedBeanPublicFieldScopeConstraint(Class<?> clazz,
                                                                Class<? extends Annotation> scopeAnnotation) {
+        // Applies to managed beans; types without a bean constructor are not managed beans.
+        if (!isManagedBeanConstructorCandidate(clazz)) {
+            return;
+        }
+
         if (declaresSingletonPseudoScope(clazz)) {
             return;
         }
@@ -2736,6 +2741,11 @@ public class CDI41BeanValidator {
      */
     private void validateManagedBeanGenericTypeScopeConstraint(Class<?> clazz,
                                                                Class<? extends Annotation> scopeAnnotation) {
+        // Applies to managed beans; types without a bean constructor are not managed beans.
+        if (!isManagedBeanConstructorCandidate(clazz)) {
+            return;
+        }
+
         if (clazz.getTypeParameters().length == 0) {
             return;
         }
@@ -2748,6 +2758,10 @@ public class CDI41BeanValidator {
                 ": managed bean class is generic and declares scope @" +
                 scopeAnnotation.getSimpleName() +
                 ". Generic managed beans must have @Dependent scope.");
+    }
+
+    private boolean isManagedBeanConstructorCandidate(Class<?> clazz) {
+        return hasNoArgsConstructor(clazz) || hasInjectConstructor(clazz);
     }
 
     private boolean isNormalScope(Class<? extends Annotation> scopeAnnotation) {
