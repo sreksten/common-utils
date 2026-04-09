@@ -54,6 +54,11 @@ class AnnotatedTypeConfiguratorInBBDTest {
 
         Foo foo = getContextualReference(Foo.class, CustomQualifier.CustomQualifierLiteral.INSTANCE);
         assertNotNull(foo);
+
+        Foo fromInstanceSelect = beanManager.createInstance()
+                .select(Foo.class, CustomQualifier.CustomQualifierLiteral.INSTANCE)
+                .get();
+        assertNotNull(fromInstanceSelect);
     }
 
     @Test

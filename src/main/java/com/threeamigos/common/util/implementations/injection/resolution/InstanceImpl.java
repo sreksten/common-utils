@@ -782,14 +782,29 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         if (annotationType == null) {
             return false;
         }
-        for (Annotation meta : annotationType.getAnnotations()) {
-            String name = meta.annotationType().getName();
-            if ("jakarta.inject.Qualifier".equals(name) ||
-                    "javax.inject.Qualifier".equals(name)) {
-                return true;
-            }
+        if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasQualifierAnnotation(annotationType)) {
+            return true;
         }
-        return false;
+
+        BeanManagerImpl beanManager = resolveBeanManagerForQualifierValidation(annotationType);
+        return beanManager != null && beanManager.isQualifier(annotationType);
+    }
+
+    private BeanManagerImpl resolveBeanManagerForQualifierValidation(Class<? extends Annotation> annotationType) {
+        BeanManagerImpl beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+        if (beanManager == null && annotationType != null) {
+            beanManager = BeanManagerImpl.getRegisteredBeanManager(annotationType.getClassLoader());
+        }
+        if (beanManager == null) {
+            beanManager = BeanManagerImpl.getRegisteredBeanManager(type.getClassLoader());
+        }
+        if (beanManager == null) {
+            beanManager = BeanManagerImpl.getRegisteredBeanManager(Thread.currentThread().getContextClassLoader());
+        }
+        if (beanManager == null) {
+            beanManager = BeanManagerImpl.getRegisteredBeanManager(InstanceImpl.class.getClassLoader());
+        }
+        return beanManager;
     }
 
     private ResolutionStrategy<T> strategy() {
