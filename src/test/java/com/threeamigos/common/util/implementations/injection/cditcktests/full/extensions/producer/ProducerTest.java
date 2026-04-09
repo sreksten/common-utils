@@ -99,9 +99,9 @@ class ProducerTest {
 
     @Test
     void testInterceptorAndDecoratorStackBuilt() {
-        // Non-contextual InjectionTarget#produce() in Syringe does not apply decorator/interceptor stack.
-        // Verify stack behavior via a contextual reference from BeanManager.
-        Cat cat = getContextualReference(Cat.class);
+        InjectionTarget<Cat> injectionTarget = ProducerProcessor.getCatInjectionTarget();
+        CreationalContext<Cat> ctx = beanManager.createCreationalContext(null);
+        Cat cat = injectionTarget.produce(ctx);
         assertEquals(11, cat.foo());
         assertEquals("Meow meow", cat.saySomething());
     }

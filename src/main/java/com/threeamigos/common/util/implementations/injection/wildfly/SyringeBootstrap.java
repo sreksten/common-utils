@@ -231,10 +231,12 @@ public class SyringeBootstrap {
     }
 
     private BeanArchiveMode resolveManagedArchiveMode() {
+        boolean beansXmlPresent = false;
         for (BeansXml beansXml : preDiscoveredBeansXmlConfigurations) {
             if (beansXml == null) {
                 continue;
             }
+            beansXmlPresent = true;
             String discoveryMode = beansXml.getBeanDiscoveryMode();
             if (discoveryMode == null) {
                 continue;
@@ -247,7 +249,34 @@ public class SyringeBootstrap {
                 return beansXml.isTrimEnabled() ? BeanArchiveMode.TRIMMED : BeanArchiveMode.EXPLICIT;
             }
         }
+        // Align managed bootstrap with archive detector semantics:
+        // a deployment archive that only declares CDI extensions and has no beans.xml
+        // is not a bean archive unless classes are explicitly added via BCE ScannedClasses.
+        if (!beansXmlPresent && hasExtensionServiceDescriptor()) {
+            return BeanArchiveMode.NONE;
+        }
         return BeanArchiveMode.IMPLICIT;
+    }
+
+    private boolean hasExtensionServiceDescriptor() {
+        return hasServiceDescriptor(EXTENSION_SERVICE) || hasServiceDescriptor(BCE_SERVICE);
+    }
+
+    private boolean hasServiceDescriptor(String resourceName) {
+        if (resourceName == null || resourceName.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
+            ClassLoader loader = tccl != null ? tccl : classLoader;
+            if (loader == null) {
+                return false;
+            }
+            Enumeration<URL> resources = loader.getResources(resourceName);
+            return resources != null && resources.hasMoreElements();
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private void applyDeploymentCompatibilityModes() {

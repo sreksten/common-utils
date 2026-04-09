@@ -1,9 +1,11 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
+import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.CreationException;
 import jakarta.enterprise.inject.spi.*;
@@ -21,7 +23,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 /**
  * Factory for creating InjectionTarget instances.
@@ -50,6 +54,8 @@ import java.util.Set;
  */
 public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> {
 
+    private static final ThreadLocal<Boolean> CONTEXTUAL_PRODUCE_IN_PROGRESS = new ThreadLocal<Boolean>();
+
     private final AnnotatedType<T> annotatedType;
     private final BeanManager beanManager;
     private AnnotatedTypeConfigurator<T> configurator;
@@ -64,6 +70,14 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
     public InjectionTargetFactoryImpl(AnnotatedType<T> annotatedType, BeanManager beanManager) {
         this.annotatedType = annotatedType;
         this.beanManager = beanManager;
+    }
+
+    public static void beginContextualProduce() {
+        CONTEXTUAL_PRODUCE_IN_PROGRESS.set(Boolean.TRUE);
+    }
+
+    public static void endContextualProduce() {
+        CONTEXTUAL_PRODUCE_IN_PROGRESS.remove();
     }
 
     /**
@@ -121,6 +135,8 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         private final Set<Field> injectableFields;
         private final Set<Method> injectableMethods;
         private final Set<InjectionPoint> injectionPoints;
+        private final Map<Object, Object> wrappedInstanceTargets =
+                Collections.synchronizedMap(new WeakHashMap<Object, Object>());
 
         public InjectionTargetImpl(AnnotatedType<T> annotatedType, BeanManager beanManager, Bean<T> bean) {
             this.annotatedType = annotatedType;
@@ -152,7 +168,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
 
                 // Create instance
                 T instance = constructor.newInstance(args);
-                return wrapWithBusinessMethodInterceptionIfRequired(instance, ctx);
+                return applyProducedInstanceWrapping(instance, ctx);
 
             } catch (RuntimeException e) {
                 throw e;
@@ -278,13 +294,42 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
 
         @SuppressWarnings("unchecked")
         private T unwrapProxyTarget(T instance) {
-            if (instance instanceof InterceptorAwareProxyGenerator.InterceptorProxyState) {
-                Object target = ((InterceptorAwareProxyGenerator.InterceptorProxyState) instance).$$_getTargetInstance();
-                if (target != null && annotatedType.getJavaClass().isInstance(target)) {
-                    return (T) target;
+            Object candidate = instance;
+            if (candidate instanceof InterceptorAwareProxyGenerator.InterceptorProxyState) {
+                Object target = ((InterceptorAwareProxyGenerator.InterceptorProxyState) candidate).$$_getTargetInstance();
+                if (target != null) {
+                    candidate = target;
                 }
             }
+            candidate = resolveWrappedTarget(candidate);
+            if (candidate != null && annotatedType.getJavaClass().isInstance(candidate)) {
+                return (T) candidate;
+            }
             return instance;
+        }
+
+        private Object resolveWrappedTarget(Object instance) {
+            Object current = instance;
+            while (current != null) {
+                Object next;
+                synchronized (wrappedInstanceTargets) {
+                    next = wrappedInstanceTargets.get(current);
+                }
+                if (next == null || next == current) {
+                    return current;
+                }
+                current = next;
+            }
+            return instance;
+        }
+
+        private void trackWrappedTarget(Object wrappedInstance, Object rawTarget) {
+            if (wrappedInstance == null || rawTarget == null || wrappedInstance == rawTarget) {
+                return;
+            }
+            synchronized (wrappedInstanceTargets) {
+                wrappedInstanceTargets.put(wrappedInstance, rawTarget);
+            }
         }
 
         private T wrapWithBusinessMethodInterceptionIfRequired(T instance, CreationalContext<T> creationalContext) {
@@ -306,6 +351,41 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 }
             }
             return interceptionFactory.createInterceptedInstance(instance);
+        }
+
+        @SuppressWarnings("unchecked")
+        private T applyProducedInstanceWrapping(T instance, CreationalContext<T> creationalContext) {
+            if (instance == null) {
+                return null;
+            }
+
+            // When produce() is called as part of BeanImpl#create(), BeanImpl applies wrapping
+            // after full lifecycle callbacks. Avoid wrapping twice in that path.
+            if (Boolean.TRUE.equals(CONTEXTUAL_PRODUCE_IN_PROGRESS.get())) {
+                return instance;
+            }
+
+            if (!(bean instanceof BeanImpl<?>)) {
+                return wrapWithBusinessMethodInterceptionIfRequired(instance, creationalContext);
+            }
+
+            BeanImpl<T> beanImpl = (BeanImpl<T>) bean;
+            T rawTarget = instance;
+            T wrapped = instance;
+
+            if (beanImpl.hasDecorators()) {
+                wrapped = beanImpl.createDecoratorChain(wrapped, creationalContext);
+                trackWrappedTarget(wrapped, rawTarget);
+            }
+
+            Class<? extends Annotation> scope = beanImpl.getScope();
+            boolean dependent = scope == null || Dependent.class.equals(scope);
+            if (beanImpl.hasInterceptors() && dependent) {
+                wrapped = beanImpl.createInterceptorAwareProxy(wrapped);
+                trackWrappedTarget(wrapped, rawTarget);
+            }
+
+            return wrapped;
         }
 
         private Set<Annotation> getClassLevelInterceptorBindingsFromAnnotatedType() {

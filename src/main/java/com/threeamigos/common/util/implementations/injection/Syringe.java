@@ -735,8 +735,12 @@ public class Syringe {
         if (knowledgeBase.getClasses().contains(clazz)) {
             if (!explicitlyAdded) {
                 // Managed runtimes can report classes already added during BCE discovery.
-                // Keep this path idempotent and update archive mode from external discovery metadata.
-                knowledgeBase.add(clazz, effectiveMode);
+                // Keep this path idempotent. Do not downgrade already discovered classes to NONE,
+                // because BCE ScannedClasses can intentionally include classes in non-bean archives.
+                BeanArchiveMode currentMode = knowledgeBase.getBeanArchiveMode(clazz);
+                if (!(BeanArchiveMode.NONE.equals(effectiveMode) && !BeanArchiveMode.NONE.equals(currentMode))) {
+                    knowledgeBase.add(clazz, effectiveMode);
+                }
                 return;
             }
             throw new NonPortableBehaviourException(

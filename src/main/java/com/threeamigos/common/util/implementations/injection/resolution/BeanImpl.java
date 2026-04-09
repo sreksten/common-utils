@@ -11,6 +11,7 @@ import com.threeamigos.common.util.implementations.injection.interceptors.Interc
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
+import com.threeamigos.common.util.implementations.injection.spi.InjectionTargetFactoryImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.RequestScopedContext;
@@ -459,7 +460,12 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                     instance = createInstance(creationalContext);
                     customInjectionTarget.inject(instance, creationalContext);
                 } else {
-                    instance = customInjectionTarget.produce(creationalContext);
+                    InjectionTargetFactoryImpl.beginContextualProduce();
+                    try {
+                        instance = customInjectionTarget.produce(creationalContext);
+                    } finally {
+                        InjectionTargetFactoryImpl.endContextualProduce();
+                    }
                     customInjectionTarget.inject(instance, creationalContext);
                 }
                 invokeCustomInjectionTargetPostConstructWithRequestContext(instance);
