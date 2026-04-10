@@ -18,7 +18,6 @@ import com.threeamigos.common.util.implementations.injection.util.LegacyNewQuali
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
-import jakarta.annotation.Priority;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
@@ -243,7 +242,7 @@ public class BeanResolver implements DependencyResolver {
             return true;
         }
         for (Annotation annotation : qualifiers) {
-            if (annotation != null && Default.class.equals(annotation.annotationType())) {
+            if (annotation != null && hasDefaultAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
@@ -563,14 +562,7 @@ public class BeanResolver implements DependencyResolver {
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        for (Annotation annotation : beanClass.getAnnotations()) {
-            String name = annotation.annotationType().getName();
-            if ("jakarta.enterprise.inject.Specializes".equals(name) ||
-                    "javax.enterprise.inject.Specializes".equals(name)) {
-                return true;
-            }
-        }
-        return false;
+        return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasSpecializesAnnotation(beanClass);
     }
 
     private Object resolveDecoratorMetadata(InjectionPoint injectionPoint, ParameterizedType requiredType) {
@@ -653,9 +645,7 @@ public class BeanResolver implements DependencyResolver {
             if (qualifier == null) {
                 continue;
             }
-            String name = qualifier.annotationType().getName();
-            if ("jakarta.enterprise.inject.Decorated".equals(name) ||
-                    "javax.enterprise.inject.Decorated".equals(name)) {
+            if (hasDecoratedAnnotation(qualifier.annotationType())) {
                 return true;
             }
         }
@@ -825,9 +815,7 @@ public class BeanResolver implements DependencyResolver {
         }
 
         for (Annotation annotation : annotations) {
-            String annotationTypeName = annotation.annotationType().getName();
-            if (Priority.class.getName().equals(annotationTypeName) ||
-                    "javax.annotation.Priority".equals(annotationTypeName)) {
+            if (PRIORITY.matches(annotation.annotationType())) {
                 try {
                     Method valueMethod = annotation.annotationType().getMethod("value");
                     Object value = valueMethod.invoke(annotation);

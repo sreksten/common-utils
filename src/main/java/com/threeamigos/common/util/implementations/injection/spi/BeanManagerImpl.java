@@ -1032,14 +1032,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        for (Annotation annotation : beanClass.getAnnotations()) {
-            String annotationName = annotation.annotationType().getName();
-            if ("jakarta.enterprise.inject.Specializes".equals(annotationName) ||
-                    "javax.enterprise.inject.Specializes".equals(annotationName)) {
-                return true;
-            }
-        }
-        return false;
+        return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasSpecializesAnnotation(beanClass);
     }
 
     private boolean isBeanEnabledForResolution(Bean<?> bean) {
@@ -2377,9 +2370,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return true;
         }
         for (Annotation qualifier : qualifiers) {
-            String name = qualifier.annotationType().getName();
-            if ("jakarta.enterprise.inject.Default".equals(name) ||
-                    "javax.enterprise.inject.Default".equals(name)) {
+            if (hasDefaultAnnotation(qualifier.annotationType())) {
                 return true;
             }
         }
@@ -3305,8 +3296,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             if (stereotype == null) {
                 continue;
             }
-            String name = stereotype.getName();
-            if ("jakarta.decorator.Decorator".equals(name) || "javax.decorator.Decorator".equals(name)) {
+            if (hasDecoratorAnnotation(stereotype)) {
                 return true;
             }
         }
@@ -3700,9 +3690,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
         for (Annotation annotation : annotations) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            String annotationTypeName = annotationType.getName();
-            if (jakarta.annotation.Priority.class.getName().equals(annotationTypeName) ||
-                    "javax.annotation.Priority".equals(annotationTypeName)) {
+            if (PRIORITY.matches(annotationType)) {
                 try {
                     Method valueMethod = annotationType.getMethod("value");
                     Object value = valueMethod.invoke(annotation);
@@ -4301,9 +4289,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             if (annotation == null) {
                 continue;
             }
-            String annotationTypeName = annotation.annotationType().getName();
-            if ("jakarta.inject.Inject".equals(annotationTypeName) ||
-                    "javax.inject.Inject".equals(annotationTypeName)) {
+            if (hasInjectAnnotation(annotation.annotationType())) {
                 return true;
             }
         }

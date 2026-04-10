@@ -106,7 +106,7 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
                 if (annotationsByType.containsKey(annotationType)) {
                     continue;
                 }
-                if (!annotationType.isAnnotationPresent(java.lang.annotation.Inherited.class)) {
+                if (!AnnotationsEnum.hasInheritedAnnotation(annotationType)) {
                     continue;
                 }
                 if (!isCdiInheritableTypeAnnotation(annotationType)) {

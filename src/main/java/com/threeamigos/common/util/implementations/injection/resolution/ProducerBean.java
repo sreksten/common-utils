@@ -6,7 +6,6 @@ import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
-import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.CreationException;
@@ -456,11 +455,7 @@ public class ProducerBean<T> implements Bean<T> {
         if (passivating != null) {
             return passivating;
         }
-        String name = scopeType.getName();
-        return "jakarta.enterprise.context.SessionScoped".equals(name) ||
-                "jakarta.enterprise.context.ConversationScoped".equals(name) ||
-                "javax.enterprise.context.SessionScoped".equals(name) ||
-                "javax.enterprise.context.ConversationScoped".equals(name);
+        return hasBuiltInPassivatingScopeAnnotation(scopeType);
     }
 
     /**
@@ -783,7 +778,7 @@ public class ProducerBean<T> implements Bean<T> {
             if (annotation == null) {
                 continue;
             }
-            if (annotation.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)) {
+            if (hasQualifierAnnotation(annotation.annotationType())) {
                 qualifiers.add(annotation);
             }
         }

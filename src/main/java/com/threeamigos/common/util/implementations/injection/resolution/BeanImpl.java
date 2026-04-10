@@ -2000,9 +2000,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             if (binding == null) {
                 continue;
             }
-            String typeName = binding.annotationType().getName();
-            if ("jakarta.interceptor.InterceptorBinding".equals(typeName)
-                    || "javax.interceptor.InterceptorBinding".equals(typeName)) {
+            if (AnnotationsEnum.INTERCEPTOR_BINDING.matches(binding.annotationType())) {
                 continue;
             }
             normalized.add(binding);
@@ -2650,9 +2648,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         }
         for (Annotation annotation : annotations) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            String name = annotationType.getName();
-            if (!"jakarta.interceptor.Interceptors".equals(name) &&
-                    !"javax.interceptor.Interceptors".equals(name)) {
+            if (!AnnotationsEnum.INTERCEPTORS.matches(annotationType)) {
                 continue;
             }
             try {
@@ -2677,9 +2673,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             if (annotation == null || annotation.annotationType() == null) {
                 continue;
             }
-            String annotationTypeName = annotation.annotationType().getName();
-            if ("jakarta.interceptor.ExcludeClassInterceptors".equals(annotationTypeName) ||
-                    "javax.interceptor.ExcludeClassInterceptors".equals(annotationTypeName)) {
+            if (AnnotationsEnum.EXCLUDE_CLASS_INTERCEPTORS.matches(annotation.annotationType())) {
                 return true;
             }
         }

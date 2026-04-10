@@ -14,7 +14,6 @@ import com.threeamigos.common.util.implementations.injection.util.GenericTypeRes
 import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
-import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.DefinitionException;
@@ -570,7 +569,7 @@ public class CDI41BeanValidator {
         }
 
         Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
-        if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+        if (!hasStereotypeAnnotation(annotationType)) {
             return;
         }
 
@@ -593,7 +592,7 @@ public class CDI41BeanValidator {
         }
 
         Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
-        if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+        if (!hasStereotypeAnnotation(annotationType)) {
             return;
         }
 
@@ -633,13 +632,10 @@ public class CDI41BeanValidator {
 
     private boolean hasLegacyInterceptorDeclaration(Annotation[] annotations) {
         for (Annotation annotation : annotations) {
-            String annotationName = annotation.annotationType().getName();
-            if ("jakarta.interceptor.Interceptors".equals(annotationName) ||
-                "javax.interceptor.Interceptors".equals(annotationName) ||
-                "jakarta.interceptor.ExcludeClassInterceptors".equals(annotationName) ||
-                "javax.interceptor.ExcludeClassInterceptors".equals(annotationName) ||
-                "jakarta.interceptor.ExcludeDefaultInterceptors".equals(annotationName) ||
-                "javax.interceptor.ExcludeDefaultInterceptors".equals(annotationName)) {
+            Class<? extends Annotation> annotationType = annotation.annotationType();
+            if (INTERCEPTORS.matches(annotationType) ||
+                EXCLUDE_CLASS_INTERCEPTORS.matches(annotationType) ||
+                EXCLUDE_DEFAULT_INTERCEPTORS.matches(annotationType)) {
                 return true;
             }
         }
@@ -753,9 +749,7 @@ public class CDI41BeanValidator {
 
     private boolean declaresInterceptorsAnnotation(Annotation[] annotations, Class<?> interceptorClass) {
         for (Annotation annotation : annotations) {
-            String annotationName = annotation.annotationType().getName();
-            if (!"jakarta.interceptor.Interceptors".equals(annotationName)
-                    && !"javax.interceptor.Interceptors".equals(annotationName)) {
+            if (!INTERCEPTORS.matches(annotation.annotationType())) {
                 continue;
             }
             try {
@@ -794,7 +788,7 @@ public class CDI41BeanValidator {
 
         for (Annotation meta : stereotypeType.getAnnotations()) {
             Class<? extends Annotation> metaType = meta.annotationType();
-            if (hasMetaAnnotation(metaType, Stereotype.class)) {
+            if (hasStereotypeAnnotation(metaType)) {
                 validateStereotypeNamedDeclaration(metaType, visited);
             }
         }
@@ -835,7 +829,7 @@ public class CDI41BeanValidator {
         }
 
         Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
-        if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+        if (!hasStereotypeAnnotation(annotationType)) {
             return;
         }
 
@@ -862,7 +856,7 @@ public class CDI41BeanValidator {
         }
 
         Class<? extends Annotation> annotationType = (Class<? extends Annotation>) clazz;
-        if (!hasMetaAnnotation(annotationType, Stereotype.class)) {
+        if (!hasStereotypeAnnotation(annotationType)) {
             return;
         }
 
@@ -901,7 +895,7 @@ public class CDI41BeanValidator {
             Class<? extends Annotation> metaType = meta.annotationType();
             if (isScopeAnnotationType(metaType)) {
                 scopes.add(metaType);
-            } else if (hasMetaAnnotation(metaType, Stereotype.class)) {
+            } else if (hasStereotypeAnnotation(metaType)) {
                 collectStereotypeScopes(metaType, scopes, visited);
             }
         }
@@ -916,7 +910,7 @@ public class CDI41BeanValidator {
 
         for (Annotation meta : stereotypeType.getAnnotations()) {
             Class<? extends Annotation> metaType = meta.annotationType();
-            if (!hasMetaAnnotation(metaType, Stereotype.class)) {
+            if (!hasStereotypeAnnotation(metaType)) {
                 continue;
             }
 
@@ -947,7 +941,7 @@ public class CDI41BeanValidator {
 
         for (Annotation annotation : annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (hasMetaAnnotation(annotationType, Stereotype.class)) {
+            if (hasStereotypeAnnotation(annotationType)) {
                 collectStereotypePriorityValues(annotationType, priorities, visited);
             }
         }
@@ -969,7 +963,7 @@ public class CDI41BeanValidator {
 
         for (Annotation meta : stereotypeType.getAnnotations()) {
             Class<? extends Annotation> metaType = meta.annotationType();
-            if (hasMetaAnnotation(metaType, Stereotype.class)) {
+            if (hasStereotypeAnnotation(metaType)) {
                 collectStereotypePriorityValues(metaType, priorities, visited);
             }
         }
@@ -1024,9 +1018,7 @@ public class CDI41BeanValidator {
         }
 
         for (Annotation annotation : annotations) {
-            String annotationTypeName = annotation.annotationType().getName();
-            if (Priority.class.getName().equals(annotationTypeName) ||
-                    "javax.annotation.Priority".equals(annotationTypeName)) {
+            if (PRIORITY.matches(annotation.annotationType())) {
                 return readPriorityValue(annotation);
             }
         }
@@ -2158,7 +2150,7 @@ public class CDI41BeanValidator {
 
         Class<?> declaringClass = declaringClassOf(injectionPoint);
         boolean interceptorDeclaringClass = declaringClass != null && isInterceptorClass(declaringClass);
-        boolean interceptedQualified = hasQualifier(annotationsOf(injectionPoint), Intercepted.class.getName());
+        boolean interceptedQualified = hasQualifier(annotationsOf(injectionPoint), INTERCEPTED);
         boolean defaultQualified = hasDefaultQualifier(annotationsOf(injectionPoint));
         Type metadataArgument = getSingleTypeArgument(injectionPoint);
 
@@ -2239,7 +2231,7 @@ public class CDI41BeanValidator {
 
     private boolean isDecoratedBeanMetadataType(AnnotatedElement injectionPoint) {
         return isBeanMetadataType(injectionPoint)
-                && hasQualifier(annotationsOf(injectionPoint), Decorated.class.getName());
+                && hasQualifier(annotationsOf(injectionPoint), DECORATED);
     }
 
     private Type metadataRawType(AnnotatedElement injectionPoint) {
@@ -2385,19 +2377,20 @@ public class CDI41BeanValidator {
 
     private boolean isInterceptorClass(Class<?> clazz) {
         for (Annotation annotation : annotationsOf(clazz)) {
-            String name = annotation.annotationType().getName();
-            if ("jakarta.interceptor.Interceptor".equals(name) ||
-                    "javax.interceptor.Interceptor".equals(name)) {
+            if (hasInterceptorAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean hasQualifier(Annotation[] annotations, String qualifierTypeName) {
+    private boolean hasQualifier(Annotation[] annotations, AnnotationsEnum qualifierType) {
+        if (qualifierType == null) {
+            return false;
+        }
         Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(annotations);
         for (Annotation qualifier : qualifiers) {
-            if (qualifier.annotationType().getName().equals(qualifierTypeName)) {
+            if (qualifierType.matches(qualifier.annotationType())) {
                 return true;
             }
         }
@@ -2423,9 +2416,7 @@ public class CDI41BeanValidator {
             return true;
         }
         for (Annotation qualifier : qualifiers) {
-            String typeName = qualifier.annotationType().getName();
-            if ("jakarta.enterprise.inject.Default".equals(typeName) ||
-                    "javax.enterprise.inject.Default".equals(typeName)) {
+            if (hasDefaultAnnotation(qualifier.annotationType())) {
                 return true;
             }
         }
@@ -2528,7 +2519,7 @@ public class CDI41BeanValidator {
             return false;
         }
 
-        if (hasMetaAnnotation(stereotypeType, Alternative.class)) {
+        if (hasAlternativeAnnotation(stereotypeType)) {
             return true;
         }
 
@@ -2774,15 +2765,7 @@ public class CDI41BeanValidator {
             return registeredScope.isNormal();
         }
 
-        String scopeName = scopeAnnotation.getName();
-        if ("jakarta.enterprise.context.ApplicationScoped".equals(scopeName) ||
-                "jakarta.enterprise.context.RequestScoped".equals(scopeName) ||
-                "jakarta.enterprise.context.SessionScoped".equals(scopeName) ||
-                "jakarta.enterprise.context.ConversationScoped".equals(scopeName) ||
-                "javax.enterprise.context.ApplicationScoped".equals(scopeName) ||
-                "javax.enterprise.context.RequestScoped".equals(scopeName) ||
-                "javax.enterprise.context.SessionScoped".equals(scopeName) ||
-                "javax.enterprise.context.ConversationScoped".equals(scopeName)) {
+        if (hasBuiltInNormalScopeAnnotation(scopeAnnotation)) {
             return true;
         }
 
@@ -3239,7 +3222,7 @@ public class CDI41BeanValidator {
             raw = getBoxedType(raw);
         }
         String qualKey = qualifiers.stream()
-                .filter(q -> hasMetaAnnotation(q.annotationType(), Qualifier.class))
+                .filter(q -> hasQualifierAnnotation(q.annotationType()))
                 .map(q -> "@" + q.annotationType().getName())
                 .sorted()
                 .collect(Collectors.joining(","));
@@ -3572,10 +3555,6 @@ public class CDI41BeanValidator {
             if (hasDisposesAnnotation(p)) return true;
         }
         return false;
-    }
-
-    private boolean hasMetaAnnotation(Class<? extends Annotation> annotationType, Class<? extends Annotation> metaAnnotationType) {
-        return annotationType.isAnnotationPresent(metaAnnotationType);
     }
 
     /**
@@ -4503,17 +4482,8 @@ public class CDI41BeanValidator {
      * @param isPrePassivate true for @PrePassivate, false for @PostActivate
      */
     private void findAllPassivationMethods(Class<?> clazz, BeanImpl<?> bean, boolean isPrePassivate) {
-        // Try to load jakarta.ejb.PrePassivate and jakarta.ejb.PostActivate annotations
-        Class<? extends Annotation> annotationClass;
-        try {
-            if (isPrePassivate) {
-                annotationClass = Class.forName("jakarta.ejb.PrePassivate").asSubclass(Annotation.class);
-            } else {
-                annotationClass = Class.forName("jakarta.ejb.PostActivate").asSubclass(Annotation.class);
-            }
-        } catch (ClassNotFoundException e) {
-            // jakarta.ejb not on classpath - passivation callbacks not supported
-            // This is acceptable - not all applications need passivating scopes
+        AnnotationsEnum passivationAnnotation = isPrePassivate ? PRE_PASSIVATE : POST_ACTIVATE;
+        if (passivationAnnotation.getAnnotations().isEmpty()) {
             return;
         }
 
@@ -4530,7 +4500,11 @@ public class CDI41BeanValidator {
 
         // Process in superclass → subclass order
         for (Class<?> currentClass : hierarchy) {
-            Method foundMethod = findPassivationMethodInClass(currentClass, annotationClass);
+            Method foundMethod = findPassivationMethodInClass(
+                    currentClass,
+                    passivationAnnotation,
+                    isPrePassivate ? "@PrePassivate" : "@PostActivate"
+            );
 
             if (foundMethod != null) {
                 String signature = getMethodSignature(foundMethod);
@@ -4569,15 +4543,18 @@ public class CDI41BeanValidator {
      * Finds a passivation lifecycle method in a single class (not hierarchy).
      *
      * @param clazz the class to search
-     * @param annotationClass the annotation class (@PrePassivate or @PostActivate)
+     * @param passivationAnnotation the passivation annotation enum
+     * @param annotationLabel annotation label for diagnostics
      * @return the found method, or null if none found
      */
-    private Method findPassivationMethodInClass(Class<?> clazz, Class<? extends Annotation> annotationClass) {
+    private Method findPassivationMethodInClass(Class<?> clazz,
+                                                AnnotationsEnum passivationAnnotation,
+                                                String annotationLabel) {
         Method found = null;
         int count = 0;
 
         for (Method method : clazz.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(annotationClass)) {
+            if (passivationAnnotation.isPresent(method)) {
                 found = method;
                 count++;
             }
@@ -4586,8 +4563,7 @@ public class CDI41BeanValidator {
         // Validate: at most one passivation method per class
         if (count > 1) {
             addValidationError(clazz,
-                "Class cannot have more than one @" + annotationClass.getSimpleName() +
-                " method, found " + count);
+                "Class cannot have more than one " + annotationLabel + " method, found " + count);
             return null;
         }
 
@@ -4933,7 +4909,7 @@ public class CDI41BeanValidator {
     }
 
     private boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
-        return hasMetaAnnotation(annotationType, Stereotype.class) ||
+        return hasStereotypeAnnotation(annotationType) ||
                 knowledgeBase.isRegisteredStereotype(annotationType);
     }
 

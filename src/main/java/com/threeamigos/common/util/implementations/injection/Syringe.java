@@ -1974,7 +1974,7 @@ public class Syringe {
     }
 
     private Integer extractPriorityValue(Annotation annotation) {
-        if (annotation == null || !hasPriorityAnnotation(annotation.annotationType())) {
+        if (annotation == null || !PRIORITY.matches(annotation.annotationType())) {
             return null;
         }
         try {
@@ -3211,7 +3211,7 @@ public class Syringe {
         }
         for (AnnotatedMethod<?> method : annotatedType.getMethods()) {
             for (AnnotatedParameter<?> parameter : method.getParameters()) {
-                if (!parameter.isAnnotationPresent(jakarta.enterprise.inject.Disposes.class)) {
+                if (!hasDisposesAnnotationInAnnotatedParameter(parameter)) {
                     continue;
                 }
                 if (isSameRawType(parameter.getBaseType(), producedType)) {
@@ -3683,9 +3683,7 @@ public class Syringe {
             if (annotation == null) {
                 continue;
             }
-            String annotationTypeName = annotation.annotationType().getName();
-            if (Priority.class.getName().equals(annotationTypeName) ||
-                    "javax.annotation.Priority".equals(annotationTypeName)) {
+            if (PRIORITY.matches(annotation.annotationType())) {
                 try {
                     Method valueMethod = annotation.annotationType().getMethod("value");
                     Object value = valueMethod.invoke(annotation);
@@ -3698,6 +3696,18 @@ public class Syringe {
             }
         }
         return null;
+    }
+
+    private boolean hasDisposesAnnotationInAnnotatedParameter(AnnotatedParameter<?> parameter) {
+        if (parameter == null || parameter.getAnnotations() == null) {
+            return false;
+        }
+        for (Annotation annotation : parameter.getAnnotations()) {
+            if (annotation != null && hasDisposesAnnotation(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String observerInfoKey(ObserverMethodInfo info) {
@@ -5871,7 +5881,7 @@ public class Syringe {
         }
 
         return qualifierAnnotations.size() == 1 &&
-                Any.class.equals(qualifierAnnotations.get(0).annotationType());
+                hasAnyAnnotation(qualifierAnnotations.get(0).annotationType());
     }
 
     private int resolvePriority(Method method, Parameter observedParameter) {

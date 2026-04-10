@@ -1,10 +1,10 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.AlterableContext;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
-import jakarta.enterprise.context.NormalScope;
 import jakarta.enterprise.inject.spi.Bean;
 
 import java.io.Serializable;
@@ -173,8 +173,8 @@ public class CustomContextAdapter implements ScopeContext {
         if (scope == null) {
             return false;
         }
-        NormalScope normalScope = scope.getAnnotation(NormalScope.class);
-        return normalScope != null && normalScope.passivating();
+        Boolean passivating = AnnotationsEnum.getNormalScopePassivatingValue(scope);
+        return Boolean.TRUE.equals(passivating);
     }
 
     /**

@@ -10,16 +10,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasAnyAnnotation;
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasNewAnnotation;
 
 /**
  * Helper utilities for legacy CDI 1.0 {@code @javax.enterprise.inject.New} support.
  */
 public final class LegacyNewQualifierHelper {
-
-    private static final String LEGACY_NEW_ANNOTATION = "javax.enterprise.inject.New";
-    private static final String JAKARTA_ANY = "jakarta.enterprise.inject.Any";
-    private static final String JAVAX_ANY = "javax.enterprise.inject.Any";
 
     private LegacyNewQualifierHelper() {
     }
@@ -74,12 +71,11 @@ public final class LegacyNewQualifierHelper {
             return false;
         }
         Class<? extends Annotation> annotationType = annotation.annotationType();
-        return hasNewAnnotation(annotationType) || LEGACY_NEW_ANNOTATION.equals(annotationType.getName());
+        return hasNewAnnotation(annotationType);
     }
 
     private static boolean isAnyQualifier(Annotation annotation) {
-        String typeName = annotation.annotationType().getName();
-        return JAKARTA_ANY.equals(typeName) || JAVAX_ANY.equals(typeName);
+        return annotation != null && hasAnyAnnotation(annotation.annotationType());
     }
 
     private static Class<?> resolveTargetClass(Annotation newQualifier, Class<?> requiredRawType) {
@@ -91,9 +87,15 @@ public final class LegacyNewQualifierHelper {
             }
 
             Class<?> configured = (Class<?>) value;
-            if (configured.equals(newQualifier.annotationType())
-                    || LEGACY_NEW_ANNOTATION.equals(configured.getName())) {
+            if (configured.equals(newQualifier.annotationType())) {
                 return requiredRawType;
+            }
+            if (Annotation.class.isAssignableFrom(configured)) {
+                @SuppressWarnings("unchecked")
+                Class<? extends Annotation> configuredAnnotation = (Class<? extends Annotation>) configured;
+                if (hasNewAnnotation(configuredAnnotation)) {
+                    return requiredRawType;
+                }
             }
             return configured;
         } catch (NoSuchMethodException e) {

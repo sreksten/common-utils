@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.injection.wildfly;
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
+import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.context.passivating.broken.decorator.field.CityDecorator;
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.context.passivating.broken.decorator.field.CityInterface;
 import com.threeamigos.common.util.implementations.injection.cditcktests.full.context.passivating.broken.decorator.field.NonPassivating;
@@ -97,6 +98,13 @@ public class SyringeBootstrapTest {
     public static class PlainManagedBean {
         public String value() {
             return "plain";
+        }
+    }
+
+    @ApplicationScoped
+    public static class ManagedArchiveModeNoneBean {
+        public String value() {
+            return "none";
         }
     }
 
@@ -377,6 +385,32 @@ public class SyringeBootstrapTest {
         try {
             PlainManagedBean bean = syringe.getBeanManager().createInstance().select(PlainManagedBean.class).get();
             assertEquals("plain", bean.value());
+        } finally {
+            bootstrap.shutdown();
+        }
+    }
+
+    @Test
+    public void testManagedBootstrapUsesPreDiscoveredClassArchiveModes() {
+        Set<Class<?>> classes = new HashSet<Class<?>>();
+        classes.add(PlainManagedBean.class);
+        classes.add(ManagedArchiveModeNoneBean.class);
+
+        Map<String, BeanArchiveMode> classArchiveModes = new java.util.HashMap<String, BeanArchiveMode>();
+        classArchiveModes.put(PlainManagedBean.class.getName(), BeanArchiveMode.EXPLICIT);
+        classArchiveModes.put(ManagedArchiveModeNoneBean.class.getName(), BeanArchiveMode.NONE);
+
+        SyringeBootstrap bootstrap = new SyringeBootstrap(
+                classes,
+                Thread.currentThread().getContextClassLoader(),
+                null,
+                "ManagedArchiveModesTest1234567890abcdef1234567890abcdef12345678.war",
+                classArchiveModes);
+        Syringe syringe = bootstrap.bootstrap();
+        try {
+            BeanManager beanManager = syringe.getBeanManager();
+            assertEquals(1, beanManager.getBeans(PlainManagedBean.class).size());
+            assertTrue(beanManager.getBeans(ManagedArchiveModeNoneBean.class).isEmpty());
         } finally {
             bootstrap.shutdown();
         }

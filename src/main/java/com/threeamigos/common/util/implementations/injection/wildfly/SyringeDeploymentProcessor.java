@@ -3,6 +3,7 @@ package com.threeamigos.common.util.implementations.injection.wildfly;
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlParser;
+import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
@@ -21,8 +22,10 @@ import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -32,6 +35,10 @@ import java.util.regex.Pattern;
 public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
 
     private static final Pattern HASH_SUFFIX = Pattern.compile("^[0-9a-fA-F]{24,}$");
+    private static final String PORTABLE_EXTENSION_SERVICE_PATH =
+            "META-INF/services/jakarta.enterprise.inject.spi.Extension";
+    private static final String BCE_EXTENSION_SERVICE_PATH =
+            "META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension";
 
     @Override
     public void deploy(DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
@@ -62,7 +69,8 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         if (indexedClassNames.isEmpty()) {
             return;
         }
-        List<String> deploymentClassNames = collectDeploymentClassNames(deploymentUnit);
+        Map<String, BeanArchiveMode> deploymentClassArchiveModes = new HashMap<String, BeanArchiveMode>();
+        List<String> deploymentClassNames = collectDeploymentClassNames(deploymentUnit, deploymentClassArchiveModes);
         boolean applyHashedDeploymentIsolation = shouldApplyHashedDeploymentIsolation(deploymentClassNames);
         if (!deploymentClassNames.isEmpty()) {
             indexedClassNames = deploymentClassNames;
@@ -111,7 +119,8 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
                 discoveredClasses,
                 module.getClassLoader(),
                 deploymentBeansXmlConfigurations,
-                deploymentUnit.getName());
+                deploymentUnit.getName(),
+                deploymentClassArchiveModes);
         Syringe syringe = null;
         try {
             syringe = bootstrap.bootstrap();
@@ -361,7 +370,15 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
     }
 
     static List<String> collectDeploymentClassNames(DeploymentUnit deploymentUnit) {
+        return collectDeploymentClassNames(deploymentUnit, null);
+    }
+
+    static List<String> collectDeploymentClassNames(DeploymentUnit deploymentUnit,
+                                                    Map<String, BeanArchiveMode> classArchiveModes) {
         Set<String> classNames = new HashSet<String>();
+        if (classArchiveModes != null) {
+            classArchiveModes.clear();
+        }
         if (deploymentUnit == null) {
             return new ArrayList<String>();
         }
@@ -369,14 +386,15 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         ResourceRoot deploymentRoot = deploymentUnit.getAttachment(Attachments.DEPLOYMENT_ROOT);
         if (deploymentRoot != null && deploymentRoot.getRoot() != null) {
             // Prefer deployment classes only; avoid traversing mounted container/module resources.
-            collectClassNamesFromDeploymentRoot(deploymentRoot.getRoot(), classNames);
+            collectClassNamesFromDeploymentRoot(deploymentRoot.getRoot(), classNames, classArchiveModes);
         }
 
         return new ArrayList<String>(classNames);
     }
 
     private static void collectClassNamesFromDeploymentRoot(Object deploymentRoot,
-                                                            Set<String> classNames) {
+                                                            Set<String> classNames,
+                                                            Map<String, BeanArchiveMode> classArchiveModes) {
         if (deploymentRoot == null || classNames == null) {
             return;
         }
@@ -387,13 +405,21 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         }
 
         List<String> relativePaths = new ArrayList<String>();
+        Map<String, Object> filesByRelativePath = new HashMap<String, Object>();
         for (Object file : files) {
             String relativePath = extractRelativePath(file, deploymentRoot);
             if (relativePath != null) {
-                relativePaths.add(relativePath.replace('\\', '/'));
+                String normalized = relativePath.replace('\\', '/');
+                relativePaths.add(normalized);
+                String normalizedKey = trimLeadingSlashes(normalized);
+                if (!filesByRelativePath.containsKey(normalizedKey)) {
+                    filesByRelativePath.put(normalizedKey, file);
+                }
             }
         }
 
+        Map<String, BeanArchiveMode> archiveModesByPrefix =
+                resolveArchiveModesByPrefix(filesByRelativePath);
         Set<String> beanArchiveLibraryPrefixes = collectBeanArchiveLibraryPrefixes(relativePaths);
         for (String relativePath : relativePaths) {
             String classEntry = toDeploymentClassEntry(relativePath, beanArchiveLibraryPrefixes);
@@ -404,6 +430,201 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
                     .substring(0, classEntry.length() - ".class".length())
                     .replace('/', '.');
             classNames.add(className);
+            if (classArchiveModes != null) {
+                BeanArchiveMode mode = resolveClassArchiveMode(relativePath, archiveModesByPrefix);
+                classArchiveModes.put(className, mode != null ? mode : BeanArchiveMode.IMPLICIT);
+            }
+        }
+    }
+
+    private static Map<String, BeanArchiveMode> resolveArchiveModesByPrefix(Map<String, Object> filesByRelativePath) {
+        if (filesByRelativePath == null || filesByRelativePath.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, BeanArchiveMode> modes = new HashMap<String, BeanArchiveMode>();
+        Set<String> extensionServicePrefixes = new HashSet<String>();
+        BeansXmlParser parser = new BeansXmlParser();
+        for (Map.Entry<String, Object> entry : filesByRelativePath.entrySet()) {
+            String relativePath = entry.getKey();
+            if (!isDeploymentBeansXmlPath(relativePath)) {
+                String extensionPrefix = serviceDescriptorArchivePrefix(relativePath);
+                if (extensionPrefix != null) {
+                    extensionServicePrefixes.add(extensionPrefix);
+                }
+                continue;
+            }
+            String prefix = descriptorArchivePrefix(relativePath);
+            if (prefix == null) {
+                continue;
+            }
+            BeanArchiveMode mode = parseArchiveMode(entry.getValue(), parser);
+            modes.put(prefix, mode);
+        }
+        for (String prefix : extensionServicePrefixes) {
+            if (!modes.containsKey(prefix)) {
+                modes.put(prefix, BeanArchiveMode.NONE);
+            }
+        }
+        return modes;
+    }
+
+    private static BeanArchiveMode parseArchiveMode(Object descriptorFile, BeansXmlParser parser) {
+        if (descriptorFile == null || parser == null) {
+            return BeanArchiveMode.IMPLICIT;
+        }
+        InputStream inputStream = null;
+        try {
+            Method openStream = descriptorFile.getClass().getMethod("openStream");
+            inputStream = (InputStream) openStream.invoke(descriptorFile);
+            if (inputStream == null) {
+                return BeanArchiveMode.IMPLICIT;
+            }
+            BeansXml beansXml = parser.parse(inputStream);
+            return determineArchiveMode(beansXml);
+        } catch (Exception ignored) {
+            return BeanArchiveMode.IMPLICIT;
+        } finally {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (Exception ignored) {
+                    // Best effort only.
+                }
+            }
+        }
+    }
+
+    private static BeanArchiveMode resolveClassArchiveMode(String relativeClassPath,
+                                                           Map<String, BeanArchiveMode> archiveModesByPrefix) {
+        if (archiveModesByPrefix == null || archiveModesByPrefix.isEmpty()) {
+            return BeanArchiveMode.IMPLICIT;
+        }
+        String prefix = classArchivePrefix(relativeClassPath);
+        if (prefix == null) {
+            return BeanArchiveMode.IMPLICIT;
+        }
+        BeanArchiveMode mode = archiveModesByPrefix.get(prefix);
+        return mode != null ? mode : BeanArchiveMode.IMPLICIT;
+    }
+
+    private static String classArchivePrefix(String relativeClassPath) {
+        if (relativeClassPath == null || relativeClassPath.isEmpty()) {
+            return null;
+        }
+        String normalized = trimLeadingSlashes(relativeClassPath.replace('\\', '/'));
+        int jarSeparator = findJarSeparator(normalized);
+        if (jarSeparator >= 0) {
+            int separatorLength = jarSeparatorLength(normalized, jarSeparator);
+            if (separatorLength <= 0) {
+                return null;
+            }
+            return normalized.substring(0, jarSeparator + separatorLength);
+        }
+        String webInfTrimmed = trimToWebInfClasses(normalized);
+        if (webInfTrimmed != null) {
+            return "WEB-INF/classes/";
+        }
+        return "";
+    }
+
+    private static String descriptorArchivePrefix(String relativeBeansXmlPath) {
+        if (relativeBeansXmlPath == null || relativeBeansXmlPath.isEmpty()) {
+            return null;
+        }
+        String normalized = trimLeadingSlashes(relativeBeansXmlPath.replace('\\', '/'));
+        if ("WEB-INF/beans.xml".equals(normalized) || "WEB-INF/classes/META-INF/beans.xml".equals(normalized)) {
+            return "WEB-INF/classes/";
+        }
+        if ("META-INF/beans.xml".equals(normalized)) {
+            return "";
+        }
+        int jarSeparator = findJarSeparator(normalized);
+        if (jarSeparator < 0) {
+            return null;
+        }
+        int separatorLength = jarSeparatorLength(normalized, jarSeparator);
+        if (separatorLength <= 0) {
+            return null;
+        }
+        return normalized.substring(0, jarSeparator + separatorLength);
+    }
+
+    private static String serviceDescriptorArchivePrefix(String relativeServicePath) {
+        if (relativeServicePath == null || relativeServicePath.isEmpty()) {
+            return null;
+        }
+        String normalized = trimLeadingSlashes(relativeServicePath.replace('\\', '/'));
+        int jarSeparator = findJarSeparator(normalized);
+        if (jarSeparator >= 0) {
+            int separatorLength = jarSeparatorLength(normalized, jarSeparator);
+            if (separatorLength <= 0) {
+                return null;
+            }
+            String entry = normalized.substring(jarSeparator + separatorLength);
+            if (!isExtensionServiceDescriptorEntry(entry)) {
+                return null;
+            }
+            return normalized.substring(0, jarSeparator + separatorLength);
+        }
+        String webInfTrimmed = trimToWebInfClasses(normalized);
+        if (webInfTrimmed != null) {
+            if (isExtensionServiceDescriptorEntry(webInfTrimmed)) {
+                return "WEB-INF/classes/";
+            }
+            return null;
+        }
+        if (isExtensionServiceDescriptorEntry(normalized)) {
+            return "";
+        }
+        return null;
+    }
+
+    private static boolean isExtensionServiceDescriptorEntry(String entryPath) {
+        if (entryPath == null || entryPath.isEmpty()) {
+            return false;
+        }
+        return PORTABLE_EXTENSION_SERVICE_PATH.equals(entryPath)
+                || BCE_EXTENSION_SERVICE_PATH.equals(entryPath);
+    }
+
+    private static BeanArchiveMode determineArchiveMode(BeansXml beansXml) {
+        if (beansXml == null) {
+            return BeanArchiveMode.IMPLICIT;
+        }
+        String discoveryMode = beansXml.getBeanDiscoveryMode();
+        String normalized = discoveryMode != null ? discoveryMode.trim().toLowerCase() : "";
+        if ("none".equals(normalized)) {
+            return BeanArchiveMode.NONE;
+        }
+        if ("all".equals(normalized) || isLegacyAllByDefaultDescriptor(beansXml, normalized)) {
+            return beansXml.isTrimEnabled() ? BeanArchiveMode.TRIMMED : BeanArchiveMode.EXPLICIT;
+        }
+        return BeanArchiveMode.IMPLICIT;
+    }
+
+    private static boolean isLegacyAllByDefaultDescriptor(BeansXml beansXml, String normalizedMode) {
+        if (beansXml == null || !"annotated".equals(normalizedMode)) {
+            return false;
+        }
+        if (beansXml.isBeanDiscoveryModeDeclared() || !beansXml.isLegacyJavaSunDescriptor()) {
+            return false;
+        }
+        String version = beansXml.getVersion();
+        if (version == null || version.trim().isEmpty()) {
+            return true;
+        }
+        String trimmed = version.trim();
+        if ("1".equals(trimmed) || "1.0".equals(trimmed)) {
+            return true;
+        }
+        try {
+            String[] parts = trimmed.split("\\.");
+            int major = Integer.parseInt(parts[0]);
+            int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            return major < 1 || (major == 1 && minor == 0);
+        } catch (NumberFormatException ignored) {
+            return false;
         }
     }
 

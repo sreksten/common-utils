@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -195,7 +196,7 @@ public class SessionScopedContext implements ScopeContext {
                     }
                 } else if (bean == null) {
                     // Fallback: invoke annotation directly if metadata is missing
-                    invokeAnnotationIfPresent(instance, "jakarta.ejb.PrePassivate");
+                    invokeAnnotationIfPresent(instance, AnnotationsEnum.PRE_PASSIVATE);
                 }
             }
         }
@@ -293,7 +294,7 @@ public class SessionScopedContext implements ScopeContext {
                 }
             } else {
                 // Fallback when bean metadata isn't available
-                invokeAnnotationIfPresent(instance, "jakarta.ejb.PostActivate");
+                invokeAnnotationIfPresent(instance, AnnotationsEnum.POST_ACTIVATE);
             }
         }
     }
@@ -423,25 +424,22 @@ public class SessionScopedContext implements ScopeContext {
         return null;
     }
 
-    private void invokeAnnotationIfPresent(Object instance, String annotationClassName) {
+    private void invokeAnnotationIfPresent(Object instance, AnnotationsEnum annotationType) {
+        if (instance == null || annotationType == null) {
+            return;
+        }
         try {
-            @SuppressWarnings("unchecked")
-            Class<? extends Annotation> annClass =
-                (Class<? extends Annotation>) Class.forName(annotationClassName);
-
             for (Class<?> clazz : LifecycleMethodHelper.buildHierarchy(instance)) {
                 for (Method method : clazz.getDeclaredMethods()) {
-                    if (method.isAnnotationPresent(annClass)) {
+                    if (annotationType.isPresent(method)) {
                         method.setAccessible(true);
                         method.invoke(instance);
                     }
                 }
             }
-        } catch (ClassNotFoundException e) {
-            // jakarta.ejb not on classpath; nothing to do
         } catch (Exception e) {
             messageHandler.handleException(
-                "Error invoking @" + annotationClassName + " on " +
+                "Error invoking @" + annotationType.name() + " on " +
                     instance.getClass().getName() + ": " + e.getMessage(),
                 e
             );

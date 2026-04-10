@@ -432,9 +432,7 @@ public class InterceptorResolver {
         if (annotationType == null) {
             return false;
         }
-        String name = annotationType.getName();
-        return "jakarta.interceptor.InterceptorBinding".equals(name)
-                || "javax.interceptor.InterceptorBinding".equals(name);
+        return AnnotationsEnum.INTERCEPTOR_BINDING.matches(annotationType);
     }
 
     /**

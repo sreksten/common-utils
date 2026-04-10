@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.decorators;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
@@ -225,8 +226,8 @@ public class DecoratorResolver {
         if (decoratorClass == null) {
             return Integer.MAX_VALUE;
         }
-        jakarta.annotation.Priority priority = decoratorClass.getAnnotation(jakarta.annotation.Priority.class);
-        return priority != null ? priority.value() : Integer.MAX_VALUE;
+        Integer priority = AnnotationsEnum.getPriorityValue(decoratorClass);
+        return priority != null ? priority : Integer.MAX_VALUE;
     }
 
     private static final class SyntheticDelegateInjectionPoint implements InjectionPoint {

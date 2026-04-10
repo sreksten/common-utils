@@ -12,6 +12,9 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasAnyAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDefaultAnnotation;
+
 /**
  * Implementation of {@link InjectionPointConfigurator} used for ProcessInjectionPoint events.
  */
@@ -138,12 +141,10 @@ public class InjectionPointConfiguratorImpl implements InjectionPointConfigurato
     }
 
     private boolean isDefaultQualifier(Annotation qualifier) {
-        return qualifier != null &&
-                qualifier.annotationType().getName().equals(jakarta.enterprise.inject.Default.class.getName());
+        return qualifier != null && hasDefaultAnnotation(qualifier.annotationType());
     }
 
     private boolean isAnyQualifier(Annotation qualifier) {
-        return qualifier != null &&
-                qualifier.annotationType().getName().equals(jakarta.enterprise.inject.Any.class.getName());
+        return qualifier != null && hasAnyAnnotation(qualifier.annotationType());
     }
 }

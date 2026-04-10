@@ -44,8 +44,6 @@ import java.io.NotSerializableException;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
-import java.lang.annotation.Repeatable;
-import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
@@ -716,13 +714,11 @@ public class EventImpl<T> implements Event<T>, Serializable {
     }
 
     private boolean isDefaultQualifierType(Class<? extends Annotation> qualifierType) {
-        return qualifierType != null &&
-                jakarta.enterprise.inject.Default.class.getName().equals(qualifierType.getName());
+        return qualifierType != null && hasDefaultAnnotation(qualifierType);
     }
 
     private boolean isAnyQualifierType(Class<? extends Annotation> qualifierType) {
-        return qualifierType != null &&
-                jakarta.enterprise.inject.Any.class.getName().equals(qualifierType.getName());
+        return qualifierType != null && hasAnyAnnotation(qualifierType);
     }
 
     private boolean isRepeatableQualifier(Class<? extends Annotation> qualifierType) {
@@ -730,7 +726,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
     }
 
     private boolean hasRuntimeRetention(Class<? extends Annotation> annotationType) {
-        Retention retention = annotationType.getAnnotation(Retention.class);
+        java.lang.annotation.Retention retention = AnnotationsEnum.getRetentionAnnotation(annotationType);
         return retention != null && RetentionPolicy.RUNTIME.equals(retention.value());
     }
 
@@ -744,8 +740,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             }
         }
 
-        if (("jakarta.enterprise.event.Startup".equals(runtimeType.getName()) ||
-             "jakarta.enterprise.event.Shutdown".equals(runtimeType.getName())) && !allowStartupEventDispatch) {
+        if (AnnotationsEnum.isContainerLifecyclePayloadTypeName(runtimeType.getName()) && !allowStartupEventDispatch) {
             throw new IllegalArgumentException(
                     "Application must not manually fire events with payload type " + runtimeType.getName());
         }
@@ -1650,10 +1645,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             return false;
         }
         String eventClassName = event.getClass().getName();
-        return "jakarta.enterprise.event.Startup".equals(eventClassName)
-                || "jakarta.enterprise.event.Shutdown".equals(eventClassName)
-                || "javax.enterprise.event.Startup".equals(eventClassName)
-                || "javax.enterprise.event.Shutdown".equals(eventClassName);
+        return AnnotationsEnum.isContainerLifecyclePayloadTypeName(eventClassName);
     }
 
     private boolean isContextLifecycleEvent() {
@@ -1664,11 +1656,8 @@ public class EventImpl<T> implements Event<T>, Serializable {
             if (qualifier == null || qualifier.annotationType() == null) {
                 continue;
             }
-            String qualifierTypeName = qualifier.annotationType().getName();
-            if ("jakarta.enterprise.context.Initialized".equals(qualifierTypeName)
-                    || "jakarta.enterprise.context.Destroyed".equals(qualifierTypeName)
-                    || "javax.enterprise.context.Initialized".equals(qualifierTypeName)
-                    || "javax.enterprise.context.Destroyed".equals(qualifierTypeName)) {
+            if (hasInitializedAnnotation(qualifier.annotationType())
+                    || hasDestroyedAnnotation(qualifier.annotationType())) {
                 return true;
             }
         }
@@ -1684,7 +1673,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             if (annotation == null) {
                 continue;
             }
-            if (annotation.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)) {
+            if (hasQualifierAnnotation(annotation.annotationType())) {
                 qualifierSet.add(annotation);
             }
         }
@@ -2155,7 +2144,8 @@ public class EventImpl<T> implements Event<T>, Serializable {
                 if (qualifier == null) {
                     continue;
                 }
-                Repeatable repeatable = qualifier.annotationType().getAnnotation(Repeatable.class);
+                java.lang.annotation.Repeatable repeatable =
+                        AnnotationsEnum.getRepeatableAnnotation(qualifier.annotationType());
                 if (repeatable == null || repeatable.value() == null) {
                     continue;
                 }

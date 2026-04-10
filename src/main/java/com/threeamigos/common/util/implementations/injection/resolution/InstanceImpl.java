@@ -24,6 +24,8 @@ import java.util.*;
 import java.util.function.Function;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDependentAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasPriorityAnnotation;
 
 /**
  * Generic wrapper implementing CDI {@link Instance} interface for lazy and programmatic
@@ -415,7 +417,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                         if (resolvedBean != null &&
                                 beanManager != null &&
                                 (resolvedBean.getScope() == null ||
-                                        "jakarta.enterprise.context.Dependent".equals(resolvedBean.getScope().getName()))) {
+                                        hasDependentAnnotation(resolvedBean.getScope()))) {
                             CreationalContext<T> creationalContext = beanManager.createCreationalContext(resolvedBean);
                             @SuppressWarnings("unchecked")
                             T resolvedInstance = (T) beanManager.getReference(resolvedBean, classToResolve, creationalContext);
@@ -635,9 +637,8 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             return null;
         }
         for (Annotation annotation : annotations) {
-            String annotationTypeName = annotation.annotationType().getName();
-            if (jakarta.annotation.Priority.class.getName().equals(annotationTypeName) ||
-                    "javax.annotation.Priority".equals(annotationTypeName)) {
+            if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRIORITY
+                    .matches(annotation.annotationType())) {
                 try {
                     Method valueMethod = annotation.annotationType().getMethod("value");
                     Object value = valueMethod.invoke(annotation);
@@ -903,7 +904,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             if (resolved == null || resolved.getScope() == null) {
                 return;
             }
-            if (!"jakarta.enterprise.context.Dependent".equals(resolved.getScope().getName())) {
+            if (!hasDependentAnnotation(resolved.getScope())) {
                 return;
             }
             trackedDependentInstances().add(instance);

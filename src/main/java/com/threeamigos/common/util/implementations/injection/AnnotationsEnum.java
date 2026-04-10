@@ -117,6 +117,20 @@ public enum AnnotationsEnum {
     PRE_DESTROY(annotationClass("javax.annotation.PreDestroy"), jakarta.annotation.PreDestroy.class),
 
     /**
+     * Lifecycle callback executed before passivation of a stateful component.<br/>
+     * Maps: {@code javax.ejb.PrePassivate}, {@code jakarta.ejb.PrePassivate}<br/>
+     * Since: EJB 3.0 (used by CDI passivating scopes integration)
+     */
+    PRE_PASSIVATE(annotationClass("javax.ejb.PrePassivate"), annotationClass("jakarta.ejb.PrePassivate")),
+
+    /**
+     * Lifecycle callback executed after activation of a passivated component.<br/>
+     * Maps: {@code javax.ejb.PostActivate}, {@code jakarta.ejb.PostActivate}<br/>
+     * Since: EJB 3.0 (used by CDI passivating scopes integration)
+     */
+    POST_ACTIVATE(annotationClass("javax.ejb.PostActivate"), annotationClass("jakarta.ejb.PostActivate")),
+
+    /**
      * Priority annotation for ordering.<br/>
      * Maps: {@code javax.annotation.Priority}, {@code jakarta.annotation.Priority}<br/>
      * Since: Common Annotations 1.2 (used by CDI since CDI 1.1)
@@ -222,6 +236,13 @@ public enum AnnotationsEnum {
     INTERCEPTED(annotationClass("javax.enterprise.inject.Intercepted"), jakarta.enterprise.inject.Intercepted.class),
 
     /**
+     * Built-in qualifier for obtaining decorated bean metadata in decorators.<br/>
+     * Maps: {@code javax.enterprise.inject.Decorated}, {@code jakarta.enterprise.inject.Decorated}<br/>
+     * Since: CDI 1.1
+     */
+    DECORATED(annotationClass("javax.enterprise.inject.Decorated"), annotationClass("jakarta.enterprise.inject.Decorated")),
+
+    /**
      * Annotation for transient method or constructor parameter references.<br/>
      * Maps: {@code javax.enterprise.inject.TransientReference}, {@code jakarta.enterprise.inject.TransientReference}<br/>
      * Since: CDI 2.0
@@ -257,6 +278,29 @@ public enum AnnotationsEnum {
      */
     INTERCEPTOR_BINDING(annotationClass("javax.interceptor.InterceptorBinding"),
             jakarta.interceptor.InterceptorBinding.class),
+
+    /**
+     * Declares class or method level legacy interceptor classes.<br/>
+     * Maps: {@code javax.interceptor.Interceptors}, {@code jakarta.interceptor.Interceptors}<br/>
+     * Since: Interceptors 1.0
+     */
+    INTERCEPTORS(annotationClass("javax.interceptor.Interceptors"), annotationClass("jakarta.interceptor.Interceptors")),
+
+    /**
+     * Excludes class-level interceptors from applying to a method.<br/>
+     * Maps: {@code javax.interceptor.ExcludeClassInterceptors}, {@code jakarta.interceptor.ExcludeClassInterceptors}<br/>
+     * Since: Interceptors 1.0
+     */
+    EXCLUDE_CLASS_INTERCEPTORS(annotationClass("javax.interceptor.ExcludeClassInterceptors"),
+            annotationClass("jakarta.interceptor.ExcludeClassInterceptors")),
+
+    /**
+     * Excludes globally/default enabled interceptors.<br/>
+     * Maps: {@code javax.interceptor.ExcludeDefaultInterceptors}, {@code jakarta.interceptor.ExcludeDefaultInterceptors}<br/>
+     * Since: Interceptors 1.0
+     */
+    EXCLUDE_DEFAULT_INTERCEPTORS(annotationClass("javax.interceptor.ExcludeDefaultInterceptors"),
+            annotationClass("jakarta.interceptor.ExcludeDefaultInterceptors")),
 
     // ==================== CDI Scope Annotations ====================
 
@@ -342,6 +386,20 @@ public enum AnnotationsEnum {
      */
     OBSERVES_ASYNC(annotationClass("javax.enterprise.event.ObservesAsync"),
             jakarta.enterprise.event.ObservesAsync.class),
+
+    /**
+     * Built-in qualifier for container startup event notifications.<br/>
+     * Maps: {@code javax.enterprise.event.Startup}, {@code jakarta.enterprise.event.Startup}<br/>
+     * Since: CDI 2.0/4.0
+     */
+    STARTUP(annotationClass("javax.enterprise.event.Startup"), annotationClass("jakarta.enterprise.event.Startup")),
+
+    /**
+     * Built-in qualifier for container shutdown event notifications.<br/>
+     * Maps: {@code javax.enterprise.event.Shutdown}, {@code jakarta.enterprise.event.Shutdown}<br/>
+     * Since: CDI 2.0/4.0
+     */
+    SHUTDOWN(annotationClass("javax.enterprise.event.Shutdown"), annotationClass("jakarta.enterprise.event.Shutdown")),
 
     /**
      * Interceptor method invoked around business method invocation.<br/>
@@ -470,6 +528,10 @@ public enum AnnotationsEnum {
             new ConcurrentHashMap<>();
     private static final Map<ClassLoader, AtomicInteger> DYNAMIC_ANNOTATION_USERS =
             new ConcurrentHashMap<>();
+    private static final String JAKARTA_STARTUP_EVENT_TYPE_NAME = "jakarta.enterprise.event.Startup";
+    private static final String JAVAX_STARTUP_EVENT_TYPE_NAME = "javax.enterprise.event.Startup";
+    private static final String JAKARTA_SHUTDOWN_EVENT_TYPE_NAME = "jakarta.enterprise.event.Shutdown";
+    private static final String JAVAX_SHUTDOWN_EVENT_TYPE_NAME = "javax.enterprise.event.Shutdown";
 
     @SafeVarargs
     AnnotationsEnum(Class<? extends Annotation>... annotationClasses) {
@@ -541,6 +603,28 @@ public enum AnnotationsEnum {
      */
     public boolean matches(Class<? extends Annotation> annotationClass) {
         return annotations.contains(annotationClass);
+    }
+
+    /**
+     * Checks whether the fully qualified annotation type name matches this enum value.
+     */
+    public boolean matchesName(String annotationClassName) {
+        if (annotationClassName == null || annotationClassName.trim().isEmpty()) {
+            return false;
+        }
+        for (Class<? extends Annotation> annotationClass : annotations) {
+            if (annotationClassName.equals(annotationClass.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks whether the annotation instance type matches this enum value.
+     */
+    public boolean matches(Annotation annotation) {
+        return annotation != null && matches(annotation.annotationType());
     }
 
     // ==================== Static Helper Methods ====================
@@ -630,6 +714,20 @@ public enum AnnotationsEnum {
      */
     public static boolean hasPreDestroyAnnotation(AnnotatedElement element) {
         return PRE_DESTROY.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @PrePassivate annotation (javax or jakarta).
+     */
+    public static boolean hasPrePassivateAnnotation(AnnotatedElement element) {
+        return PRE_PASSIVATE.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @PostActivate annotation (javax or jakarta).
+     */
+    public static boolean hasPostActivateAnnotation(AnnotatedElement element) {
+        return POST_ACTIVATE.isPresent(element);
     }
 
     /**
@@ -725,6 +823,13 @@ public enum AnnotationsEnum {
     }
 
     /**
+     * Checks if the element has a @Decorated annotation (javax or jakarta).
+     */
+    public static boolean hasDecoratedAnnotation(AnnotatedElement element) {
+        return DECORATED.isPresent(element);
+    }
+
+    /**
      * Checks if the element has a @TransientReference annotation (javax or jakarta).
      */
     public static boolean hasTransientReferenceAnnotation(AnnotatedElement element) {
@@ -757,6 +862,27 @@ public enum AnnotationsEnum {
      */
     public static boolean hasInterceptorBindingAnnotation(AnnotatedElement element) {
         return INTERCEPTOR_BINDING.isPresent(element) || matchesDynamicAnnotation(element, DYNAMIC_INTERCEPTOR_BINDINGS);
+    }
+
+    /**
+     * Checks if the element has an @Interceptors annotation (javax or jakarta).
+     */
+    public static boolean hasInterceptorsAnnotation(AnnotatedElement element) {
+        return INTERCEPTORS.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has an @ExcludeClassInterceptors annotation (javax or jakarta).
+     */
+    public static boolean hasExcludeClassInterceptorsAnnotation(AnnotatedElement element) {
+        return EXCLUDE_CLASS_INTERCEPTORS.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has an @ExcludeDefaultInterceptors annotation (javax or jakarta).
+     */
+    public static boolean hasExcludeDefaultInterceptorsAnnotation(AnnotatedElement element) {
+        return EXCLUDE_DEFAULT_INTERCEPTORS.isPresent(element);
     }
 
     /**
@@ -807,6 +933,14 @@ public enum AnnotationsEnum {
     }
 
     /**
+     * Checks if the element has one of the built-in passivating scopes:
+     * {@code @SessionScoped} or {@code @ConversationScoped} (javax or jakarta).
+     */
+    public static boolean hasBuiltInPassivatingScopeAnnotation(AnnotatedElement element) {
+        return hasSessionScopedAnnotation(element) || hasConversationScopedAnnotation(element);
+    }
+
+    /**
      * Checks if the element has a @NormalScope annotation (javax or jakarta).
      */
     public static boolean hasNormalScopeAnnotation(AnnotatedElement element) {
@@ -846,6 +980,43 @@ public enum AnnotationsEnum {
      */
     public static boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
         return OBSERVES_ASYNC.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @Startup annotation (javax or jakarta).
+     */
+    public static boolean hasStartupAnnotation(AnnotatedElement element) {
+        return STARTUP.isPresent(element);
+    }
+
+    /**
+     * Checks if the element has a @Shutdown annotation (javax or jakarta).
+     */
+    public static boolean hasShutdownAnnotation(AnnotatedElement element) {
+        return SHUTDOWN.isPresent(element);
+    }
+
+    /**
+     * Checks whether the supplied type name identifies a CDI Startup event payload type.
+     */
+    public static boolean isStartupEventTypeName(String typeName) {
+        return JAKARTA_STARTUP_EVENT_TYPE_NAME.equals(typeName)
+                || JAVAX_STARTUP_EVENT_TYPE_NAME.equals(typeName);
+    }
+
+    /**
+     * Checks whether the supplied type name identifies a CDI Shutdown event payload type.
+     */
+    public static boolean isShutdownEventTypeName(String typeName) {
+        return JAKARTA_SHUTDOWN_EVENT_TYPE_NAME.equals(typeName)
+                || JAVAX_SHUTDOWN_EVENT_TYPE_NAME.equals(typeName);
+    }
+
+    /**
+     * Checks whether the supplied type name identifies either Startup or Shutdown payload type.
+     */
+    public static boolean isContainerLifecyclePayloadTypeName(String typeName) {
+        return isStartupEventTypeName(typeName) || isShutdownEventTypeName(typeName);
     }
 
     /**
@@ -1018,6 +1189,26 @@ public enum AnnotationsEnum {
             return null;
         }
         return element.getAnnotation(Target.class);
+    }
+
+    /**
+     * Gets the @Retention annotation from the element.
+     */
+    public static java.lang.annotation.Retention getRetentionAnnotation(AnnotatedElement element) {
+        if (element == null) {
+            return null;
+        }
+        return element.getAnnotation(java.lang.annotation.Retention.class);
+    }
+
+    /**
+     * Gets the @Repeatable annotation from the element.
+     */
+    public static java.lang.annotation.Repeatable getRepeatableAnnotation(AnnotatedElement element) {
+        if (element == null) {
+            return null;
+        }
+        return element.getAnnotation(java.lang.annotation.Repeatable.class);
     }
 
     /**

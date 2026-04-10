@@ -608,28 +608,7 @@ public class CDI41InjectionValidator {
         if (scope == null) {
             return false;
         }
-
-        String scopeName = scope.getName();
-        if ("jakarta.enterprise.context.ApplicationScoped".equals(scopeName) ||
-                "jakarta.enterprise.context.RequestScoped".equals(scopeName) ||
-                "jakarta.enterprise.context.SessionScoped".equals(scopeName) ||
-                "jakarta.enterprise.context.ConversationScoped".equals(scopeName) ||
-                "javax.enterprise.context.ApplicationScoped".equals(scopeName) ||
-                "javax.enterprise.context.RequestScoped".equals(scopeName) ||
-                "javax.enterprise.context.SessionScoped".equals(scopeName) ||
-                "javax.enterprise.context.ConversationScoped".equals(scopeName)) {
-            return true;
-        }
-
-        for (Annotation meta : scope.getAnnotations()) {
-            String metaName = meta.annotationType().getName();
-            if ("jakarta.enterprise.context.NormalScope".equals(metaName) ||
-                    "javax.enterprise.context.NormalScope".equals(metaName)) {
-                return true;
-            }
-        }
-
-        return false;
+        return hasBuiltInNormalScopeAnnotation(scope) || hasNormalScopeAnnotation(scope);
     }
 
     // ============================================
@@ -1213,9 +1192,7 @@ public class CDI41InjectionValidator {
             if (annotationType == null) {
                 continue;
             }
-            String name = annotationType.getName();
-            if (!"jakarta.interceptor.Interceptors".equals(name) &&
-                    !"javax.interceptor.Interceptors".equals(name)) {
+            if (!INTERCEPTORS.matches(annotationType)) {
                 continue;
             }
             try {
@@ -1416,17 +1393,7 @@ public class CDI41InjectionValidator {
             return registeredScope.isNormal();
         }
 
-        String scopeName = scopeAnnotation.getName();
-        return scopeName.equals("jakarta.enterprise.context.ApplicationScoped") ||
-               scopeName.equals("jakarta.enterprise.context.SessionScoped") ||
-               scopeName.equals("jakarta.enterprise.context.ConversationScoped") ||
-               scopeName.equals("jakarta.enterprise.context.RequestScoped") ||
-               scopeName.equals("javax.enterprise.context.ApplicationScoped") ||
-               scopeName.equals("javax.enterprise.context.SessionScoped") ||
-               scopeName.equals("javax.enterprise.context.ConversationScoped") ||
-               scopeName.equals("javax.enterprise.context.RequestScoped") ||
-               // Check for @NormalScope meta-annotation
-               hasNormalScopeAnnotation(scopeAnnotation);
+        return hasBuiltInNormalScopeAnnotation(scopeAnnotation) || hasNormalScopeAnnotation(scopeAnnotation);
     }
 
     /**
@@ -1458,11 +1425,7 @@ public class CDI41InjectionValidator {
         }
 
         // SessionScoped and ConversationScoped are passivation-capable
-        String scopeName = scopeAnnotation.getName();
-        return scopeName.equals("jakarta.enterprise.context.SessionScoped") ||
-               scopeName.equals("jakarta.enterprise.context.ConversationScoped") ||
-               scopeName.equals("javax.enterprise.context.SessionScoped") ||
-               scopeName.equals("javax.enterprise.context.ConversationScoped");
+        return hasBuiltInPassivatingScopeAnnotation(scopeAnnotation);
     }
 
     // ============================================
@@ -1843,8 +1806,7 @@ public class CDI41InjectionValidator {
             return false;
         }
         Class<?> beanClass = decorator.getBeanClass();
-        Priority priority = beanClass.getAnnotation(Priority.class);
-        return priority != null || knowledgeBase.getDecoratorBeansXmlOrder(beanClass) >= 0;
+        return getPriorityValue(beanClass) != null || knowledgeBase.getDecoratorBeansXmlOrder(beanClass) >= 0;
     }
 
     private boolean decoratorMatchesTypes(DecoratorInfo decoratorInfo, Set<Type> beanTypes) {
@@ -1882,7 +1844,7 @@ public class CDI41InjectionValidator {
                 continue;
             }
             Class<? extends Annotation> requiredType = requiredQualifier.annotationType();
-            if (Any.class.equals(requiredType)) {
+            if (hasAnyAnnotation(requiredType)) {
                 continue;
             }
             boolean found = false;
@@ -2114,9 +2076,7 @@ public class CDI41InjectionValidator {
             return null;
         }
         for (Annotation annotation : annotations) {
-            String annotationTypeName = annotation.annotationType().getName();
-            if (Priority.class.getName().equals(annotationTypeName) ||
-                    "javax.annotation.Priority".equals(annotationTypeName)) {
+            if (PRIORITY.matches(annotation.annotationType())) {
                 try {
                     Method valueMethod = annotation.annotationType().getMethod("value");
                     Object value = valueMethod.invoke(annotation);
@@ -3045,9 +3005,7 @@ public class CDI41InjectionValidator {
             if (annotation == null) {
                 continue;
             }
-            String annotationTypeName = annotation.annotationType().getName();
-            if (Priority.class.getName().equals(annotationTypeName) ||
-                    "javax.annotation.Priority".equals(annotationTypeName)) {
+            if (PRIORITY.matches(annotation.annotationType())) {
                 try {
                     Method valueMethod = annotation.annotationType().getMethod("value");
                     Object value = valueMethod.invoke(annotation);
@@ -3135,13 +3093,6 @@ public class CDI41InjectionValidator {
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        for (Annotation annotation : beanClass.getAnnotations()) {
-            String name = annotation.annotationType().getName();
-            if ("jakarta.enterprise.inject.Specializes".equals(name) ||
-                    "javax.enterprise.inject.Specializes".equals(name)) {
-                return true;
-            }
-        }
-        return false;
+        return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasSpecializesAnnotation(beanClass);
     }
 }

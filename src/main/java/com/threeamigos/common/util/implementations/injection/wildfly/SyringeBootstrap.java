@@ -13,7 +13,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.lang.reflect.Method;
@@ -40,6 +42,7 @@ public class SyringeBootstrap {
     private final Set<Class<?>> discoveredClasses;
     private final ClassLoader classLoader;
     private final List<BeansXml> preDiscoveredBeansXmlConfigurations;
+    private final Map<String, BeanArchiveMode> preDiscoveredClassArchiveModes;
     private final String deploymentName;
 
     /**
@@ -50,7 +53,7 @@ public class SyringeBootstrap {
      * @throws IllegalArgumentException if any parameter is null
      */
     public SyringeBootstrap(Set<Class<?>> discoveredClasses, ClassLoader classLoader) {
-        this(discoveredClasses, classLoader, null, null);
+        this(discoveredClasses, classLoader, null, null, null);
     }
 
     /**
@@ -64,23 +67,45 @@ public class SyringeBootstrap {
     public SyringeBootstrap(Set<Class<?>> discoveredClasses,
                             ClassLoader classLoader,
                             Collection<BeansXml> preDiscoveredBeansXmlConfigurations) {
-        this(discoveredClasses, classLoader, preDiscoveredBeansXmlConfigurations, null);
+        this(discoveredClasses, classLoader, preDiscoveredBeansXmlConfigurations, null, null);
     }
 
     public SyringeBootstrap(Set<Class<?>> discoveredClasses,
                             ClassLoader classLoader,
                             Collection<BeansXml> preDiscoveredBeansXmlConfigurations,
                             String deploymentName) {
+        this(discoveredClasses, classLoader, preDiscoveredBeansXmlConfigurations, deploymentName, null);
+    }
+
+    public SyringeBootstrap(Set<Class<?>> discoveredClasses,
+                            ClassLoader classLoader,
+                            Collection<BeansXml> preDiscoveredBeansXmlConfigurations,
+                            String deploymentName,
+                            Map<String, BeanArchiveMode> preDiscoveredClassArchiveModes) {
         this.discoveredClasses = Objects.requireNonNull(discoveredClasses, "discoveredClasses cannot be null");
         this.classLoader = Objects.requireNonNull(classLoader, "classLoader cannot be null");
         this.syringe = new Syringe(); // Use no-args constructor for managed bootstrap
         this.preDiscoveredBeansXmlConfigurations = new ArrayList<BeansXml>();
+        this.preDiscoveredClassArchiveModes = new HashMap<String, BeanArchiveMode>();
         this.deploymentName = deploymentName;
         if (preDiscoveredBeansXmlConfigurations != null) {
             for (BeansXml beansXml : preDiscoveredBeansXmlConfigurations) {
                 if (beansXml != null) {
                     this.preDiscoveredBeansXmlConfigurations.add(beansXml);
                 }
+            }
+        }
+        if (preDiscoveredClassArchiveModes != null) {
+            for (Map.Entry<String, BeanArchiveMode> entry : preDiscoveredClassArchiveModes.entrySet()) {
+                if (entry == null) {
+                    continue;
+                }
+                String className = entry.getKey();
+                BeanArchiveMode mode = entry.getValue();
+                if (className == null || className.trim().isEmpty() || mode == null) {
+                    continue;
+                }
+                this.preDiscoveredClassArchiveModes.put(className, mode);
             }
         }
     }
@@ -112,7 +137,7 @@ public class SyringeBootstrap {
             // 3. Feed discovered classes to the container
             BeanArchiveMode managedArchiveMode = resolveManagedArchiveMode();
             for (Class<?> clazz : discoveredClasses) {
-                syringe.addExternallyDiscoveredClass(clazz, managedArchiveMode);
+                syringe.addExternallyDiscoveredClass(clazz, resolveManagedArchiveMode(clazz, managedArchiveMode));
             }
 
             // 4. Complete the initialization flow (processing, validation)
@@ -256,6 +281,14 @@ public class SyringeBootstrap {
             return BeanArchiveMode.NONE;
         }
         return BeanArchiveMode.IMPLICIT;
+    }
+
+    private BeanArchiveMode resolveManagedArchiveMode(Class<?> clazz, BeanArchiveMode fallbackMode) {
+        if (clazz == null) {
+            return fallbackMode;
+        }
+        BeanArchiveMode classMode = preDiscoveredClassArchiveModes.get(clazz.getName());
+        return classMode != null ? classMode : fallbackMode;
     }
 
     private boolean hasExtensionServiceDescriptor() {

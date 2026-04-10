@@ -7,7 +7,6 @@ import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.spi.*;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedTypeConfigurator;
-import jakarta.enterprise.util.Nonbinding;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -184,10 +183,22 @@ public class BeforeBeanDiscoveryImpl extends PhaseAware implements BeforeBeanDis
             if (!qualifierType.equals(method.getJavaMember().getDeclaringClass())) {
                 continue;
             }
-            if (method.isAnnotationPresent(Nonbinding.class) || hasNonbindingAnnotation(method.getJavaMember())) {
+            if (hasNonbindingMarker(method) || hasNonbindingAnnotation(method.getJavaMember())) {
                 registerDynamicNonbindingMember(qualifierType, method.getJavaMember().getName());
             }
         }
+    }
+
+    private boolean hasNonbindingMarker(AnnotatedMethod<?> method) {
+        if (method == null || method.getAnnotations() == null) {
+            return false;
+        }
+        for (Annotation annotation : method.getAnnotations()) {
+            if (annotation != null && hasNonbindingAnnotation(annotation.annotationType())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
