@@ -479,8 +479,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
 
             try {
                 Class<?> beanClass = InjectionPointImpl.loadClassWithContextClassLoader(beanClassName);
-                @SuppressWarnings({"rawtypes", "unchecked"})
-                Set<Bean<?>> beans = (Set) beanManager.getBeans(beanClass);
+                Set<Bean<?>> beans = beanManager.getBeans(beanClass);
                 if (beans == null || beans.isEmpty()) {
                     return null;
                 }
@@ -518,7 +517,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
                 Member resolvedMember = getMember();
                 if (resolvedMember instanceof Method) {
                     List<AnnotatedParameter<Object>> parameters =
-                            new AnnotatedMethodWrapper<Object>((Method) resolvedMember, null).getParameters();
+                            new AnnotatedMethodWrapper<>((Method) resolvedMember, null).getParameters();
                     if (annotatedParameterPosition >= 0 && annotatedParameterPosition < parameters.size()) {
                         return parameters.get(annotatedParameterPosition);
                     }
@@ -526,7 +525,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
                     @SuppressWarnings("unchecked")
                     Constructor<Object> constructor = (Constructor<Object>) resolvedMember;
                     List<AnnotatedParameter<Object>> parameters =
-                            new AnnotatedConstructorWrapper<Object>(constructor, null).getParameters();
+                            new AnnotatedConstructorWrapper<>(constructor, null).getParameters();
                     if (annotatedParameterPosition >= 0 && annotatedParameterPosition < parameters.size()) {
                         return parameters.get(annotatedParameterPosition);
                     }
@@ -536,7 +535,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
                     @SuppressWarnings("unchecked")
                     Class<Object> javaClass =
                             (Class<Object>) InjectionPointImpl.loadClassWithContextClassLoader(annotatedJavaClassName);
-                    return new SimpleAnnotatedType<Object>(javaClass);
+                    return new SimpleAnnotatedType<>(javaClass);
                 } catch (Exception ignored) {
                     // Fall through to metadata-only fallback.
                 }
@@ -585,11 +584,11 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
         private AnnotatedBaseTypeOnly(Type baseType, Set<Type> typeClosure, Set<Annotation> annotations) {
             this.baseType = baseType;
             this.typeClosure = typeClosure != null && !typeClosure.isEmpty()
-                    ? new LinkedHashSet<Type>(typeClosure)
-                    : Collections.<Type>singleton(baseType);
+                    ? new LinkedHashSet<>(typeClosure)
+                    : Collections.singleton(baseType);
             this.annotations = annotations != null
-                    ? new LinkedHashSet<Annotation>(annotations)
-                    : new LinkedHashSet<Annotation>();
+                    ? new LinkedHashSet<>(annotations)
+                    : new LinkedHashSet<>();
         }
 
         @Override
@@ -622,7 +621,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
             if (annotationType == null) {
                 return Collections.emptySet();
             }
-            Set<T> matches = new LinkedHashSet<T>();
+            Set<T> matches = new LinkedHashSet<>();
             for (Annotation annotation : annotations) {
                 if (annotationType.equals(annotation.annotationType())) {
                     matches.add(annotationType.cast(annotation));

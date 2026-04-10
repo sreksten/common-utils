@@ -30,9 +30,7 @@ public class SyringeSeContainer implements SeContainer {
 
     @Override
     public void close() {
-        if (!running) {
-            throw new IllegalStateException("SeContainer is already shut down");
-        }
+        ensureRunning();
         try {
             syringe.shutdown();
         } finally {

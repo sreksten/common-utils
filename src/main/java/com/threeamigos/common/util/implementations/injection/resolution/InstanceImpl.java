@@ -289,19 +289,17 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private boolean destroyViaBeanManager(T instance) {
-        BeanManager beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
+        BeanManagerImpl beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
         if (beanManager == null) {
             return false;
         }
 
         try {
-            if (beanManager instanceof BeanManagerImpl) {
-                if (((BeanManagerImpl) beanManager).destroyOwnedTransientReference(instance)) {
-                    return true;
-                }
+            if (beanManager.destroyOwnedTransientReference(instance)) {
+                return true;
             }
 
-            Annotation[] qualifierArray = qualifiers.toArray(new Annotation[qualifiers.size()]);
+            Annotation[] qualifierArray = qualifiers.toArray(new Annotation[0]);
             Set<Bean<?>> beans = beanManager.getBeans(requiredType, qualifierArray);
             if (beans == null || beans.isEmpty()) {
                 return false;
@@ -321,7 +319,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                                     " because context @" + scope.getSimpleName() +
                                     " does not support AlterableContext.destroy(Contextual)");
                 }
-                ((AlterableContext) context).destroy((Contextual<?>) resolved);
+                ((AlterableContext) context).destroy(resolved);
                 return true;
             }
 

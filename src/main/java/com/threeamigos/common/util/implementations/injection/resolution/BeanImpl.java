@@ -2342,12 +2342,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             return interceptorInstanceCache;
         }
         synchronized (interceptorTargetInstanceCache) {
-            Map<Class<?>, Object> targetCache = interceptorTargetInstanceCache.get(normalizedTarget);
-            if (targetCache == null) {
-                targetCache = new ConcurrentHashMap<Class<?>, Object>();
-                interceptorTargetInstanceCache.put(normalizedTarget, targetCache);
-            }
-            return targetCache;
+            return interceptorTargetInstanceCache.computeIfAbsent(normalizedTarget, k -> new ConcurrentHashMap<>());
         }
     }
 
@@ -2675,7 +2670,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
     }
 
     private boolean hasExcludeClassInterceptorsAnnotation(Annotation[] annotations) {
-        if (annotations == null || annotations.length == 0) {
+        if (annotations == null) {
             return false;
         }
         for (Annotation annotation : annotations) {
@@ -2731,10 +2726,6 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             current = current.getSuperclass();
         }
         return null;
-    }
-
-    private Object getOrCreateLegacyInterceptorInstance(Class<?> interceptorClass) {
-        return getOrCreateLegacyInterceptorInstance(interceptorClass, null);
     }
 
     private Object getOrCreateLegacyInterceptorInstance(Class<?> interceptorClass, Object interceptionTarget) {

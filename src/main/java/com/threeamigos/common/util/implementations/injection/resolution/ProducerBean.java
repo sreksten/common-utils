@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.resolution;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 
+import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
@@ -451,8 +452,7 @@ public class ProducerBean<T> implements Bean<T> {
         if (scopeType == null) {
             return false;
         }
-        Boolean passivating = com.threeamigos.common.util.implementations.injection.AnnotationsEnum
-                .getNormalScopePassivatingValue(scopeType);
+        Boolean passivating = AnnotationsEnum.getNormalScopePassivatingValue(scopeType);
         if (passivating != null) {
             return passivating;
         }
@@ -766,7 +766,7 @@ public class ProducerBean<T> implements Bean<T> {
             return false;
         }
         for (Annotation annotation : parameter.getAnnotations()) {
-            if (annotation != null && hasTransientReferenceAnnotation(annotation.annotationType())) {
+            if (hasTransientReferenceAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
@@ -787,7 +787,7 @@ public class ProducerBean<T> implements Bean<T> {
                 qualifiers.add(annotation);
             }
         }
-        return qualifiers.toArray(new Annotation[qualifiers.size()]);
+        return qualifiers.toArray(new Annotation[0]);
     }
 
     @SuppressWarnings("rawtypes")

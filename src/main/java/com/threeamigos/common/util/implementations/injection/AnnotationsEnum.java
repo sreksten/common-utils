@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import jakarta.annotation.Nonnull;
+
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Target;
 import java.lang.reflect.AnnotatedElement;
@@ -562,8 +564,8 @@ public enum AnnotationsEnum {
      * Returns the original scope type for all non-singleton scopes.
      */
     public static Class<? extends Annotation> normalizeSingletonToApplicationScoped(
-            Class<? extends Annotation> scopeType) {
-        if (scopeType != null && hasSingletonAnnotation(scopeType)) {
+            @Nonnull Class<? extends Annotation> scopeType) {
+        if (hasSingletonAnnotation(scopeType)) {
             return jakarta.enterprise.context.ApplicationScoped.class;
         }
         return scopeType;
