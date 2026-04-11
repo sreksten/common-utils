@@ -71,7 +71,7 @@ import static com.threeamigos.common.util.implementations.injection.AnnotationsE
  *   <li>Creates decorator instances via CDI (supports dependency injection)</li>
  *   <li>Injects @Delegate references automatically (field, constructor, or method injection)</li>
  *   <li>Handles multiple decorators with proper priority ordering</li>
- *   <li>Caches decorator classes for performance</li>
+ *   <li>Cache decorator classes for performance</li>
  *   <li>Supports interface-based and class-based decoration</li>
  * </ul>
  *
@@ -121,7 +121,7 @@ public class DecoratorAwareProxyGenerator {
     private final ConcurrentHashMap<Class<?>, Class<?>> decoratorProxyCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Class<?>, Class<?>> decoratedTypeBridgeProxyCache = new ConcurrentHashMap<>();
     private final Map<Object, DecoratorChain> activeChains =
-            Collections.synchronizedMap(new WeakHashMap<Object, DecoratorChain>());
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     public void clearCache() {
         decoratorProxyCache.clear();
@@ -533,21 +533,6 @@ public class DecoratorAwareProxyGenerator {
             matchedPosition = i;
         }
         return matchedPosition;
-    }
-
-    /**
-     * Resolves the decorator bean from the BeanManager.
-     *
-     * @param decoratorClass the decorator class
-     * @param beanManager the BeanManager
-     * @return the decorator bean, or null if not found
-     */
-    private Bean<?> resolveDecoratorBean(Class<?> decoratorClass, BeanManager beanManager) {
-        Set<Bean<?>> beans = beanManager.getBeans(decoratorClass);
-        if (beans.isEmpty()) {
-            return createSyntheticDecoratorBean(decoratorClass);
-        }
-        return beanManager.resolve(beans);
     }
 
     private Constructor<?> findInjectionConstructor(Class<?> decoratorClass) throws NoSuchMethodException {

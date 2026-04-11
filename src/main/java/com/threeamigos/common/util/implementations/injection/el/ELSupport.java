@@ -11,7 +11,6 @@ import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 
 import java.io.Serializable;
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -211,8 +210,7 @@ public final class ELSupport {
                 return EL_UNRESOLVED;
             }
 
-            @SuppressWarnings({"rawtypes", "unchecked"})
-            Bean<?> resolvedBean = (Bean<?>) beanManager.resolve((Set) beans);
+            Bean<?> resolvedBean = beanManager.resolve(beans);
             if (resolvedBean == null) {
                 return EL_UNRESOLVED;
             }
@@ -221,8 +219,7 @@ public final class ELSupport {
             CreationalContext<?> creationalContext =
                     beanManager.createCreationalContext((Bean) resolvedBean);
             Class<?> beanClass = resolvedBean.getBeanClass() != null ? resolvedBean.getBeanClass() : Object.class;
-            @SuppressWarnings({"rawtypes", "unchecked"})
-            Object reference = beanManager.getReference((Bean) resolvedBean, (Class) beanClass, creationalContext);
+            Object reference = beanManager.getReference(resolvedBean, beanClass, creationalContext);
             state.trackCreationalContext(creationalContext);
             return reference;
         }
@@ -445,11 +442,9 @@ public final class ELSupport {
 
     private static final class WrappedExpressionFactory extends ExpressionFactory implements Serializable {
         private static final long serialVersionUID = 1L;
-        private final BeanManagerImpl beanManager;
         private final ExpressionFactory delegate;
 
         private WrappedExpressionFactory(BeanManagerImpl beanManager, ExpressionFactory delegate) {
-            this.beanManager = beanManager;
             this.delegate = delegate;
         }
 
@@ -459,7 +454,7 @@ public final class ELSupport {
             if (valueExpression == null) {
                 return null;
             }
-            return new WrappedValueExpression(valueExpression, beanManager);
+            return new WrappedValueExpression(valueExpression);
         }
 
         @Override
@@ -468,7 +463,7 @@ public final class ELSupport {
             if (valueExpression == null) {
                 return null;
             }
-            return new WrappedValueExpression(valueExpression, beanManager);
+            return new WrappedValueExpression(valueExpression);
         }
 
         @Override
@@ -481,7 +476,7 @@ public final class ELSupport {
             if (methodExpression == null) {
                 return null;
             }
-            return new WrappedMethodExpression(methodExpression, beanManager);
+            return new WrappedMethodExpression(methodExpression);
         }
 
         @Override
@@ -493,12 +488,9 @@ public final class ELSupport {
     private static final class WrappedMethodExpression extends MethodExpression {
         private static final long serialVersionUID = 1L;
         private final MethodExpression delegate;
-        @SuppressWarnings("unused")
-        private final BeanManagerImpl beanManager;
 
-        private WrappedMethodExpression(MethodExpression delegate, BeanManagerImpl beanManager) {
+        private WrappedMethodExpression(MethodExpression delegate) {
             this.delegate = delegate;
-            this.beanManager = beanManager;
         }
 
         @Override
@@ -540,12 +532,9 @@ public final class ELSupport {
     private static final class WrappedValueExpression extends ValueExpression {
         private static final long serialVersionUID = 1L;
         private final ValueExpression delegate;
-        @SuppressWarnings("unused")
-        private final BeanManagerImpl beanManager;
 
-        private WrappedValueExpression(ValueExpression delegate, BeanManagerImpl beanManager) {
+        private WrappedValueExpression(ValueExpression delegate) {
             this.delegate = delegate;
-            this.beanManager = beanManager;
         }
 
         @Override
@@ -617,7 +606,7 @@ public final class ELSupport {
     private static final class ELResolutionState {
         private final Map<String, Object> values = new HashMap<>();
         private final Map<String, ELNamespace> namespaces = new HashMap<>();
-        private final List<CreationalContext<?>> creationalContexts = new ArrayList<CreationalContext<?>>();
+        private final List<CreationalContext<?>> creationalContexts = new ArrayList<>();
         private int evaluationDepth;
 
         private ELNamespace namespace(String prefix) {

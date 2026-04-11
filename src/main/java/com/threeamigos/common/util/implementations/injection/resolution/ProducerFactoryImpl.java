@@ -185,7 +185,7 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
             Method javaMethod = method.getJavaMember();
 
             for (java.lang.reflect.Parameter param : javaMethod.getParameters()) {
-                points.add(new InjectionPointImpl(param, declaringBean));
+                points.add(new InjectionPointImpl<>(param, declaringBean));
             }
 
             return points;
@@ -196,7 +196,7 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
             Object[] args = new Object[params.length];
 
             for (int i = 0; i < params.length; i++) {
-                InjectionPoint ip = new InjectionPointImpl(params[i], declaringBean);
+                InjectionPoint ip = new InjectionPointImpl<>(params[i], declaringBean);
                 args[i] = beanManager.getInjectableReference(ip, ctx);
             }
 
@@ -312,7 +312,7 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
             if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDisposesAnnotation(parameter)) {
                 args[i] = disposedInstance;
             } else {
-                InjectionPoint ip = new InjectionPointImpl(parameter, declaringBean);
+                InjectionPoint ip = new InjectionPointImpl<>(parameter, declaringBean);
                 args[i] = beanManager.getInjectableReference(ip, creationalContext);
             }
         }

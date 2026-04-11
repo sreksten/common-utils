@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
-import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.ObservesAsync;
 import jakarta.enterprise.event.Reception;
@@ -36,7 +35,6 @@ import java.util.Set;
  */
 public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigurator<T> {
 
-    private final KnowledgeBase knowledgeBase;
     private final boolean preserveNotifyCallbackWhenReadingObserverMethod;
     private Class<?> beanClass;
     private Type observedType;
@@ -51,22 +49,10 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
     /**
      * Creates an ObserverMethodConfigurator.
      *
-     * @param knowledgeBase the knowledge base to register the observer in
-     */
-    public ObserverMethodConfiguratorImpl(KnowledgeBase knowledgeBase) {
-        this(knowledgeBase, false);
-    }
-
-    /**
-     * Creates an ObserverMethodConfigurator.
-     *
-     * @param knowledgeBase the knowledge base to register the observer in
      * @param preserveNotifyCallbackWhenReadingObserverMethod whether read(ObserverMethod) should retain
      *                                                        notification behavior when notifyWith() is not invoked
      */
-    public ObserverMethodConfiguratorImpl(KnowledgeBase knowledgeBase,
-                                          boolean preserveNotifyCallbackWhenReadingObserverMethod) {
-        this.knowledgeBase = knowledgeBase;
+    public ObserverMethodConfiguratorImpl(boolean preserveNotifyCallbackWhenReadingObserverMethod) {
         this.preserveNotifyCallbackWhenReadingObserverMethod = preserveNotifyCallbackWhenReadingObserverMethod;
     }
 
@@ -157,7 +143,7 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
         Reception resolvedReception = this.reception;
         TransactionPhase resolvedTransactionPhase = this.transactionPhase;
         boolean resolvedAsync = this.async;
-        Set<Annotation> resolvedQualifiers = new HashSet<Annotation>();
+        Set<Annotation> resolvedQualifiers = new HashSet<>();
 
         for (Annotation annotation : annotations) {
             if (annotation == null) {

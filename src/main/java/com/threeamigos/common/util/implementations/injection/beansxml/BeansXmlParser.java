@@ -288,8 +288,8 @@ public class BeansXmlParser {
         setFeatureIfSupported(factory, "http://apache.org/xml/features/disallow-doctype-decl", true);
         setFeatureIfSupported(factory, "http://xml.org/sax/features/external-general-entities", false);
         setFeatureIfSupported(factory, "http://xml.org/sax/features/external-parameter-entities", false);
-        setAttributeIfSupported(factory, XMLConstants.ACCESS_EXTERNAL_DTD, "");
-        setAttributeIfSupported(factory, XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        setAttributeIfSupported(factory, XMLConstants.ACCESS_EXTERNAL_DTD);
+        setAttributeIfSupported(factory, XMLConstants.ACCESS_EXTERNAL_SCHEMA);
         if (schema != null) {
             factory.setSchema(schema);
         }
@@ -370,7 +370,7 @@ public class BeansXmlParser {
 
     private Scan buildScan(Element scanElement) throws Exception {
         Scan scan = new Scan();
-        List<Exclude> excludes = new ArrayList<Exclude>();
+        List<Exclude> excludes = new ArrayList<>();
         for (Element excludeElement : directChildren(scanElement, "exclude")) {
             excludes.add(buildExclude(excludeElement));
         }
@@ -383,7 +383,7 @@ public class BeansXmlParser {
         String name = trimToNull(excludeElement.getAttribute("name"));
         setFieldValue(exclude, "name", name);
 
-        List<IfClassAvailable> ifClassAvailable = new ArrayList<IfClassAvailable>();
+        List<IfClassAvailable> ifClassAvailable = new ArrayList<>();
         for (Element element : directChildren(excludeElement, "if-class-available")) {
             IfClassAvailable condition = new IfClassAvailable();
             setFieldValue(condition, "name", trimToNull(element.getAttribute("name")));
@@ -391,7 +391,7 @@ public class BeansXmlParser {
         }
         setFieldValue(exclude, "ifClassAvailable", ifClassAvailable);
 
-        List<IfClassNotAvailable> ifClassNotAvailable = new ArrayList<IfClassNotAvailable>();
+        List<IfClassNotAvailable> ifClassNotAvailable = new ArrayList<>();
         for (Element element : directChildren(excludeElement, "if-class-not-available")) {
             IfClassNotAvailable condition = new IfClassNotAvailable();
             setFieldValue(condition, "name", trimToNull(element.getAttribute("name")));
@@ -399,7 +399,7 @@ public class BeansXmlParser {
         }
         setFieldValue(exclude, "ifClassNotAvailable", ifClassNotAvailable);
 
-        List<IfSystemProperty> ifSystemProperty = new ArrayList<IfSystemProperty>();
+        List<IfSystemProperty> ifSystemProperty = new ArrayList<>();
         for (Element element : directChildren(excludeElement, "if-system-property")) {
             IfSystemProperty condition = new IfSystemProperty();
             setFieldValue(condition, "name", trimToNull(element.getAttribute("name")));
@@ -412,7 +412,7 @@ public class BeansXmlParser {
     }
 
     private List<String> collectDirectChildText(Element parent, String childName) {
-        List<String> values = new ArrayList<String>();
+        List<String> values = new ArrayList<>();
         for (Element element : directChildren(parent, childName)) {
             String value = trimToNull(element.getTextContent());
             if (value != null) {
@@ -423,7 +423,7 @@ public class BeansXmlParser {
     }
 
     private List<Element> directChildren(Element parent, String childName) {
-        List<Element> elements = new ArrayList<Element>();
+        List<Element> elements = new ArrayList<>();
         for (Node child = parent.getFirstChild(); child != null; child = child.getNextSibling()) {
             if (!(child instanceof Element)) {
                 continue;
@@ -453,9 +453,6 @@ public class BeansXmlParser {
             return localName;
         }
         String nodeName = node.getNodeName();
-        if (nodeName == null) {
-            return null;
-        }
         int colon = nodeName.indexOf(':');
         if (colon >= 0 && colon + 1 < nodeName.length()) {
             return nodeName.substring(colon + 1);
@@ -485,9 +482,9 @@ public class BeansXmlParser {
         }
     }
 
-    private void setAttributeIfSupported(DocumentBuilderFactory factory, String attribute, String value) {
+    private void setAttributeIfSupported(DocumentBuilderFactory factory, String attribute) {
         try {
-            factory.setAttribute(attribute, value);
+            factory.setAttribute(attribute, "");
         } catch (Exception ignored) {
             // Best effort across XML parser implementations.
         }

@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.util;
 
+import jakarta.annotation.Nonnull;
+
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -122,7 +124,7 @@ public final class TypeClosureHelper {
         }
         TypeVariable<?>[] typeParameters = rawType.getTypeParameters();
         if (preserveTypeVariableDeclarations && typeParameters.length > 0) {
-            // For generic bean classes declared as Class<?> (e.g. Baz<T>), preserve the
+            // For generic bean classes declared as Class<?> (e.g., Baz<T>), preserve the
             // declaration as a parameterized bean type instead of erasing to raw type.
             Type ownerType = rawType.getDeclaringClass();
             return new SimpleParameterizedType(rawType, typeParameters, ownerType);
@@ -195,12 +197,12 @@ public final class TypeClosureHelper {
         }
 
         @Override
-        public Type[] getActualTypeArguments() {
+        public @Nonnull Type[] getActualTypeArguments() {
             return actualTypeArguments.clone();
         }
 
         @Override
-        public Type getRawType() {
+        public @Nonnull Type getRawType() {
             return rawType;
         }
 
@@ -236,7 +238,7 @@ public final class TypeClosureHelper {
         }
 
         @Override
-        public Type getGenericComponentType() {
+        public @Nonnull Type getGenericComponentType() {
             return componentType;
         }
 
@@ -265,12 +267,12 @@ public final class TypeClosureHelper {
         }
 
         @Override
-        public Type[] getUpperBounds() {
+        public @Nonnull Type[] getUpperBounds() {
             return upperBounds.clone();
         }
 
         @Override
-        public Type[] getLowerBounds() {
+        public @Nonnull Type[] getLowerBounds() {
             return lowerBounds.clone();
         }
 

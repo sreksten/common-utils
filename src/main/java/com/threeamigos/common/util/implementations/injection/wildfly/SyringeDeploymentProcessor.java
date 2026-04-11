@@ -607,7 +607,7 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         if (beansXml == null || !"annotated".equals(normalizedMode)) {
             return false;
         }
-        if (beansXml.isBeanDiscoveryModeDeclared() || !beansXml.isLegacyJavaSunDescriptor()) {
+        if (beansXml.isBeanDiscoveryModeDeclared() || beansXml.isNotLegacyJavaSunDescriptor()) {
             return false;
         }
         String version = beansXml.getVersion();

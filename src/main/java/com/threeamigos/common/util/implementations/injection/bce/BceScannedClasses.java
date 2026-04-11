@@ -22,7 +22,7 @@ final class BceScannedClasses implements ScannedClasses {
             // ScannedClasses#add is a programmatic discovery hook.
             // Per CDI behavior this must make the class participate in discovery even
             // when archive defaults are annotated/implicit or the class was pre-discovered
-            // with a restrictive mode (e.g. NONE in managed bootstrap).
+            // with a restrictive mode (e.g., NONE in managed bootstrap).
             knowledgeBase.addProgrammatic(clazz, BeanArchiveMode.EXPLICIT);
             messageHandler.handleInfoMessage("[BCE] Added scanned class " + className);
         } catch (ClassNotFoundException e) {
@@ -31,17 +31,17 @@ final class BceScannedClasses implements ScannedClasses {
     }
 
     private Class<?> resolveClass(String className) throws ClassNotFoundException {
-        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-        if (tccl != null) {
+        ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+        if (ccl != null) {
             try {
-                return Class.forName(className, false, tccl);
+                return Class.forName(className, false, ccl);
             } catch (ClassNotFoundException ignored) {
                 // fall through to the container/module class loader
             }
         }
 
         ClassLoader fallback = BceScannedClasses.class.getClassLoader();
-        if (fallback != null && fallback != tccl) {
+        if (fallback != null && fallback != ccl) {
             return Class.forName(className, false, fallback);
         }
         return Class.forName(className);

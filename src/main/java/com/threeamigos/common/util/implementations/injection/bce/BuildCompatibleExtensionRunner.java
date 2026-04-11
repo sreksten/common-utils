@@ -28,6 +28,7 @@ import jakarta.enterprise.inject.build.compatible.spi.Types;
 import jakarta.enterprise.inject.build.compatible.spi.InvokerFactory;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.declarations.FieldInfo;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.configurator.AnnotatedFieldConfigurator;
@@ -77,7 +78,7 @@ public class BuildCompatibleExtensionRunner {
     private final Messages messages;
     private final MetaAnnotations metaAnnotations;
     private final ScannedClasses scannedClasses;
-    private final Map<Method, Set<String>> deliveredRegistrationModels = new HashMap<Method, Set<String>>();
+    private final Map<Method, Set<String>> deliveredRegistrationModels = new HashMap<>();
 
     public BuildCompatibleExtensionRunner(MessageHandler messageHandler,
                                           KnowledgeBase knowledgeBase,
@@ -499,8 +500,7 @@ public class BuildCompatibleExtensionRunner {
                 ": at most one model parameter is allowed from {BeanInfo, ObserverInfo, InterceptorInfo, InjectionPointInfo, DisposerInfo, ScopeInfo, StereotypeInfo}.");
         }
         if (phase == BceSupportedPhase.REGISTRATION && modelCount == 0 &&
-            !isRegistrationWithoutModelAllowed(method, seenInvokerFactory, seenContext,
-                seenTypes, seenMessages)) {
+            !isRegistrationWithoutModelAllowed(method, seenInvokerFactory, seenContext)) {
             throw new DefinitionException("Invalid BCE " + phase + " method " +
                 method.getDeclaringClass().getName() + "." + method.getName() +
                 ": exactly one model parameter is required from {BeanInfo, ObserverInfo, InterceptorInfo, InjectionPointInfo, DisposerInfo, ScopeInfo, StereotypeInfo}.");
@@ -509,9 +509,7 @@ public class BuildCompatibleExtensionRunner {
 
     private boolean isRegistrationWithoutModelAllowed(Method method,
                                                       boolean seenInvokerFactory,
-                                                      boolean seenContext,
-                                                      boolean seenTypes,
-                                                      boolean seenMessages) {
+                                                      boolean seenContext) {
         // Service-driven registration callbacks are allowed without a direct model parameter.
         if (seenInvokerFactory || seenContext) {
             return true;
@@ -519,19 +517,15 @@ public class BuildCompatibleExtensionRunner {
 
         Registration registration = getRegistrationAnnotation(method);
         Class<?>[] acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
-        boolean objectFiltered = containsObjectRegistrationType(acceptedTypes);
 
         // Parameterless registration callback is only meaningful as a broad registration checkpoint.
-        if (!seenTypes && !seenMessages) {
-            return objectFiltered;
-        }
 
         // Types/Messages-only signatures are accepted only for broad Object-filtered registration callbacks.
-        return objectFiltered;
+        return containsObjectRegistrationType(acceptedTypes);
     }
 
     private boolean containsObjectRegistrationType(Class<?>[] acceptedTypes) {
-        if (acceptedTypes == null || acceptedTypes.length == 0) {
+        if (acceptedTypes == null) {
             return false;
         }
         for (Class<?> acceptedType : acceptedTypes) {
@@ -603,7 +597,7 @@ public class BuildCompatibleExtensionRunner {
         if (isObserverInfo(modelType)) {
             List<ObserverInfo> observers = collectObserverInfosForPhase(phaseMethod, phase);
             for (ObserverInfo observerInfo : observers) {
-                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(observerInfo))) {
+                if (shouldNotDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(observerInfo))) {
                     continue;
                 }
                 invokeRegistrationOrValidationForModel(invocation, phase, null, observerInfo, null, null, null, null, null);
@@ -613,7 +607,7 @@ public class BuildCompatibleExtensionRunner {
         if (isInterceptorInfo(modelType)) {
             List<InterceptorInfo> interceptors = collectInterceptorInfosForPhase(phaseMethod, phase);
             for (InterceptorInfo interceptorInfo : interceptors) {
-                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(interceptorInfo))) {
+                if (shouldNotDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(interceptorInfo))) {
                     continue;
                 }
                 invokeRegistrationOrValidationForModel(invocation, phase, null, null, interceptorInfo, null, null, null, null);
@@ -623,7 +617,7 @@ public class BuildCompatibleExtensionRunner {
         if (isBeanInfo(modelType)) {
             List<BeanInfo> beans = collectBeanInfosForPhase(phaseMethod, phase);
             for (BeanInfo beanInfo : beans) {
-                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(beanInfo))) {
+                if (shouldNotDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(beanInfo))) {
                     continue;
                 }
                 invokeRegistrationOrValidationForModel(invocation, phase, beanInfo, null, null, null, null, null, null);
@@ -633,7 +627,7 @@ public class BuildCompatibleExtensionRunner {
         if (isInjectionPointInfo(modelType)) {
             List<InjectionPointInfo> injectionPoints = collectInjectionPointInfosForPhase(phaseMethod, phase);
             for (InjectionPointInfo injectionPointInfo : injectionPoints) {
-                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(injectionPointInfo))) {
+                if (shouldNotDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(injectionPointInfo))) {
                     continue;
                 }
                 invokeRegistrationOrValidationForModel(
@@ -644,7 +638,7 @@ public class BuildCompatibleExtensionRunner {
         if (isDisposerInfo(modelType)) {
             List<DisposerInfo> disposers = collectDisposerInfosForPhase(phaseMethod, phase);
             for (DisposerInfo disposerInfo : disposers) {
-                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(disposerInfo))) {
+                if (shouldNotDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(disposerInfo))) {
                     continue;
                 }
                 invokeRegistrationOrValidationForModel(
@@ -655,7 +649,7 @@ public class BuildCompatibleExtensionRunner {
         if (isScopeInfo(modelType)) {
             List<ScopeInfo> scopes = collectScopeInfosForPhase(phaseMethod, phase);
             for (ScopeInfo scopeInfo : scopes) {
-                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(scopeInfo))) {
+                if (shouldNotDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(scopeInfo))) {
                     continue;
                 }
                 invokeRegistrationOrValidationForModel(
@@ -666,7 +660,7 @@ public class BuildCompatibleExtensionRunner {
         if (isStereotypeInfo(modelType)) {
             List<StereotypeInfo> stereotypes = collectStereotypeInfosForPhase(phaseMethod, phase);
             for (StereotypeInfo stereotypeInfo : stereotypes) {
-                if (!shouldDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(stereotypeInfo))) {
+                if (shouldNotDeliverRegistrationModel(phaseMethod, phase, registrationModelKey(stereotypeInfo))) {
                     continue;
                 }
                 invokeRegistrationOrValidationForModel(
@@ -677,8 +671,8 @@ public class BuildCompatibleExtensionRunner {
 
     private List<BeanInfo> collectBeanInfosForPhase(Method phaseMethod,
                                                     BceSupportedPhase phase) {
-        List<BeanInfo> beans = new ArrayList<BeanInfo>();
-        Set<String> seenModelKeys = new LinkedHashSet<String>();
+        List<BeanInfo> beans = new ArrayList<>();
+        Set<String> seenModelKeys = new LinkedHashSet<>();
         if (phase == BceSupportedPhase.REGISTRATION) {
             Registration registration = getRegistrationAnnotation(phaseMethod);
             Class<?>[] acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
@@ -698,7 +692,7 @@ public class BuildCompatibleExtensionRunner {
                 }
             }
             for (InterceptorInfo interceptorInfo : collectInterceptorInfosForPhase(phaseMethod, phase)) {
-                BeanInfo beanInfo = (BeanInfo) interceptorInfo;
+                BeanInfo beanInfo = interceptorInfo;
                 if (seenModelKeys.add(registrationModelKey(beanInfo))) {
                     beans.add(beanInfo);
                 }
@@ -878,19 +872,15 @@ public class BuildCompatibleExtensionRunner {
         return "Z:" + injectionPointInfo.declaration().kind().name();
     }
 
-    private boolean shouldDeliverRegistrationModel(Method phaseMethod,
-                                                   BceSupportedPhase phase,
-                                                   String modelKey) {
+    private boolean shouldNotDeliverRegistrationModel(Method phaseMethod,
+                                                      BceSupportedPhase phase,
+                                                      String modelKey) {
         if (phase != BceSupportedPhase.REGISTRATION) {
-            return true;
+            return false;
         }
         synchronized (deliveredRegistrationModels) {
-            Set<String> delivered = deliveredRegistrationModels.get(phaseMethod);
-            if (delivered == null) {
-                delivered = new LinkedHashSet<String>();
-                deliveredRegistrationModels.put(phaseMethod, delivered);
-            }
-            return delivered.add(modelKey);
+            Set<String> delivered = deliveredRegistrationModels.computeIfAbsent(phaseMethod, k -> new LinkedHashSet<>());
+            return !delivered.add(modelKey);
         }
     }
 
@@ -952,7 +942,7 @@ public class BuildCompatibleExtensionRunner {
         if (qualifiers == null || qualifiers.isEmpty()) {
             return "";
         }
-        List<String> out = new ArrayList<String>();
+        List<String> out = new ArrayList<>();
         for (jakarta.enterprise.lang.model.AnnotationInfo qualifier : qualifiers) {
             if (qualifier == null) {
                 continue;
@@ -989,10 +979,7 @@ public class BuildCompatibleExtensionRunner {
             }
         }
         Class<?> beanClass = bean.getBeanClass();
-        if (beanClass != null && isClassAcceptedByRegistrationTypes(beanClass, acceptedTypes)) {
-            return true;
-        }
-        return false;
+        return beanClass != null && isClassAcceptedByRegistrationTypes(beanClass, acceptedTypes);
     }
 
     private boolean isBeanInfoAcceptedByRegistrationTypes(BeanInfo beanInfo, Class<?>[] acceptedTypes) {
@@ -1067,10 +1054,6 @@ public class BuildCompatibleExtensionRunner {
                 }
                 if (isObserverInfo(parameterType)) {
                     args[i] = observerInfo;
-                    continue;
-                }
-                if (isInterceptorInfo(parameterType)) {
-                    args[i] = interceptorInfo;
                     continue;
                 }
                 if (isBeanInfo(parameterType)) {
@@ -1330,8 +1313,7 @@ public class BuildCompatibleExtensionRunner {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private void applyEnhancementModelState(EnhancementModelState enhancementModelState) {
-        Set<Class<?>> affectedClasses = new LinkedHashSet<Class<?>>();
-        affectedClasses.addAll(enhancementModelState.classConfigs.keySet());
+        Set<Class<?>> affectedClasses = new LinkedHashSet<>(enhancementModelState.classConfigs.keySet());
         for (Method method : enhancementModelState.methodConfigs.keySet()) {
             affectedClasses.add(method.getDeclaringClass());
         }
@@ -1375,7 +1357,7 @@ public class BuildCompatibleExtensionRunner {
             }
 
             if (changed) {
-                knowledgeBase.setAnnotatedTypeOverride((Class) clazz, typeConfigurator.complete());
+                knowledgeBase.setAnnotatedTypeOverride(clazz, typeConfigurator.complete());
             }
         }
     }
@@ -1386,14 +1368,13 @@ public class BuildCompatibleExtensionRunner {
         addAnnotationsToType(typeConfigurator, annotations);
     }
 
-    @SuppressWarnings("unchecked")
     private boolean replaceFieldAnnotations(AnnotatedTypeConfiguratorImpl<?> typeConfigurator,
                                             Field field,
                                             Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
         for (AnnotatedFieldConfigurator<?> fieldConfigurator : typeConfigurator.fields()) {
             if (field.equals(fieldConfigurator.getAnnotated().getJavaMember())) {
                 fieldConfigurator.removeAll();
-                addAnnotationsToField((AnnotatedFieldConfigurator) fieldConfigurator, annotations);
+                addAnnotationsToField(fieldConfigurator, annotations);
                 return true;
             }
         }
@@ -1410,7 +1391,7 @@ public class BuildCompatibleExtensionRunner {
             }
 
             methodConfigurator.removeAll();
-            addAnnotationsToMethod((AnnotatedMethodConfigurator) methodConfigurator, methodConfig.info().annotations());
+            addAnnotationsToMethod(methodConfigurator, methodConfig.info().annotations());
 
             List<ParameterConfig> parameterConfigs = methodConfig.parameters();
             List<AnnotatedParameterConfigurator<?>> parameterConfigurators =
@@ -1419,8 +1400,7 @@ public class BuildCompatibleExtensionRunner {
             for (int i = 0; i < parameterCount; i++) {
                 AnnotatedParameterConfigurator<?> parameterConfigurator = parameterConfigurators.get(i);
                 parameterConfigurator.removeAll();
-                addAnnotationsToParameter((AnnotatedParameterConfigurator) parameterConfigurator,
-                        parameterConfigs.get(i).info().annotations());
+                addAnnotationsToParameter(parameterConfigurator, parameterConfigs.get(i).info().annotations());
             }
 
             return true;
@@ -1428,34 +1408,33 @@ public class BuildCompatibleExtensionRunner {
         return false;
     }
 
-    @SuppressWarnings("unchecked")
     private void addAnnotationsToType(AnnotatedTypeConfiguratorImpl<?> typeConfigurator,
-                                      Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
-        for (jakarta.enterprise.lang.model.AnnotationInfo annotationInfo : annotations) {
+                                      Collection<AnnotationInfo> annotations) {
+        for (AnnotationInfo annotationInfo : annotations) {
             typeConfigurator.add(BceMetadata.unwrapAnnotationInfo(annotationInfo));
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     private void addAnnotationsToField(AnnotatedFieldConfigurator fieldConfigurator,
-                                       Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
-        for (jakarta.enterprise.lang.model.AnnotationInfo annotationInfo : annotations) {
+                                       Collection<AnnotationInfo> annotations) {
+        for (AnnotationInfo annotationInfo : annotations) {
             fieldConfigurator.add(BceMetadata.unwrapAnnotationInfo(annotationInfo));
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     private void addAnnotationsToMethod(AnnotatedMethodConfigurator methodConfigurator,
-                                        Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
-        for (jakarta.enterprise.lang.model.AnnotationInfo annotationInfo : annotations) {
+                                        Collection<AnnotationInfo> annotations) {
+        for (AnnotationInfo annotationInfo : annotations) {
             methodConfigurator.add(BceMetadata.unwrapAnnotationInfo(annotationInfo));
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("rawtypes")
     private void addAnnotationsToParameter(AnnotatedParameterConfigurator parameterConfigurator,
-                                           Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
-        for (jakarta.enterprise.lang.model.AnnotationInfo annotationInfo : annotations) {
+                                           Collection<AnnotationInfo> annotations) {
+        for (AnnotationInfo annotationInfo : annotations) {
             parameterConfigurator.add(BceMetadata.unwrapAnnotationInfo(annotationInfo));
         }
     }

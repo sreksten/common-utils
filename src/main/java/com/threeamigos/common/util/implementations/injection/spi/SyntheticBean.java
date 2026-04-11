@@ -39,7 +39,7 @@ public class SyntheticBean<T> implements Bean<T>, PassivationCapable {
     // Injection points
     private final Set<InjectionPoint> injectionPoints;
     private final Map<T, CreationalContext<T>> contextsByInstance =
-            Collections.synchronizedMap(new IdentityHashMap<T, CreationalContext<T>>());
+            Collections.synchronizedMap(new IdentityHashMap<>());
 
     /**
      * Constructor for building synthetic beans.
@@ -150,7 +150,7 @@ public class SyntheticBean<T> implements Bean<T>, PassivationCapable {
             contextsByInstance.remove(instance);
         }
 
-        if (instance != null && DestroyedInstanceTracker.isDestroyed(instance)) {
+        if (DestroyedInstanceTracker.isDestroyed(instance)) {
             if (contextToRelease != null) {
                 contextToRelease.release();
             }

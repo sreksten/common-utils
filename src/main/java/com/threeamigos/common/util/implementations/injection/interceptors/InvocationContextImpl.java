@@ -276,10 +276,7 @@ public class InvocationContextImpl implements InvocationContext {
             currentPosition = interceptorPosition + 1;
             try {
                 return nextInterceptor.invoke(this);
-            } catch (Exception e) {
-                currentPosition = interceptorPosition;
-                throw e;
-            } catch (Error e) {
+            } catch (Exception | Error e) {
                 currentPosition = interceptorPosition;
                 throw e;
             }

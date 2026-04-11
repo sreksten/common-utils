@@ -197,28 +197,28 @@ public class CustomContextAdapter implements ScopeContext {
                '}';
     }
 
-    private boolean requiresSerializableParameters() {
-        return isPassivationCapable();
+    private boolean notRequiresSerializableParameters() {
+        return !isPassivationCapable();
     }
 
     private <T> Contextual<T> adaptContextual(Contextual<T> contextual) {
-        if (contextual == null || !requiresSerializableParameters()) {
+        if (contextual == null || notRequiresSerializableParameters()) {
             return contextual;
         }
         if (contextual instanceof Serializable) {
             return contextual;
         }
-        return new SerializableContextualAdapter<T>(contextual);
+        return new SerializableContextualAdapter<>(contextual);
     }
 
     private <T> CreationalContext<T> adaptCreationalContext(CreationalContext<T> creationalContext) {
-        if (creationalContext == null || !requiresSerializableParameters()) {
+        if (creationalContext == null || notRequiresSerializableParameters()) {
             return creationalContext;
         }
         if (creationalContext instanceof Serializable) {
             return creationalContext;
         }
-        return new SerializableCreationalContextAdapter<T>(creationalContext);
+        return new SerializableCreationalContextAdapter<>(creationalContext);
     }
 
     private static final class SerializableContextualAdapter<T> implements Contextual<T>, Serializable {

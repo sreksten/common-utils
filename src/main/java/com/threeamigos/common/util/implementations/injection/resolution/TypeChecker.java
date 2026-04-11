@@ -155,9 +155,6 @@ public class TypeChecker {
      * @throws DefinitionException if targetType contains type variables
      * @throws IllegalStateException if type hierarchy navigation fails unexpectedly
      */
-    /**
-     * Public entry point for type assignability checks, used across injection and observer matching.
-     */
     public boolean isAssignable(Type targetType, Type implementationType) {
         if (targetType instanceof TypeVariable || implementationType instanceof TypeVariable ||
             targetType instanceof WildcardType || implementationType instanceof WildcardType) {
@@ -173,7 +170,7 @@ public class TypeChecker {
      */
     public boolean isEventTypeAssignable(Type observedEventType, Type eventType) {
         // CDI observer resolution allows a parameterized event type to match a raw observed type
-        // when raw types are assignable (e.g. observe Box, fire Box<Integer, String, Random>).
+        // when raw types are assignable (e.g., observe Box, fire Box<Integer, String, Random>).
         if (observedEventType instanceof Class<?> && eventType instanceof ParameterizedType) {
             Class<?> observedRaw = normalizePrimitive((Class<?>) observedEventType);
             Class<?> eventRaw = normalizePrimitive(RawTypeExtractor.getRawType(eventType));
@@ -195,34 +192,6 @@ public class TypeChecker {
         return isLookupTypeVariableCompatible(requiredType, beanType);
     }
 
-    /**
-     * Internal implementation of type assignability checking (not cached).
-     *
-     * <p>This method performs the actual type checking logic:
-     * <ol>
-     *   <li>Validates that the target is a legal injection point</li>
-     *   <li>Checks if types are identical</li>
-     *   <li>Handles intersection types via TypeVariable bounds</li>
-     *   <li>Verifies raw type assignability</li>
-     *   <li>For parameterized types, resolves generic arguments and checks invariance</li>
-     *   <li>For generic arrays, recursively checks component types</li>
-     * </ol>
-     *
-     * <p><b>Intersection Types:</b>
-     * Java represents intersection types (e.g., {@code T extends Serializable & Comparable<T>})
-     * through {@link TypeVariable#getBounds()}, which returns multiple bounds. When checking
-     * assignability, the implementation must be assignable to ALL bounds of the intersection.
-     *
-     * @param targetType the target injection point type
-     * @param implementationType the candidate bean type
-     * @return true if implementationType is assignable to targetType
-     * @throws DefinitionException if targetType contains type variables
-     * @throws IllegalStateException if type navigation fails unexpectedly
-     */
-    boolean isAssignableInternal(Type targetType, Type implementationType) {
-        return isAssignableInternal(targetType, implementationType, true);
-    }
-
     boolean isAssignableInternal(Type targetType, Type implementationType, boolean validateTarget) {
         if (validateTarget) {
             validateInjectionPoint(targetType);
@@ -236,7 +205,7 @@ public class TypeChecker {
         if (targetType instanceof TypeVariable) {
             TypeVariable<?> tv = (TypeVariable<?>) targetType;
             Type[] bounds = tv.getBounds();
-            if (bounds == null || bounds.length == 0 || isOnlyObjectBound(bounds)) {
+            if (bounds.length == 0 || isOnlyObjectBound(bounds)) {
                 return true;
             }
             for (Type bound : bounds) {
@@ -253,7 +222,7 @@ public class TypeChecker {
             TypeVariable<?> tv = (TypeVariable<?>) implementationType;
             Type[] bounds = tv.getBounds();
 
-            if (bounds == null || bounds.length == 0 || isOnlyObjectBound(bounds)) {
+            if (bounds.length == 0 || isOnlyObjectBound(bounds)) {
                 return true; // Raw/erased type variable accepts any target
             }
 
@@ -350,7 +319,7 @@ public class TypeChecker {
         }
 
         for (int i = 0; i < requiredArgs.length; i++) {
-            if (!isLookupTypeArgumentCompatible(requiredArgs[i], beanArgs[i])) {
+            if (isNotLookupTypeArgumentCompatible(requiredArgs[i], beanArgs[i])) {
                 return false;
             }
         }
@@ -370,33 +339,33 @@ public class TypeChecker {
         return false;
     }
 
-    private boolean isLookupTypeArgumentCompatible(Type requiredArgument, Type beanArgument) {
+    private boolean isNotLookupTypeArgumentCompatible(Type requiredArgument, Type beanArgument) {
         if (requiredArgument instanceof TypeVariable<?>) {
             if (beanArgument instanceof TypeVariable<?>) {
-                return isRequiredTypeVariableAssignableToBeanTypeVariable(
+                return !isRequiredTypeVariableAssignableToBeanTypeVariable(
                         (TypeVariable<?>) requiredArgument,
                         (TypeVariable<?>) beanArgument);
             }
             if (beanArgument instanceof WildcardType) {
-                return isWildcardCompatible(requiredArgument, (WildcardType) beanArgument);
+                return !isWildcardCompatible(requiredArgument, (WildcardType) beanArgument);
             }
-            return false;
+            return true;
         }
 
         if (requiredArgument instanceof ParameterizedType && beanArgument instanceof ParameterizedType) {
             Type[] requiredNested = ((ParameterizedType) requiredArgument).getActualTypeArguments();
             Type[] beanNested = ((ParameterizedType) beanArgument).getActualTypeArguments();
             if (requiredNested.length != beanNested.length) {
-                return false;
+                return true;
             }
             for (int i = 0; i < requiredNested.length; i++) {
-                if (!isLookupTypeArgumentCompatible(requiredNested[i], beanNested[i])) {
-                    return false;
+                if (isNotLookupTypeArgumentCompatible(requiredNested[i], beanNested[i])) {
+                    return true;
                 }
             }
         }
 
-        return true;
+        return false;
     }
 
     private Class<?> normalizePrimitive(Class<?> type) {
@@ -559,26 +528,7 @@ public class TypeChecker {
      * <p>This method handles type argument matching with the following rules:
      * <ul>
      *   <li>Exact equality: {@code String} = {@code String}</li>
-     *   <li>Wildcards/TypeVariables in t2 are accepted (raw type compatibility)</li>
-     *   <li>Nested parameterized types are checked recursively</li>
-     *   <li>Raw types can match parameterized types (with warning semantics)</li>
-     *   <li><b>Invariance:</b> {@code String} does NOT match {@code Object}</li>
-     * </ul>
-     *
-     * <p>Note: t1 (target) cannot be a wildcard or type variable due to
-     * {@link #validateInjectionPoint(Type)} validation.
-     *
-     * @param t1 the target type argument (from injection point)
-     * @param t2 the candidate type argument (from implementation)
-     * @return true if t2 is compatible with t1
-     */
-    /**
-     * Checks if type argument {@code t2} is compatible with type argument {@code t1}.
-     *
-     * <p>This method handles type argument matching with the following rules:
-     * <ul>
-     *   <li>Exact equality: {@code String} = {@code String}</li>
-     *   <li>Wildcards in t2: checked against t1 using wildcard bound rules (CDI 4.1)</li>
+     *   <li>Wildcards in t2: checked against t1 using wildcard-bound rules (CDI 4.1)</li>
      *   <li>TypeVariables in t2 are accepted (raw type compatibility)</li>
      *   <li>Nested parameterized types are checked recursively</li>
      *   <li>Raw types can match parameterized types (with warning semantics)</li>
@@ -662,8 +612,8 @@ public class TypeChecker {
             return matchParameterizedTypes(t1, t2);
         }
 
-        // Handle raw type (Class) in t1 vs ParameterizedType in t2
-        // Example: List vs ArrayList<String>
+        // Handle raw type (Class) in t1 vs. ParameterizedType in t2
+        // Example: List vs. ArrayList<String>
         if (t1 instanceof Class<?> && t2 instanceof ParameterizedType) {
             Class<?> raw1 = (Class<?>) t1;
             ParameterizedType pt2 = (ParameterizedType) t2;
@@ -671,8 +621,8 @@ public class TypeChecker {
             return raw1.isAssignableFrom(raw2);
         }
 
-        // Handle ParameterizedType in t1 vs raw type (Class) in t2
-        // Example: List<Object> vs ArrayList (raw)
+        // Handle ParameterizedType in t1 vs. raw type (Class) in t2
+        // Example: List<Object> vs. ArrayList (raw)
         if (t1 instanceof ParameterizedType && t2 instanceof Class<?>) {
             ParameterizedType pt1 = (ParameterizedType) t1;
             Class<?> raw1 = (Class<?>) pt1.getRawType();
@@ -837,8 +787,8 @@ public class TypeChecker {
      * // Can inject into: List&lt;String&gt; ✅, List&lt;Integer&gt; ✅, List&lt;anything&gt; ✅
      * </pre>
      *
-     * @param injectionPointType the type required at injection point (e.g., Integer)
-     * @param producerWildcard the wildcard from producer bean (e.g., ? extends Number)
+     * @param injectionPointType the type required at the injection point (e.g., Integer)
+     * @param producerWildcard the wildcard from producer bean (e.g., extends Number)
      * @return true if the producer wildcard can satisfy the injection point type
      */
     private boolean isWildcardCompatible(Type injectionPointType, WildcardType producerWildcard) {
@@ -850,7 +800,7 @@ public class TypeChecker {
             return true;
         }
 
-        // ? extends T: injection point type must be assignable to T (or equal to T)
+        // ? extends T: the injection point type must be assignable to T (or equal to T)
         // Example: List<? extends Number> can provide List<Integer> since Integer extends Number
         if (upperBounds.length > 0 && lowerBounds.length == 0) {
             for (Type upperBound : upperBounds) {
@@ -867,7 +817,7 @@ public class TypeChecker {
             return false;
         }
 
-        // ? super T: injection point type must be a supertype of T (or equal to T)
+        // ? super T: the injection point type must be a supertype of T (or equal to T)
         // Example: List<? super Integer> can provide List<Number> since Number is super of Integer
         if (lowerBounds.length > 0) {
             for (Type lowerBound : lowerBounds) {
@@ -942,8 +892,8 @@ public class TypeChecker {
      * t1 = Map&lt;String, List&lt;Integer&gt;&gt;
      * t2 = HashMap&lt;String, ArrayList&lt;Integer&gt;&gt;
      * Resolves HashMap to Map, then recursively checks:
-     * - String vs String ✓
-     * - List&lt;Integer&gt; vs ArrayList&lt;Integer&gt; (recursive resolution) ✓
+     * - String vs. String ✓
+     * - List&lt;Integer&gt; vs. ArrayList&lt;Integer&gt; (recursive resolution) ✓
      *
      * // Deep nesting:
      * t1 = Map&lt;String, Map&lt;String, List&lt;Integer&gt;&gt;&gt;

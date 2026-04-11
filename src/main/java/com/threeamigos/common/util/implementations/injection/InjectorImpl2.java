@@ -383,7 +383,7 @@ public class InjectorImpl2 implements Injector {
         programmaticBean.setQualifiers(new HashSet<>(qualifiers));
 
         // Register with KnowledgeBase
-        knowledgeBase.addProgrammaticBean(type, qualifiers, programmaticBean);
+        knowledgeBase.addProgrammaticBean(programmaticBean);
     }
 
     /**

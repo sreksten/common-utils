@@ -18,11 +18,11 @@ import com.threeamigos.common.util.implementations.injection.util.LegacyNewQuali
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
+import jakarta.annotation.Nonnull;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
-import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -55,7 +55,7 @@ import static com.threeamigos.common.util.implementations.injection.util.Qualifi
  *
  * <p>Special handling for built-in beans:
  * <ul>
- *   <li><b>InjectionPoint</b> - Contextual metadata about current injection point</li>
+ *   <li><b>InjectionPoint</b> - Contextual metadata about the current injection point</li>
  *   <li><b>Instance&lt;T&gt;</b> - Programmatic bean lookup</li>
  *   <li><b>Provider&lt;T&gt;</b> - Lazy dependency resolution</li>
  *   <li><b>Event&lt;T&gt;</b> - Programmatic event firing</li>
@@ -135,7 +135,7 @@ public class BeanResolver implements DependencyResolver {
                     throw new IllegalStateException("Bean metadata is not available in this context");
                 }
                 if (Bean.class.equals(rawType) && hasDecoratedQualifier(effectiveQualifiers)) {
-                    return resolveDecoratedBeanMetadata(ip, parameterizedType, effectiveQualifiers);
+                    return resolveDecoratedBeanMetadata(ip, parameterizedType);
                 }
                 return ip.getBean();
             }
@@ -253,7 +253,7 @@ public class BeanResolver implements DependencyResolver {
     public Object resolveDeclaringBeanInstance(Class<?> declaringClass) {
         // Find the managed bean for the declaring class.
         // ProducerBean#getBeanClass() returns the declaring class too, but using that here
-        // would recurse infinitely when the producer tries to obtain its declaring instance.
+        // would recurse infinitely when the producer tries to get its declaring instance.
         for (Bean<?> bean : knowledgeBase.getValidBeans()) {
             if (bean instanceof ProducerBean) {
                 continue;
@@ -311,7 +311,7 @@ public class BeanResolver implements DependencyResolver {
             // Check type match
             boolean typeMatches = false;
             for (Type beanType : bean.getTypes()) {
-                if (!sameRawType(requiredType, beanType)) {
+                if (notSameRawType(requiredType, beanType)) {
                     continue;
                 }
                 if (typeChecker.isLookupTypeAssignable(requiredType, beanType)) {
@@ -326,7 +326,7 @@ public class BeanResolver implements DependencyResolver {
 
             // Check qualifier match
             if (qualifiersMatchIncludingBeanName(requiredQualifiers, bean)) {
-                if (!isBeanClassAccessibleFromCurrentInjectionPoint(bean)) {
+                if (isNotBeanClassAccessibleFromCurrentInjectionPoint(bean)) {
                     continue;
                 }
                 matches.add(bean);
@@ -365,7 +365,7 @@ public class BeanResolver implements DependencyResolver {
 
             boolean typeMatches = false;
             for (Type beanType : bean.getTypes()) {
-                if (!sameRawType(requiredType, beanType)) {
+                if (notSameRawType(requiredType, beanType)) {
                     continue;
                 }
                 if (typeChecker.isLookupTypeAssignable(requiredType, beanType)) {
@@ -376,7 +376,7 @@ public class BeanResolver implements DependencyResolver {
             if (!typeMatches) {
                 continue;
             }
-            if (!isBeanClassAccessibleFromCurrentInjectionPoint(bean)) {
+            if (isNotBeanClassAccessibleFromCurrentInjectionPoint(bean)) {
                 continue;
             }
 
@@ -479,13 +479,13 @@ public class BeanResolver implements DependencyResolver {
         return Optional.of(winner);
     }
 
-    private boolean sameRawType(Type requiredType, Type beanType) {
+    private boolean notSameRawType(Type requiredType, Type beanType) {
         if (requiredType == null || beanType == null) {
-            return false;
+            return true;
         }
         if (requiredType instanceof java.lang.reflect.TypeVariable ||
                 requiredType instanceof java.lang.reflect.WildcardType) {
-            return true;
+            return false;
         }
 
         Class<?> requiredRaw;
@@ -494,13 +494,13 @@ public class BeanResolver implements DependencyResolver {
             requiredRaw = normalizePrimitiveType(RawTypeExtractor.getRawType(requiredType));
             beanRaw = normalizePrimitiveType(RawTypeExtractor.getRawType(beanType));
         } catch (RuntimeException e) {
-            return true;
+            return false;
         }
 
         if (requiredRaw == null || beanRaw == null) {
-            return true;
+            return false;
         }
-        return requiredRaw.equals(beanRaw);
+        return !requiredRaw.equals(beanRaw);
     }
 
     private Class<?> normalizePrimitiveType(Class<?> type) {
@@ -531,7 +531,7 @@ public class BeanResolver implements DependencyResolver {
         Set<Class<?>> specializedSuperclasses = new HashSet<>();
         for (Bean<?> candidate : candidates) {
             Class<?> beanClass = candidate.getBeanClass();
-            if (beanClass != null && hasSpecializesAnnotation(beanClass)) {
+            if (hasSpecializesAnnotation(beanClass)) {
                 specializedSuperclasses.addAll(collectSpecializedSuperclasses(beanClass));
             }
         }
@@ -547,7 +547,7 @@ public class BeanResolver implements DependencyResolver {
 
     private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
         Set<Class<?>> out = new HashSet<>();
-        if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
+        if (!hasSpecializesAnnotation(beanClass)) {
             return out;
         }
         Class<?> current = beanClass.getSuperclass();
@@ -586,8 +586,7 @@ public class BeanResolver implements DependencyResolver {
     }
 
     private Object resolveDecoratedBeanMetadata(InjectionPoint injectionPoint,
-                                                ParameterizedType requiredType,
-                                                Annotation[] qualifiers) {
+                                                ParameterizedType requiredType) {
         if (injectionPoint == null || injectionPoint.getBean() == null) {
             throw new IllegalStateException("@Decorated Bean metadata is not available in this context");
         }
@@ -1009,21 +1008,21 @@ public class BeanResolver implements DependencyResolver {
         return false;
     }
 
-    private boolean isBeanClassAccessibleFromCurrentInjectionPoint(Bean<?> bean) {
+    private boolean isNotBeanClassAccessibleFromCurrentInjectionPoint(Bean<?> bean) {
         if (bean == null) {
-            return false;
+            return true;
         }
         InjectionPoint injectionPoint = getCurrentInjectionPoint();
         Class<?> beanClass = bean.getBeanClass();
         if (injectionPoint == null) {
-            return beanClass == null || !Modifier.isPrivate(beanClass.getModifiers());
+            return beanClass != null && Modifier.isPrivate(beanClass.getModifiers());
         }
         Member member = injectionPoint.getMember();
         Class<?> declaringClass = member != null ? member.getDeclaringClass() : null;
         if (declaringClass == null && injectionPoint.getBean() != null) {
             declaringClass = injectionPoint.getBean().getBeanClass();
         }
-        return isClassAccessibleTo(beanClass, declaringClass);
+        return !isClassAccessibleTo(beanClass, declaringClass);
     }
 
     private boolean isClassAccessibleTo(Class<?> beanClass, Class<?> consumerClass) {
@@ -1171,7 +1170,7 @@ public class BeanResolver implements DependencyResolver {
      * Why proxies are needed:
      * - Allows injecting short-lived beans (RequestScoped) into long-lived beans (ApplicationScoped)
      * - The proxy ensures each method call gets the correct contextual instance
-     * - Without proxies, you'd get the wrong instance (e.g., same RequestScoped instance for all requests)
+     * - Without proxies, you'd get the wrong instance (e.g., the same RequestScoped instance for all requests)
      * <p>
      * For pseudo-scopes (Dependent), this returns the actual instance directly since
      * Dependent beans are created fresh for each injection point and don't need proxies.
@@ -1184,7 +1183,7 @@ public class BeanResolver implements DependencyResolver {
             // For normal scopes, return a client proxy
             // The proxy will delegate to the contextual instance on each method call
             T proxy = contextManager.createClientProxy(bean);
-            return maybeDecorateResolvedInstance(bean, proxy, new CreationalContextImpl<T>());
+            return maybeDecorateResolvedInstance(bean, proxy, new CreationalContextImpl<>());
         } else {
             // For pseudo-scopes like @Dependent, return the actual instance
             ScopeContext context = contextManager.getContext(scope);
@@ -1241,7 +1240,7 @@ public class BeanResolver implements DependencyResolver {
         if (resolved.isEmpty()) {
             return Collections.emptyList();
         }
-        List<DecoratorInfo> infos = new ArrayList<DecoratorInfo>();
+        List<DecoratorInfo> infos = new ArrayList<>();
         for (Decorator<?> decorator : resolved) {
             DecoratorInfo info = findDecoratorInfoByClass(decorator.getBeanClass());
             if (info != null) {
@@ -1340,10 +1339,10 @@ public class BeanResolver implements DependencyResolver {
             return baseInstance;
         }
 
-        Set<Annotation> normalizedQualifiers = new HashSet<Annotation>(qualifiers);
+        Set<Annotation> normalizedQualifiers = new HashSet<>(qualifiers);
         normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
 
-        Set<Type> instanceBeanTypes = new HashSet<Type>();
+        Set<Type> instanceBeanTypes = new HashSet<>();
         instanceBeanTypes.add(Instance.class);
         instanceBeanTypes.add(Object.class);
         instanceBeanTypes.add(parameterizedInstanceType(type));
@@ -1357,7 +1356,7 @@ public class BeanResolver implements DependencyResolver {
 
         @SuppressWarnings("unchecked")
         Instance<T> decoratedInstance = (Instance<T>) decoratorAwareProxyGenerator
-                .createDecoratorChain(baseInstance, decorators, owningBeanManager, new CreationalContextImpl<Object>())
+                .createDecoratorChain(baseInstance, decorators, owningBeanManager, new CreationalContextImpl<>())
                 .getOutermostInstance();
         return decoratedInstance;
     }
@@ -1365,12 +1364,12 @@ public class BeanResolver implements DependencyResolver {
     private ParameterizedType parameterizedInstanceType(final Type argumentType) {
         return new ParameterizedType() {
             @Override
-            public Type[] getActualTypeArguments() {
+            public @Nonnull Type[] getActualTypeArguments() {
                 return new Type[]{argumentType};
             }
 
             @Override
-            public Type getRawType() {
+            public @Nonnull Type getRawType() {
                 return Instance.class;
             }
 
@@ -1384,12 +1383,12 @@ public class BeanResolver implements DependencyResolver {
     private ParameterizedType parameterizedProviderType(final Type argumentType) {
         return new ParameterizedType() {
             @Override
-            public Type[] getActualTypeArguments() {
+            public @Nonnull Type[] getActualTypeArguments() {
                 return new Type[]{argumentType};
             }
 
             @Override
-            public Type getRawType() {
+            public @Nonnull Type getRawType() {
                 return Provider.class;
             }
 
@@ -1403,12 +1402,12 @@ public class BeanResolver implements DependencyResolver {
     private ParameterizedType parameterizedIterableType(final Type argumentType) {
         return new ParameterizedType() {
             @Override
-            public Type[] getActualTypeArguments() {
+            public @Nonnull Type[] getActualTypeArguments() {
                 return new Type[]{argumentType};
             }
 
             @Override
-            public Type getRawType() {
+            public @Nonnull Type getRawType() {
                 return Iterable.class;
             }
 
@@ -1421,10 +1420,10 @@ public class BeanResolver implements DependencyResolver {
 
     /**
      * Applies CDI iterator() ambiguity semantics for Instance:
-     * - unsatisfied => empty set
-     * - ambiguous with at least one alternative => eliminate non-alternatives, then
-     *   if all remaining have explicit priority keep highest-priority subset
-     * - ambiguous with no alternatives => keep all candidates
+     * - Unsatisfied => empty set
+     * - Ambiguous with at least one alternative => eliminate non-alternatives, then
+     *   if all remaining have explicit priority, keep the highest-priority subset
+     * - Ambiguous with no alternatives => keep all candidates
      */
     private Collection<Bean<?>> findMatchingBeansForIterator(Type requiredType, Annotation[] qualifiers) {
         Collection<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
@@ -1507,7 +1506,7 @@ public class BeanResolver implements DependencyResolver {
             return baseEvent;
         }
 
-        Set<Type> eventBeanTypes = new HashSet<Type>();
+        Set<Type> eventBeanTypes = new HashSet<>();
         eventBeanTypes.add(Event.class);
         eventBeanTypes.add(Object.class);
         eventBeanTypes.add(parameterizedEventType(eventType));
@@ -1519,7 +1518,7 @@ public class BeanResolver implements DependencyResolver {
 
         @SuppressWarnings("unchecked")
         Event<T> decoratedEvent = (Event<T>) decoratorAwareProxyGenerator
-                .createDecoratorChain(baseEvent, decorators, owningBeanManager, new CreationalContextImpl<Object>())
+                .createDecoratorChain(baseEvent, decorators, owningBeanManager, new CreationalContextImpl<>())
                 .getOutermostInstance();
         return decoratedEvent;
     }
@@ -1532,7 +1531,7 @@ public class BeanResolver implements DependencyResolver {
         Set<Annotation> normalizedQualifiers = extractQualifiers(qualifiers);
         normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
 
-        Set<Type> injectionPointTypes = new HashSet<Type>();
+        Set<Type> injectionPointTypes = new HashSet<>();
         injectionPointTypes.add(InjectionPoint.class);
         injectionPointTypes.add(Object.class);
 
@@ -1542,19 +1541,19 @@ public class BeanResolver implements DependencyResolver {
         }
 
         return (InjectionPoint) decoratorAwareProxyGenerator
-                .createDecoratorChain(injectionPoint, decorators, owningBeanManager, new CreationalContextImpl<Object>())
+                .createDecoratorChain(injectionPoint, decorators, owningBeanManager, new CreationalContextImpl<>())
                 .getOutermostInstance();
     }
 
     private ParameterizedType parameterizedEventType(final Type eventType) {
         return new ParameterizedType() {
             @Override
-            public Type[] getActualTypeArguments() {
+            public @Nonnull Type[] getActualTypeArguments() {
                 return new Type[]{eventType};
             }
 
             @Override
-            public Type getRawType() {
+            public @Nonnull Type getRawType() {
                 return Event.class;
             }
 
@@ -1638,7 +1637,7 @@ public class BeanResolver implements DependencyResolver {
     /**
      * Sets the current injection point context for InjectionPoint bean resolution.
      *
-     * <p>This method must be called by BeanImpl before resolving dependencies
+     * <p>BeanImpl must call this method before resolving dependencies
      * to provide the correct contextual InjectionPoint metadata.
      *
      * <p><b>Thread Safety:</b> Uses ThreadLocal, safe for concurrent injection.
@@ -1655,7 +1654,7 @@ public class BeanResolver implements DependencyResolver {
     /**
      * Clears the current injection point context after resolution completes.
      *
-     * <p>This prevents memory leaks in thread pools and ensures clean state.
+     * <p>This prevents memory leaks in thread pools and ensures a clean state.
      */
     public void clearCurrentInjectionPoint() {
         Deque<InjectionPoint> stack = currentInjectionPoint.get();
@@ -1692,7 +1691,7 @@ public class BeanResolver implements DependencyResolver {
         if (stack.isEmpty()) {
             return null;
         }
-        // Prefer an owning non-InjectionPoint site when available (e.g. dependent
+        // Prefer an owning non-InjectionPoint site when available (e.g., dependent
         // beans instantiated for an outer injection point).
         for (InjectionPoint injectionPoint : stack) {
             if (!isInjectionPointMetadataType(injectionPoint.getType())) {

@@ -236,7 +236,7 @@ public enum AnnotationsEnum {
     INTERCEPTED(annotationClass("javax.enterprise.inject.Intercepted"), jakarta.enterprise.inject.Intercepted.class),
 
     /**
-     * Built-in qualifier for obtaining decorated bean metadata in decorators.<br/>
+     * Built-in qualifier for getting decorated bean metadata in decorators.<br/>
      * Maps: {@code javax.enterprise.inject.Decorated}, {@code jakarta.enterprise.inject.Decorated}<br/>
      * Since: CDI 1.1
      */

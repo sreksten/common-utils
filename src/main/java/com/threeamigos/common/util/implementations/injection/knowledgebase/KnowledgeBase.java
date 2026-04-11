@@ -42,7 +42,7 @@ public class KnowledgeBase {
     private final Map<Class<?>, Constructor<?>> constructorsMap = new ConcurrentHashMap<>();
 
     // Producer/Disposer tracking
-    // ProducerBeans are also added to the beans collection, but we keep separate reference for convenience
+    // ProducerBeans are also added to the bean collection, but we keep separate reference for convenience
     private final Collection<ProducerBean<?>> producerBeans = new ConcurrentLinkedQueue<>();
 
     // Interceptor/Decorator tracking (legacy - for backward compatibility)
@@ -101,11 +101,11 @@ public class KnowledgeBase {
 
     // Programmatically enabled alternatives (fully qualified class names)
     private final Set<String> programmaticallyEnabledAlternatives = ConcurrentHashMap.newKeySet();
-    // Final application interceptor order (e.g. from AfterTypeDiscovery / beans.xml)
+    // Final application interceptor order (e.g., from AfterTypeDiscovery / beans.xml)
     private final Map<String, Integer> applicationInterceptorOrder = new ConcurrentHashMap<>();
-    // Final application alternative order (e.g. from AfterTypeDiscovery)
+    // Final application alternative order (e.g., from AfterTypeDiscovery)
     private final Map<String, Integer> applicationAlternativeOrder = new ConcurrentHashMap<>();
-    // Final application decorator order (e.g. from AfterTypeDiscovery)
+    // Final application decorator order (e.g., from AfterTypeDiscovery)
     private final Map<String, Integer> applicationDecoratorOrder = new ConcurrentHashMap<>();
     // True when AfterTypeDiscovery observers changed the corresponding list from its initial value.
     private volatile boolean afterTypeDiscoveryAlternativesCustomized;
@@ -139,8 +139,7 @@ public class KnowledgeBase {
                 classArchiveModes.put(clazz, mode);
             }
         } else if (!excludedClasses.contains(clazz) && mode != null) {
-            BeanArchiveMode currentMode = classArchiveModes.get(clazz);
-            classArchiveModes.put(clazz, mergeBeanArchiveMode(currentMode, mode));
+            classArchiveModes.compute(clazz, (k, currentMode) -> mergeBeanArchiveMode(currentMode, mode));
         }
     }
 
@@ -204,8 +203,8 @@ public class KnowledgeBase {
         vetoedTypes.remove(clazz);
     }
 
-    public boolean isImplicitBeanArchiveScanningEnabled() {
-        return implicitBeanArchiveScanningEnabled;
+    public boolean isImplicitBeanArchiveScanningDisabled() {
+        return !implicitBeanArchiveScanningEnabled;
     }
 
     public void setImplicitBeanArchiveScanningEnabled(boolean implicitBeanArchiveScanningEnabled) {
@@ -384,7 +383,7 @@ public class KnowledgeBase {
 
     /**
      * Adds a ProducerBean to the knowledge base.
-     * ProducerBeans are also added to the general beans collection.
+     * ProducerBeans are also added to the general beans' collection.
      */
     public void addProducerBean(ProducerBean<?> producerBean) {
         producerBeans.add(producerBean);
@@ -461,7 +460,7 @@ public class KnowledgeBase {
     /**
      * Returns the aggregate beans.xml decorator order index for a decorator class.
      *
-     * <p>Decorators listed in any beans.xml are considered enabled and their relative order
+     * <p>Decorators listed in any beans.xml are considered enabled, and their relative order
      * is determined by first-appearance across all beans.xml files (in scan order) and
      * by position within the list. Decorators not present return -1.</p>
      *
@@ -776,7 +775,7 @@ public class KnowledgeBase {
     /**
      * Returns all interceptor bindings registered in the system.
      *
-     * <p>This returns the unique set of all interceptor binding annotation types
+     * <p>This returns the unique set of all interceptor-binding annotation types
      * that are present on any registered interceptor.
      *
      * @return set of all interceptor binding annotation types
@@ -932,7 +931,7 @@ public class KnowledgeBase {
      * @return true if the bindings are equal
      */
     private boolean areBindingsEqual(Annotation binding1, Annotation binding2) {
-        // Use AnnotationComparator to respect @Nonbinding members
+        // Use AnnotationComparator to respect @Nonbinding members;
         // According to CDI 4.1 spec, interceptor binding members marked with @Nonbinding
         // must be ignored when comparing bindings for interceptor resolution
         return AnnotationComparator.equals(binding1, binding2);
@@ -946,11 +945,9 @@ public class KnowledgeBase {
      * <p>This allows beans to be registered programmatically outside classpath scanning,
      * useful for testing, dynamic configuration, and third-party library integration.
      *
-     * @param type the interface or abstract type
-     * @param qualifiers the qualifiers for this binding
      * @param bean the bean implementation
      */
-    public void addProgrammaticBean(java.lang.reflect.Type type, java.util.Collection<java.lang.annotation.Annotation> qualifiers, jakarta.enterprise.inject.spi.Bean<?> bean) {
+    public void addProgrammaticBean(jakarta.enterprise.inject.spi.Bean<?> bean) {
         beans.add(bean);
     }
 

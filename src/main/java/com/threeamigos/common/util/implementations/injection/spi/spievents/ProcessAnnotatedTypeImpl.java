@@ -65,7 +65,7 @@ public class ProcessAnnotatedTypeImpl<T> extends PhaseAware implements ProcessAn
                 annotatedType.getJavaClass().getName());
         this.configureCalledInCurrentInvocation.set(Boolean.TRUE);
         if (configurator == null) {
-            configurator = new AnnotatedTypeConfiguratorImpl<T>(annotatedType);
+            configurator = new AnnotatedTypeConfiguratorImpl<>(annotatedType);
         }
         return configurator;
     }

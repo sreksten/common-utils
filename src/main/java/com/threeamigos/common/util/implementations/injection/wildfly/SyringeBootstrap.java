@@ -359,7 +359,7 @@ public class SyringeBootstrap {
         }
         // CDI 1.0 legacy descriptor semantics (java.sun namespace + no discovery mode attribute)
         // default to "all"; modern empty beans.xml defaults to "annotated".
-        if (beansXml.isBeanDiscoveryModeDeclared() || !beansXml.isLegacyJavaSunDescriptor()) {
+        if (beansXml.isBeanDiscoveryModeDeclared() || beansXml.isNotLegacyJavaSunDescriptor()) {
             return false;
         }
         String version = beansXml.getVersion();

@@ -50,7 +50,7 @@ final class BceAnnotationBuilderFactory implements AnnotationBuilderFactory {
         public Object invoke(Object proxy, Method method, Object[] args) {
             String methodName = method.getName();
             if ("build".equals(methodName)) {
-                return BceMetadata.annotationInfo(buildAnnotationProxy());
+                return BceMetadata.annotationInfo(BceCommonFunctions.buildAnnotationProxy(annotationType, members));
             }
             if ("member".equals(methodName) && args != null) {
                 if (args.length == 2) {
@@ -58,17 +58,12 @@ final class BceAnnotationBuilderFactory implements AnnotationBuilderFactory {
                     return proxy;
                 }
                 if (args.length == 3 && args[1] instanceof Class && args[2] instanceof String) {
-                    @SuppressWarnings("unchecked")
-                    Class<? extends Enum> enumClass = (Class<? extends Enum>) args[1];
-                    Object enumValue = Enum.valueOf(enumClass, (String) args[2]);
+                    Object enumValue = evaluateEnumFromClass(args[1], args[2]);
                     members.put((String) args[0], normalizeValue(enumValue));
                     return proxy;
                 }
                 if (args.length == 3 && args[1] instanceof ClassInfo && args[2] instanceof String) {
-                    Class<?> enumClass = BceMetadata.unwrapClassInfo((ClassInfo) args[1]);
-                    @SuppressWarnings("unchecked")
-                    Class<? extends Enum> castEnumClass = (Class<? extends Enum>) enumClass;
-                    Object enumValue = Enum.valueOf(castEnumClass, (String) args[2]);
+                    Object enumValue = evaluateEnumFromClassInfo(args[1], args[2]);
                     members.put((String) args[0], normalizeValue(enumValue));
                     return proxy;
                 }
@@ -78,14 +73,9 @@ final class BceAnnotationBuilderFactory implements AnnotationBuilderFactory {
                 if (args.length == 1) {
                     value = args[0];
                 } else if (args.length == 2 && args[0] instanceof Class && args[1] instanceof String) {
-                    @SuppressWarnings("unchecked")
-                    Class<? extends Enum> enumClass = (Class<? extends Enum>) args[0];
-                    value = Enum.valueOf(enumClass, (String) args[1]);
+                    value = evaluateEnumFromClass(args[0], args[1]);
                 } else if (args.length == 2 && args[0] instanceof ClassInfo && args[1] instanceof String) {
-                    Class<?> enumClass = BceMetadata.unwrapClassInfo((ClassInfo) args[0]);
-                    @SuppressWarnings("unchecked")
-                    Class<? extends Enum> castEnumClass = (Class<? extends Enum>) enumClass;
-                    value = Enum.valueOf(castEnumClass, (String) args[1]);
+                    value = evaluateEnumFromClassInfo(args[0], args[1]);
                 } else {
                     value = args[0];
                 }
@@ -103,65 +93,41 @@ final class BceAnnotationBuilderFactory implements AnnotationBuilderFactory {
             return proxy;
         }
 
+        private Object evaluateEnumFromClassInfo(Object enumClassInfoAsObject, Object enumValue) {
+            Class<?> enumClass = BceMetadata.unwrapClassInfo((ClassInfo) enumClassInfoAsObject);
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Object object = Enum.valueOf((Class<? extends Enum>)enumClass, (String) enumValue);
+            return object;
+        }
+
+        private Object evaluateEnumFromClass(Object enumClassAsObject, Object enumValue) {
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Class<? extends Enum> enumClass = (Class<? extends Enum>) enumClassAsObject;
+            @SuppressWarnings("unchecked")
+            Object object = Enum.valueOf(enumClass, (String) enumValue);
+            return object;
+        }
+
         private Object normalizeValue(Object value) {
             if (value instanceof ClassInfo) {
                 return BceMetadata.unwrapClassInfo((ClassInfo) value);
             }
             if (value instanceof ClassInfo[]) {
-                ClassInfo[] infos = (ClassInfo[]) value;
-                Class<?>[] out = new Class<?>[infos.length];
-                for (int i = 0; i < infos.length; i++) {
-                    out[i] = infos[i] != null ? BceMetadata.unwrapClassInfo(infos[i]) : null;
-                }
-                return out;
+                return BceMetadata.unwrapClassInfo((ClassInfo[]) value);
             }
             if (value instanceof Type) {
                 return BceMetadata.unwrapType((Type) value);
             }
             if (value instanceof Type[]) {
-                Type[] types = (Type[]) value;
-                Class<?>[] out = new Class<?>[types.length];
-                for (int i = 0; i < types.length; i++) {
-                    out[i] = types[i] != null ? BceMetadata.unwrapType(types[i]) : null;
-                }
-                return out;
+                return BceMetadata.unwrapTypes((Type[]) value);
             }
             if (value instanceof AnnotationInfo) {
                 return BceMetadata.unwrapAnnotationInfo((AnnotationInfo) value);
             }
             if (value instanceof AnnotationInfo[]) {
-                AnnotationInfo[] infos = (AnnotationInfo[]) value;
-                Annotation[] out = new Annotation[infos.length];
-                for (int i = 0; i < infos.length; i++) {
-                    out[i] = infos[i] != null ? BceMetadata.unwrapAnnotationInfo(infos[i]) : null;
-                }
-                return out;
+                return BceMetadata.unwrapAnnotationInfo((AnnotationInfo[]) value);
             }
             return value;
-        }
-
-        private Annotation buildAnnotationProxy() {
-            return (Annotation) Proxy.newProxyInstance(
-                annotationType.getClassLoader(),
-                new Class<?>[]{annotationType},
-                (proxy, method, args) -> {
-                    String methodName = method.getName();
-                    switch (methodName) {
-                        case "annotationType":
-                            return annotationType;
-                        case "toString":
-                            return "@" + annotationType.getName() + members;
-                        case "hashCode":
-                            return members.hashCode();
-                        case "equals":
-                            return proxy == args[0];
-                    }
-                    if (members.containsKey(methodName)) {
-                        return members.get(methodName);
-                    }
-                    return method.getDefaultValue();
-                }
-            );
         }
     }
 }

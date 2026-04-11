@@ -33,10 +33,6 @@ public class JSR330Validator {
         this.strict = strict;
     }
 
-    public boolean isStrict() {
-        return strict;
-    }
-
     public <T> boolean isValid(Class<T> clazz) {
         Objects.requireNonNull(clazz, "Class cannot be null");
 

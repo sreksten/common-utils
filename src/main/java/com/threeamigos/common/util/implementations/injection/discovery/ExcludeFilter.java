@@ -51,7 +51,7 @@ public class ExcludeFilter {
      * <p>A class is excluded if ANY beans.xml contains an exclude rule that:
      * <ul>
      *   <li>Matches the class name (pattern match)</li>
-     *   <li>Has all conditions satisfied (if any)</li>
+     *   <li>Have all conditions satisfied (if any)</li>
      * </ul>
      *
      * @param className the fully qualified class name to check

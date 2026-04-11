@@ -24,10 +24,7 @@ import com.threeamigos.common.util.implementations.injection.util.tx.Transaction
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionSynchronizationCallbacks;
 import jakarta.annotation.Nonnull;
-import jakarta.annotation.PreDestroy;
-import jakarta.enterprise.context.ConversationScoped;
 import jakarta.enterprise.context.RequestScoped;
-import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.event.Event;
@@ -607,7 +604,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         Set<Annotation> newQualifiers = mergeSelectedQualifiers(this.qualifiers, qualifiers);
 
         // Create raw EventImpl and cast - this is safe because EventImpl<U> implements Event<U>
-        return new EventImpl<U>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager,
+        return new EventImpl<>(subtype.getType(), newQualifiers, knowledgeBase, beanResolver, contextManager,
                 transactionServices, tokenProvider, firingInjectionPoint, allowStartupEventDispatch);
     }
 
@@ -651,7 +648,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
     }
 
     private Set<Annotation> mergeSelectedQualifiers(Set<Annotation> existing, Annotation... additional) {
-        Set<Annotation> merged = new LinkedHashSet<Annotation>();
+        Set<Annotation> merged = new LinkedHashSet<>();
         if (existing != null) {
             for (Annotation qualifier : existing) {
                 if (qualifier == null) {
@@ -662,9 +659,9 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
 
         Map<Class<? extends Annotation>, Annotation> replacements =
-                new LinkedHashMap<Class<? extends Annotation>, Annotation>();
+                new LinkedHashMap<>();
         Set<Class<? extends Annotation>> replacedNonRepeatableTypes =
-                new HashSet<Class<? extends Annotation>>();
+                new HashSet<>();
 
         if (additional != null) {
             for (Annotation qualifier : additional) {
@@ -714,19 +711,19 @@ public class EventImpl<T> implements Event<T>, Serializable {
     }
 
     private boolean isDefaultQualifierType(Class<? extends Annotation> qualifierType) {
-        return qualifierType != null && hasDefaultAnnotation(qualifierType);
+        return hasDefaultAnnotation(qualifierType);
     }
 
     private boolean isAnyQualifierType(Class<? extends Annotation> qualifierType) {
-        return qualifierType != null && hasAnyAnnotation(qualifierType);
+        return hasAnyAnnotation(qualifierType);
     }
 
     private boolean isRepeatableQualifier(Class<? extends Annotation> qualifierType) {
-        return AnnotationsEnum.hasRepeatableAnnotation(qualifierType);
+        return hasRepeatableAnnotation(qualifierType);
     }
 
     private boolean hasRuntimeRetention(Class<? extends Annotation> annotationType) {
-        java.lang.annotation.Retention retention = AnnotationsEnum.getRetentionAnnotation(annotationType);
+        java.lang.annotation.Retention retention = getRetentionAnnotation(annotationType);
         return retention != null && RetentionPolicy.RUNTIME.equals(retention.value());
     }
 
@@ -758,7 +755,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
                 resolveRuntimeTypeVariables(selectedEventType, runtimeTypeClosure);
 
         for (TypeVariable<?> runtimeTypeVariable : runtimeType.getTypeParameters()) {
-            Type resolvedType = resolveTypeVariable(runtimeTypeVariable, resolvedTypeVariables, new HashSet<TypeVariable<?>>());
+            Type resolvedType = resolveTypeVariable(runtimeTypeVariable, resolvedTypeVariables, new HashSet<>());
             if (resolvedType == null || containsUnresolvableTypeVariable(resolvedType)) {
                 return false;
             }
@@ -851,7 +848,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
 
     private Type resolveTypeVariables(Type type, Map<TypeVariable<?>, Type> resolvedTypeVariables) {
         if (type instanceof TypeVariable<?>) {
-            Type resolved = resolveTypeVariable((TypeVariable<?>) type, resolvedTypeVariables, new HashSet<TypeVariable<?>>());
+            Type resolved = resolveTypeVariable((TypeVariable<?>) type, resolvedTypeVariables, new HashSet<>());
             return resolved != null ? resolved : type;
         }
 
@@ -935,13 +932,13 @@ public class EventImpl<T> implements Event<T>, Serializable {
         return resolvedDispatchTypes;
     }
 
-    private boolean matchesObservedType(Type observedType, Set<Type> eventDispatchTypes) {
+    private boolean isNotMatchingObservedType(Type observedType, Set<Type> eventDispatchTypes) {
         for (Type dispatchType : eventDispatchTypes) {
             if (typeChecker.isEventTypeAssignable(observedType, dispatchType)) {
-                return true;
+                return false;
             }
         }
-        return false;
+        return true;
     }
 
     private boolean isContainerLifecycleEventType(Class<?> type) {
@@ -1083,12 +1080,12 @@ public class EventImpl<T> implements Event<T>, Serializable {
             }
 
             // Check if observer event type is assignable from at least one resolved dispatch type.
-            if (!matchesObservedType(observerInfo.getEventType(), eventDispatchTypes)) {
+            if (isNotMatchingObservedType(observerInfo.getEventType(), eventDispatchTypes)) {
                 continue;
             }
 
             // CDI qualifier matching must honor annotation members and @Nonbinding.
-            if (!QualifiersHelper.eventQualifiersMatch(observerInfo.getQualifiers(), qualifiers)) {
+            if (QualifiersHelper.notEventQualifiersMatch(observerInfo.getQualifiers(), qualifiers)) {
                 continue;
             }
 
@@ -1103,12 +1100,12 @@ public class EventImpl<T> implements Event<T>, Serializable {
             }
 
             // Check if observer event type is assignable from at least one resolved dispatch type.
-            if (!matchesObservedType(syntheticObserver.getObservedType(), eventDispatchTypes)) {
+            if (isNotMatchingObservedType(syntheticObserver.getObservedType(), eventDispatchTypes)) {
                 continue;
             }
 
             // CDI qualifier matching must honor annotation members and @Nonbinding.
-            if (!QualifiersHelper.eventQualifiersMatch(syntheticObserver.getObservedQualifiers(), qualifiers)) {
+            if (QualifiersHelper.notEventQualifiersMatch(syntheticObserver.getObservedQualifiers(), qualifiers)) {
                 continue;
             }
 
@@ -1143,7 +1140,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         if (observerMethod == null) {
             return false;
         }
-        // Observer metadata is validated during discovery; avoid re-validating via reflection
+        // Observer metadata is validated during discovery; avoid revalidating it via reflection
         // so ProcessAnnotatedType wrapper metadata stays effective at runtime.
         return observerInfo.isAsync() == async;
     }
@@ -1152,23 +1149,23 @@ public class EventImpl<T> implements Event<T>, Serializable {
         if (declaringBean == null) {
             return true;
         }
-        if (!isBeanEnabledForObserverDispatch(declaringBean)) {
+        if (isNotBeanEnabledForObserverDispatch(declaringBean)) {
             return false;
         }
         return !isSpecializedOutForObserverDispatch(declaringBean);
     }
 
-    private boolean isBeanEnabledForObserverDispatch(Bean<?> bean) {
+    private boolean isNotBeanEnabledForObserverDispatch(Bean<?> bean) {
         if (bean == null) {
-            return false;
-        }
-        if (!bean.isAlternative()) {
             return true;
         }
-        if (bean instanceof BeanImpl<?>) {
-            return ((BeanImpl<?>) bean).isAlternativeEnabled();
+        if (!bean.isAlternative()) {
+            return false;
         }
-        return true;
+        if (bean instanceof BeanImpl<?>) {
+            return !((BeanImpl<?>) bean).isAlternativeEnabled();
+        }
+        return false;
     }
 
     private boolean isSpecializedOutForObserverDispatch(Bean<?> bean) {
@@ -1181,7 +1178,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             if (candidate == null || candidate == bean) {
                 continue;
             }
-            if (!isBeanEnabledForObserverDispatch(candidate)) {
+            if (isNotBeanEnabledForObserverDispatch(candidate)) {
                 continue;
             }
             Class<?> candidateClass = candidate.getBeanClass();
@@ -1321,6 +1318,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             // Check if this is a synthetic observer (registered via AfterBeanDiscovery.addObserverMethod())
             if (observerInfo.isSynthetic()) {
                 // Invoke the synthetic observer's notify() method
+                @SuppressWarnings("rawtypes")
                 ObserverMethod syntheticObserver = observerInfo.getSyntheticObserver();
                 final Object eventPayload = event;
                 final EventMetadata metadata = new EventMetadataImpl(qualifiers, firingInjectionPoint, metadataType);
@@ -1406,7 +1404,6 @@ public class EventImpl<T> implements Event<T>, Serializable {
                         CreationalContext<Object> context =
                                 (CreationalContext<Object>) resolveBeanManager()
                                         .createCreationalContext((Contextual) declaringBean);
-                        @SuppressWarnings({"unchecked", "rawtypes"})
                         ScopeContext scopeContext = contextManager.getContext(declaringBean.getScope());
                         @SuppressWarnings({"unchecked", "rawtypes"})
                         Object contextualInstance = scopeContext.get((Bean) declaringBean, context);
@@ -1439,10 +1436,6 @@ public class EventImpl<T> implements Event<T>, Serializable {
                 }
             }
 
-        } catch (InvocationTargetException e) {
-            throw toRuntimeObserverFailure(e);
-        } catch (RuntimeException e) {
-            throw toRuntimeObserverFailure(e);
         } catch (Exception e) {
             throw toRuntimeObserverFailure(e);
         }
@@ -1574,7 +1567,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
 
         if (AnnotationsEnum.hasDependentAnnotation(method.getDeclaringClass())) {
-            if (declaringBean != null && destroyBeanInstance(declaringBean, beanInstance)) {
+            if (destroyBeanInstance(declaringBean, beanInstance)) {
                 return;
             }
             if (destroyDependentInstance(method.getDeclaringClass(), method.getDeclaringClass().getAnnotations(),
@@ -1607,7 +1600,6 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     private boolean destroyBeanInstance(Bean<?> bean, Object instance) {
         return destroyBeanInstance(bean, instance, null);
     }
@@ -1668,7 +1660,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         if (annotations == null || annotations.length == 0) {
             return new Annotation[0];
         }
-        Set<Annotation> qualifierSet = new HashSet<Annotation>();
+        Set<Annotation> qualifierSet = new HashSet<>();
         for (Annotation annotation : annotations) {
             if (annotation == null) {
                 continue;
@@ -1677,10 +1669,10 @@ public class EventImpl<T> implements Event<T>, Serializable {
                 qualifierSet.add(annotation);
             }
         }
-        return qualifierSet.toArray(new Annotation[qualifierSet.size()]);
+        return qualifierSet.toArray(new Annotation[0]);
     }
 
-    private Object invokeOnRuntimeMethod(Object targetInstance, Method method, Object[] args) throws Exception {
+    private void invokeOnRuntimeMethod(Object targetInstance, Method method, Object[] args) throws Exception {
         Method invocable = method;
         if (targetInstance != null && !Modifier.isStatic(method.getModifiers())) {
             Method resolved = findMethodInHierarchy(targetInstance.getClass(), method.getName(), method.getParameterTypes());
@@ -1689,7 +1681,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             }
         }
         invocable.setAccessible(true);
-        return invocable.invoke(targetInstance, args);
+        invocable.invoke(targetInstance, args);
     }
 
     private Method findMethodInHierarchy(Class<?> type, String methodName, Class<?>[] parameterTypes) {
@@ -1787,7 +1779,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             Parameter parameter = parameters[parameterIndex];
             AnnotatedParameter<?> annotatedParameter = AnnotatedMetadataHelper.findAnnotatedParameter(override, parameter);
             if (annotatedParameter != null) {
-                return new InjectionPointImpl(
+                return new InjectionPointImpl<>(
                         parameter,
                         declaringBean,
                         annotatedParameter.getBaseType(),
@@ -1805,10 +1797,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         if (parameterType == null) {
             return false;
         }
-        if (AnnotationsEnum.hasDependentAnnotation(parameterType)) {
-            return true;
-        }
-        return false;
+        return AnnotationsEnum.hasDependentAnnotation(parameterType);
     }
 
     private void invokeObserverList(List<ObserverMethodInfo> observers, Object event) {
@@ -1874,30 +1863,6 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
     }
 
-    private ContextActivation tryProviderRestore(Class<? extends Annotation> scope, ContextSnapshot snapshot) {
-        if (snapshot == null) {
-            return null;
-        }
-
-        if (hasConversationScopedAnnotation(scope) && snapshot.conversationId != null) {
-            ScopeContext ctx = contextManager.getContext(ConversationScoped.class);
-            if (ctx instanceof ConversationScopedContext) {
-                ((ConversationScopedContext) ctx).beginConversation(snapshot.conversationId);
-                return new ContextActivation((ConversationScopedContext) ctx, snapshot.conversationId, true);
-            }
-        }
-
-        if (hasSessionScopedAnnotation(scope) && snapshot.sessionId != null) {
-            ScopeContext ctx = contextManager.getContext(SessionScoped.class);
-            if (ctx instanceof SessionScopedContext && snapshot.sessionData != null) {
-                ((SessionScopedContext) ctx).activateSession(snapshot.sessionId, snapshot.sessionData);
-                return new ContextActivation((SessionScopedContext) ctx, snapshot.sessionId, true);
-            }
-        }
-
-        return null;
-    }
-
     /**
      * Tracks temporary context activations (currently RequestScoped only).
      */
@@ -1937,42 +1902,6 @@ public class EventImpl<T> implements Event<T>, Serializable {
             this.deactivateRequest = false;
             this.endConversation = false;
             this.deactivateSession = false;
-        }
-
-        private ContextActivation(RequestScopedContext requestCtx) {
-            this.skip = false;
-            this.requestCtx = requestCtx;
-            this.conversationCtx = null;
-            this.sessionCtx = null;
-            this.conversationId = null;
-            this.sessionId = null;
-            this.deactivateRequest = true;
-            this.endConversation = false;
-            this.deactivateSession = false;
-        }
-
-        private ContextActivation(ConversationScopedContext conversationCtx, String conversationId, boolean endConversation) {
-            this.skip = false;
-            this.requestCtx = null;
-            this.conversationCtx = conversationCtx;
-            this.sessionCtx = null;
-            this.conversationId = conversationId;
-            this.sessionId = null;
-            this.deactivateRequest = false;
-            this.endConversation = endConversation;
-            this.deactivateSession = false;
-        }
-
-        private ContextActivation(SessionScopedContext sessionCtx, String sessionId, boolean deactivateSession) {
-            this.skip = false;
-            this.requestCtx = null;
-            this.conversationCtx = null;
-            this.sessionCtx = sessionCtx;
-            this.conversationId = null;
-            this.sessionId = sessionId;
-            this.deactivateRequest = false;
-            this.endConversation = false;
-            this.deactivateSession = deactivateSession;
         }
 
         boolean isSkip() {
@@ -2028,7 +1957,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
         return new SerializedEventReference(
                 makeSerializableType(eventType),
-                new LinkedHashSet<Annotation>(qualifiers),
+                new LinkedHashSet<>(qualifiers),
                 allowStartupEventDispatch,
                 beanManagerId
         );
@@ -2132,14 +2061,13 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
 
         private static Set<Annotation> withRepeatableQualifierContainers(Set<Annotation> qualifiers) {
-            Set<Annotation> normalized = new LinkedHashSet<Annotation>();
+            Set<Annotation> normalized = new LinkedHashSet<>();
             if (qualifiers == null || qualifiers.isEmpty()) {
                 return normalized;
             }
             normalized.addAll(qualifiers);
 
-            Map<Class<? extends Annotation>, List<Annotation>> repeatablesByContainer =
-                    new LinkedHashMap<Class<? extends Annotation>, List<Annotation>>();
+            Map<Class<? extends Annotation>, List<Annotation>> repeatablesByContainer = new LinkedHashMap<>();
             for (Annotation qualifier : qualifiers) {
                 if (qualifier == null) {
                     continue;
@@ -2150,11 +2078,8 @@ public class EventImpl<T> implements Event<T>, Serializable {
                     continue;
                 }
                 Class<? extends Annotation> containerType = repeatable.value();
-                List<Annotation> repeated = repeatablesByContainer.get(containerType);
-                if (repeated == null) {
-                    repeated = new ArrayList<Annotation>();
-                    repeatablesByContainer.put(containerType, repeated);
-                }
+                List<Annotation> repeated = repeatablesByContainer.computeIfAbsent(containerType,
+                        k -> new ArrayList<>());
                 repeated.add(qualifier);
             }
 
@@ -2291,12 +2216,12 @@ public class EventImpl<T> implements Event<T>, Serializable {
             }
 
             Set<Annotation> restoredQualifiers = qualifiers == null
-                    ? Collections.<Annotation>emptySet()
+                    ? Collections.emptySet()
                     : qualifiers;
 
-            return new EventImpl<Object>(
+            return new EventImpl<>(
                     eventType,
-                    new LinkedHashSet<Annotation>(restoredQualifiers),
+                    new LinkedHashSet<>(restoredQualifiers),
                     beanManager.getKnowledgeBase(),
                     beanManager.getBeanResolver(),
                     beanManager.getContextManager(),
@@ -2322,12 +2247,12 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
 
         @Override
-        public Type[] getActualTypeArguments() {
+        public @Nonnull Type[] getActualTypeArguments() {
             return actualTypeArguments.clone();
         }
 
         @Override
-        public Type getRawType() {
+        public @Nonnull Type getRawType() {
             return rawType;
         }
 
@@ -2365,7 +2290,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
 
         @Override
-        public Type getGenericComponentType() {
+        public @Nonnull Type getGenericComponentType() {
             return componentType;
         }
 
@@ -2396,12 +2321,12 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
 
         @Override
-        public Type[] getUpperBounds() {
+        public @Nonnull Type[] getUpperBounds() {
             return upperBounds.clone();
         }
 
         @Override
-        public Type[] getLowerBounds() {
+        public @Nonnull Type[] getLowerBounds() {
             return lowerBounds.clone();
         }
 

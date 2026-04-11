@@ -30,7 +30,7 @@ final class BceObserverInfo implements ObserverInfo {
         if (observerMethodInfos == null || observerMethodInfos.isEmpty()) {
             return Collections.emptyList();
         }
-        List<ObserverInfo> out = new ArrayList<ObserverInfo>();
+        List<ObserverInfo> out = new ArrayList<>();
         for (ObserverMethodInfo info : observerMethodInfos) {
             out.add(new BceObserverInfo(info));
         }
@@ -50,7 +50,7 @@ final class BceObserverInfo implements ObserverInfo {
         if (syntheticObserverMethods == null || syntheticObserverMethods.isEmpty()) {
             return Collections.emptyList();
         }
-        List<ObserverInfo> out = new ArrayList<ObserverInfo>();
+        List<ObserverInfo> out = new ArrayList<>();
         for (ObserverMethod<?> syntheticObserver : syntheticObserverMethods) {
             ObserverMethodInfo info = new ObserverMethodInfo(
                 syntheticObserver.getObservedType(),
@@ -83,7 +83,7 @@ final class BceObserverInfo implements ObserverInfo {
 
     @Override
     public Collection<AnnotationInfo> qualifiers() {
-        List<AnnotationInfo> out = new ArrayList<AnnotationInfo>();
+        List<AnnotationInfo> out = new ArrayList<>();
         for (Annotation annotation : delegate.getQualifiers()) {
             out.add(BceMetadata.annotationInfo(annotation));
         }
@@ -171,8 +171,11 @@ final class BceObserverInfo implements ObserverInfo {
     }
 
     private static final class SyntheticObserverMethodPlaceholder {
-        void observe(Object event) {
-            // Placeholder only; never invoked.
+        /**
+         * Placeholder method for synthetic observers. The parameter is ignored as it is only used for invocation,
+         * but still it is necessary. See {@link BceObserverInfo#syntheticObserverMethodInfo()}
+         */
+        void observe(Object ignoredEvent) {
         }
     }
 }

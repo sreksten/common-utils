@@ -163,7 +163,7 @@ public class SyringeCDIProvider implements CDIProvider {
             discoveredProviders.setAccessible(true);
             @SuppressWarnings("unchecked")
             Set<CDIProvider> discovered = (Set<CDIProvider>) discoveredProviders.get(null);
-            Set<CDIProvider> updated = new HashSet<CDIProvider>();
+            Set<CDIProvider> updated = new HashSet<>();
             if (discovered != null) {
                 for (CDIProvider discoveredProvider : discovered) {
                     if (!(discoveredProvider instanceof SyringeCDIProvider)) {
@@ -174,7 +174,7 @@ public class SyringeCDIProvider implements CDIProvider {
             updated.add(provider);
             discoveredProviders.set(null, updated);
         } catch (Exception ignored) {
-            // Best-effort setup. If reflection is blocked, existing configuration remains.
+            // Best-effort setup. If reflection is blocked, the existing configuration remains.
         }
     }
 }

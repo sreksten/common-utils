@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import jakarta.enterprise.inject.build.compatible.spi.DisposerInfo;
 import jakarta.enterprise.lang.model.declarations.MethodInfo;
@@ -9,6 +8,8 @@ import jakarta.enterprise.lang.model.declarations.ParameterInfo;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.List;
+
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDisposesAnnotation;
 
 final class BceDisposerInfo implements DisposerInfo {
 
@@ -35,7 +36,7 @@ final class BceDisposerInfo implements DisposerInfo {
         Parameter[] parameters = disposerMethod.getParameters();
         List<ParameterInfo> infos = disposerMethod().parameters();
         for (int i = 0; i < parameters.length && i < infos.size(); i++) {
-            if (AnnotationsEnum.hasDisposesAnnotation(parameters[i])) {
+            if (hasDisposesAnnotation(parameters[i])) {
                 return infos.get(i);
             }
         }

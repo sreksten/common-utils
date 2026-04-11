@@ -135,7 +135,7 @@ public class ClasspathScanner {
         }
     }
 
-    public List<Class<?>> findClassesInDirectory(ClassLoader classLoader, File directory, String packageName) throws ClassNotFoundException {
+    public List<Class<?>> findClassesInDirectory(ClassLoader classLoader, File directory, String packageName) {
         if (!directory.exists() || !directory.isDirectory()) {
             return Collections.emptyList();
         }

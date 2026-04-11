@@ -266,7 +266,7 @@ public class ConversationScopedContext implements ScopeContext {
 
     /**
      * Clears the current thread's conversation ID.
-     * Called by ConversationPropagationFilter at request end to prevent memory leaks.
+     * Called by ConversationPropagationFilter at the request end to prevent memory leaks.
      */
     public void clearCurrentThread() {
         currentConversationId.remove();

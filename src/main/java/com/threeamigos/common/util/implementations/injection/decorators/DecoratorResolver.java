@@ -128,8 +128,8 @@ public class DecoratorResolver {
     }
 
     private List<DecoratorInfo> collectRuntimeDecorators() {
-        List<DecoratorInfo> all = new ArrayList<DecoratorInfo>();
-        Set<Class<?>> seenDecoratorClasses = new HashSet<Class<?>>();
+        List<DecoratorInfo> all = new ArrayList<>();
+        Set<Class<?>> seenDecoratorClasses = new HashSet<>();
 
         for (DecoratorInfo info : knowledgeBase.getDecoratorInfos()) {
             all.add(info);
@@ -164,10 +164,10 @@ public class DecoratorResolver {
 
         Set<Type> decoratedTypes = decoratorBean.getDecoratedTypes();
         if (decoratedTypes == null || decoratedTypes.isEmpty()) {
-            decoratedTypes = new LinkedHashSet<Type>();
+            decoratedTypes = new LinkedHashSet<>();
             decoratedTypes.add(delegateType);
         } else {
-            decoratedTypes = new LinkedHashSet<Type>(decoratedTypes);
+            decoratedTypes = new LinkedHashSet<>(decoratedTypes);
         }
 
         InjectionPoint delegateInjectionPoint = findDelegateInjectionPoint(
@@ -175,9 +175,6 @@ public class DecoratorResolver {
                 delegateType,
                 delegateQualifiers
         );
-        if (delegateInjectionPoint == null) {
-            return null;
-        }
 
         return new DecoratorInfo(
                 decoratorBean.getBeanClass(),
@@ -195,7 +192,7 @@ public class DecoratorResolver {
             for (InjectionPoint injectionPoint : injectionPoints) {
                 if (injectionPoint != null && injectionPoint.isDelegate()) {
                     Member member = injectionPoint.getMember();
-                    if (member instanceof Field && Modifier.isStatic(((Field) member).getModifiers())) {
+                    if (member instanceof Field && Modifier.isStatic(member.getModifiers())) {
                         continue;
                     }
                     return injectionPoint;
@@ -205,7 +202,7 @@ public class DecoratorResolver {
                 InjectionPoint single = injectionPoints.iterator().next();
                 if (single != null) {
                     Member member = single.getMember();
-                    if (member instanceof Field && Modifier.isStatic(((Field) member).getModifiers())) {
+                    if (member instanceof Field && Modifier.isStatic(member.getModifiers())) {
                         single = null;
                     }
                 }
@@ -217,7 +214,7 @@ public class DecoratorResolver {
 
         return new SyntheticDelegateInjectionPoint(
                 delegateType,
-                delegateQualifiers != null ? delegateQualifiers : Collections.<Annotation>emptySet(),
+                delegateQualifiers != null ? delegateQualifiers : Collections.emptySet(),
                 decoratorBean
         );
     }
@@ -237,7 +234,7 @@ public class DecoratorResolver {
 
         private SyntheticDelegateInjectionPoint(Type type, Set<Annotation> qualifiers, Bean<?> bean) {
             this.type = type;
-            this.qualifiers = Collections.unmodifiableSet(new LinkedHashSet<Annotation>(qualifiers));
+            this.qualifiers = Collections.unmodifiableSet(new LinkedHashSet<>(qualifiers));
             this.bean = bean;
         }
 

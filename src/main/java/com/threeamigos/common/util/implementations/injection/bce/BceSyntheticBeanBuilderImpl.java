@@ -4,7 +4,7 @@ import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
-import jakarta.annotation.Nullable;
+import jakarta.annotation.Nonnull;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.Any;
@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
+final class BceSyntheticBeanBuilderImpl<T> extends BceSyntheticAbstractBuilder implements SyntheticBeanBuilder<T> {
 
     private final KnowledgeBase knowledgeBase;
     private final BeanManagerImpl beanManager;
@@ -38,9 +38,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
     private final Class<T> implementationClass;
 
     private final Set<java.lang.reflect.Type> types = new LinkedHashSet<>();
-    private final Set<Annotation> qualifiers = new LinkedHashSet<>();
     private final Set<Class<? extends Annotation>> stereotypes = new LinkedHashSet<>();
-    private final Map<String, Object> params = new LinkedHashMap<>();
     private Class<? extends Annotation> scope = Dependent.class;
     private boolean alternative;
     private Integer priority;
@@ -84,33 +82,19 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
 
     @Override
     public SyntheticBeanBuilder<T> qualifier(Class<? extends Annotation> qualifier) {
-        if (qualifier == null) {
-            return this;
-        }
-        try {
-            Annotation annotation = BceMetadata.unwrapAnnotationInfo(
-                    new BceAnnotationBuilderFactory().create(qualifier).build());
-            this.qualifiers.add(annotation);
-            return this;
-        } catch (RuntimeException e) {
-            throw new IllegalArgumentException("Cannot instantiate qualifier " + qualifier.getName() +
-                ". Use qualifier(Annotation) or qualifier(AnnotationInfo).", e);
-        }
+        qualifierImpl(qualifier);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> qualifier(AnnotationInfo qualifier) {
-        if (qualifier != null) {
-            this.qualifiers.add(BceMetadata.unwrapAnnotationInfo(qualifier));
-        }
+        qualifierImpl(qualifier);
         return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> qualifier(Annotation qualifier) {
-        if (qualifier != null) {
-            this.qualifiers.add(qualifier);
-        }
+        qualifierImpl(qualifier);
         return this;
     }
 
@@ -165,126 +149,134 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, boolean value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, boolean[] value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, int value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, int[] value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, long value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, long[] value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, double value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, double[] value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, String value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, String[] value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, Enum<?> value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, Enum<?>[] value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, Class<?> value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, ClassInfo value) {
-        return withParamInternal(name, value != null ? BceMetadata.unwrapClassInfo(value) : null);
+        withParamInternal(name, value != null ? BceMetadata.unwrapClassInfo(value) : null);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, Class<?>[] value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, ClassInfo[] value) {
-        if (value == null) {
-            return withParamInternal(name, null);
-        }
-        Class<?>[] converted = new Class<?>[value.length];
-        for (int i = 0; i < value.length; i++) {
-            converted[i] = value[i] != null ? BceMetadata.unwrapClassInfo(value[i]) : null;
-        }
-        return withParamInternal(name, converted);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, AnnotationInfo value) {
-        return withParamInternal(name, value != null ? BceMetadata.unwrapAnnotationInfo(value) : null);
+        withParamInternal(name, value != null ? BceMetadata.unwrapAnnotationInfo(value) : null);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, Annotation value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, AnnotationInfo[] value) {
-        if (value == null) {
-            return withParamInternal(name, null);
-        }
-        Annotation[] converted = new Annotation[value.length];
-        for (int i = 0; i < value.length; i++) {
-            converted[i] = value[i] != null ? BceMetadata.unwrapAnnotationInfo(value[i]) : null;
-        }
-        return withParamInternal(name, converted);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, Annotation[] value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, InvokerInfo value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
     public SyntheticBeanBuilder<T> withParam(String name, InvokerInfo[] value) {
-        return withParamInternal(name, value);
+        withParamInternal(name, value);
+        return this;
     }
 
     @Override
@@ -299,14 +291,6 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         return this;
     }
 
-    private SyntheticBeanBuilder<T> withParamInternal(String name, Object value) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Parameter name must not be blank");
-        }
-        this.params.put(name, value);
-        return this;
-    }
-
     void complete() {
         if (creatorClass == null) {
             throw new IllegalStateException("Synthetic bean creator is required via createWith()");
@@ -316,14 +300,13 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         final Class<? extends SyntheticBeanCreator<T>> frozenCreatorClass = creatorClass;
         final Class<? extends SyntheticBeanDisposer<T>> frozenDisposerClass = disposerClass;
         final boolean fallbackInjectionPointForCreator = Dependent.class.equals(scope);
-        final Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent =
-                Collections.synchronizedMap(new java.util.IdentityHashMap<CreationalContext<?>, java.util.List<DependentLookupInstance>>());
+        final DependentLookupTracker dependentLookupTracker = new DependentLookupTracker();
 
         Function<CreationalContext<T>, T> createCallback = ctx -> {
             try {
                 SyntheticBeanCreator<T> creator = frozenCreatorClass.getDeclaredConstructor().newInstance();
                 return creator.create(
-                        createLookup(ctx, dependentLookupsByParent, fallbackInjectionPointForCreator),
+                        createLookup(ctx, dependentLookupTracker, fallbackInjectionPointForCreator),
                         new BceParameters(frozenParams, invokerRegistry)
                 );
             } catch (RuntimeException e) {
@@ -337,7 +320,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         BiConsumer<T, CreationalContext<T>> destroyCallback = getCreationalContextBiConsumer(
                 frozenDisposerClass,
                 frozenParams,
-                dependentLookupsByParent);
+                dependentLookupTracker);
 
         Set<java.lang.reflect.Type> beanTypes = new LinkedHashSet<>(types);
         if (beanTypes.isEmpty()) {
@@ -368,19 +351,19 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         knowledgeBase.addBean(bean);
     }
 
-    @Nullable
+    @Nonnull
     private BiConsumer<T, CreationalContext<T>> getCreationalContextBiConsumer(
             Class<? extends SyntheticBeanDisposer<T>> frozenDisposerClass,
             Map<String, Object> frozenParams,
-            Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent) {
-        BiConsumer<T, CreationalContext<T>> destroyCallback = null;
+            DependentLookupTracker dependentLookupTracker) {
+        BiConsumer<T, CreationalContext<T>> destroyCallback;
         if (frozenDisposerClass != null) {
             destroyCallback = (instance, ctx) -> {
                 try {
                     SyntheticBeanDisposer<T> disposer = frozenDisposerClass.getDeclaredConstructor().newInstance();
-                    disposer.dispose(instance, createLookup(ctx, dependentLookupsByParent, false),
+                    disposer.dispose(instance, createLookup(ctx, dependentLookupTracker, false),
                         new BceParameters(frozenParams, invokerRegistry));
-                    releaseDependentLookups(ctx, dependentLookupsByParent);
+                    dependentLookupTracker.release(ctx);
                 } catch (RuntimeException e) {
                     throw e;
                 } catch (Exception e) {
@@ -389,15 +372,15 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
                 }
             };
         } else {
-            destroyCallback = (instance, ctx) -> releaseDependentLookups(ctx, dependentLookupsByParent);
+            destroyCallback = (instance, ctx) -> dependentLookupTracker.release(ctx);
         }
         return destroyCallback;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"unchecked"})
     private Instance<Object> createLookup(
             CreationalContext<?> parentContext,
-            Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent,
+            DependentLookupTracker dependentLookupTracker,
             boolean fallbackInjectionPointWhenMissing) {
         return new com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl<>(
                 Object.class,
@@ -430,19 +413,13 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
                             CreationalContext<Object> childContext = beanManager.createCreationalContext(dependentBean);
                             Object instance = dependentBean.create(childContext);
                             if (parentContext != null) {
-                                synchronized (dependentLookupsByParent) {
-                                    java.util.List<DependentLookupInstance> lookups =
-                                            dependentLookupsByParent.get(parentContext);
-                                    if (lookups == null) {
-                                        lookups = new java.util.ArrayList<DependentLookupInstance>();
-                                        dependentLookupsByParent.put(parentContext, lookups);
-                                    }
-                                    lookups.add(new DependentLookupInstance(dependentBean, instance, childContext));
-                                }
+                                dependentLookupTracker.add(
+                                        parentContext,
+                                        new DependentLookupInstance(dependentBean, instance, childContext));
                             }
                             return instance;
                         }
-                        return beanManager.getReference(bean, type, (CreationalContext) parentContext);
+                        return beanManager.getReference(bean, type, parentContext);
                     }
 
                     @Override
@@ -450,7 +427,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
                                                                                  java.util.Collection<Annotation> quals) {
                         Annotation[] qualifierArray = quals.toArray(new Annotation[0]);
                         java.util.Set<Bean<?>> beans = beanManager.getBeans(type, qualifierArray);
-                        java.util.List<Class<?>> classes = new java.util.ArrayList<Class<?>>();
+                        java.util.List<Class<?>> classes = new java.util.ArrayList<>();
                         for (Bean<?> bean : beans) {
                             classes.add(bean.getBeanClass());
                         }
@@ -467,22 +444,36 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         );
     }
 
-    private void releaseDependentLookups(
-            CreationalContext<?> parentContext,
-            Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> dependentLookupsByParent) {
-        if (parentContext == null) {
-            return;
+    private static final class DependentLookupTracker {
+        private final Object lock = new Object();
+        private final Map<CreationalContext<?>, java.util.List<DependentLookupInstance>> lookupsByParent =
+                new java.util.IdentityHashMap<>();
+
+        private void add(CreationalContext<?> parentContext, DependentLookupInstance lookup) {
+            if (parentContext == null || lookup == null) {
+                return;
+            }
+            synchronized (lock) {
+                lookupsByParent.computeIfAbsent(parentContext, ignored -> new java.util.ArrayList<>())
+                        .add(lookup);
+            }
         }
-        java.util.List<DependentLookupInstance> lookups;
-        synchronized (dependentLookupsByParent) {
-            lookups = dependentLookupsByParent.remove(parentContext);
-        }
-        if (lookups == null) {
-            return;
-        }
-        for (DependentLookupInstance lookup : lookups) {
-            if (lookup != null) {
-                lookup.destroy();
+
+        private void release(CreationalContext<?> parentContext) {
+            if (parentContext == null) {
+                return;
+            }
+            java.util.List<DependentLookupInstance> lookups;
+            synchronized (lock) {
+                lookups = lookupsByParent.remove(parentContext);
+            }
+            if (lookups == null) {
+                return;
+            }
+            for (DependentLookupInstance lookup : lookups) {
+                if (lookup != null) {
+                    lookup.destroy();
+                }
             }
         }
     }
@@ -516,7 +507,7 @@ final class BceSyntheticBeanBuilderImpl<T> implements SyntheticBeanBuilder<T> {
         private LookupInjectionPoint(java.util.Collection<Annotation> qualifiers) {
             this.qualifiers = qualifiers == null
                     ? Collections.emptySet()
-                    : Collections.unmodifiableSet(new LinkedHashSet<Annotation>(qualifiers));
+                    : Collections.unmodifiableSet(new LinkedHashSet<>(qualifiers));
         }
 
         @Override

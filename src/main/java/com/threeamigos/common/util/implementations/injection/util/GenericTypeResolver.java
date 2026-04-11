@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.util;
 
+import jakarta.annotation.Nonnull;
+
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -163,12 +165,12 @@ public final class GenericTypeResolver {
         }
 
         @Override
-        public Type[] getActualTypeArguments() {
+        public @Nonnull Type[] getActualTypeArguments() {
             return actualTypeArguments.clone();
         }
 
         @Override
-        public Type getRawType() {
+        public @Nonnull Type getRawType() {
             return rawType;
         }
 
@@ -229,7 +231,7 @@ public final class GenericTypeResolver {
         }
 
         @Override
-        public Type getGenericComponentType() {
+        public @Nonnull Type getGenericComponentType() {
             return componentType;
         }
 
@@ -272,12 +274,12 @@ public final class GenericTypeResolver {
         }
 
         @Override
-        public Type[] getUpperBounds() {
+        public @Nonnull Type[] getUpperBounds() {
             return upperBounds.clone();
         }
 
         @Override
-        public Type[] getLowerBounds() {
+        public @Nonnull Type[] getLowerBounds() {
             return lowerBounds.clone();
         }
 

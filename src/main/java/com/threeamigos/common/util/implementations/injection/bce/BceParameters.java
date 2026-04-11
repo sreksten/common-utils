@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
+import com.threeamigos.common.util.implementations.injection.util.BoxedPrimitivesHelper;
 import jakarta.enterprise.inject.build.compatible.spi.InvokerInfo;
 import jakarta.enterprise.inject.build.compatible.spi.Parameters;
 import jakarta.enterprise.invoke.Invoker;
@@ -61,6 +62,7 @@ public class BceParameters implements Parameters {
             converted = materializeInvoker((InvokerInfo) raw);
         } else if (raw instanceof InvokerInfo[]) {
             InvokerInfo[] infos = (InvokerInfo[]) raw;
+            @SuppressWarnings("rawtypes")
             Invoker[] invokers = new Invoker[infos.length];
             for (int i = 0; i < infos.length; i++) {
                 invokers[i] = materializeInvoker(infos[i]);
@@ -69,21 +71,11 @@ public class BceParameters implements Parameters {
         } else if (raw instanceof ClassInfo) {
             converted = BceMetadata.unwrapClassInfo((ClassInfo) raw);
         } else if (raw instanceof ClassInfo[]) {
-            ClassInfo[] infos = (ClassInfo[]) raw;
-            Class<?>[] classes = new Class<?>[infos.length];
-            for (int i = 0; i < infos.length; i++) {
-                classes[i] = infos[i] != null ? BceMetadata.unwrapClassInfo(infos[i]) : null;
-            }
-            converted = classes;
+            converted = BceMetadata.unwrapClassInfo((ClassInfo[]) raw);
         } else if (raw instanceof AnnotationInfo) {
             converted = BceMetadata.unwrapAnnotationInfo((AnnotationInfo) raw);
         } else if (raw instanceof AnnotationInfo[]) {
-            AnnotationInfo[] infos = (AnnotationInfo[]) raw;
-            Annotation[] annotations = new Annotation[infos.length];
-            for (int i = 0; i < infos.length; i++) {
-                annotations[i] = infos[i] != null ? BceMetadata.unwrapAnnotationInfo(infos[i]) : null;
-            }
-            converted = annotations;
+            converted = BceMetadata.unwrapAnnotationInfo((AnnotationInfo[]) raw);
         } else if (raw instanceof Type) {
             converted = BceMetadata.unwrapType((Type) raw);
         }
@@ -100,7 +92,7 @@ public class BceParameters implements Parameters {
                 }
                 converted = typedArray;
             }
-            if (converted != null && !effectiveType.isInstance(converted)) {
+            if (!effectiveType.isInstance(converted)) {
                 throw new ClassCastException("Parameter '" + name + "' cannot be cast to " +
                     type.getName() + " (actual: " + converted.getClass().getName() + ")");
             }
@@ -120,30 +112,7 @@ public class BceParameters implements Parameters {
         if (type == null || !type.isPrimitive()) {
             return type;
         }
-        if (type == boolean.class) {
-            return Boolean.class;
-        }
-        if (type == byte.class) {
-            return Byte.class;
-        }
-        if (type == short.class) {
-            return Short.class;
-        }
-        if (type == int.class) {
-            return Integer.class;
-        }
-        if (type == long.class) {
-            return Long.class;
-        }
-        if (type == float.class) {
-            return Float.class;
-        }
-        if (type == double.class) {
-            return Double.class;
-        }
-        if (type == char.class) {
-            return Character.class;
-        }
-        return type;
+        Class<?> boxedType = BoxedPrimitivesHelper.getBoxedPrimitive(type);
+        return boxedType != null ? boxedType : type;
     }
 }

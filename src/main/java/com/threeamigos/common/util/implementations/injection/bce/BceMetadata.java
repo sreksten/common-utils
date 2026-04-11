@@ -118,6 +118,14 @@ public final class BceMetadata {
         }
     }
 
+    static Class<?>[] unwrapClassInfo(ClassInfo[] infos) {
+        Class<?>[] out = new Class<?>[infos.length];
+        for (int i = 0; i < infos.length; i++) {
+            out[i] = infos[i] != null ? BceMetadata.unwrapClassInfo(infos[i]) : null;
+        }
+        return out;
+    }
+
     static Class<?> unwrapClassInfo(ClassInfo classInfo) {
         if (classInfo instanceof ReflectionClassInfo) {
             return ((ReflectionClassInfo) classInfo).clazz;
@@ -131,20 +139,28 @@ public final class BceMetadata {
     }
 
     private static Class<?> resolveClass(String className) throws ClassNotFoundException {
-        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-        if (tccl != null) {
+        ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+        if (ccl != null) {
             try {
-                return Class.forName(className, false, tccl);
+                return Class.forName(className, false, ccl);
             } catch (ClassNotFoundException ignored) {
                 // Fall through to this module class loader.
             }
         }
 
         ClassLoader fallback = BceMetadata.class.getClassLoader();
-        if (fallback != null && fallback != tccl) {
+        if (fallback != null && fallback != ccl) {
             return Class.forName(className, false, fallback);
         }
         return Class.forName(className);
+    }
+
+    static Class<?>[] unwrapTypes(Type[] types) {
+        Class<?>[] out = new Class<?>[types.length];
+        for (int i = 0; i < types.length; i++) {
+            out[i] = types[i] != null ? BceMetadata.unwrapType(types[i]) : null;
+        }
+        return out;
     }
 
     static Class<?> unwrapType(Type type) {
@@ -159,6 +175,14 @@ public final class BceMetadata {
             return Array.newInstance(component, 0).getClass();
         }
         throw new IllegalArgumentException("Unsupported Type for runtime unwrapping: " + type.kind());
+    }
+
+    static Annotation[] unwrapAnnotationInfo(AnnotationInfo[] infos) {
+        Annotation[] out = new Annotation[infos.length];
+        for (int i = 0; i < infos.length; i++) {
+            out[i] = infos[i] != null ? BceMetadata.unwrapAnnotationInfo(infos[i]) : null;
+        }
+        return out;
     }
 
     static Annotation unwrapAnnotationInfo(AnnotationInfo annotationInfo) {
@@ -182,9 +206,44 @@ public final class BceMetadata {
                     annotationType.getName(), e);
             }
         }
-        return ProxyAnnotations.create(annotationType, members);
+        return BceCommonFunctions.buildAnnotationProxy(annotationType, members);
     }
 
+    static <T extends Annotation> Collection<AnnotationInfo> extractRepeatableContainedAnnotations(
+            AnnotationInfo candidateContainer,
+            Class<T> repeatableType) {
+        if (candidateContainer == null || repeatableType == null) {
+            return Collections.emptyList();
+        }
+        Method valueMethod;
+        try {
+            Class<?> containerClass = unwrapClassInfo(candidateContainer.declaration());
+            valueMethod = containerClass.getDeclaredMethod("value");
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+        if (!valueMethod.getReturnType().isArray() ||
+                !repeatableType.equals(valueMethod.getReturnType().getComponentType())) {
+            return Collections.emptyList();
+        }
+        if (!candidateContainer.hasMember("value")) {
+            return Collections.emptyList();
+        }
+        AnnotationMember valueMember = candidateContainer.member("value");
+        if (valueMember.kind() != AnnotationMember.Kind.ARRAY) {
+            return Collections.emptyList();
+        }
+        List<AnnotationInfo> out = new ArrayList<>();
+        for (AnnotationMember item : valueMember.asArray()) {
+            if (item.kind() == AnnotationMember.Kind.NESTED_ANNOTATION) {
+                AnnotationInfo nested = item.asNestedAnnotation();
+                if (repeatableType.getName().equals(nested.declaration().name())) {
+                    out.add(nested);
+                }
+            }
+        }
+        return Collections.unmodifiableList(out);
+    }
     private static Object fromAnnotationMember(AnnotationMember member, Class<?> expectedType) {
         switch (member.kind()) {
             case BOOLEAN:
@@ -207,11 +266,11 @@ public final class BceMetadata {
                 return member.asString();
             case ENUM:
                 if (expectedType != null && expectedType.isEnum()) {
-                    @SuppressWarnings("unchecked")
+                    @SuppressWarnings({"unchecked", "rawtypes"})
                     Class<? extends Enum> enumType = (Class<? extends Enum>) expectedType;
                     return member.asEnum(enumType);
                 }
-                @SuppressWarnings("unchecked")
+                @SuppressWarnings({"unchecked", "rawtypes"})
                 Class<? extends Enum> enumType = (Class<? extends Enum>) unwrapClassInfo(member.asEnumClass());
                 return Enum.valueOf(enumType, member.asEnumConstant());
             case CLASS:
@@ -344,42 +403,6 @@ public final class BceMetadata {
         public Collection<AnnotationInfo> annotations() {
             return directAnnotations();
         }
-
-        private <T extends Annotation> Collection<AnnotationInfo> extractRepeatableContainedAnnotations(
-            AnnotationInfo candidateContainer,
-            Class<T> repeatableType) {
-            if (candidateContainer == null || repeatableType == null) {
-                return Collections.emptyList();
-            }
-            Method valueMethod;
-            try {
-                Class<?> containerClass = unwrapClassInfo(candidateContainer.declaration());
-                valueMethod = containerClass.getDeclaredMethod("value");
-            } catch (Exception e) {
-                return Collections.emptyList();
-            }
-            if (!valueMethod.getReturnType().isArray() ||
-                !repeatableType.equals(valueMethod.getReturnType().getComponentType())) {
-                return Collections.emptyList();
-            }
-            if (!candidateContainer.hasMember("value")) {
-                return Collections.emptyList();
-            }
-            AnnotationMember valueMember = candidateContainer.member("value");
-            if (valueMember.kind() != AnnotationMember.Kind.ARRAY) {
-                return Collections.emptyList();
-            }
-            List<AnnotationInfo> out = new ArrayList<>();
-            for (AnnotationMember item : valueMember.asArray()) {
-                if (item.kind() == AnnotationMember.Kind.NESTED_ANNOTATION) {
-                    AnnotationInfo nested = item.asNestedAnnotation();
-                    if (repeatableType.getName().equals(nested.declaration().name())) {
-                        out.add(nested);
-                    }
-                }
-            }
-            return Collections.unmodifiableList(out);
-        }
     }
 
     private abstract static class ReflectionDeclaration extends AnnotationTargetSupport implements DeclarationInfo {
@@ -465,8 +488,8 @@ public final class BceMetadata {
                 types.add(new ReflectionClassType(current, null));
                 current = current.getSuperclass();
             }
-            for (Class<?> iface : beanClass.getInterfaces()) {
-                types.add(new ReflectionClassType(iface, null));
+            for (Class<?> face : beanClass.getInterfaces()) {
+                types.add(new ReflectionClassType(face, null));
             }
             types.add(new ReflectionClassType(Object.class, null));
             return Collections.unmodifiableSet(types);
@@ -565,33 +588,27 @@ public final class BceMetadata {
                 }
                 for (Constructor<?> constructor : current.getDeclaredConstructors()) {
                     if (AnnotationsEnum.hasInjectAnnotation(constructor)) {
-                        ReflectionMethodInfo methodInfo = new ReflectionMethodInfo(constructor);
-                        java.lang.reflect.Parameter[] parameters = constructor.getParameters();
-                        for (java.lang.reflect.Parameter parameter : parameters) {
-                            out.add(new ReflectionInjectionPointInfo(
-                                toType(parameter.getParameterizedType(), parameter.getAnnotatedType()),
-                                qualifierAnnotations(parameter.getAnnotations()),
-                                new ReflectionParameterInfo(methodInfo, parameter)
-                            ));
-                        }
+                        eval(new ReflectionMethodInfo(constructor), constructor.getParameters(), out);
                     }
                 }
                 for (Method method : current.getDeclaredMethods()) {
                     if (AnnotationsEnum.hasInjectAnnotation(method)) {
-                        ReflectionMethodInfo methodInfo = new ReflectionMethodInfo(method);
-                        java.lang.reflect.Parameter[] parameters = method.getParameters();
-                        for (java.lang.reflect.Parameter parameter : parameters) {
-                            out.add(new ReflectionInjectionPointInfo(
-                                toType(parameter.getParameterizedType(), parameter.getAnnotatedType()),
-                                qualifierAnnotations(parameter.getAnnotations()),
-                                new ReflectionParameterInfo(methodInfo, parameter)
-                            ));
-                        }
+                        eval(new ReflectionMethodInfo(method), method.getParameters(), out);
                     }
                 }
                 current = current.getSuperclass();
             }
             return Collections.unmodifiableList(out);
+        }
+    }
+
+    private static void eval(ReflectionMethodInfo methodInfo, Parameter[] parameters, List<InjectionPointInfo> out) {
+        for (Parameter parameter : parameters) {
+            out.add(new ReflectionInjectionPointInfo(
+                    toType(parameter.getParameterizedType(), parameter.getAnnotatedType()),
+                    qualifierAnnotations(parameter.getAnnotations()),
+                    new ReflectionParameterInfo(methodInfo, parameter)
+            ));
         }
     }
 
@@ -626,7 +643,7 @@ public final class BceMetadata {
 
         @Override
         public Collection<Type> types() {
-            Set<Type> out = new LinkedHashSet<Type>();
+            Set<Type> out = new LinkedHashSet<>();
             for (java.lang.reflect.Type reflectType : bean.getTypes()) {
                 try {
                     out.add(toType(reflectType, null));
@@ -722,7 +739,7 @@ public final class BceMetadata {
 
         @Override
         public Collection<StereotypeInfo> stereotypes() {
-            List<StereotypeInfo> out = new ArrayList<StereotypeInfo>();
+            List<StereotypeInfo> out = new ArrayList<>();
             for (Class<? extends Annotation> stereotype : bean.getStereotypes()) {
                 out.add(new ReflectionStereotypeInfo(stereotype));
             }
@@ -752,7 +769,7 @@ public final class BceMetadata {
         if (annotations == null || annotations.isEmpty()) {
             return Collections.emptyList();
         }
-        List<AnnotationInfo> out = new ArrayList<AnnotationInfo>(annotations.size());
+        List<AnnotationInfo> out = new ArrayList<>(annotations.size());
         for (Annotation annotation : annotations) {
             if (annotation != null) {
                 out.add(new ReflectionAnnotationInfo(annotation));
@@ -765,7 +782,7 @@ public final class BceMetadata {
         if (injectionPoints == null || injectionPoints.isEmpty()) {
             return Collections.emptyList();
         }
-        List<InjectionPointInfo> out = new ArrayList<InjectionPointInfo>(injectionPoints.size());
+        List<InjectionPointInfo> out = new ArrayList<>(injectionPoints.size());
         for (InjectionPoint injectionPoint : injectionPoints) {
             if (injectionPoint == null) {
                 continue;
@@ -963,8 +980,8 @@ public final class BceMetadata {
         @Override
         public List<Type> superInterfaces() {
             List<Type> out = new ArrayList<>();
-            for (Class<?> iface : clazz.getInterfaces()) {
-                out.add(new ReflectionClassType(iface, null));
+            for (Class<?> face : clazz.getInterfaces()) {
+                out.add(new ReflectionClassType(face, null));
             }
             return Collections.unmodifiableList(out);
         }
@@ -972,8 +989,8 @@ public final class BceMetadata {
         @Override
         public List<ClassInfo> superInterfacesDeclarations() {
             List<ClassInfo> out = new ArrayList<>();
-            for (Class<?> iface : clazz.getInterfaces()) {
-                out.add(new ReflectionClassInfo(iface));
+            for (Class<?> face : clazz.getInterfaces()) {
+                out.add(new ReflectionClassInfo(face));
             }
             return Collections.unmodifiableList(out);
         }
@@ -1078,7 +1095,7 @@ public final class BceMetadata {
         }
 
         private static Collection<Method> declaredMethodsInTypeClosure(Class<?> root) {
-            List<Method> methods = new ArrayList<Method>();
+            List<Method> methods = new ArrayList<>();
             if (root == null) {
                 return methods;
             }
@@ -1092,7 +1109,7 @@ public final class BceMetadata {
                 current = current.getSuperclass();
             }
 
-            collectInterfaceMethods(root, methods, new LinkedHashSet<Class<?>>());
+            collectInterfaceMethods(root, methods, new LinkedHashSet<>());
             return methods;
         }
 
@@ -1118,7 +1135,7 @@ public final class BceMetadata {
         }
 
         private static Collection<Field> declaredFieldsInTypeClosure(Class<?> root) {
-            List<Field> fields = new ArrayList<Field>();
+            List<Field> fields = new ArrayList<>();
             if (root == null) {
                 return fields;
             }
@@ -1132,7 +1149,7 @@ public final class BceMetadata {
                 current = current.getSuperclass();
             }
 
-            collectInterfaceFields(root, fields, new LinkedHashSet<Class<?>>());
+            collectInterfaceFields(root, fields, new LinkedHashSet<>());
             return fields;
         }
 
@@ -1885,34 +1902,6 @@ public final class BceMetadata {
         @Override
         public Type lowerBound() {
             return lowerBound;
-        }
-    }
-
-    private static final class ProxyAnnotations {
-        private ProxyAnnotations() {
-        }
-
-        private static Annotation create(Class<? extends Annotation> annotationType, Map<String, Object> members) {
-            return (Annotation) java.lang.reflect.Proxy.newProxyInstance(
-                annotationType.getClassLoader(),
-                new Class<?>[]{annotationType},
-                (proxy, method, args) -> {
-                    String name = method.getName();
-                    switch (name) {
-                        case "annotationType":
-                            return annotationType;
-                        case "toString":
-                            return "@" + annotationType.getName() + members;
-                        case "hashCode":
-                            return members.hashCode();
-                        case "equals":
-                            return proxy == args[0];
-                    }
-                    if (members.containsKey(name)) {
-                        return members.get(name);
-                    }
-                    return method.getDefaultValue();
-                });
         }
     }
 }

@@ -17,7 +17,6 @@ import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -80,7 +79,7 @@ public final class AnnotatedMetadataHelper {
     public static Set<Type> typeClosureOf(AnnotatedType<?> annotatedType, Field field) {
         AnnotatedField<?> annotatedField = findAnnotatedField(annotatedType, field);
         if (annotatedField != null && annotatedField.getTypeClosure() != null && !annotatedField.getTypeClosure().isEmpty()) {
-            return new LinkedHashSet<Type>(annotatedField.getTypeClosure());
+            return new LinkedHashSet<>(annotatedField.getTypeClosure());
         }
         return TypeClosureHelper.extractTypesFromType(field.getGenericType());
     }
@@ -88,12 +87,11 @@ public final class AnnotatedMetadataHelper {
     public static Set<Type> typeClosureOf(AnnotatedType<?> annotatedType, Method method) {
         AnnotatedMethod<?> annotatedMethod = findAnnotatedMethod(annotatedType, method);
         if (annotatedMethod != null && annotatedMethod.getTypeClosure() != null && !annotatedMethod.getTypeClosure().isEmpty()) {
-            return new LinkedHashSet<Type>(annotatedMethod.getTypeClosure());
+            return new LinkedHashSet<>(annotatedMethod.getTypeClosure());
         }
         return TypeClosureHelper.extractTypesFromType(method.getGenericReturnType());
     }
 
-    @SuppressWarnings("unchecked")
     public static AnnotatedField<?> findAnnotatedField(AnnotatedType<?> annotatedType, Field field) {
         if (annotatedType == null || field == null) {
             return null;
@@ -106,7 +104,6 @@ public final class AnnotatedMetadataHelper {
         return null;
     }
 
-    @SuppressWarnings("unchecked")
     public static AnnotatedMethod<?> findAnnotatedMethod(AnnotatedType<?> annotatedType, Method method) {
         if (annotatedType == null || method == null) {
             return null;
@@ -119,7 +116,6 @@ public final class AnnotatedMetadataHelper {
         return null;
     }
 
-    @SuppressWarnings("unchecked")
     public static AnnotatedConstructor<?> findAnnotatedConstructor(AnnotatedType<?> annotatedType, Constructor<?> constructor) {
         if (annotatedType == null || constructor == null) {
             return null;

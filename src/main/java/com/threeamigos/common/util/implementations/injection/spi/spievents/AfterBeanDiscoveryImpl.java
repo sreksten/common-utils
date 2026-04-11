@@ -110,7 +110,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
         assertObserverInvocationActive();
         info(Phase.AFTER_BEAN_DISCOVERY, "Creating ObserverMethodConfigurator for synthetic observer");
         final AtomicBoolean applied = new AtomicBoolean(false);
-        final ObserverMethodConfiguratorImpl<T> configurator = new ObserverMethodConfiguratorImpl<T>(knowledgeBase, false) {
+        final ObserverMethodConfiguratorImpl<T> configurator = new ObserverMethodConfiguratorImpl<T>(false) {
             @Override
             public ObserverMethod<T> complete() {
                 ObserverMethod<T> observer = super.complete();
@@ -208,7 +208,6 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> List<AnnotatedType<T>> getAnnotatedTypes(Class<T> type) {
         assertObserverInvocationActive();
         checkNotNull(type, "Class");
@@ -235,7 +234,6 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> AnnotatedType<T> getAnnotatedType(Class<T> type, String id) {
         assertObserverInvocationActive();
         checkNotNull(type, "Class");
@@ -348,6 +346,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
         return new StableAnnotatedTypeView<>(annotatedType);
     }
 
+    //FIXME ???
     private boolean isReflexiveEquals(AnnotatedType<?> annotatedType) {
         try {
             return annotatedType.equals(annotatedType);
@@ -441,7 +440,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
         if (observerMethod == null || observerMethod.getBeanClass() != null || sourceExtension == null) {
             return observerMethod;
         }
-        return new ObserverMethodWithDefaultBeanClass<Object>(observerMethod, sourceExtension.getClass());
+        return new ObserverMethodWithDefaultBeanClass<>(observerMethod, sourceExtension.getClass());
     }
 
     private static final class ObserverMethodWithDefaultBeanClass<T> implements ObserverMethod<T> {
@@ -466,7 +465,7 @@ public class AfterBeanDiscoveryImpl extends PhaseAware
         @Override
         public Set<Annotation> getObservedQualifiers() {
             Set<Annotation> qualifiers = delegate.getObservedQualifiers();
-            return qualifiers == null ? Collections.<Annotation>emptySet() : qualifiers;
+            return qualifiers == null ? Collections.emptySet() : qualifiers;
         }
 
         @Override

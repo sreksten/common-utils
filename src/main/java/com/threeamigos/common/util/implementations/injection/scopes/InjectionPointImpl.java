@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.SimpleAnnotatedType;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedConstructorWrapper;
@@ -137,7 +136,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
      * Collects all qualifier annotations from the injection point.
      * Per CDI spec:
      * - If no qualifiers are present, @Default is added
-     * - @Delegate is NOT a qualifier, so it's excluded from the qualifiers set
+     * - @Delegate is NOT a qualifier, so it's excluded from the qualifier set
      *
      * @param annotations all annotations present on the injection point
      */
@@ -323,17 +322,17 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
     }
 
     private static Class<?> loadClassWithContextClassLoader(String className) throws ClassNotFoundException {
-        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-        if (tccl != null) {
+        ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+        if (ccl != null) {
             try {
-                return Class.forName(className, false, tccl);
+                return Class.forName(className, false, ccl);
             } catch (ClassNotFoundException ignored) {
                 // Fall through to module classloader.
             }
         }
 
         ClassLoader fallback = InjectionPointImpl.class.getClassLoader();
-        if (fallback != null && fallback != tccl) {
+        if (fallback != null && fallback != ccl) {
             try {
                 return Class.forName(className, false, fallback);
             } catch (ClassNotFoundException ignored) {
@@ -371,7 +370,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
 
         private SerializedInjectionPoint(InjectionPoint injectionPoint) {
             this.type = injectionPoint.getType();
-            this.qualifiers = new LinkedHashSet<Annotation>(injectionPoint.getQualifiers());
+            this.qualifiers = new LinkedHashSet<>(injectionPoint.getQualifiers());
             this.memberRef = MemberRef.of(injectionPoint.getMember());
             this.delegate = injectionPoint.isDelegate();
             this.trans = injectionPoint.isTransient();
@@ -388,12 +387,12 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
             if (annotated != null) {
                 Set<Type> typeClosure = annotated.getTypeClosure();
                 this.annotatedTypeClosure = typeClosure != null && !typeClosure.isEmpty()
-                        ? new LinkedHashSet<Type>(typeClosure)
-                        : Collections.<Type>singleton(this.annotatedBaseType);
-                this.annotatedAnnotations = new LinkedHashSet<Annotation>(annotated.getAnnotations());
+                        ? new LinkedHashSet<>(typeClosure)
+                        : Collections.singleton(this.annotatedBaseType);
+                this.annotatedAnnotations = new LinkedHashSet<>(annotated.getAnnotations());
             } else {
-                this.annotatedTypeClosure = Collections.<Type>singleton(this.annotatedBaseType);
-                this.annotatedAnnotations = new LinkedHashSet<Annotation>();
+                this.annotatedTypeClosure = Collections.singleton(this.annotatedBaseType);
+                this.annotatedAnnotations = new LinkedHashSet<>();
             }
             this.annotatedKind = AnnotatedKind.of(annotated);
             this.annotatedParameterPosition = annotated instanceof AnnotatedParameter<?>
@@ -511,7 +510,7 @@ public class InjectionPointImpl<T> implements InjectionPoint, Serializable {
             if (annotatedKind == AnnotatedKind.FIELD) {
                 Member resolvedMember = getMember();
                 if (resolvedMember instanceof Field) {
-                    return new AnnotatedFieldWrapper<Object>((Field) resolvedMember, null);
+                    return new AnnotatedFieldWrapper<>((Field) resolvedMember, null);
                 }
             } else if (annotatedKind == AnnotatedKind.PARAMETER) {
                 Member resolvedMember = getMember();

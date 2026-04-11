@@ -88,7 +88,7 @@ public class ProcessSyntheticObserverMethodImpl<T, X> extends PhaseAware
         }
         configureCalledInCurrentInvocation.set(Boolean.TRUE);
         if (configurator == null) {
-            configurator = new ObserverMethodConfiguratorImpl<>(null, true);
+            configurator = new ObserverMethodConfiguratorImpl<>(true);
             configurator.read(observerMethod);
         }
         return configurator;

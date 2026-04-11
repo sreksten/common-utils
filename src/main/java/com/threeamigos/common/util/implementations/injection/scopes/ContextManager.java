@@ -72,11 +72,11 @@ public class ContextManager {
         contexts.put(ConversationScoped.class, conversationContext);
         contexts.put(SessionScoped.class, sessionContext);
         contexts.put(RequestScoped.class, requestContext);
-        contextsByScope.put(ApplicationScoped.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(contexts.get(ApplicationScoped.class))));
-        contextsByScope.put(Dependent.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(contexts.get(Dependent.class))));
-        contextsByScope.put(ConversationScoped.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(conversationContext)));
-        contextsByScope.put(SessionScoped.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(sessionContext)));
-        contextsByScope.put(RequestScoped.class, new CopyOnWriteArrayList<ScopeContext>(Collections.singletonList(requestContext)));
+        contextsByScope.put(ApplicationScoped.class, new CopyOnWriteArrayList<>(Collections.singletonList(contexts.get(ApplicationScoped.class))));
+        contextsByScope.put(Dependent.class, new CopyOnWriteArrayList<>(Collections.singletonList(contexts.get(Dependent.class))));
+        contextsByScope.put(ConversationScoped.class, new CopyOnWriteArrayList<>(Collections.singletonList(conversationContext)));
+        contextsByScope.put(SessionScoped.class, new CopyOnWriteArrayList<>(Collections.singletonList(sessionContext)));
+        contextsByScope.put(RequestScoped.class, new CopyOnWriteArrayList<>(Collections.singletonList(requestContext)));
 
         // Initialize proxy generator
         proxyGenerator = new ClientProxyGenerator(this);
@@ -143,7 +143,7 @@ public class ContextManager {
             return;
         }
 
-        Map<ScopeContext, Boolean> destroyedContexts = new IdentityHashMap<ScopeContext, Boolean>();
+        Map<ScopeContext, Boolean> destroyedContexts = new IdentityHashMap<>();
         ScopeContext applicationScopeContext = contexts.get(ApplicationScoped.class);
         ApplicationContextLifecycleListener applicationListener = applicationContextLifecycleListener;
         if (applicationScopeContext != null) {
@@ -417,7 +417,7 @@ public class ContextManager {
             List<ScopeContext> previousRegisteredContexts = contextsByScope.get(scopeAnnotation);
 
             // CDI allows extensions to replace built-in contexts; keep a single active mapping.
-            CopyOnWriteArrayList<ScopeContext> replacement = new CopyOnWriteArrayList<ScopeContext>();
+            CopyOnWriteArrayList<ScopeContext> replacement = new CopyOnWriteArrayList<>();
             replacement.add(context);
             contextsByScope.put(scopeAnnotation, replacement);
             contexts.put(scopeAnnotation, context);
@@ -427,7 +427,7 @@ public class ContextManager {
             return;
         }
         List<ScopeContext> registered =
-                contextsByScope.computeIfAbsent(scopeAnnotation, key -> new CopyOnWriteArrayList<ScopeContext>());
+                contextsByScope.computeIfAbsent(scopeAnnotation, key -> new CopyOnWriteArrayList<>());
         for (ScopeContext existing : registered) {
             if (Objects.equals(existing, context)) {
                 return;
@@ -442,7 +442,7 @@ public class ContextManager {
     private void destroyReplacedBuiltInContexts(ScopeContext previousContext,
                                                 List<ScopeContext> previousRegisteredContexts,
                                                 ScopeContext replacementContext) {
-        Map<ScopeContext, Boolean> destroyed = new IdentityHashMap<ScopeContext, Boolean>();
+        Map<ScopeContext, Boolean> destroyed = new IdentityHashMap<>();
         destroyContextIfReplaced(previousContext, replacementContext, destroyed);
         if (previousRegisteredContexts == null) {
             return;

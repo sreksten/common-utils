@@ -91,15 +91,6 @@ public class DecoratorChain {
     }
 
     /**
-     * Returns the actual bean instance (the target being decorated).
-     *
-     * @return the target bean instance
-     */
-    public Object getTargetInstance() {
-        return targetInstance;
-    }
-
-    /**
      * Returns the outermost decorator (the one client code interacts with).
      *
      * <p>If there are no decorators, returns the target instance.
@@ -126,33 +117,6 @@ public class DecoratorChain {
      */
     public boolean isEmpty() {
         return decorators.isEmpty();
-    }
-
-    /**
-     * Gets the delegate instance for a decorator at the given index.
-     *
-     * <p>The delegate is the next instance in the chain:
-     * <ul>
-     *   <li>For a decorator at index i, a delegate is a decorator at index i+1</li>
-     *   <li>For the last decorator, delegate is the target instance</li>
-     * </ul>
-     *
-     * @param decoratorIndex the index of the decorator (0-based)
-     * @return the delegate instance for that decorator
-     * @throws IndexOutOfBoundsException if the index is invalid
-     */
-    public Object getDelegateFor(int decoratorIndex) {
-        if (decoratorIndex < 0 || decoratorIndex >= decorators.size()) {
-            throw new IndexOutOfBoundsException("Invalid decorator index: " + decoratorIndex);
-        }
-
-        // If this is the last decorator, delegate to target
-        if (decoratorIndex == decorators.size() - 1) {
-            return targetInstance;
-        }
-
-        // Otherwise, delegate to the next decorator in the chain
-        return decorators.get(decoratorIndex + 1).getDecoratorInstance();
     }
 
     @Override

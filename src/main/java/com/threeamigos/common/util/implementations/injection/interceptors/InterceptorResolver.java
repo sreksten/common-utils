@@ -13,6 +13,9 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
 
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasActivateRequestContextAnnotation;
+import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasInterceptorBindingAnnotation;
+
 /**
  * Resolves interceptors for target beans, methods, and constructors.
  *
@@ -29,7 +32,7 @@ import java.util.*;
  * <ul>
  *   <li>Class-level bindings apply to all business methods</li>
  *   <li>Method-level bindings override class-level bindings (not merge)</li>
- *   <li>Stereotype bindings are inherited by the bean class</li>
+ *   <li>The bean class inherits stereotype bindings</li>
  *   <li>An interceptor matches if ALL of its bindings are present on the target</li>
  *   <li>Interceptors are sorted by priority (lower value = earlier execution)</li>
  * </ul>
@@ -72,10 +75,10 @@ public class InterceptorResolver {
      *
      * <p><b>Resolution Strategy:</b>
      * <ol>
-     *   <li>If method is not null and has interceptor bindings → use method bindings only</li>
+     *   <li>If the method is not null and has interceptor bindings → use method bindings only</li>
      *   <li>Otherwise → use class bindings (including inherited from stereotypes)</li>
      *   <li>Query KnowledgeBase for matching interceptors</li>
-     *   <li>Return sorted list (already sorted by priority)</li>
+     *   <li>Return a sorted list (already sorted by priority)</li>
      * </ol>
      *
      * @param targetClass the bean class being intercepted
@@ -142,20 +145,7 @@ public class InterceptorResolver {
      * @return sorted list of matching interceptors
      */
     public List<InterceptorInfo> resolveForClass(Class<?> targetClass, InterceptionType interceptionType) {
-        return resolve(targetClass, (Method) null, interceptionType);
-    }
-
-    /**
-     * Resolves interceptors for constructor interception.
-     *
-     * <p>Constructor-level bindings augment class-level bindings. When both class and constructor
-     * declare the same interceptor binding type, constructor declaration overrides class declaration.
-     */
-    public List<InterceptorInfo> resolveForConstructor(
-            Class<?> targetClass,
-            Constructor<?> constructor,
-            InterceptionType interceptionType) {
-        return resolveForConstructor(targetClass, constructor, null, interceptionType);
+        return resolve(targetClass, null, interceptionType);
     }
 
     public List<InterceptorInfo> resolveForConstructor(
@@ -176,10 +166,6 @@ public class InterceptorResolver {
         return knowledgeBase.getInterceptorsByBindingsAndType(interceptionType, targetBindings);
     }
 
-    public Set<Annotation> resolveBindingsForConstructor(Class<?> targetClass, Constructor<?> constructor) {
-        return resolveBindingsForConstructor(targetClass, constructor, null);
-    }
-
     public Set<Annotation> resolveBindingsForConstructor(Class<?> targetClass,
                                                          Constructor<?> constructor,
                                                          AnnotatedType<?> annotatedTypeOverride) {
@@ -196,24 +182,6 @@ public class InterceptorResolver {
             return Collections.emptySet();
         }
         return Collections.unmodifiableSet(new HashSet<>(targetBindings));
-    }
-
-    /**
-     * Extracts interceptor bindings from an annotated element (class or method).
-     *
-     * <p>An interceptor binding is an annotation that is itself annotated with @InterceptorBinding.
-     *
-     * <p>For classes, this also includes interceptor bindings inherited from stereotypes.
-     *
-     * @param element the annotated element (class or method)
-     * @return set of interceptor binding annotations
-     */
-    private Set<Annotation> extractInterceptorBindings(AnnotatedElement element) {
-        return extractInterceptorBindings(element, null, null);
-    }
-
-    private Set<Annotation> extractInterceptorBindings(AnnotatedElement element, Class<?> targetClass) {
-        return extractInterceptorBindings(element, targetClass, null);
     }
 
     private Set<Annotation> extractInterceptorBindings(AnnotatedElement element,
@@ -386,21 +354,6 @@ public class InterceptorResolver {
     }
 
     /**
-     * Checks if an annotated element has any interceptor bindings.
-     *
-     * @param element the annotated element
-     * @return true if the element has at least one interceptor binding
-     */
-    private boolean hasInterceptorBindings(AnnotatedElement element) {
-        for (Annotation annotation : element.getAnnotations()) {
-            if (isInterceptorBinding(annotation.annotationType())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
      * Checks if an annotation type is an interceptor binding.
      *
      * <p>An interceptor binding is an annotation annotated with @InterceptorBinding.
@@ -409,9 +362,8 @@ public class InterceptorResolver {
      * @return true if the annotation is an interceptor binding
      */
     private boolean isInterceptorBinding(Class<? extends Annotation> annotationType) {
-        // Check both jakarta and javax namespaces for backward compatibility
-        return AnnotationsEnum.hasActivateRequestContextAnnotation(annotationType) ||
-               AnnotationsEnum.hasInterceptorBindingAnnotation(annotationType) ||
+        return hasActivateRequestContextAnnotation(annotationType) ||
+               hasInterceptorBindingAnnotation(annotationType) ||
                knowledgeBase.isRegisteredInterceptorBinding(annotationType);
     }
 
@@ -433,43 +385,6 @@ public class InterceptorResolver {
             return false;
         }
         return AnnotationsEnum.INTERCEPTOR_BINDING.matches(annotationType);
-    }
-
-    /**
-     * Returns all interceptor binding types that are currently registered in the system.
-     *
-     * <p>This is useful for diagnostic purposes or for validating interceptor configurations.
-     *
-     * @return set of all interceptor binding annotation types
-     */
-    public Set<Class<? extends Annotation>> getAllInterceptorBindingTypes() {
-        return knowledgeBase.getAllInterceptorBindingTypes();
-    }
-
-    /**
-     * Checks if a specific class has any interceptors that would apply to it.
-     *
-     * <p>This does not check individual methods - only class-level bindings.
-     *
-     * @param targetClass the class to check
-     * @param interceptionType the type of interception
-     * @return true if at least one interceptor would apply
-     */
-    public boolean hasInterceptors(Class<?> targetClass, InterceptionType interceptionType) {
-        return !resolveForClass(targetClass, interceptionType).isEmpty();
-    }
-
-    /**
-     * Checks if a specific method has any interceptors that would apply to it.
-     *
-     * <p>This considers both method-level and class-level bindings.
-     *
-     * @param targetClass the class containing the method
-     * @param method the method to check
-     * @return true if at least one interceptor would apply
-     */
-    public boolean hasInterceptors(Class<?> targetClass, Method method) {
-        return !resolve(targetClass, method, InterceptionType.AROUND_INVOKE).isEmpty();
     }
 
     @Override

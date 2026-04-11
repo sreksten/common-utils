@@ -24,6 +24,7 @@ import com.threeamigos.common.util.implementations.injection.util.LifecycleMetho
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServicesFactory;
+import jakarta.annotation.Nonnull;
 import jakarta.el.ELResolver;
 import jakarta.el.ExpressionFactory;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -111,7 +112,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     private static final ConcurrentHashMap<String, BeanManagerImpl> BEAN_MANAGER_ID_REGISTRY =
             new ConcurrentHashMap<>();
     private static final Map<Object, DependentReference<?>> TRANSIENT_DEPENDENT_REFERENCE_REGISTRY =
-            Collections.synchronizedMap(new IdentityHashMap<Object, DependentReference<?>>());
+            Collections.synchronizedMap(new IdentityHashMap<>());
 
     private final KnowledgeBase knowledgeBase;
     private final BeanResolver beanResolver;
@@ -127,7 +128,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     private volatile boolean afterDeploymentValidationFired;
     private transient volatile ELResolver beanManagerELResolver;
     private final Map<Class<? extends Annotation>, List<Context>> bceContextInstances =
-            new ConcurrentHashMap<Class<? extends Annotation>, List<Context>>();
+            new ConcurrentHashMap<>();
     private volatile boolean requireActiveContextForGetContext;
 
     /**
@@ -222,8 +223,8 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     public static Collection<BeanManagerImpl> getRegisteredBeanManagersSnapshot() {
-        return new ArrayList<BeanManagerImpl>(
-                new LinkedHashSet<BeanManagerImpl>(BEAN_MANAGER_ID_REGISTRY.values()));
+        return new ArrayList<>(
+                new LinkedHashSet<>(BEAN_MANAGER_ID_REGISTRY.values()));
     }
 
     public boolean destroyOwnedTransientReference(Object instance) {
@@ -236,7 +237,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         registerTransientReference(beanManagerId, bean, instance, creationalContext);
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     public static boolean destroyTransientReference(Object instance) {
         return destroyTransientReference(null, instance);
     }
@@ -258,9 +258,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             }
             TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.remove(instance);
         }
-        if (reference == null) {
-            return false;
-        }
 
         try {
             Bean bean = reference.bean;
@@ -272,7 +269,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static <T> void registerTransientReference(String ownerBeanManagerId,
                                                        Bean<T> bean,
                                                        T instance,
@@ -282,7 +278,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
         synchronized (TRANSIENT_DEPENDENT_REFERENCE_REGISTRY) {
             TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.put(instance,
-                    new DependentReference<T>(ownerBeanManagerId, bean, creationalContext));
+                    new DependentReference<>(ownerBeanManagerId, bean, creationalContext));
         }
     }
 
@@ -432,7 +428,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
         for (Type beanType : beanTypes) {
             try {
-                if (!sameRawType(requestedType, beanType)) {
+                if (notSameRawType(requestedType, beanType)) {
                     continue;
                 }
                 if (typeChecker.isAssignable(requestedType, beanType)) {
@@ -451,12 +447,12 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         return alternate != null && beanTypes.contains(alternate);
     }
 
-    private boolean sameRawType(Type requiredType, Type beanType) {
+    private boolean notSameRawType(Type requiredType, Type beanType) {
         if (requiredType == null || beanType == null) {
-            return false;
+            return true;
         }
         if (requiredType instanceof TypeVariable || requiredType instanceof WildcardType) {
-            return true;
+            return false;
         }
 
         Class<?> requiredRaw;
@@ -465,13 +461,13 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             requiredRaw = normalizePrimitiveType(RawTypeExtractor.getRawType(requiredType));
             beanRaw = normalizePrimitiveType(RawTypeExtractor.getRawType(beanType));
         } catch (RuntimeException e) {
-            return true;
+            return false;
         }
 
         if (requiredRaw == null || beanRaw == null) {
-            return true;
+            return false;
         }
-        return requiredRaw.equals(beanRaw);
+        return !requiredRaw.equals(beanRaw);
     }
 
     private Class<?> normalizePrimitiveType(Class<?> type) {
@@ -644,7 +640,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             // Check type compatibility
             boolean typeMatches = false;
             for (Type type : bean.getTypes()) {
-                if (!sameRawType(beanType, type)) {
+                if (notSameRawType(beanType, type)) {
                     continue;
                 }
                 if (typeChecker.isLookupTypeAssignable(beanType, type)) {
@@ -659,7 +655,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
             // Check qualifier match
             if (qualifiersMatchIncludingBeanName(requiredQualifiers, bean)) {
-                if (!isBeanAccessibleFromCurrentInjectionPoint(bean)) {
+                if (isNotBeanAccessibleFromCurrentInjectionPoint(bean)) {
                     continue;
                 }
                 matchingBeans.add(bean);
@@ -685,7 +681,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
         Annotation[] requestedQualifiers = qualifiers == null ? new Annotation[0] : qualifiers;
         Set<Annotation> lookupBeanQualifiers = normalizeBeanQualifiers(Arrays.asList(requestedQualifiers));
-        Set<Bean<?>> builtInBeans = new LinkedHashSet<Bean<?>>();
+        Set<Bean<?>> builtInBeans = new LinkedHashSet<>();
 
         if (Event.class.equals(rawClass)) {
             builtInBeans.add(new BuiltInEventBean(typeArguments[0], beanType, lookupBeanQualifiers, this));
@@ -768,7 +764,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
             boolean typeMatches = false;
             for (Type type : bean.getTypes()) {
-                if (!sameRawType(beanType, type)) {
+                if (notSameRawType(beanType, type)) {
                     continue;
                 }
                 if (typeChecker.isLookupTypeAssignable(beanType, type)) {
@@ -781,7 +777,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 continue;
             }
 
-            if (!isBeanAccessibleFromCurrentInjectionPoint(bean)) {
+            if (isNotBeanAccessibleFromCurrentInjectionPoint(bean)) {
                 continue;
             }
             matchingBeans.add(new LegacyNewBeanAdapter(bean));
@@ -997,7 +993,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         Set<Class<?>> specializedSuperclasses = new HashSet<>();
         for (Bean<? extends X> candidate : candidates) {
             Class<?> beanClass = candidate.getBeanClass();
-            if (beanClass != null && hasSpecializesAnnotation(beanClass)) {
+            if (hasSpecializesAnnotation(beanClass)) {
                 specializedSuperclasses.addAll(collectSpecializedSuperclasses(beanClass));
             }
         }
@@ -1017,7 +1013,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
     private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
         Set<Class<?>> out = new HashSet<>();
-        if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
+        if (!hasSpecializesAnnotation(beanClass)) {
             return out;
         }
         Class<?> current = beanClass.getSuperclass();
@@ -1212,18 +1208,18 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         return false;
     }
 
-    private boolean isBeanAccessibleFromCurrentInjectionPoint(Bean<?> bean) {
+    private boolean isNotBeanAccessibleFromCurrentInjectionPoint(Bean<?> bean) {
         if (bean == null) {
-            return false;
+            return true;
         }
         Class<?> beanClass = bean.getBeanClass();
         if (beanClass == null) {
-            return true;
+            return false;
         }
 
         InjectionPoint injectionPoint = beanResolver != null ? beanResolver.getCurrentInjectionPoint() : null;
         if (injectionPoint == null) {
-            return !Modifier.isPrivate(beanClass.getModifiers());
+            return Modifier.isPrivate(beanClass.getModifiers());
         }
 
         Member member = injectionPoint.getMember();
@@ -1232,7 +1228,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             consumerClass = injectionPoint.getBean().getBeanClass();
         }
 
-        return isClassAccessibleTo(beanClass, consumerClass);
+        return !isClassAccessibleTo(beanClass, consumerClass);
     }
 
     private boolean isClassAccessibleTo(Class<?> beanClass, Class<?> consumerClass) {
@@ -1369,7 +1365,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
             Set<Annotation> observedQualifiers = syntheticObserver.getObservedQualifiers();
             Set<Annotation> normalizedObservedQualifiers = normalizeObservedEventQualifiers(
-                    observedQualifiers == null ? Collections.<Annotation>emptySet() : observedQualifiers);
+                    observedQualifiers == null ? Collections.emptySet() : observedQualifiers);
             if (observerQualifiersMatch(normalizedEventQualifiers, normalizedObservedQualifiers)) {
                 matchingObserverInfos.add(createSyntheticObserverInfo(syntheticObserver));
             }
@@ -1881,7 +1877,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return Collections.emptyList();
         }
 
-        List<Context> created = new ArrayList<Context>();
+        List<Context> created = new ArrayList<>();
         for (Class<? extends AlterableContext> contextImplementation : implementations) {
             try {
                 created.add(contextImplementation.getDeclaredConstructor().newInstance());
@@ -1911,11 +1907,11 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             if (byId != null) {
                 return byId;
             }
-            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-            if (tccl == null) {
-                tccl = BeanManagerImpl.class.getClassLoader();
+            ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+            if (ccl == null) {
+                ccl = BeanManagerImpl.class.getClassLoader();
             }
-            BeanManagerImpl byClassLoader = BeanManagerImpl.getRegisteredBeanManager(tccl);
+            BeanManagerImpl byClassLoader = BeanManagerImpl.getRegisteredBeanManager(ccl);
             if (byClassLoader != null) {
                 return byClassLoader;
             }
@@ -1949,12 +1945,12 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         if (beanResolver != null) {
             Type eventObjectType = new ParameterizedType() {
                 @Override
-                public Type[] getActualTypeArguments() {
+                public @Nonnull Type[] getActualTypeArguments() {
                     return new Type[]{Object.class};
                 }
 
                 @Override
-                public Type getRawType() {
+                public @Nonnull Type getRawType() {
                     return Event.class;
                 }
 
@@ -1975,10 +1971,10 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         }
 
         // Fallback to raw built-in EventImpl if resolver integration is unavailable.
-        Set<Annotation> qualifiers = new HashSet<Annotation>();
+        Set<Annotation> qualifiers = new HashSet<>();
         qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
         qualifiers.add(new AnyLiteral());
-        return new EventImpl<Object>(
+        return new EventImpl<>(
                 Object.class,
                 qualifiers,
                 knowledgeBase,
@@ -2127,7 +2123,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 typeMatches = true;
                 break;
             }
-            if (!sameRawType(requiredType, beanType)) {
+            if (notSameRawType(requiredType, beanType)) {
                 continue;
             }
             if (typeChecker.isAssignable(requiredType, beanType)) {
@@ -2307,7 +2303,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 try {
                     instance = dependentBean.create(childContext);
                 } catch (jakarta.enterprise.inject.CreationException creationException) {
-                    if (isUnconstructibleManagedBean(bean) || hasCause(creationException, NoSuchMethodException.class)) {
+                    if (isUnconstructibleManagedBean(bean) || hasCause(creationException)) {
                         throw new jakarta.enterprise.inject.UnsatisfiedResolutionException(
                                 "No constructible bean found for injection point: " + injectionPoint);
                     }
@@ -2351,13 +2347,13 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         return true;
     }
 
-    private boolean hasCause(Throwable throwable, Class<? extends Throwable> expectedType) {
-        if (throwable == null || expectedType == null) {
+    private boolean hasCause(Throwable throwable) {
+        if (throwable == null) {
             return false;
         }
         Throwable current = throwable;
         while (current != null) {
-            if (expectedType.isInstance(current)) {
+            if (current instanceof NoSuchMethodException) {
                 return true;
             }
             current = current.getCause();
@@ -3046,7 +3042,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 }
             }
             Type ownerType = parameterizedType.getOwnerType();
-            return ownerType != null && containsWildcardOrTypeVariable(ownerType);
+            return containsWildcardOrTypeVariable(ownerType);
         }
         if (type instanceof GenericArrayType) {
             return containsWildcardOrTypeVariable(((GenericArrayType) type).getGenericComponentType());
@@ -3286,7 +3282,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     private <T> boolean isDecoratorSyntheticBean(BeanAttributes<T> attributes, Class<T> beanClass) {
-        if (beanClass != null && hasDecoratorAnnotation(beanClass)) {
+        if (hasDecoratorAnnotation(beanClass)) {
             return true;
         }
         if (attributes == null || attributes.getStereotypes() == null) {
@@ -3508,7 +3504,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 }
             }
             Type ownerType = ((ParameterizedType) type).getOwnerType();
-            return ownerType != null && containsTypeVariable(ownerType);
+            return containsTypeVariable(ownerType);
         }
         if (type instanceof GenericArrayType) {
             return containsTypeVariable(((GenericArrayType) type).getGenericComponentType());
@@ -3724,7 +3720,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         return new ObserverMethodInfo(
                 syntheticObserver.getObservedType(),
                 syntheticObserver.getObservedQualifiers() == null
-                        ? Collections.<Annotation>emptySet()
+                        ? Collections.emptySet()
                         : syntheticObserver.getObservedQualifiers(),
                 syntheticObserver.getReception(),
                 syntheticObserver.getTransactionPhase(),
@@ -3914,12 +3910,12 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return "";
         }
 
-        List<String> entries = new ArrayList<String>();
+        List<String> entries = new ArrayList<>();
         for (Annotation qualifier : qualifiers) {
             if (qualifier == null) {
                 continue;
             }
-            entries.add(qualifier.annotationType().getName() + ":" + qualifier.toString());
+            entries.add(qualifier.annotationType().getName() + ":" + qualifier);
         }
         Collections.sort(entries);
         return String.join(",", entries);
@@ -4201,20 +4197,18 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                  current != null && !Object.class.equals(current);
                  current = current.getSuperclass()) {
                 for (Field field : current.getDeclaredFields()) {
-                    if (Modifier.isStatic(field.getModifiers()) || !hasInjectMarker(field.getAnnotations())) {
+                    if (Modifier.isStatic(field.getModifiers()) || hasNotInjectMarker(field.getAnnotations())) {
                         continue;
                     }
                     if (delegateMember instanceof Field && delegateMember.equals(field)) {
-                        if (delegateInjectionPoint != null) {
-                            resolved.add(delegateInjectionPoint);
-                        }
+                        resolved.add(delegateInjectionPoint);
                         continue;
                     }
-                    resolved.add(new InjectionPointImpl<Object>(field, decoratorMetadataBean));
+                    resolved.add(new InjectionPointImpl<>(field, decoratorMetadataBean));
                 }
 
                 for (Method method : current.getDeclaredMethods()) {
-                    if (!hasInjectMarker(method.getAnnotations())) {
+                    if (hasNotInjectMarker(method.getAnnotations())) {
                         continue;
                     }
                     Parameter[] parameters = method.getParameters();
@@ -4227,13 +4221,13 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                             }
                             continue;
                         }
-                        resolved.add(new InjectionPointImpl<Object>(parameter, decoratorMetadataBean));
+                        resolved.add(new InjectionPointImpl<>(parameter, decoratorMetadataBean));
                     }
                 }
             }
 
             for (Constructor<?> constructor : decoratorClass.getDeclaredConstructors()) {
-                if (!hasInjectMarker(constructor.getAnnotations())) {
+                if (hasNotInjectMarker(constructor.getAnnotations())) {
                     continue;
                 }
                 Parameter[] parameters = constructor.getParameters();
@@ -4246,7 +4240,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                         }
                         continue;
                     }
-                    resolved.add(new InjectionPointImpl<Object>(parameter, decoratorMetadataBean));
+                    resolved.add(new InjectionPointImpl<>(parameter, decoratorMetadataBean));
                 }
             }
         }
@@ -4281,19 +4275,19 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         return executable.getParameterCount() == 1;
     }
 
-    private boolean hasInjectMarker(Annotation[] annotations) {
+    private boolean hasNotInjectMarker(Annotation[] annotations) {
         if (annotations == null) {
-            return false;
+            return true;
         }
         for (Annotation annotation : annotations) {
             if (annotation == null) {
                 continue;
             }
             if (hasInjectAnnotation(annotation.annotationType())) {
-                return true;
+                return false;
             }
         }
-        return false;
+        return true;
     }
 
     /**
@@ -4545,13 +4539,13 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             this.eventPayloadType = eventPayloadType;
             this.beanManager = beanManager;
 
-            Set<Type> resolvedTypes = new LinkedHashSet<Type>();
+            Set<Type> resolvedTypes = new LinkedHashSet<>();
             resolvedTypes.add(Event.class);
             resolvedTypes.add(Object.class);
             resolvedTypes.add(requestedBeanType);
             this.types = Collections.unmodifiableSet(resolvedTypes);
 
-            Set<Annotation> resolvedQualifiers = new LinkedHashSet<Annotation>();
+            Set<Annotation> resolvedQualifiers = new LinkedHashSet<>();
             if (qualifiers != null) {
                 resolvedQualifiers.addAll(qualifiers);
             }
@@ -4571,9 +4565,9 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
         @Override
         public Event<?> create(CreationalContext<Event<?>> context) {
-            return new EventImpl<Object>(
+            return new EventImpl<>(
                     eventPayloadType,
-                    new LinkedHashSet<Annotation>(qualifiers),
+                    new LinkedHashSet<>(qualifiers),
                     beanManager.knowledgeBase,
                     beanManager.beanResolver,
                     beanManager.contextManager,
@@ -4649,20 +4643,20 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             this.requestedBeanType = requestedBeanType;
             this.beanManager = beanManager;
 
-            Set<Type> resolvedTypes = new LinkedHashSet<Type>();
+            Set<Type> resolvedTypes = new LinkedHashSet<>();
             resolvedTypes.add(Instance.class);
             resolvedTypes.add(Object.class);
             resolvedTypes.add(requestedBeanType);
             this.types = Collections.unmodifiableSet(resolvedTypes);
 
-            Set<Annotation> resolvedQualifiers = new LinkedHashSet<Annotation>();
+            Set<Annotation> resolvedQualifiers = new LinkedHashSet<>();
             if (qualifiers != null) {
                 resolvedQualifiers.addAll(qualifiers);
             }
             resolvedQualifiers.add(Any.Literal.INSTANCE);
             this.qualifiers = Collections.unmodifiableSet(resolvedQualifiers);
 
-            Set<Annotation> requestedResolutionQualifiers = new LinkedHashSet<Annotation>();
+            Set<Annotation> requestedResolutionQualifiers = new LinkedHashSet<>();
             if (resolutionQualifiers != null) {
                 requestedResolutionQualifiers.addAll(resolutionQualifiers);
             }
@@ -4681,7 +4675,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
         @Override
         public Instance<?> create(CreationalContext<Instance<?>> context) {
-            Annotation[] qualifierArray = resolutionQualifiers.toArray(new Annotation[resolutionQualifiers.size()]);
+            Annotation[] qualifierArray = resolutionQualifiers.toArray(new Annotation[0]);
             Object resolved = beanManager.beanResolver.resolve(requestedBeanType, qualifierArray);
             if (!(resolved instanceof Instance<?>)) {
                 throw new DefinitionException(
@@ -4754,9 +4748,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         private void invokeCloseIfPresent(Instance<?> instance) {
             try {
                 Method closeMethod = instance.getClass().getMethod("close");
-                if (closeMethod != null) {
-                    closeMethod.invoke(instance);
-                }
+                closeMethod.invoke(instance);
             } catch (NoSuchMethodException ignored) {
                 // Best-effort cleanup for unknown Instance implementations.
             } catch (Exception ignored) {
@@ -4787,7 +4779,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return defaultedTypeName(readNamedValue(named), type.getJavaClass());
         }
 
-        Set<Class<? extends Annotation>> visited = new HashSet<Class<? extends Annotation>>();
+        Set<Class<? extends Annotation>> visited = new HashSet<>();
         for (Class<? extends Annotation> stereotype : extractStereotypesFromAnnotated(type)) {
             String fromStereotype = extractNameFromStereotype(stereotype, type.getJavaClass(), visited);
             if (fromStereotype != null) {
@@ -4889,7 +4881,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         Class<? extends Annotation> stereotypeScope = null;
         for (Class<? extends Annotation> stereotype : extractStereotypesFromAnnotated(annotated)) {
             Class<? extends Annotation> inheritedScope =
-                    extractScopeFromStereotype(stereotype, new HashSet<Class<? extends Annotation>>());
+                    extractScopeFromStereotype(stereotype, new HashSet<>());
             if (inheritedScope == null) {
                 continue;
             }
@@ -4962,7 +4954,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
      * Extracts stereotypes from an Annotated element.
      */
     private Set<Class<? extends Annotation>> extractStereotypesFromAnnotated(jakarta.enterprise.inject.spi.Annotated annotated) {
-        Set<Class<? extends Annotation>> stereotypes = new HashSet<Class<? extends Annotation>>();
+        Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
         for (Annotation ann : annotated.getAnnotations()) {
             if (isStereotype(ann.annotationType())) {
                 stereotypes.add(ann.annotationType());
@@ -4972,11 +4964,11 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     private Set<Annotation> extractBeanQualifiers(jakarta.enterprise.inject.spi.Annotated annotated) {
-        Set<Annotation> qualifiers = new LinkedHashSet<Annotation>(
+        Set<Annotation> qualifiers = new LinkedHashSet<>(
                 com.threeamigos.common.util.implementations.injection.util.QualifiersHelper
                         .extractQualifierAnnotations(annotated.getAnnotations().toArray(new Annotation[0])));
         for (Class<? extends Annotation> stereotype : extractStereotypesFromAnnotated(annotated)) {
-            qualifiers.addAll(extractQualifiersFromStereotype(stereotype, new HashSet<Class<? extends Annotation>>()));
+            qualifiers.addAll(extractQualifiersFromStereotype(stereotype, new HashSet<>()));
         }
         return qualifiers;
     }
@@ -4987,7 +4979,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return Collections.emptySet();
         }
 
-        Set<Annotation> qualifiers = new LinkedHashSet<Annotation>();
+        Set<Annotation> qualifiers = new LinkedHashSet<>();
 
         Set<Annotation> registeredDefinition = knowledgeBase.getStereotypeDefinition(stereotype);
         if (registeredDefinition != null && !registeredDefinition.isEmpty()) {
@@ -5017,7 +5009,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     private Set<Type> extractTypesFromAnnotatedType(AnnotatedType<?> type) {
-        Set<Type> unrestrictedTypes = new LinkedHashSet<Type>(type.getTypeClosure());
+        Set<Type> unrestrictedTypes = new LinkedHashSet<>(type.getTypeClosure());
         if (unrestrictedTypes.isEmpty()) {
             unrestrictedTypes.addAll(TypeClosureHelper.extractTypesFromClass(type.getJavaClass()));
         }
@@ -5063,7 +5055,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             throw new IllegalArgumentException("Definition error: @Typed may only be used when raw bean type can be determined");
         }
 
-        Set<Type> types = new LinkedHashSet<Type>();
+        Set<Type> types = new LinkedHashSet<>();
 
         try {
             Method valueMethod = typedAnnotation.annotationType().getMethod("value");
@@ -5105,7 +5097,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     private Set<Type> keepLegalBeanTypes(Set<Type> candidateTypes) {
-        Set<Type> legalTypes = new LinkedHashSet<Type>();
+        Set<Type> legalTypes = new LinkedHashSet<>();
         if (candidateTypes == null) {
             legalTypes.add(Object.class);
             return legalTypes;
@@ -5161,7 +5153,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
                 return true;
             }
             if (isStereotype(annotationType) &&
-                    stereotypeDeclaresAlternative(annotationType, new HashSet<Class<? extends Annotation>>())) {
+                    stereotypeDeclaresAlternative(annotationType, new HashSet<>())) {
                 return true;
             }
         }
@@ -5275,13 +5267,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         return hasScopeAnnotation(annotationType) ||
                hasNormalScopeAnnotation(annotationType) ||
                knowledgeBase.isRegisteredScope(annotationType);
-    }
-
-    /**
-     * Checks if an annotation type is a stereotype annotation.
-     */
-    private boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
-        return hasStereotypeAnnotation(annotationType);
     }
 
     // ==================== Container Internal Methods ====================

@@ -1,9 +1,13 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
-import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
+import jakarta.enterprise.inject.build.compatible.spi.*;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.inject.spi.InterceptionType;
+import jakarta.enterprise.lang.model.declarations.ClassInfo;
+import jakarta.enterprise.lang.model.declarations.FieldInfo;
+import jakarta.enterprise.lang.model.declarations.MethodInfo;
+import jakarta.enterprise.lang.model.types.Type;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -61,7 +65,7 @@ final class BceInterceptorInfo implements jakarta.enterprise.inject.build.compat
     }
 
     @Override
-    public jakarta.enterprise.lang.model.declarations.ClassInfo declaringClass() {
+    public ClassInfo declaringClass() {
         return beanInfoDelegate.declaringClass();
     }
 
@@ -71,7 +75,7 @@ final class BceInterceptorInfo implements jakarta.enterprise.inject.build.compat
     }
 
     @Override
-    public jakarta.enterprise.inject.build.compatible.spi.ScopeInfo scope() {
+    public ScopeInfo scope() {
         return beanInfoDelegate.scope();
     }
 
@@ -81,22 +85,22 @@ final class BceInterceptorInfo implements jakarta.enterprise.inject.build.compat
     }
 
     @Override
-    public Collection<jakarta.enterprise.lang.model.types.Type> types() {
+    public Collection<Type> types() {
         return beanInfoDelegate.types();
     }
 
     @Override
-    public jakarta.enterprise.inject.build.compatible.spi.DisposerInfo disposer() {
+    public DisposerInfo disposer() {
         return beanInfoDelegate.disposer();
     }
 
     @Override
-    public Collection<jakarta.enterprise.inject.build.compatible.spi.StereotypeInfo> stereotypes() {
+    public Collection<StereotypeInfo> stereotypes() {
         return beanInfoDelegate.stereotypes();
     }
 
     @Override
-    public Collection<jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo> injectionPoints() {
+    public Collection<InjectionPointInfo> injectionPoints() {
         return beanInfoDelegate.injectionPoints();
     }
 
@@ -126,12 +130,12 @@ final class BceInterceptorInfo implements jakarta.enterprise.inject.build.compat
     }
 
     @Override
-    public jakarta.enterprise.lang.model.declarations.MethodInfo producerMethod() {
+    public MethodInfo producerMethod() {
         return beanInfoDelegate.producerMethod();
     }
 
     @Override
-    public jakarta.enterprise.lang.model.declarations.FieldInfo producerField() {
+    public FieldInfo producerField() {
         return beanInfoDelegate.producerField();
     }
 

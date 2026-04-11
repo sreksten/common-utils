@@ -54,7 +54,7 @@ import java.util.WeakHashMap;
  */
 public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> {
 
-    private static final ThreadLocal<Boolean> CONTEXTUAL_PRODUCE_IN_PROGRESS = new ThreadLocal<Boolean>();
+    private static final ThreadLocal<Boolean> CONTEXTUAL_PRODUCE_IN_PROGRESS = new ThreadLocal<>();
 
     private final AnnotatedType<T> annotatedType;
     private final BeanManager beanManager;
@@ -136,7 +136,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         private final Set<Method> injectableMethods;
         private final Set<InjectionPoint> injectionPoints;
         private final Map<Object, Object> wrappedInstanceTargets =
-                Collections.synchronizedMap(new WeakHashMap<Object, Object>());
+                Collections.synchronizedMap(new WeakHashMap<>());
 
         public InjectionTargetImpl(AnnotatedType<T> annotatedType, BeanManager beanManager, Bean<T> bean) {
             this.annotatedType = annotatedType;
@@ -353,7 +353,6 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             return interceptionFactory.createInterceptedInstance(instance);
         }
 
-        @SuppressWarnings("unchecked")
         private T applyProducedInstanceWrapping(T instance, CreationalContext<T> creationalContext) {
             if (instance == null) {
                 return null;
@@ -389,7 +388,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private Set<Annotation> getClassLevelInterceptorBindingsFromAnnotatedType() {
-            Set<Annotation> bindings = new HashSet<Annotation>();
+            Set<Annotation> bindings = new HashSet<>();
             for (Annotation annotation : annotatedType.getAnnotations()) {
                 if (beanManager.isInterceptorBinding(annotation.annotationType())) {
                     bindings.add(annotation);
@@ -441,7 +440,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
                 if (isInjectableConstructor(constructor)) {
                     for (java.lang.reflect.Parameter param : constructor.getParameters()) {
-                        points.add(new InjectionPointImpl(param, bean));
+                        points.add(new InjectionPointImpl<>(param, bean));
                     }
                 }
             }
@@ -450,7 +449,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             for (Class<?> clazz : hierarchy) {
                 for (Field field : clazz.getDeclaredFields()) {
                     if (isInjectableField(field)) {
-                        points.add(new InjectionPointImpl(field, bean));
+                        points.add(new InjectionPointImpl<>(field, bean));
                     }
                 }
             }
@@ -460,7 +459,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 for (Method method : clazz.getDeclaredMethods()) {
                     if (isInjectableMethod(method)) {
                         for (java.lang.reflect.Parameter param : method.getParameters()) {
-                            points.add(new InjectionPointImpl(param, bean));
+                            points.add(new InjectionPointImpl<>(param, bean));
                         }
                     }
                 }
@@ -533,11 +532,11 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private InjectionPoint createInjectionPoint(Field field, Type resolvedType) {
-            return new ResolvedInjectionPoint(new InjectionPointImpl(field, bean), resolvedType);
+            return new ResolvedInjectionPoint(new InjectionPointImpl<>(field, bean), resolvedType);
         }
 
         private InjectionPoint createInjectionPoint(Parameter parameter, Type resolvedType) {
-            return new ResolvedInjectionPoint(new InjectionPointImpl(parameter, bean), resolvedType);
+            return new ResolvedInjectionPoint(new InjectionPointImpl<>(parameter, bean), resolvedType);
         }
 
         private Object defaultPrimitiveValue(Class<?> primitiveType) {
@@ -659,7 +658,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private Set<Constructor<?>> discoverInjectableConstructors() {
-            Set<Constructor<?>> constructors = new LinkedHashSet<Constructor<?>>();
+            Set<Constructor<?>> constructors = new LinkedHashSet<>();
             for (AnnotatedConstructor<T> constructor : annotatedType.getConstructors()) {
                 if (hasInjectAnnotation(constructor.getAnnotations())) {
                     constructors.add(constructor.getJavaMember());
@@ -669,7 +668,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private Set<Field> discoverInjectableFields() {
-            Set<Field> fields = new LinkedHashSet<Field>();
+            Set<Field> fields = new LinkedHashSet<>();
             for (AnnotatedField<? super T> field : annotatedType.getFields()) {
                 if (hasInjectAnnotation(field.getAnnotations())) {
                     fields.add(field.getJavaMember());
@@ -679,7 +678,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private Set<Method> discoverInjectableMethods() {
-            Set<Method> methods = new LinkedHashSet<Method>();
+            Set<Method> methods = new LinkedHashSet<>();
             for (AnnotatedMethod<? super T> method : annotatedType.getMethods()) {
                 if (hasInjectAnnotation(method.getAnnotations())) {
                     methods.add(method.getJavaMember());

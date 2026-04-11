@@ -31,12 +31,10 @@ public class DecoratorChainBuilder {
      *
      * @param decoratorInfo     the decorator metadata
      * @param decoratorInstance the decorator instance
-     * @return this builder for chaining
      * @throws NullPointerException if any parameter is null
      */
-    public DecoratorChainBuilder addDecorator(DecoratorInfo decoratorInfo, Object decoratorInstance) {
+    public void addDecorator(DecoratorInfo decoratorInfo, Object decoratorInstance) {
         decorators.add(new DecoratorInstance(decoratorInfo, decoratorInstance));
-        return this;
     }
 
     /**
@@ -53,9 +51,8 @@ public class DecoratorChainBuilder {
         return this;
     }
 
-    public DecoratorChainBuilder setOutermostInstance(Object outermostInstance) {
+    public void setOutermostInstance(Object outermostInstance) {
         this.outermostInstance = outermostInstance;
-        return this;
     }
 
     /**

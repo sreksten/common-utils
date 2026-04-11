@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import com.threeamigos.common.util.implementations.injection.*;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
@@ -18,8 +17,6 @@ import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetad
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
-import jakarta.annotation.Priority;
-import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.DefinitionException;
@@ -128,11 +125,8 @@ public class CDI41InjectionValidator {
      *   <li>Alternative bean validation - ensures only one alternative per type</li>
      *   <li>Circular dependency detection - validates injection graphs have no cycles</li>
      * </ul>
-     *
-     * @return true if all injection points can be satisfied, false otherwise
      */
-    public boolean validateAllInjectionPoints() {
-        boolean allValid = true;
+    public void validateAllInjectionPoints() {
 
         // Only validate injection points of valid beans
         Collection<Bean<?>> validBeans = knowledgeBase.getValidBeans().stream()
@@ -140,37 +134,33 @@ public class CDI41InjectionValidator {
                 .collect(Collectors.toList());
 
         // Enhancement 3: Validate alternative beans (only one alternative per type)
-        allValid &= validateAlternatives(validBeans);
+        validateAlternatives(validBeans);
         // CDI 4.1 §5.3.1: validate ambiguous bean names at initialization.
-        allValid &= validateNameResolution(validBeans);
+        validateNameResolution(validBeans);
         // CDI 4.1 §20.3: if a decorator matches a managed bean, the bean class must be proxyable.
-        allValid &= validateDecoratedManagedBeansProxyable(validBeans);
+        validateDecoratedManagedBeansProxyable(validBeans);
         // CDI 4.1 §3.10: intercepted beans must be proxyable.
-        allValid &= validateInterceptedManagedBeansProxyable(validBeans);
+        validateInterceptedManagedBeansProxyable(validBeans);
 
         // Enhancement 4: Validate passivation capability for beans in passivating scopes
-        allValid &= validatePassivation(validBeans);
+        validatePassivation(validBeans);
 
         // Enhancement 5: Scan and validate observer methods
-        allValid &= scanAndValidateObserverMethods(validBeans);
+        scanAndValidateObserverMethods(validBeans);
 
         Set<Bean<?>> globallyVisited = Collections.newSetFromMap(new IdentityHashMap<>());
 
         // Validate each bean's dependency graph (including circular dependency detection)
         for (Bean<?> bean : validBeans) {
-            boolean valid = validateBeanWithCircularCheck(bean, globallyVisited);
-            allValid &= valid;
+            validateBeanWithCircularCheck(bean, globallyVisited);
         }
 
         // Clean up thread-local storage
         resolutionStack.remove();
         reportedCircularDependencies.remove();
-
-        return allValid;
     }
 
-    private boolean validateDecoratedManagedBeansProxyable(Collection<Bean<?>> validBeans) {
-        boolean allValid = true;
+    private void validateDecoratedManagedBeansProxyable(Collection<Bean<?>> validBeans) {
         for (Bean<?> bean : validBeans) {
             if (!(bean instanceof BeanImpl<?>)) {
                 continue;
@@ -187,13 +177,10 @@ public class CDI41InjectionValidator {
             knowledgeBase.addDefinitionError(
                     "Managed bean " + bean.getBeanClass().getName() +
                             " matches a decorator but is unproxyable: " + reason);
-            allValid = false;
         }
-        return allValid;
     }
 
-    private boolean validateInterceptedManagedBeansProxyable(Collection<Bean<?>> validBeans) {
-        boolean allValid = true;
+    private void validateInterceptedManagedBeansProxyable(Collection<Bean<?>> validBeans) {
         for (Bean<?> bean : validBeans) {
             if (!(bean instanceof BeanImpl<?>)) {
                 continue;
@@ -231,14 +218,10 @@ public class CDI41InjectionValidator {
                                 " has bound interceptor(s) but declares non-private final method: " +
                                 finalBusinessMethod.getName());
             }
-            allValid = false;
         }
-        return allValid;
     }
 
-    private boolean validateNameResolution(Collection<Bean<?>> validBeans) {
-        boolean allValid = true;
-
+    private void validateNameResolution(Collection<Bean<?>> validBeans) {
         Map<String, Set<Bean<?>>> beansByName = new HashMap<>();
         for (Bean<?> bean : validBeans) {
             String name = bean.getName();
@@ -266,13 +249,12 @@ public class CDI41InjectionValidator {
                 knowledgeBase.addDefinitionError(
                         "Ambiguous bean name '" + beanName + "': [" + beans + "]"
                 );
-                allValid = false;
             }
         }
 
         // CDI 4.1 §5.3.1: deployment problem when one name is x and another is x.y
         // where y is a valid bean name. This must apply recursively as well
-        // (e.g. "foo.bar" vs "foo.bar.baz").
+        // (e.g. "foo.bar" vs. "foo.bar.baz").
         Set<String> names = new HashSet<>(beansByName.keySet());
         Set<String> reportedConflicts = new HashSet<>();
         for (String shorter : names) {
@@ -298,12 +280,9 @@ public class CDI41InjectionValidator {
                     knowledgeBase.addDefinitionError(
                             "Bean name conflict detected: '" + shorter + "' and '" + longer + "'"
                     );
-                    allValid = false;
                 }
             }
         }
-
-        return allValid;
     }
 
     private Bean<?> resolveAmbiguousName(Set<Bean<?>> candidates) {
@@ -436,11 +415,11 @@ public class CDI41InjectionValidator {
     // Enhancement 2: Circular Dependency Detection
     // ============================================
 
-    private boolean validateBeanWithCircularCheck(Bean<?> rootBean, Set<Bean<?>> globallyVisited) {
+    private void validateBeanWithCircularCheck(Bean<?> rootBean, Set<Bean<?>> globallyVisited) {
         Deque<Bean<?>> stack = resolutionStack.get();
         stack.clear();
         try {
-            return validateBeanDependencies(rootBean, stack, globallyVisited);
+            validateBeanDependencies(rootBean, stack, globallyVisited);
         } finally {
             stack.clear();
         }
@@ -649,11 +628,8 @@ public class CDI41InjectionValidator {
      * </pre>
      *
      * @param validBeans collection of all valid beans
-     * @return true if alternatives are properly configured per CDI 4.1 spec
      */
-    private boolean validateAlternatives(Collection<Bean<?>> validBeans) {
-        boolean allValid = true;
-
+    private void validateAlternatives(Collection<Bean<?>> validBeans) {
         // Group by type AND effective qualifiers to detect ambiguity only within the same qualifier set.
         Map<Type, Map<Set<Annotation>, Set<Bean<?>>>> byTypeAndQuals = new HashMap<>();
 
@@ -714,7 +690,6 @@ public class CDI41InjectionValidator {
                                 "Multiple alternatives without @Priority - cannot determine precedence. " +
                                 "Add @Priority to resolve ambiguity."
                         );
-                        allValid = false;
                     }
 
                     if (!priorities.isEmpty()) {
@@ -735,14 +710,11 @@ public class CDI41InjectionValidator {
                                     ": [" + samePriorityList + "] all have the same (highest) priority @Priority(" + max + "). " +
                                     "Alternatives must have different priority values to resolve ambiguity."
                             );
-                            allValid = false;
                         }
                     }
                 }
             }
         }
-
-        return allValid;
     }
 
     private boolean isJavaLangObject(Type type) {
@@ -779,21 +751,18 @@ public class CDI41InjectionValidator {
      * passivation-capable dependencies because they are injected as proxies.
      *
      * @param validBeans collection of valid beans to validate
-     * @return true if all beans satisfy passivation requirements, false otherwise
      */
-    private boolean validatePassivation(Collection<Bean<?>> validBeans) {
-        boolean allValid = true;
-
+    private void validatePassivation(Collection<Bean<?>> validBeans) {
         // Track visited beans to avoid infinite recursion in circular dependencies
         Set<Bean<?>> visited = new HashSet<>();
         Set<ProducerBean<?>> validatedProducerBeans =
-                Collections.newSetFromMap(new IdentityHashMap<ProducerBean<?>, Boolean>());
+                Collections.newSetFromMap(new IdentityHashMap<>());
 
         for (ProducerBean<?> producerBean : knowledgeBase.getProducerBeans()) {
             if (producerBean == null) {
                 continue;
             }
-            if (!knowledgeBase.isImplicitBeanArchiveScanningEnabled()) {
+            if (knowledgeBase.isImplicitBeanArchiveScanningDisabled()) {
                 BeanArchiveMode archiveMode = knowledgeBase.getBeanArchiveMode(producerBean.getDeclaringClass());
                 if (archiveMode != BeanArchiveMode.EXPLICIT) {
                     continue;
@@ -803,7 +772,7 @@ public class CDI41InjectionValidator {
                 continue;
             }
             if (validatedProducerBeans.add(producerBean)) {
-                allValid &= validatePassivatingProducerDeclaration(producerBean);
+                validatePassivatingProducerDeclaration(producerBean);
             }
         }
 
@@ -830,19 +799,16 @@ public class CDI41InjectionValidator {
                             "Beans in @SessionScoped or @ConversationScoped must be Serializable " +
                             "because the container may passivate (serialize) them to disk or database."
                     );
-                    allValid = false;
                 }
 
                 // Recursively validate all dependencies are passivation-capable
                 visited.clear();
-                allValid &= validateDependenciesPassivationCapable(bean, visited, validBeans);
+                validateDependenciesPassivationCapable(bean, visited);
 
                 // Interceptors and decorators attached to passivating beans must be passivation-capable.
-                allValid &= validateInterceptorsAndDecoratorsPassivation(bean, validBeans);
+                validateInterceptorsAndDecoratorsPassivation(bean, validBeans);
             }
         }
-
-        return allValid;
     }
 
     /**
@@ -860,11 +826,9 @@ public class CDI41InjectionValidator {
      *
      * @param bean the bean whose dependencies to check
      * @param visited set of already visited beans to prevent infinite recursion
-     * @param validBeans all valid beans for dependency resolution
      * @return true if all dependencies are passivation-capable
      */
-    private boolean validateDependenciesPassivationCapable(Bean<?> bean, Set<Bean<?>> visited,
-                                                           Collection<Bean<?>> validBeans) {
+    private boolean validateDependenciesPassivationCapable(Bean<?> bean, Set<Bean<?>> visited) {
         // Avoid infinite recursion on circular dependencies
         if (visited.contains(bean)) {
             return true;
@@ -923,7 +887,7 @@ public class CDI41InjectionValidator {
                     !(resolvedBean instanceof BeanImpl) &&
                     !(resolvedBean instanceof ProducerBean)) {
                 if (isDependentScope(dependencyScope)) {
-                    allValid &= validateDependenciesPassivationCapable(resolvedBean, visited, validBeans);
+                    allValid &= validateDependenciesPassivationCapable(resolvedBean, visited);
                 }
                 continue;
             }
@@ -954,7 +918,7 @@ public class CDI41InjectionValidator {
                     allValid = false;
                 } else {
                     // Recursively check @Dependent bean's dependencies
-                    allValid &= validateDependenciesPassivationCapable(resolvedBean, visited, validBeans);
+                    allValid &= validateDependenciesPassivationCapable(resolvedBean, visited);
                 }
             }
 
@@ -1005,22 +969,22 @@ public class CDI41InjectionValidator {
                 "javax.enterprise.inject.spi.BeanManager".equals(rawTypeName);
     }
 
-    private boolean validatePassivatingProducerDeclaration(Bean<?> bean) {
+    private void validatePassivatingProducerDeclaration(Bean<?> bean) {
         if (!(bean instanceof ProducerBean)) {
-            return true;
+            return;
         }
 
         ProducerBean<?> producerBean = (ProducerBean<?>) bean;
         Class<? extends Annotation> declaredPassivatingScope = resolvePassivatingScopeDeclaredOnProducerMember(producerBean);
         if (declaredPassivatingScope == null) {
-            return true;
+            return;
         }
 
         Method producerMethod = producerBean.getProducerMethod();
         if (producerMethod != null) {
             Class<?> returnType = producerMethod.getReturnType();
             if (returnType.isPrimitive()) {
-                return true;
+                return;
             }
             if (Modifier.isFinal(returnType.getModifiers()) &&
                     !java.io.Serializable.class.isAssignableFrom(returnType)) {
@@ -1030,16 +994,16 @@ public class CDI41InjectionValidator {
                                 " declares passivating scope @" + declaredPassivatingScope.getSimpleName() +
                                 " but has final non-serializable return type " + returnType.getName()
                 );
-                return false;
+                return;
             }
-            return true;
+            return;
         }
 
         Field producerField = producerBean.getProducerField();
         if (producerField != null) {
             Class<?> fieldType = producerField.getType();
             if (fieldType.isPrimitive()) {
-                return true;
+                return;
             }
             if (Modifier.isFinal(fieldType.getModifiers()) &&
                     !java.io.Serializable.class.isAssignableFrom(fieldType)) {
@@ -1049,10 +1013,8 @@ public class CDI41InjectionValidator {
                                 " declares passivating scope @" + declaredPassivatingScope.getSimpleName() +
                                 " but has final non-serializable type " + fieldType.getName()
                 );
-                return false;
             }
         }
-        return true;
     }
 
     private Class<? extends Annotation> resolvePassivatingScopeDeclaredOnProducerMember(ProducerBean<?> producerBean) {
@@ -1076,14 +1038,12 @@ public class CDI41InjectionValidator {
         return null;
     }
 
-    private boolean validateInterceptorsAndDecoratorsPassivation(Bean<?> bean, Collection<Bean<?>> validBeans) {
-        boolean allValid = true;
+    private void validateInterceptorsAndDecoratorsPassivation(Bean<?> bean, Collection<Bean<?>> validBeans) {
         Class<?> beanClass = bean.getBeanClass();
 
         Set<InterceptorInfo> boundInterceptors = new LinkedHashSet<>();
-        Set<Class<?>> legacyInterceptorClasses = new LinkedHashSet<>();
         Set<Annotation> classBindings = extractInterceptorBindingAnnotations(beanClass.getAnnotations());
-        legacyInterceptorClasses.addAll(extractLegacyInterceptorClasses(beanClass.getAnnotations()));
+        Set<Class<?>> legacyInterceptorClasses = new LinkedHashSet<>(extractLegacyInterceptorClasses(beanClass.getAnnotations()));
         if (!classBindings.isEmpty()) {
             boundInterceptors.addAll(knowledgeBase.getInterceptorsByBindings(classBindings));
         }
@@ -1109,13 +1069,12 @@ public class CDI41InjectionValidator {
                                 " and bound interceptor " + interceptorClass.getName() +
                                 " which is not Serializable"
                 );
-                allValid = false;
             }
             Bean<?> interceptorBean = findBeanByClass(validBeans, interceptorClass);
             if (interceptorBean != null) {
-                allValid &= validateDependenciesPassivationCapable(interceptorBean, new HashSet<>(), validBeans);
+                validateDependenciesPassivationCapable(interceptorBean, new HashSet<>());
             }
-            allValid &= validateDeclaredInjectionMembersPassivation(interceptorClass, validBeans, bean);
+            validateDeclaredInjectionMembersPassivation(interceptorClass, bean);
         }
 
         for (Class<?> interceptorClass : legacyInterceptorClasses) {
@@ -1129,13 +1088,12 @@ public class CDI41InjectionValidator {
                                 " and legacy interceptor " + interceptorClass.getName() +
                                 " which is not Serializable"
                 );
-                allValid = false;
             }
             Bean<?> interceptorBean = findBeanByClass(validBeans, interceptorClass);
             if (interceptorBean != null) {
-                allValid &= validateDependenciesPassivationCapable(interceptorBean, new HashSet<>(), validBeans);
+                validateDependenciesPassivationCapable(interceptorBean, new HashSet<>());
             }
-            allValid &= validateDeclaredInjectionMembersPassivation(interceptorClass, validBeans, bean);
+            validateDeclaredInjectionMembersPassivation(interceptorClass, bean);
         }
 
         for (DecoratorInfo decoratorInfo : knowledgeBase.getDecoratorInfos()) {
@@ -1150,16 +1108,13 @@ public class CDI41InjectionValidator {
                                 " and matching decorator " + decoratorClass.getName() +
                                 " which is not Serializable"
                 );
-                allValid = false;
             }
             Bean<?> decoratorBean = findBeanByClass(validBeans, decoratorClass);
             if (decoratorBean != null) {
-                allValid &= validateDependenciesPassivationCapable(decoratorBean, new HashSet<>(), validBeans);
+                validateDependenciesPassivationCapable(decoratorBean, new HashSet<>());
             }
-            allValid &= validateDeclaredInjectionMembersPassivation(decoratorClass, validBeans, bean);
+            validateDeclaredInjectionMembersPassivation(decoratorClass, bean);
         }
-
-        return allValid;
     }
 
     private boolean decoratesBean(DecoratorInfo decoratorInfo, Bean<?> bean) {
@@ -1181,7 +1136,7 @@ public class CDI41InjectionValidator {
     }
 
     private List<Class<?>> extractLegacyInterceptorClasses(Annotation[] annotations) {
-        if (annotations == null || annotations.length == 0) {
+        if (annotations == null) {
             return Collections.emptyList();
         }
         for (Annotation annotation : annotations) {
@@ -1208,11 +1163,8 @@ public class CDI41InjectionValidator {
         return Collections.emptyList();
     }
 
-    private boolean validateDeclaredInjectionMembersPassivation(Class<?> declaringClass,
-                                                                Collection<Bean<?>> validBeans,
-                                                                Bean<?> owningPassivatingBean) {
-        boolean allValid = true;
-
+    private void validateDeclaredInjectionMembersPassivation(Class<?> declaringClass,
+                                                             Bean<?> owningPassivatingBean) {
         for (Field field : declaringClass.getDeclaredFields()) {
             if (!hasInjectAnnotation(field)) {
                 continue;
@@ -1220,12 +1172,11 @@ public class CDI41InjectionValidator {
             if (Modifier.isTransient(field.getModifiers())) {
                 continue;
             }
-            allValid &= validateResolvedDependencyPassivation(
+            validateResolvedDependencyPassivation(
                     field.getGenericType(),
                     extractInjectionQualifiers(field.getAnnotations()),
                     field.getName(),
-                    owningPassivatingBean,
-                    validBeans
+                    owningPassivatingBean
             );
         }
 
@@ -1237,12 +1188,11 @@ public class CDI41InjectionValidator {
                 if (hasTransientReference(parameter.getAnnotations())) {
                     continue;
                 }
-                allValid &= validateResolvedDependencyPassivation(
+                validateResolvedDependencyPassivation(
                         parameter.getParameterizedType(),
                         extractInjectionQualifiers(parameter.getAnnotations()),
                         constructor.getName() + "(param)",
-                        owningPassivatingBean,
-                        validBeans
+                        owningPassivatingBean
                 );
             }
         }
@@ -1255,27 +1205,24 @@ public class CDI41InjectionValidator {
                 if (hasTransientReference(parameter.getAnnotations())) {
                     continue;
                 }
-                allValid &= validateResolvedDependencyPassivation(
+                validateResolvedDependencyPassivation(
                         parameter.getParameterizedType(),
                         extractInjectionQualifiers(parameter.getAnnotations()),
                         method.getName() + "(param)",
-                        owningPassivatingBean,
-                        validBeans
+                        owningPassivatingBean
                 );
             }
         }
 
-        return allValid;
     }
 
-    private boolean validateResolvedDependencyPassivation(Type requiredType,
-                                                          Set<Annotation> qualifiers,
-                                                          String location,
-                                                          Bean<?> owningPassivatingBean,
-                                                          Collection<Bean<?>> validBeans) {
+    private void validateResolvedDependencyPassivation(Type requiredType,
+                                                       Set<Annotation> qualifiers,
+                                                       String location,
+                                                       Bean<?> owningPassivatingBean) {
         if (isInstanceOrProvider(requiredType) || isInterceptionFactory(requiredType) ||
                 isBuiltInPassivationCapableDependency(requiredType)) {
-            return true;
+            return;
         }
 
         Set<Bean<?>> candidates = findMatchingBeans(requiredType, qualifiers);
@@ -1286,14 +1233,14 @@ public class CDI41InjectionValidator {
                             " and declares unsatisfied dependency at " + location +
                             " for type " + requiredType.getTypeName() +
                             " with qualifiers " + qualifiers);
-            return false;
+            return;
         }
 
         Bean<?> resolvedBean;
         if (candidates.size() > 1) {
             Optional<Bean<?>> preferred = resolveByAlternativePrecedence(candidates);
             if (!preferred.isPresent()) {
-                return true;
+                return;
             }
             resolvedBean = preferred.get();
         } else {
@@ -1302,7 +1249,7 @@ public class CDI41InjectionValidator {
 
         Class<? extends Annotation> dependencyScope = resolvedBean.getScope();
         if (isNormalScope(dependencyScope)) {
-            return true;
+            return;
         }
 
         if (isDependentScope(dependencyScope)) {
@@ -1313,9 +1260,9 @@ public class CDI41InjectionValidator {
                                 " and declares dependency at " + location +
                                 " resolving to @Dependent bean " + resolvedBean.getBeanClass().getName() +
                                 " which is not Serializable");
-                return false;
+                return;
             }
-            return true;
+            return;
         }
 
         if (!java.io.Serializable.class.isAssignableFrom(resolvedBean.getBeanClass())) {
@@ -1325,9 +1272,7 @@ public class CDI41InjectionValidator {
                             " and declares dependency at " + location +
                             " resolving to non-normal-scoped bean " + resolvedBean.getBeanClass().getName() +
                             " which is not Serializable");
-            return false;
         }
-        return true;
     }
 
     private Set<Annotation> extractInjectionQualifiers(Annotation[] annotations) {
@@ -1457,7 +1402,7 @@ public class CDI41InjectionValidator {
             return true;
         }
 
-        // Ensure InjectionPoint#getMember participates in validation flow.
+        // Ensure InjectionPoint#getMember participates in the validation flow.
         // Some custom InjectionPoint implementations rely on this callback for metadata checks.
         try {
             if (injectionPoint != null) {
@@ -1508,7 +1453,7 @@ public class CDI41InjectionValidator {
         // Excluding decorators here avoids false ambiguity when the decorator type is assignable
         // to its own delegate type.
         if (injectionPoint.isDelegate()) {
-            Set<Bean<?>> delegateCandidates = new LinkedHashSet<Bean<?>>();
+            Set<Bean<?>> delegateCandidates = new LinkedHashSet<>();
             for (Bean<?> candidate : candidates) {
                 if (candidate instanceof Decorator<?>) {
                     continue;
@@ -1692,7 +1637,7 @@ public class CDI41InjectionValidator {
             return bindings;
         }
         for (Annotation annotation : annotations) {
-            collectInterceptorBindings(annotation, bindings, new HashSet<Class<? extends Annotation>>());
+            collectInterceptorBindings(annotation, bindings, new HashSet<>());
         }
         return bindings;
     }
@@ -1764,7 +1709,7 @@ public class CDI41InjectionValidator {
                 continue;
             }
             Set<Annotation> delegateQualifiers = decoratorInfo.getDelegateInjectionPoint().getQualifiers();
-            if (delegateQualifiers != null && !qualifierSubset(delegateQualifiers, beanQualifiers)) {
+            if (notQualifierSubset(delegateQualifiers, beanQualifiers)) {
                 continue;
             }
             return true;
@@ -1785,7 +1730,7 @@ public class CDI41InjectionValidator {
                 continue;
             }
             Set<Annotation> delegateQualifiers = decorator.getDelegateQualifiers();
-            if (delegateQualifiers != null && !qualifierSubset(delegateQualifiers, beanQualifiers)) {
+            if (notQualifierSubset(delegateQualifiers, beanQualifiers)) {
                 continue;
             }
             return true;
@@ -1835,9 +1780,9 @@ public class CDI41InjectionValidator {
         return false;
     }
 
-    private boolean qualifierSubset(Set<Annotation> required, Set<Annotation> available) {
+    private boolean notQualifierSubset(Set<Annotation> required, Set<Annotation> available) {
         if (required == null || required.isEmpty()) {
-            return true;
+            return false;
         }
         for (Annotation requiredQualifier : required) {
             if (requiredQualifier == null) {
@@ -1859,10 +1804,10 @@ public class CDI41InjectionValidator {
                 }
             }
             if (!found) {
-                return false;
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     private List<String> findUnproxyableBeanTypes(Set<Type> beanTypes, Bean<?> bean) {
@@ -2092,7 +2037,7 @@ public class CDI41InjectionValidator {
     }
 
     /**
-     * Checks if the type is Instance&lt;T&gt; or Provider&lt;T&gt;.
+     * Checks if the type is Instance&lt;T&gt; or Provider&lt;T&gt;
      * These types can always be satisfied as they provide lazy/programmatic access.
      *
      * @param type the type to check
@@ -2216,7 +2161,7 @@ public class CDI41InjectionValidator {
     }
 
     private boolean isBeanEnabledForResolution(Bean<?> bean) {
-        Set<Bean<?>> visited = Collections.newSetFromMap(new IdentityHashMap<Bean<?>, Boolean>());
+        Set<Bean<?>> visited = Collections.newSetFromMap(new IdentityHashMap<>());
         return isBeanEnabledForResolution(bean, visited);
     }
 
@@ -2532,17 +2477,6 @@ public class CDI41InjectionValidator {
     }
 
     /**
-     * Checks if @Any is present in the set.
-     *
-     * @param qualifiers the qualifiers to check
-     * @return true if @Any is present
-     */
-    private boolean hasAny(Set<Annotation> qualifiers) {
-        return qualifiers.stream()
-            .anyMatch(q -> hasAnyAnnotation(q.annotationType()));
-    }
-
-    /**
      * Formats an injection point for error messages.
      *
      * @param ip the injection point
@@ -2607,16 +2541,14 @@ public class CDI41InjectionValidator {
      * </ul>
      *
      * @param validBeans the beans to scan for observer methods
-     * @return true if all observer methods are valid
      */
-    private boolean scanAndValidateObserverMethods(Collection<Bean<?>> validBeans) {
+    private void scanAndValidateObserverMethods(Collection<Bean<?>> validBeans) {
         // Validation can execute more than once during startup (for example, before and after BCE @Validation).
         // Observer discovery must remain stable across passes; otherwise the same observer is registered repeatedly.
         if (knowledgeBase.isObserverMethodsDiscovered()) {
-            return true;
+            return;
         }
 
-        boolean allValid = true;
         boolean registerObserverInfos = knowledgeBase.getObserverMethodInfos().isEmpty();
         Set<Bean<?>> specializationFiltered = applySpecializationFiltering(new HashSet<>(validBeans));
 
@@ -2627,31 +2559,26 @@ public class CDI41InjectionValidator {
 
             BeanImpl<?> beanImpl = (BeanImpl<?>) bean;
             Class<?> beanClass = beanImpl.getBeanClass();
-            @SuppressWarnings("unchecked")
-            AnnotatedType<?> annotatedTypeOverride =
-                    knowledgeBase.getAnnotatedTypeOverride(beanClass);
+            AnnotatedType<?> annotatedTypeOverride = knowledgeBase.getAnnotatedTypeOverride(beanClass);
 
             // Scan all methods for @Observes and @ObservesAsync
             for (ObserverMethodCandidate candidate : collectObserverCandidateMethods(beanClass, annotatedTypeOverride)) {
-                boolean valid = validateObserverMethod(candidate, beanImpl, registerObserverInfos);
-                allValid &= valid;
+                validateObserverMethod(candidate, beanImpl, registerObserverInfos);
             }
         }
 
         knowledgeBase.setObserverMethodsDiscovered(true);
-        return allValid;
     }
 
     /**
      * Validates a single observer method and registers it if valid.
      *
-     * @param method the method to validate
+     * @param candidate     the method to validate
      * @param declaringBean the bean that declares this method
-     * @return true if valid
      */
-    private boolean validateObserverMethod(ObserverMethodCandidate candidate,
-                                           BeanImpl<?> declaringBean,
-                                           boolean registerObserverInfo) {
+    private void validateObserverMethod(ObserverMethodCandidate candidate,
+                                        BeanImpl<?> declaringBean,
+                                        boolean registerObserverInfo) {
         Method method = candidate.method;
         List<ObserverParameterMetadata> parameters =
                 resolveObserverParameterMetadata(method, candidate.annotatedMethod, declaringBean.getBeanClass());
@@ -2674,7 +2601,7 @@ public class CDI41InjectionValidator {
 
         // No observer annotations - not an observer method
         if (observesCount == 0 && observesAsyncCount == 0) {
-            return true;
+            return;
         }
 
         // Validate exactly one observer annotation
@@ -2684,7 +2611,7 @@ public class CDI41InjectionValidator {
                 " must have exactly one parameter with @Observes or @ObservesAsync, found " +
                 (observesCount + observesAsyncCount)
             );
-            return false;
+            return;
         }
 
         // Cannot mix @Observes and @ObservesAsync
@@ -2693,7 +2620,7 @@ public class CDI41InjectionValidator {
                 "Observer method " + method.getName() + " in " + declaringBean.getBeanClass().getName() +
                 " cannot have both @Observes and @ObservesAsync"
             );
-            return false;
+            return;
         }
 
         // Extract observer metadata
@@ -2730,7 +2657,7 @@ public class CDI41InjectionValidator {
                     "Observer method " + method.getName() + " in " + declaringBean.getBeanClass().getName() +
                     " declares notifyObserver=IF_EXISTS but bean scope is @Dependent"
                 );
-                return false;
+                return;
             }
         }
 
@@ -2744,7 +2671,7 @@ public class CDI41InjectionValidator {
                 knowledgeBase.addDefinitionError(
                         formatObserverParameter(parameter.parameter, method, declaringBean) +
                                 ": @Named injection point must declare a non-empty value on non-field injection points");
-                return false;
+                return;
             }
             Type parameterType = GenericTypeResolver.resolve(
                     parameter.baseType,
@@ -2759,7 +2686,7 @@ public class CDI41InjectionValidator {
                     parameter.annotatedParameter
             );
             if (!validateInjectionPoint(injectionPoint, declaringBean)) {
-                return false;
+                return;
             }
         }
 
@@ -2801,7 +2728,6 @@ public class CDI41InjectionValidator {
             );
             knowledgeBase.addObserverMethodInfo(observerMethodInfo);
         }
-        return true;
     }
 
     private String formatObserverParameter(Parameter parameter, Method method, Bean<?> declaringBean) {
@@ -2847,7 +2773,7 @@ public class CDI41InjectionValidator {
         qualifiers.addAll(com.threeamigos.common.util.implementations.injection.util.QualifiersHelper
                 .extractQualifierAnnotations(annotations));
 
-        // Also honor dynamically-registered qualifiers from extensions.
+        // Also honor dynamically registered qualifiers from extensions.
         for (Annotation annotation : annotations) {
             if (annotation == null) {
                 continue;
@@ -2856,9 +2782,7 @@ public class CDI41InjectionValidator {
                 qualifiers.add(annotation);
                 continue;
             }
-            for (Annotation nested : extractRegisteredQualifierAnnotationsFromContainer(annotation)) {
-                qualifiers.add(nested);
-            }
+            Collections.addAll(qualifiers, extractRegisteredQualifierAnnotationsFromContainer(annotation));
         }
         return qualifiers;
     }
@@ -3062,7 +2986,7 @@ public class CDI41InjectionValidator {
         Set<Class<?>> specializedSuperclasses = new HashSet<>();
         for (Bean<?> candidate : candidates) {
             Class<?> beanClass = candidate.getBeanClass();
-            if (beanClass != null && hasSpecializesAnnotation(beanClass)) {
+            if (hasSpecializesAnnotation(beanClass)) {
                 specializedSuperclasses.addAll(collectSpecializedSuperclasses(beanClass));
             }
         }
@@ -3078,7 +3002,7 @@ public class CDI41InjectionValidator {
 
     private Set<Class<?>> collectSpecializedSuperclasses(Class<?> beanClass) {
         Set<Class<?>> out = new HashSet<>();
-        if (beanClass == null || !hasSpecializesAnnotation(beanClass)) {
+        if (!hasSpecializesAnnotation(beanClass)) {
             return out;
         }
         Class<?> current = beanClass.getSuperclass();

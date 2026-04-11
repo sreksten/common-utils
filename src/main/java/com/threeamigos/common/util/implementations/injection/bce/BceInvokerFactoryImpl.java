@@ -45,11 +45,9 @@ final class BceInvokerFactoryImpl implements InvokerFactory {
         }
 
         AnnotatedType<?> annotatedType = beanManager.createAnnotatedType(beanClass);
-        ProcessManagedBeanImpl<?> event = new ProcessManagedBeanImpl<>(
-                messageHandler, knowledgeBase, (Bean<Object>) managedBean, (AnnotatedType<Object>) annotatedType, beanManager);
-        AnnotatedMethodWrapper wrapper = new AnnotatedMethodWrapper(javaMethod, annotatedType);
+        @SuppressWarnings("unchecked")
         final InvokerBuilder<Invoker<Object, ?>> runtimeBuilder =
-            (InvokerBuilder<Invoker<Object, ?>>) event.createInvoker(wrapper);
+                getInvokerInvokerBuilder((Bean<Object>) managedBean, annotatedType, javaMethod);
 
         return new InvokerBuilder<InvokerInfo>() {
             @Override
@@ -70,6 +68,17 @@ final class BceInvokerFactoryImpl implements InvokerFactory {
                 return invokerRegistry.register(runtimeInvoker);
             }
         };
+    }
+
+    private InvokerBuilder<Invoker<Object, ?>> getInvokerInvokerBuilder(Bean<Object> managedBean, AnnotatedType<?> annotatedType, Method javaMethod) {
+        @SuppressWarnings("unchecked")
+        ProcessManagedBeanImpl<?> event = new ProcessManagedBeanImpl<>(
+                messageHandler, knowledgeBase, managedBean, (AnnotatedType<Object>) annotatedType, beanManager);
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        AnnotatedMethodWrapper wrapper = new AnnotatedMethodWrapper(javaMethod, annotatedType);
+        @SuppressWarnings("unchecked")
+        final InvokerBuilder<Invoker<Object, ?>> runtimeBuilder = (InvokerBuilder<Invoker<Object, ?>>) event.createInvoker(wrapper);
+        return runtimeBuilder;
     }
 
     private Bean<?> findManagedBean(Class<?> beanClass) {

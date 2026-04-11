@@ -62,7 +62,7 @@ public interface ScopeContext {
      * <p>
      * Non-passivating scopes:
      * - @ApplicationScoped - lives for the entire application lifetime, no passivation needed
-     * - @RequestScoped - short-lived, destroyed at the end of request
+     * - @RequestScoped - short-lived, destroyed at the end of the request
      * - @Dependent - pseudo-scope, lifecycle tied to parent bean
      * <p>
      * Beans in passivation-capable scopes MUST be Serializable.

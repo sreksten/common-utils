@@ -92,7 +92,7 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
     @Override
     public Set<Annotation> getAnnotations() {
         Map<Class<? extends Annotation>, Annotation> annotationsByType =
-                new LinkedHashMap<Class<? extends Annotation>, Annotation>();
+                new LinkedHashMap<>();
         for (Annotation annotation : javaClass.getDeclaredAnnotations()) {
             annotationsByType.put(annotation.annotationType(), annotation);
         }
@@ -117,11 +117,11 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
             current = current.getSuperclass();
         }
 
-        Set<Annotation> annotations = new HashSet<Annotation>(annotationsByType.values());
+        Set<Annotation> annotations = new HashSet<>(annotationsByType.values());
 
         boolean hasDeclaredScope = hasDeclaredScope(javaClass);
         if (hasDeclaredScope) {
-            Set<Class<? extends Annotation>> declaredScopeTypes = new HashSet<Class<? extends Annotation>>();
+            Set<Class<? extends Annotation>> declaredScopeTypes = new HashSet<>();
             for (Annotation annotation : javaClass.getDeclaredAnnotations()) {
                 if (isScopeAnnotation(annotation.annotationType())) {
                     declaredScopeTypes.add(annotation.annotationType());
@@ -140,13 +140,7 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
 
         // CDI special rule: if no scope is declared directly on this type, inherit the nearest
         // scope from the superclass hierarchy even if that scope annotation is not @Inherited.
-        Iterator<Annotation> iterator = annotations.iterator();
-        while (iterator.hasNext()) {
-            Annotation annotation = iterator.next();
-            if (isScopeAnnotation(annotation.annotationType())) {
-                iterator.remove();
-            }
-        }
+        annotations.removeIf(annotation -> isScopeAnnotation(annotation.annotationType()));
 
         Class<?> scopeSource = javaClass.getSuperclass();
         while (scopeSource != null && scopeSource != Object.class) {

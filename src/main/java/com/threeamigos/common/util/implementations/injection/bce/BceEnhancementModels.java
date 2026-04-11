@@ -14,6 +14,7 @@ import jakarta.enterprise.lang.model.declarations.ParameterInfo;
 import jakarta.enterprise.lang.model.types.Type;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -45,7 +46,7 @@ final class BceEnhancementModels {
         return new SimpleMethodConfig(method);
     }
 
-    static MethodConfig methodConfig(java.lang.reflect.Constructor<?> constructor) {
+    static MethodConfig methodConfig(Constructor<?> constructor) {
         return new SimpleMethodConfig(constructor);
     }
 
@@ -257,23 +258,22 @@ final class BceEnhancementModels {
         private final List<ParameterConfig> parameters;
 
         private SimpleMethodConfig(Method method) {
-            this.info = BceMetadata.methodInfo(method);
-            List<ParameterConfig> out = new ArrayList<>();
-            List<ParameterInfo> parameterInfos = info.parameters();
-            for (ParameterInfo parameterInfo : parameterInfos) {
-                out.add(new SimpleParameterConfig(parameterInfo));
-            }
-            this.parameters = Collections.unmodifiableList(out);
+            info = BceMetadata.methodInfo(method);
+            parameters = evaluateInfo(info);
         }
 
-        private SimpleMethodConfig(java.lang.reflect.Constructor<?> constructor) {
-            this.info = BceMetadata.methodInfo(constructor);
+        private SimpleMethodConfig(Constructor<?> constructor) {
+            info = BceMetadata.methodInfo(constructor);
+            parameters = evaluateInfo(info);
+        }
+
+        private List<ParameterConfig> evaluateInfo(MethodInfo info) {
             List<ParameterConfig> out = new ArrayList<>();
             List<ParameterInfo> parameterInfos = info.parameters();
             for (ParameterInfo parameterInfo : parameterInfos) {
                 out.add(new SimpleParameterConfig(parameterInfo));
             }
-            this.parameters = Collections.unmodifiableList(out);
+            return Collections.unmodifiableList(out);
         }
 
         @Override
@@ -460,7 +460,7 @@ final class BceEnhancementModels {
                     out.add(annotationInfo);
                     continue;
                 }
-                out.addAll(extractRepeatableContainedAnnotations(annotationInfo, annotationType));
+                out.addAll(BceMetadata.extractRepeatableContainedAnnotations(annotationInfo, annotationType));
             }
             return Collections.unmodifiableList(out);
         }
@@ -483,42 +483,6 @@ final class BceEnhancementModels {
         @Override
         public Collection<AnnotationInfo> annotations() {
             return annotations;
-        }
-
-        private <T extends Annotation> Collection<AnnotationInfo> extractRepeatableContainedAnnotations(
-            AnnotationInfo candidateContainer,
-            Class<T> repeatableType) {
-            if (candidateContainer == null || repeatableType == null) {
-                return Collections.emptyList();
-            }
-            Method valueMethod;
-            try {
-                Class<?> containerClass = BceMetadata.unwrapClassInfo(candidateContainer.declaration());
-                valueMethod = containerClass.getDeclaredMethod("value");
-            } catch (Exception e) {
-                return Collections.emptyList();
-            }
-            if (!valueMethod.getReturnType().isArray() ||
-                !repeatableType.equals(valueMethod.getReturnType().getComponentType())) {
-                return Collections.emptyList();
-            }
-            if (!candidateContainer.hasMember("value")) {
-                return Collections.emptyList();
-            }
-            AnnotationMember valueMember = candidateContainer.member("value");
-            if (valueMember.kind() != AnnotationMember.Kind.ARRAY) {
-                return Collections.emptyList();
-            }
-            List<AnnotationInfo> out = new ArrayList<>();
-            for (AnnotationMember item : valueMember.asArray()) {
-                if (item.kind() == AnnotationMember.Kind.NESTED_ANNOTATION) {
-                    AnnotationInfo nested = item.asNestedAnnotation();
-                    if (repeatableType.getName().equals(nested.declaration().name())) {
-                        out.add(nested);
-                    }
-                }
-            }
-            return Collections.unmodifiableList(out);
         }
     }
 
@@ -618,7 +582,7 @@ final class BceEnhancementModels {
         }
 
         @Override
-        public jakarta.enterprise.lang.model.declarations.ClassInfo declaration() {
+        public ClassInfo declaration() {
             return BceMetadata.classInfo(annotationType);
         }
 

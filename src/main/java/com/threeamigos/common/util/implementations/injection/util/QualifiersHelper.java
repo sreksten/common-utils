@@ -2,10 +2,7 @@ package com.threeamigos.common.util.implementations.injection.util;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
 
@@ -98,9 +95,7 @@ public final class QualifiersHelper {
             return;
         }
 
-        for (Annotation nestedQualifier : extractQualifierAnnotationsFromContainer(annotation)) {
-            sink.add(nestedQualifier);
-        }
+        Collections.addAll(sink, extractQualifierAnnotationsFromContainer(annotation));
     }
 
     /**
@@ -181,16 +176,16 @@ public final class QualifiersHelper {
      * Event-observer qualifier matching where @Default observer methods only match
      * events with no explicit non-default qualifiers.
      */
-    public static boolean eventQualifiersMatch(Set<Annotation> observedQualifiers, Set<Annotation> eventQualifiers) {
+    public static boolean notEventQualifiersMatch(Set<Annotation> observedQualifiers, Set<Annotation> eventQualifiers) {
         Annotation observedNamed = findNamedAnnotation(observedQualifiers);
         Annotation eventNamed = findNamedAnnotation(eventQualifiers);
 
         if (observedNamed != null) {
             if (eventNamed == null) {
-                return false;
+                return true;
             }
             if (!getNamedValue(observedNamed).equals(getNamedValue(eventNamed))) {
-                return false;
+                return true;
             }
         }
 
@@ -200,7 +195,7 @@ public final class QualifiersHelper {
             }
             if (isDefaultQualifier(required)) {
                 if (hasExplicitNonDefaultQualifier(eventQualifiers)) {
-                    return false;
+                    return true;
                 }
                 continue;
             }
@@ -215,10 +210,10 @@ public final class QualifiersHelper {
                 }
             }
             if (!found) {
-                return false;
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     private static boolean hasExplicitNonDefaultQualifier(Set<Annotation> qualifiers) {

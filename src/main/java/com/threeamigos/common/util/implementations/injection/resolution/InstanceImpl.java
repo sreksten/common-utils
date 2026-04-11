@@ -25,7 +25,6 @@ import java.util.function.Function;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDependentAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasPriorityAnnotation;
 
 /**
  * Generic wrapper implementing CDI {@link Instance} interface for lazy and programmatic
@@ -95,7 +94,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
         /**
          * Resolves and creates a single instance using a possibly parameterized type.
-         * Default implementation falls back to raw type resolution.
+         * The default implementation falls back to raw type resolution.
          */
         @SuppressWarnings("unchecked")
         default T resolveInstance(Type type, Collection<Annotation> qualifiers) throws Exception {
@@ -114,7 +113,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
         /**
          * Resolves all implementation classes using a possibly parameterized type.
-         * Default implementation falls back to raw type resolution.
+         * The default implementation falls back to raw type resolution.
          */
         @SuppressWarnings("unchecked")
         default Collection<Class<? extends T>> resolveImplementations(Type type,
@@ -127,7 +126,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
          *
          * @param instance the instance to destroy
          * @throws InvocationTargetException if @PreDestroy method throws
-         * @throws IllegalAccessException if @PreDestroy method cannot be accessed
+         * @throws IllegalAccessException if the @PreDestroy method cannot be accessed
          */
         void invokePreDestroy(T instance) throws InvocationTargetException, IllegalAccessException;
     }
@@ -275,7 +274,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             return;
         }
 
-        List<Object> snapshot = new ArrayList<Object>(tracked);
+        List<Object> snapshot = new ArrayList<>(tracked);
         tracked.clear();
         for (Object instance : snapshot) {
             if (instance == null) {
@@ -449,6 +448,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                 }
 
                 // Fallback: synthesize a lightweight BeanImpl with available metadata
+                @SuppressWarnings("unchecked")
                 BeanImpl<T> fallback = new BeanImpl<>((Class<T>) beanClass, false);
                 if (!qualifiers.isEmpty()) {
                     fallback.setQualifiers(new HashSet<>(qualifiers));
@@ -466,10 +466,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                     try {
                         Bean<T> bean = handleBean;
                         if (bean != null) {
-                            @SuppressWarnings("unchecked")
-                            jakarta.enterprise.context.spi.Contextual<T> contextual =
-                                    (jakarta.enterprise.context.spi.Contextual<T>) bean;
-                            contextual.destroy(instance, handleCreationalContext);
+                            bean.destroy(instance, handleCreationalContext);
                         } else {
                             strategy().invokePreDestroy(instance);
                         }
@@ -497,18 +494,18 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         try {
             BeanManager beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
             if (beanManager != null) {
-                Annotation[] qualifierArray = qualifiers.toArray(new Annotation[qualifiers.size()]);
+                Annotation[] qualifierArray = qualifiers.toArray(new Annotation[0]);
                 Set<Bean<?>> beans = beanManager.getBeans(requiredType, qualifierArray);
                 Collection<Bean<?>> iteratorBeans = applyIteratorAmbiguityElimination(beans);
                 @SuppressWarnings("unchecked")
                 Class<T> referenceType = (Class<T>) RawTypeExtractor.getRawType(requiredType);
-                List<T> instances = new ArrayList<T>();
+                List<T> instances = new ArrayList<>();
                 for (Bean<?> bean : iteratorBeans) {
                     @SuppressWarnings({"rawtypes", "unchecked"})
                     CreationalContext<Object> creationalContext =
                             (CreationalContext<Object>) beanManager.createCreationalContext((Bean) bean);
-                    @SuppressWarnings({"rawtypes", "unchecked"})
-                    T instance = (T) beanManager.getReference((Bean) bean, referenceType, (CreationalContext) creationalContext);
+                    @SuppressWarnings({"unchecked"})
+                    T instance = (T) beanManager.getReference(bean, referenceType, creationalContext);
                     trackDependentResult(instance);
                     instances.add(instance);
                 }
@@ -519,7 +516,9 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
             List<T> instances = new ArrayList<>();
             for (Class<? extends T> clazz : classes) {
-                instances.add(strategy().resolveInstance((Class<T>) clazz, qualifiers));
+                @SuppressWarnings("unchecked")
+                Class<T> castedClass = (Class<T>) clazz;
+                instances.add(strategy().resolveInstance(castedClass, qualifiers));
             }
             return instances.iterator();
         } catch (Exception e) {
@@ -529,13 +528,13 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
     /**
      * Applies CDI Instance iterator()/stream() ambiguity elimination rules:
-     * - unsatisfied => empty set
-     * - ambiguous + alternatives present => eliminate non-alternatives
-     * - if remaining alternatives all declare explicit priority => keep highest-priority subset
+     * - Unsatisfied => empty set
+     * - Ambiguous and alternatives present => eliminate non-alternatives
+     * - If remaining alternatives all declare explicit priority => keep highest-priority subset
      */
     private Collection<Bean<?>> applyIteratorAmbiguityElimination(Collection<Bean<?>> candidates) {
         if (candidates == null || candidates.size() <= 1) {
-            return candidates == null ? Collections.<Bean<?>>emptyList() : candidates;
+            return candidates == null ? Collections.emptyList() : candidates;
         }
 
         boolean hasAlternative = false;
@@ -549,7 +548,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             return candidates;
         }
 
-        List<Bean<?>> remaining = new ArrayList<Bean<?>>();
+        List<Bean<?>> remaining = new ArrayList<>();
         for (Bean<?> candidate : candidates) {
             if (candidate != null && candidate.isAlternative()) {
                 remaining.add(candidate);
@@ -559,7 +558,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             return remaining;
         }
 
-        Map<Bean<?>, Integer> priorities = new IdentityHashMap<Bean<?>, Integer>();
+        Map<Bean<?>, Integer> priorities = new IdentityHashMap<>();
         boolean allHaveExplicitPriority = true;
         for (Bean<?> bean : remaining) {
             Integer priority = getExplicitAlternativePriority(bean);
@@ -579,7 +578,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             }
         }
 
-        List<Bean<?>> highestPriorityBeans = new ArrayList<Bean<?>>();
+        List<Bean<?>> highestPriorityBeans = new ArrayList<>();
         for (Bean<?> bean : remaining) {
             Integer priority = priorities.get(bean);
             if (priority != null && priority == highestPriority) {
@@ -689,7 +688,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             return existing;
         }
 
-        List<Annotation> merged = new ArrayList<Annotation>();
+        List<Annotation> merged = new ArrayList<>();
         boolean hasDefault = false;
         boolean hasAny = false;
         if (existing != null) {
@@ -708,8 +707,8 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             }
         }
 
-        Map<Class<? extends Annotation>, Annotation> replacements = new LinkedHashMap<Class<? extends Annotation>, Annotation>();
-        Set<Class<? extends Annotation>> replacedNonRepeatableTypes = new HashSet<Class<? extends Annotation>>();
+        Map<Class<? extends Annotation>, Annotation> replacements = new LinkedHashMap<>();
+        Set<Class<? extends Annotation>> replacedNonRepeatableTypes = new HashSet<>();
         boolean hasExplicitAdditionalQualifier = false;
 
         for (Annotation annotation : newAnnotations) {
@@ -818,13 +817,6 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         return current;
     }
 
-    private Function<Class<? extends T>, Bean<? extends T>> beanLookup() {
-        if (beanLookup == null) {
-            initializeTransientState();
-        }
-        return beanLookup;
-    }
-
     @SuppressWarnings("unchecked")
     private void initializeTransientState() {
         BeanManagerImpl beanManager = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
@@ -884,7 +876,6 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         trackedDependentInstances = createIdentitySet();
     }
 
-    @SuppressWarnings("rawtypes")
     private void trackDependentResult(T instance) {
         if (instance == null) {
             return;
@@ -895,7 +886,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         }
 
         try {
-            Annotation[] qualifierArray = qualifiers.toArray(new Annotation[qualifiers.size()]);
+            Annotation[] qualifierArray = qualifiers.toArray(new Annotation[0]);
             Set<Bean<?>> beans = beanManager.getBeans(requiredType, qualifierArray);
             if (beans == null || beans.isEmpty()) {
                 return;
@@ -921,6 +912,6 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
     }
 
     private Set<Object> createIdentitySet() {
-        return Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
+        return Collections.newSetFromMap(new IdentityHashMap<>());
     }
 }

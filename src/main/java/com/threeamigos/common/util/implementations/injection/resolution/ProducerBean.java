@@ -58,15 +58,11 @@ public class ProducerBean<T> implements Bean<T> {
     private boolean alternative;
     private boolean alternativeEnabled;
     private Integer priority; // @Priority value when the alternative is enabled
-    private jakarta.enterprise.inject.spi.InjectionTarget<T> customInjectionTarget;
 
     // Injection points (for producer method parameters)
     private final Set<InjectionPoint> injectionPoints = new HashSet<>();
     private final Map<Object, List<TrackedDependentArgument>> producerMethodDependentArguments =
-            Collections.synchronizedMap(new IdentityHashMap<Object, List<TrackedDependentArgument>>());
-
-    // Validation state
-    private boolean hasValidationErrors = false;
+            Collections.synchronizedMap(new IdentityHashMap<>());
 
     // Extension veto state
     private boolean vetoed = false;
@@ -231,9 +227,9 @@ public class ProducerBean<T> implements Bean<T> {
                     requiresDeclaringInstanceForProducer()
             );
 
-            // 2. Invoke producer method or access producer field
+            // 2. Invoke the producer method or access the producer field
             if (producerMethod != null) {
-                T produced = invokeProducerMethod(declaringInstanceHandle, creationalContext);
+                T produced = invokeProducerMethod(declaringInstanceHandle);
                 validateProducerMethodNullProduct(produced);
                 validatePassivationRequirementsForProducedValue(produced);
                 return produced;
@@ -283,9 +279,7 @@ public class ProducerBean<T> implements Bean<T> {
                     creationalContext.release();
                 }
             } catch (Exception e) {
-                if (ignored == null) {
-                    ignored = e;
-                }
+                //FIXME log something?
             }
         }
     }
@@ -302,7 +296,7 @@ public class ProducerBean<T> implements Bean<T> {
      * Invokes the producer method to create an instance.
      */
     @SuppressWarnings("unchecked")
-    private T invokeProducerMethod(DeclaringInstanceHandle declaringInstanceHandle, CreationalContext<T> creationalContext)
+    private T invokeProducerMethod(DeclaringInstanceHandle declaringInstanceHandle)
             throws Exception {
         Object declaringInstance = declaringInstanceHandle.instance;
         producerMethod.setAccessible(true);
@@ -631,7 +625,7 @@ public class ProducerBean<T> implements Bean<T> {
             if (skipDisposesParameter && isDisposerParameter(parameter)) {
                 continue;
             }
-            if (!isDependentParameter(parameter)) {
+            if (isNotDependentParameter(parameter)) {
                 continue;
             }
             destroyDependentArgument(new TrackedDependentArgument(
@@ -642,12 +636,12 @@ public class ProducerBean<T> implements Bean<T> {
         }
     }
 
-    private boolean isDependentParameter(Parameter parameter) {
+    private boolean isNotDependentParameter(Parameter parameter) {
         Class<?> parameterType = parameter.getType();
         if (parameterType == null) {
-            return false;
+            return true;
         }
-        return hasDependentAnnotation(parameterType);
+        return !hasDependentAnnotation(parameterType);
     }
 
     private void trackDependentProducerParametersForProducedInstance(
@@ -655,14 +649,14 @@ public class ProducerBean<T> implements Bean<T> {
             Object[] args,
             Object produced
     ) {
-        List<TrackedDependentArgument> tracked = new ArrayList<TrackedDependentArgument>();
+        List<TrackedDependentArgument> tracked = new ArrayList<>();
         for (int i = 0; i < parameters.length; i++) {
             Parameter parameter = parameters[i];
             Object arg = args[i];
             if (arg == null) {
                 continue;
             }
-            if (!isDependentParameter(parameter)) {
+            if (isNotDependentParameter(parameter)) {
                 continue;
             }
             if (isTransientReferenceParameter(parameter)) {
@@ -745,7 +739,7 @@ public class ProducerBean<T> implements Bean<T> {
             if (!isTransientReferenceParameter(parameter)) {
                 continue;
             }
-            if (!isDependentParameter(parameter)) {
+            if (isNotDependentParameter(parameter)) {
                 continue;
             }
             destroyDependentArgument(new TrackedDependentArgument(
@@ -773,7 +767,7 @@ public class ProducerBean<T> implements Bean<T> {
             return new Annotation[0];
         }
 
-        Set<Annotation> qualifiers = new HashSet<Annotation>();
+        Set<Annotation> qualifiers = new HashSet<>();
         for (Annotation annotation : annotations) {
             if (annotation == null) {
                 continue;
@@ -951,7 +945,7 @@ public class ProducerBean<T> implements Bean<T> {
     }
 
     public boolean hasValidationErrors() {
-        return hasValidationErrors;
+        return false;
     }
 
     /**

@@ -148,7 +148,7 @@ public class AnnotationComparator {
      * Computes a hash code for an annotation, respecting @Nonbinding members.
      *
      * <p>This hash code is compatible with {@link #equals(Annotation, Annotation)},
-     * meaning that if two annotations are equal according to equals(), they will have
+     * meaning that if two annotations are equal, according to equals(), they will have
      * the same hash code.
      *
      * @param annotation the annotation

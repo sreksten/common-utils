@@ -67,10 +67,6 @@ public class ConversationBean implements Bean<Conversation> {
 
     private final BeanManagerImpl beanManager;
 
-    public ConversationBean() {
-        this(null);
-    }
-
     public ConversationBean(BeanManagerImpl beanManager) {
         this.beanManager = beanManager;
     }
@@ -93,7 +89,7 @@ public class ConversationBean implements Bean<Conversation> {
             if (beanManager == null) {
                 return conversation;
             }
-            Set<Type> types = new HashSet<Type>();
+            Set<Type> types = new HashSet<>();
             types.add(Conversation.class);
             types.add(Object.class);
             List<Decorator<?>> decorators = beanManager.resolveDecorators(types, Default.Literal.INSTANCE);
@@ -101,7 +97,7 @@ public class ConversationBean implements Bean<Conversation> {
                 return conversation;
             }
             BeanManagerImpl beanManagerImpl = (BeanManagerImpl) beanManager;
-            List<DecoratorInfo> infos = new ArrayList<DecoratorInfo>();
+            List<DecoratorInfo> infos = new ArrayList<>();
             for (Decorator<?> decorator : decorators) {
                 DecoratorInfo info = findDecoratorInfoByClass(
                         beanManagerImpl.getKnowledgeBase().getDecoratorInfos(),

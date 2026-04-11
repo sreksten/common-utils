@@ -56,7 +56,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <pre>
  * // Bean with interceptors
  * {@literal @}ApplicationScoped
- * {@literal @}Transactional  // Interceptor binding
+ * {@literal @}Transactional // Interceptor binding
  * public class OrderService {
  *     public void createOrder(Order order) {
  *         // Business logic
@@ -128,7 +128,7 @@ public class InterceptorAwareProxyGenerator {
      * Map&lt;Method, InterceptorChain&gt; methodInterceptorChains = {
      *     OrderService.createOrder() → [TransactionalInterceptor, LoggingInterceptor],
      *     OrderService.deleteOrder() → [SecurityInterceptor],
-     *     OrderService.getOrder() → null  // No interceptors, direct call
+     *     OrderService.getOrder() → null // No interceptors, direct call
      * }
      * </pre>
      *
@@ -153,7 +153,7 @@ public class InterceptorAwareProxyGenerator {
      * <ol>
      * <li>Retrieves or generates a proxy class (cached)</li>
      * <li>Instantiates the proxy</li>
-     * <li>Initializes the proxy state (target instance + interceptor chains)</li>
+     * <li>Initializes the proxy state (target instance and interceptor chains)</li>
      * </ol>
      *
      * @param <T> the bean type
@@ -275,14 +275,14 @@ public class InterceptorAwareProxyGenerator {
      * <h3>Method Interception Logic</h3>
      * The proxy delegates ALL business methods to {@link InterceptorMethodInterceptor}, which:
      * <pre>
-     * 1. Checks if method has interceptors in the methodInterceptorChains map
+     * 1. Checks if a method has interceptors in the methodInterceptorChains map
      * 2. If YES:
      *    a. Retrieve the InterceptorChain for this method
-     *    b. Execute chain.invoke(targetInstance, method, args)
-     *    c. Return result
+     *    B. Execute chain.invoke(targetInstance, method, args)
+     *    C. Return result
      * 3. If NO:
      *    a. Directly invoke method.invoke(targetInstance, args)
-     *    b. Return result
+     *    B. Return result
      * </pre>
      *
      * @param beanClass the class to generate a proxy for
@@ -294,7 +294,7 @@ public class InterceptorAwareProxyGenerator {
             return new ByteBuddy()
                 // Create a subclass of the target bean class
                 // Imitate superclass constructors so proxy generation also works for classes
-                // without a no-arg constructor (for example synthetic beans with @Inject ctor).
+                // without a no-arg constructor (for example, synthetic beans with @Inject ctor).
                 .subclass(beanClass, ConstructorStrategy.Default.IMITATE_SUPER_CLASS)
 
                 // Add field to store the target instance (the real bean)
@@ -398,7 +398,7 @@ public class InterceptorAwareProxyGenerator {
      *       → Target method (OrderService.createOrder)
      * 4b. NO - Direct invocation:
      *     method.invoke(targetInstance, args)
-     * 5. Return result to user
+     * 5. Return result to the user
      * </pre>
      *
      * <h3>Method Matching</h3>
@@ -423,8 +423,8 @@ public class InterceptorAwareProxyGenerator {
          * 1. Executes the interceptor chain (if interceptors exist for this method), OR
          * 2. Directly invokes the method on the target instance (if no interceptors)
          *
-         * @param targetInstance the real bean instance from proxy field
-         * @param methodInterceptorChains the method-to-chain map from proxy field
+         * @param targetInstance the real bean instance from the proxy field
+         * @param methodInterceptorChains the method-to-chain map from the proxy field
          * @param method the method being called
          * @param args the method arguments
          * @return the result from either the interceptor chain or direct invocation
@@ -459,8 +459,7 @@ public class InterceptorAwareProxyGenerator {
             }
 
             if (chain != null) {
-                // Step 3a: Method has interceptors - execute the chain
-                // The chain will:
+                // Step 3a: Method has interceptors - execute the chain will:
                 // 1. Execute each interceptor in priority order
                 // 2. Each interceptor calls context.proceed() to continue the chain
                 // 3. The last proceed() invokes the actual target method
@@ -475,7 +474,7 @@ public class InterceptorAwareProxyGenerator {
                     return dynamicChain.invoke(targetInstance, method, args);
                 }
 
-                // Step 3b: No interceptors for this method - direct invocation
+                // Step 3b: No interceptors for this method-direct invocation
                 // This is the fast path for non-intercepted methods
                 // Simply invoke the method on the target instance and return the result
                 method.setAccessible(true);

@@ -236,29 +236,6 @@ public class BeanArchiveDetector {
         return null;
     }
 
-    /**
-     * Parses beans.xml using JAXB and extracts the bean-discovery-mode.
-     *
-     * <p>CDI 4.1 bean-discovery-mode values:
-     * <ul>
-     *   <li>"all" or missing → EXPLICIT (all classes are beans)</li>
-     *   <li>"annotated" → IMPLICIT (only annotated classes are beans)</li>
-     *   <li>"none" → Not a bean archive (skip entirely)</li>
-     * </ul>
-     *
-     * @param inputStream the beans.xml input stream
-     * @return the detected mode
-     */
-    private BeanArchiveMode parseBeanDiscoveryMode(InputStream inputStream) {
-        try {
-            BeansXml beansXml = beansXmlParser.parse(inputStream);
-            // parseBeanDiscoveryMode is used when we cannot associate with a concrete file path
-            return determineMode(beansXml);
-        } catch (Exception e) {
-            return BeanArchiveMode.EXPLICIT;
-        }
-    }
-
     private BeanArchiveMode determineMode(BeansXml beansXml) {
         if (beansXml == null) {
             return BeanArchiveMode.IMPLICIT;
@@ -294,7 +271,7 @@ public class BeanArchiveDetector {
     }
 
     private BeanArchiveMode implicitArchiveModeWhenNoBeansXml() {
-        if (knowledgeBase != null && !knowledgeBase.isImplicitBeanArchiveScanningEnabled()) {
+        if (knowledgeBase != null && knowledgeBase.isImplicitBeanArchiveScanningDisabled()) {
             return BeanArchiveMode.NONE;
         }
         return BeanArchiveMode.IMPLICIT;

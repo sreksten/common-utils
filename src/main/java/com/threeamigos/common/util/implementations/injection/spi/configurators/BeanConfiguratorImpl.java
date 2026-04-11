@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -72,12 +71,6 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
 
     public BeanConfiguratorImpl(MessageHandler messageHandler, KnowledgeBase knowledgeBase) {
         this(messageHandler, knowledgeBase, null, null);
-    }
-
-    public BeanConfiguratorImpl(MessageHandler messageHandler,
-                                KnowledgeBase knowledgeBase,
-                                Consumer<SyntheticBean<T>> syntheticBeanCallback) {
-        this(messageHandler, knowledgeBase, null, syntheticBeanCallback);
     }
 
     public BeanConfiguratorImpl(MessageHandler messageHandler,
@@ -444,7 +437,7 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
             scope = Dependent.class;
         }
         if (Dependent.class.equals(scope) && !stereotypes.isEmpty()) {
-            Class<? extends Annotation> inferredScope = inferScopeFromStereotypes(stereotypes, new HashSet<Class<? extends Annotation>>());
+            Class<? extends Annotation> inferredScope = inferScopeFromStereotypes(stereotypes, new HashSet<>());
             if (inferredScope != null) {
                 scope = inferredScope;
             }
@@ -485,9 +478,6 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
                 continue;
             }
             for (Annotation annotation : stereotypeType.getAnnotations()) {
-                if (annotation == null) {
-                    continue;
-                }
                 Class<? extends Annotation> annotationType = annotation.annotationType();
                 if (hasNormalScopeAnnotation(annotationType) ||
                         hasScopeAnnotation(annotationType) ||
@@ -495,7 +485,7 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
                     return annotationType;
                 }
                 if (hasStereotypeAnnotation(annotationType)) {
-                    Set<Class<? extends Annotation>> nested = new LinkedHashSet<Class<? extends Annotation>>();
+                    Set<Class<? extends Annotation>> nested = new LinkedHashSet<>();
                     nested.add(annotationType);
                     Class<? extends Annotation> nestedScope = inferScopeFromStereotypes(nested, visited);
                     if (nestedScope != null) {

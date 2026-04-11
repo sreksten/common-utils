@@ -6,7 +6,6 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl
 import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
-import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -45,7 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <pre>
  * {@literal @}ApplicationScoped
  * class GlobalService {
- *     {@literal @}Inject RequestData requestData;  // Different request per HTTP call!
+ *     {@literal @}Inject RequestData requestData; // Different request per HTTP call!
  * }
  *
  * {@literal @}RequestScoped
@@ -100,7 +99,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <h3>Call Flow With Interceptors:</h3>
  * <pre>
  * {@literal @}ApplicationScoped
- * {@literal @}Transactional  // Interceptor binding
+ * {@literal @}Transactional // Interceptor binding
  * class OrderService {
  *     public void createOrder(Order order) { ... }
  * }
@@ -232,7 +231,7 @@ public class ClientProxyGenerator {
     }
 
     /**
-     * Clears generated proxy class cache for this generator instance.
+     * Clears the generated proxy class cache for this generator instance.
      * Intended for container shutdown to release class references promptly.
      */
     public void clearCache() {
@@ -263,9 +262,9 @@ public class ClientProxyGenerator {
      * 1. Proxy is created once and injected into dependent beans
      * 2. Proxy lives as long as the dependent bean (could be the entire application)
      * 3. Each method call on the proxy:
-     *    a. Looks up the current contextual instance from the scope's context
-     *    b. Delegates the call to that instance
-     *    c. Returns the result
+     *    - Looks up the current contextual instance from the scope's context
+     *    - Delegates the call to that instance
+     *    - Returns the result
      * <p>
      * This ensures that even if the proxy is held by a long-lived bean,
      * it always accesses the correct contextual instance for the current scope.
@@ -299,7 +298,7 @@ public class ClientProxyGenerator {
 
         Class<?> proxyClass;
         if (beanClass != null && (beanClass.isInterface() || beanClass == Object.class)) {
-            // Interface/object-based beans are frequently loaded from parent modules (e.g. CDI API);
+            // Interface/object-based beans are frequently loaded from parent modules (e.g., CDI API);
             // generate against the active deployment loader to avoid module visibility issues.
             proxyClass = generateProxyClass(beanClass);
         } else {
@@ -413,8 +412,7 @@ public class ClientProxyGenerator {
         if (allocated != null) {
             return allocated;
         }
-        throw lastError != null ? lastError :
-                new IllegalStateException("Failed to instantiate proxy class " + proxyClass.getName());
+        throw lastError;
     }
 
     private Object allocateWithoutConstructor(Class<?> proxyClass) {
@@ -483,7 +481,7 @@ public class ClientProxyGenerator {
         if (best == null) {
             return fallback;
         }
-        if (fallback != null && best.equals(fallback)) {
+        if (best.equals(fallback)) {
             return fallback;
         }
         return best;
@@ -508,7 +506,7 @@ public class ClientProxyGenerator {
      *    - This is CRITICAL: The bean class might have @Inject constructors with parameters
      *    - The proxy doesn't need to initialize the bean properly because it NEVER calls
      *      business methods on itself - it always delegates to contextual instances
-     *    - We use DEFAULT constructor strategy which calls super() on any existing constructor,
+     *    - We use DEFAULT constructor strategy, which calls super() on any existing constructor,
      *      using default values (null for objects, 0 for primitives, false for booleans)
      * 3. Implements ProxyState (to hold bean and contextManager references)
      * 4. Implements Serializable (required by CDI spec for passivation)
@@ -596,9 +594,9 @@ public class ClientProxyGenerator {
 
     private ClassLoader resolveProxyClassLoader(Class<?> beanClass) {
         if (beanClass != null && beanClass.isInterface()) {
-            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-            if (canLoadType(tccl, beanClass)) {
-                return tccl;
+            ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+            if (canLoadType(ccl, beanClass)) {
+                return ccl;
             }
             ClassLoader own = ClientProxyGenerator.class.getClassLoader();
             if (canLoadType(own, beanClass)) {
@@ -609,9 +607,9 @@ public class ClientProxyGenerator {
         if (beanLoader != null) {
             return beanLoader;
         }
-        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-        if (tccl != null) {
-            return tccl;
+        ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+        if (ccl != null) {
+            return ccl;
         }
         return ClientProxyGenerator.class.getClassLoader();
     }
@@ -645,13 +643,13 @@ public class ClientProxyGenerator {
      * 1. User calls: proxy.getUserId()
      * 2. ByteBuddy intercepts and calls: ContextualInstanceInterceptor.intercept(...)
      * 3. Interceptor does:
-     *    a. Extract bean and contextManager from proxy (via ProxyState)
-     *    b. Get bean's scope annotation (e.g., @RequestScoped)
-     *    c. Get the context for that scope from contextManager
-     *    d. Get the current contextual instance from the context
-     *    e. Invoke the original method on the contextual instance
-     *    f. Return the result
-     * 4. Result flows back to user
+     *    - Extract bean and contextManager from proxy (via ProxyState)
+     *    - Get bean's scope annotation (e.g., @RequestScoped)
+     *    - Get the context for that scope from contextManager
+     *    - Get the current contextual instance from the context
+     *    - Invoke the original method on the contextual instance
+     *    - Return the result
+     * 4. Result flows back to the user
      * </pre>
      *
      * This interceptor is what makes the proxy "transparent" - from the caller's
@@ -834,10 +832,10 @@ public class ClientProxyGenerator {
                 }
             }
 
-            ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-            BeanManagerImpl byTccl = BeanManagerImpl.getRegisteredBeanManager(tccl);
-            if (byTccl != null) {
-                return byTccl.getBeanManagerId();
+            ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+            BeanManagerImpl byCcl = BeanManagerImpl.getRegisteredBeanManager(ccl);
+            if (byCcl != null) {
+                return byCcl.getBeanManagerId();
             }
             return null;
         }
@@ -969,7 +967,7 @@ public class ClientProxyGenerator {
 
             Bean<?> bean = null;
             if (beanManager instanceof BeanManagerImpl && beanPassivationId != null) {
-                bean = ((BeanManagerImpl) beanManager).getPassivationCapableBean(beanPassivationId);
+                bean = beanManager.getPassivationCapableBean(beanPassivationId);
             }
             if (bean == null) {
                 // Look up the bean from the BeanManager

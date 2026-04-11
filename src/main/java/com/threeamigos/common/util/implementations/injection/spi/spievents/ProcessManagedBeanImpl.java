@@ -350,12 +350,11 @@ public class ProcessManagedBeanImpl<T> extends ProcessBeanImpl<T> implements Pro
             return beanManager.getBeans(requiredType, qualifiers);
         }
 
-        @SuppressWarnings({"rawtypes", "unchecked"})
         private Bean<?> resolveBean(Set<Bean<?>> beans) {
             if (beanManager instanceof BeanManagerImpl) {
-                return (Bean<?>) ((BeanManagerImpl) beanManager).resolveForInvokerLookup((Set) beans);
+                return ((BeanManagerImpl) beanManager).resolveForInvokerLookup(beans);
             }
-            return (Bean<?>) beanManager.resolve((Set) beans);
+            return beanManager.resolve(beans);
         }
 
         private void ensureNotAsyncTargetMethod() {

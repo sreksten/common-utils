@@ -308,7 +308,7 @@ public class InterceptorChain {
     /**
      * Builder for constructing InterceptorChain instances.
      *
-     * <p>Interceptors should be added in priority order (lowest priority first).
+     * <p>Interceptors should be added in priority order (the lowest priority first).
      * The builder does not automatically sort - callers must add interceptors in the correct order.
      */
     public static class Builder {

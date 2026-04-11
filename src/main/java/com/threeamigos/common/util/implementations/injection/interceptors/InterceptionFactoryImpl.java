@@ -197,8 +197,7 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
 
         // Build interceptor chains for each method
         Map<Method, InterceptorChain> methodInterceptorChains = buildInterceptorChains(
-            clazz,
-            interceptorBindingsByMethod
+                interceptorBindingsByMethod
         );
 
         if (methodInterceptorChains.isEmpty()) {
@@ -233,13 +232,10 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
      *   <li>Map the method to its chain</li>
      * </ol>
      *
-     * @param clazz the bean class
-     * @param interceptorBindings the interceptor bindings to apply
+     * @param interceptorBindingsByMethod the interceptor bindings to apply
      * @return map of methods to their interceptor chains
      */
-    private Map<Method, InterceptorChain> buildInterceptorChains(
-            Class<T> clazz,
-            Map<Method, Set<Annotation>> interceptorBindingsByMethod) {
+    private Map<Method, InterceptorChain> buildInterceptorChains(Map<Method, Set<Annotation>> interceptorBindingsByMethod) {
 
         Map<Method, InterceptorChain> chains = new HashMap<>();
 
@@ -387,15 +383,15 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
     }
 
     private Map<Method, Set<Annotation>> extractInterceptorBindingsByMethod(AnnotatedType<T> annotatedType) {
-        Map<Method, Set<Annotation>> bindingsByMethod = new HashMap<Method, Set<Annotation>>();
+        Map<Method, Set<Annotation>> bindingsByMethod = new HashMap<>();
         Set<Annotation> classBindings = extractInterceptorBindings(annotatedType);
 
-        Map<Method, Set<Annotation>> configuredMethodBindings = new HashMap<Method, Set<Annotation>>();
+        Map<Method, Set<Annotation>> configuredMethodBindings = new HashMap<>();
         for (AnnotatedMethod<? super T> annotatedMethod : annotatedType.getMethods()) {
             if (annotatedMethod == null || annotatedMethod.getJavaMember() == null) {
                 continue;
             }
-            Set<Annotation> methodBindings = new LinkedHashSet<Annotation>();
+            Set<Annotation> methodBindings = new LinkedHashSet<>();
             for (Annotation annotation : annotatedMethod.getAnnotations()) {
                 if (beanManager.isInterceptorBinding(annotation.annotationType())) {
                     methodBindings.add(annotation);
@@ -411,7 +407,7 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
                 continue;
             }
 
-            Set<Annotation> bindings = new LinkedHashSet<Annotation>(classBindings);
+            Set<Annotation> bindings = new LinkedHashSet<>(classBindings);
             Set<Annotation> methodBindings = configuredMethodBindings.get(method);
             if (methodBindings != null) {
                 bindings.addAll(methodBindings);

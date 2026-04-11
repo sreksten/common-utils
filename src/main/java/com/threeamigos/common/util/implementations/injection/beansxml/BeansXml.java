@@ -83,7 +83,7 @@ public class BeansXml {
     private String version;
 
     // Metadata captured by parser from the original descriptor source.
-    // Not part of beans.xml schema and not unmarshalled by JAXB.
+    // Not part of the beans.xml schema and not unmarshalled by JAXB.
     private transient String sourceNamespace;
     private transient boolean beanDiscoveryModeDeclared;
 
@@ -183,16 +183,12 @@ public class BeansXml {
         return version;
     }
 
-    public String getSourceNamespace() {
-        return sourceNamespace;
-    }
-
     public boolean isBeanDiscoveryModeDeclared() {
         return beanDiscoveryModeDeclared;
     }
 
-    public boolean isLegacyJavaSunDescriptor() {
-        return LEGACY_JAVA_SUN_NAMESPACE.equals(sourceNamespace);
+    public boolean isNotLegacyJavaSunDescriptor() {
+        return !LEGACY_JAVA_SUN_NAMESPACE.equals(sourceNamespace);
     }
 
     public Alternatives getAlternatives() {

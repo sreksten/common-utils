@@ -74,7 +74,7 @@ public final class BeanTypesExtractor {
             unrestrictedTypes.add(producerRawType);
         }
         Set<Type> resultingTypes = unrestrictedTypes;
-        if (producerElement != null && hasTypedAnnotation(producerElement)) {
+        if (hasTypedAnnotation(producerElement)) {
             Annotation typedAnnotation = getTypedAnnotation(producerElement);
             if (typedAnnotation != null) {
                 resultingTypes = computeTypedBeanTypes(producerRawType, typedAnnotation, unrestrictedTypes, definitionErrors);
@@ -118,7 +118,7 @@ public final class BeanTypesExtractor {
                 }
             }
             Type owner = parameterizedType.getOwnerType();
-            return owner != null && containsTypeVariable(owner);
+            return containsTypeVariable(owner);
         }
         if (type instanceof WildcardType) {
             WildcardType wildcardType = (WildcardType) type;
@@ -154,7 +154,7 @@ public final class BeanTypesExtractor {
                 }
             }
             Type owner = parameterizedType.getOwnerType();
-            return owner != null && containsWildcard(owner);
+            return containsWildcard(owner);
         }
         return false;
     }
@@ -173,9 +173,7 @@ public final class BeanTypesExtractor {
     }
 
     private boolean isTypeClosureSyntheticParameterizedType(Type type) {
-        return type != null
-                && type.getClass() != null
-                && "com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper$SimpleParameterizedType"
+        return type != null && "com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper$SimpleParameterizedType"
                 .equals(type.getClass().getName());
     }
 

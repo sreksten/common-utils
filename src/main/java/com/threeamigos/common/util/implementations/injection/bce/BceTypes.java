@@ -163,17 +163,17 @@ final class BceTypes implements Types {
     }
 
     private Class<?> resolveClass(String className) throws ClassNotFoundException {
-        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
-        if (tccl != null) {
+        ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+        if (ccl != null) {
             try {
-                return Class.forName(className, false, tccl);
+                return Class.forName(className, false, ccl);
             } catch (ClassNotFoundException ignored) {
                 // Fall through to the container/module class loader.
             }
         }
 
         ClassLoader fallback = BceTypes.class.getClassLoader();
-        if (fallback != null && fallback != tccl) {
+        if (fallback != null && fallback != ccl) {
             return Class.forName(className, false, fallback);
         }
         return Class.forName(className);
