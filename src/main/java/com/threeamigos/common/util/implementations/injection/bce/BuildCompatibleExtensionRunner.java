@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
@@ -59,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasRequiredEnhancementAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
@@ -1489,70 +1491,6 @@ public class BuildCompatibleExtensionRunner {
             return true;
         }
         return hasRequiredEnhancementAnnotation(element, requiredAnnotations);
-    }
-
-    private boolean hasRequiredEnhancementAnnotation(java.lang.reflect.AnnotatedElement element,
-                                                     Class<? extends Annotation>[] requiredAnnotations) {
-        if (element == null) {
-            return false;
-        }
-
-        if (hasAnyRequiredAnnotation(element, requiredAnnotations)) {
-            return true;
-        }
-
-        if (!(element instanceof Class<?>)) {
-            return false;
-        }
-
-        Class<?> clazz = (Class<?>) element;
-        for (Field field : clazz.getDeclaredFields()) {
-            if (hasAnyRequiredAnnotation(field, requiredAnnotations)) {
-                return true;
-            }
-        }
-
-        for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
-            if (hasAnyRequiredAnnotation(constructor, requiredAnnotations) ||
-                    parametersHaveAnyRequiredAnnotation(constructor.getParameters(), requiredAnnotations)) {
-                return true;
-            }
-        }
-
-        for (Method method : clazz.getDeclaredMethods()) {
-            if (hasAnyRequiredAnnotation(method, requiredAnnotations) ||
-                    parametersHaveAnyRequiredAnnotation(method.getParameters(), requiredAnnotations)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private boolean hasAnyRequiredAnnotation(java.lang.reflect.AnnotatedElement element,
-                                             Class<? extends Annotation>[] requiredAnnotations) {
-        if (element == null || requiredAnnotations == null) {
-            return false;
-        }
-        for (Class<? extends Annotation> annotation : requiredAnnotations) {
-            if (annotation != null && element.isAnnotationPresent(annotation)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean parametersHaveAnyRequiredAnnotation(java.lang.reflect.Parameter[] parameters,
-                                                        Class<? extends Annotation>[] requiredAnnotations) {
-        if (parameters == null || requiredAnnotations == null) {
-            return false;
-        }
-        for (java.lang.reflect.Parameter parameter : parameters) {
-            if (hasAnyRequiredAnnotation(parameter, requiredAnnotations)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private boolean hasEnhancementModelParameter(Method method) {

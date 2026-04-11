@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
@@ -563,10 +564,6 @@ public class BeanResolver implements DependencyResolver {
             current = current.getSuperclass();
         }
         return out;
-    }
-
-    private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        return AnnotationPredicates.hasSpecializesAnnotation(beanClass);
     }
 
     private Object resolveDecoratorMetadata(InjectionPoint injectionPoint, ParameterizedType requiredType) {

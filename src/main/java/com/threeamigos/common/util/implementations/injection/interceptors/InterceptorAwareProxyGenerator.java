@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.injection.interceptors;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
@@ -22,12 +21,13 @@ import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.annotation.Annotation;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasAroundInvokeAnnotation;
 
 /**
  * Generates proxies that integrate interceptor chain execution with business method calls.
@@ -576,18 +576,6 @@ public class InterceptorAwareProxyGenerator {
                 }
             }
             return null;
-        }
-
-        private static boolean hasAroundInvokeAnnotation(Iterable<Annotation> annotations) {
-            if (annotations == null) {
-                return false;
-            }
-            for (Annotation annotation : annotations) {
-                if (annotation != null && AnnotationsEnum.AROUND_INVOKE.matches(annotation.annotationType())) {
-                    return true;
-                }
-            }
-            return false;
         }
     }
 }

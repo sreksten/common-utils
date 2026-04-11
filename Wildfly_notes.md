@@ -1,3 +1,11 @@
+### TEST
+cd /Users/stefano.reksten/Downloads/jakartacdi/cdi-tck-4.1.0/weld/jboss-tck-runner
+mvn -Dincontainer=syringe clean test
+
+export $JBOSS_HOME=/Users/stefano.reksten/Downloads/jakartacdi/wildfly-31.0.1.Final
+${JBOSS_HOME}/bin/standalone.sh -c standalone-syringe.xml
+
+
 In WildFly, modules are stored in a specific directory structure that mirrors the module's name. For the module name defined in the roadmap (`com.threeamigos.common.util`), the `module.xml` must be located at:
 
 **Path:**

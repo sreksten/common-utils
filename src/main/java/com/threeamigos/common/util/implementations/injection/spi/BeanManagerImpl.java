@@ -109,13 +109,6 @@ import static com.threeamigos.common.util.implementations.injection.annotations.
 public class BeanManagerImpl implements BeanManager, Serializable {
     private static final long serialVersionUID = 1L;
 
-    private static final ConcurrentHashMap<ClassLoader, BeanManagerImpl> BEAN_MANAGER_REGISTRY =
-            new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, BeanManagerImpl> BEAN_MANAGER_ID_REGISTRY =
-            new ConcurrentHashMap<>();
-    private static final Map<Object, DependentReference<?>> TRANSIENT_DEPENDENT_REFERENCE_REGISTRY =
-            Collections.synchronizedMap(new IdentityHashMap<>());
-
     private final KnowledgeBase knowledgeBase;
     private final BeanResolver beanResolver;
     private final ContextManager contextManager;
@@ -158,8 +151,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             classLoader = BeanManagerImpl.class.getClassLoader();
         }
         this.registrationClassLoader = classLoader;
-        BEAN_MANAGER_REGISTRY.put(classLoader, this);
-        BEAN_MANAGER_ID_REGISTRY.put(beanManagerId, this);
+        BeanManagerRegistry.register(this, classLoader);
     }
 
     public ClassLoader getRegistrationClassLoader() {
@@ -167,8 +159,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     public void unregisterFromGlobalRegistries() {
-        BEAN_MANAGER_ID_REGISTRY.remove(beanManagerId, this);
-        BEAN_MANAGER_REGISTRY.remove(registrationClassLoader, this);
+        BeanManagerRegistry.unregister(this, registrationClassLoader);
     }
 
     public void setLegacyCdi10NewEnabled(boolean enabled) {
@@ -211,22 +202,15 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     public static BeanManagerImpl getRegisteredBeanManager(ClassLoader classLoader) {
-        if (classLoader == null) {
-            return null;
-        }
-        return BEAN_MANAGER_REGISTRY.get(classLoader);
+        return BeanManagerRegistry.getRegisteredBeanManager(classLoader);
     }
 
     public static BeanManagerImpl getRegisteredBeanManager(String beanManagerId) {
-        if (beanManagerId == null) {
-            return null;
-        }
-        return BEAN_MANAGER_ID_REGISTRY.get(beanManagerId);
+        return BeanManagerRegistry.getRegisteredBeanManager(beanManagerId);
     }
 
     public static Collection<BeanManagerImpl> getRegisteredBeanManagersSnapshot() {
-        return new ArrayList<>(
-                new LinkedHashSet<>(BEAN_MANAGER_ID_REGISTRY.values()));
+        return BeanManagerRegistry.getRegisteredBeanManagersSnapshot();
     }
 
     public boolean destroyOwnedTransientReference(Object instance) {
@@ -243,62 +227,19 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         return destroyTransientReference(null, instance);
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     private static boolean destroyTransientReference(String ownerBeanManagerId, Object instance) {
-        if (instance == null) {
-            return false;
-        }
-
-        DependentReference<?> reference;
-        synchronized (TRANSIENT_DEPENDENT_REFERENCE_REGISTRY) {
-            reference = TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.get(instance);
-            if (reference == null) {
-                return false;
-            }
-            if (ownerBeanManagerId != null && !ownerBeanManagerId.equals(reference.beanManagerId)) {
-                return false;
-            }
-            TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.remove(instance);
-        }
-
-        try {
-            Bean bean = reference.bean;
-            CreationalContext context = reference.creationalContext;
-            bean.destroy(instance, context);
-            return true;
-        } catch (Throwable ignored) {
-            return false;
-        }
+        return BeanManagerRegistry.destroyTransientReference(ownerBeanManagerId, instance);
     }
 
     private static <T> void registerTransientReference(String ownerBeanManagerId,
                                                        Bean<T> bean,
                                                        T instance,
                                                        CreationalContext<T> creationalContext) {
-        if (ownerBeanManagerId == null || bean == null || instance == null || creationalContext == null) {
-            return;
-        }
-        synchronized (TRANSIENT_DEPENDENT_REFERENCE_REGISTRY) {
-            TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.put(instance,
-                    new DependentReference<>(ownerBeanManagerId, bean, creationalContext));
-        }
+        BeanManagerRegistry.registerTransientReference(ownerBeanManagerId, bean, instance, creationalContext);
     }
 
     private static void clearTransientReferencesForOwner(String ownerBeanManagerId) {
-        if (ownerBeanManagerId == null) {
-            return;
-        }
-        synchronized (TRANSIENT_DEPENDENT_REFERENCE_REGISTRY) {
-            Iterator<Map.Entry<Object, DependentReference<?>>> iterator =
-                    TRANSIENT_DEPENDENT_REFERENCE_REGISTRY.entrySet().iterator();
-            while (iterator.hasNext()) {
-                Map.Entry<Object, DependentReference<?>> entry = iterator.next();
-                DependentReference<?> reference = entry.getValue();
-                if (reference != null && ownerBeanManagerId.equals(reference.beanManagerId)) {
-                    iterator.remove();
-                }
-            }
-        }
+        BeanManagerRegistry.clearTransientReferencesForOwner(ownerBeanManagerId);
     }
 
     public String getBeanManagerId() {
@@ -306,7 +247,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     private Object writeReplace() throws ObjectStreamException {
-        return new SerializedBeanManagerReference(beanManagerId);
+        return BeanManagerRegistry.createSerializedReference(beanManagerId);
     }
 
     /**
@@ -1027,10 +968,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             current = current.getSuperclass();
         }
         return out;
-    }
-
-    private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        return AnnotationPredicates.hasSpecializesAnnotation(beanClass);
     }
 
     private boolean isBeanEnabledForResolution(Bean<?> bean) {
@@ -1894,31 +1831,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
         List<Context> previous = bceContextInstances.putIfAbsent(
                 scopeType, Collections.unmodifiableList(created));
         return previous != null ? previous : bceContextInstances.get(scopeType);
-    }
-
-    private static final class SerializedBeanManagerReference implements Serializable {
-        private static final long serialVersionUID = 1L;
-
-        private final String beanManagerId;
-        private SerializedBeanManagerReference(String beanManagerId) {
-            this.beanManagerId = beanManagerId;
-        }
-
-        private Object readResolve() throws ObjectStreamException {
-            BeanManagerImpl byId = BeanManagerImpl.getRegisteredBeanManager(beanManagerId);
-            if (byId != null) {
-                return byId;
-            }
-            ClassLoader ccl = Thread.currentThread().getContextClassLoader();
-            if (ccl == null) {
-                ccl = BeanManagerImpl.class.getClassLoader();
-            }
-            BeanManagerImpl byClassLoader = BeanManagerImpl.getRegisteredBeanManager(ccl);
-            if (byClassLoader != null) {
-                return byClassLoader;
-            }
-            throw new java.io.InvalidObjectException("No BeanManager registered for deserialization handle");
-        }
     }
 
     /**
@@ -4513,18 +4425,6 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             }
             collected.add(Object.class);
             return collected;
-        }
-    }
-
-    private static final class DependentReference<T> {
-        private final String beanManagerId;
-        private final Bean<T> bean;
-        private final CreationalContext<T> creationalContext;
-
-        private DependentReference(String beanManagerId, Bean<T> bean, CreationalContext<T> creationalContext) {
-            this.beanManagerId = beanManagerId;
-            this.bean = bean;
-            this.creationalContext = creationalContext;
         }
     }
 

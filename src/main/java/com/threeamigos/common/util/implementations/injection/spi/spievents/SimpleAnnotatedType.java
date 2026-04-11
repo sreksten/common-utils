@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedConstructorWrapper;
@@ -22,6 +23,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.isCdiInheritableTypeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.isScopeOrNormalScopeAnnotation;
 
 /**
  * Minimal AnnotatedType implementation used for SPI events where full
@@ -124,7 +128,7 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
         if (hasDeclaredScope) {
             Set<Class<? extends Annotation>> declaredScopeTypes = new HashSet<>();
             for (Annotation annotation : javaClass.getDeclaredAnnotations()) {
-                if (isScopeAnnotation(annotation.annotationType())) {
+                if (isScopeOrNormalScopeAnnotation(annotation.annotationType())) {
                     declaredScopeTypes.add(annotation.annotationType());
                 }
             }
@@ -132,7 +136,8 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
             while (iterator.hasNext()) {
                 Annotation annotation = iterator.next();
                 Class<? extends Annotation> annotationType = annotation.annotationType();
-                if (isScopeAnnotation(annotationType) && !declaredScopeTypes.contains(annotationType)) {
+                if (isScopeOrNormalScopeAnnotation(annotationType)
+                        && !declaredScopeTypes.contains(annotationType)) {
                     iterator.remove();
                 }
             }
@@ -141,13 +146,13 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
 
         // CDI special rule: if no scope is declared directly on this type, inherit the nearest
         // scope from the superclass hierarchy even if that scope annotation is not @Inherited.
-        annotations.removeIf(annotation -> isScopeAnnotation(annotation.annotationType()));
+        annotations.removeIf(annotation -> isScopeOrNormalScopeAnnotation(annotation.annotationType()));
 
         Class<?> scopeSource = javaClass.getSuperclass();
         while (scopeSource != null && scopeSource != Object.class) {
             if (hasDeclaredScope(scopeSource)) {
                 for (Annotation annotation : scopeSource.getDeclaredAnnotations()) {
-                    if (isScopeAnnotation(annotation.annotationType())) {
+                    if (isScopeOrNormalScopeAnnotation(annotation.annotationType())) {
                         annotations.add(annotation);
                     }
                 }
@@ -215,27 +220,10 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
 
     private boolean hasDeclaredScope(Class<?> type) {
         for (Annotation annotation : type.getDeclaredAnnotations()) {
-            if (isScopeAnnotation(annotation.annotationType())) {
+            if (isScopeOrNormalScopeAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
         return false;
-    }
-
-    private boolean isScopeAnnotation(Class<? extends Annotation> annotationType) {
-        return AnnotationPredicates.hasScopeAnnotation(annotationType) ||
-                AnnotationPredicates.hasNormalScopeAnnotation(annotationType);
-    }
-
-    private boolean isCdiInheritableTypeAnnotation(Class<? extends Annotation> annotationType) {
-        if (annotationType == null) {
-            return false;
-        }
-        if (isScopeAnnotation(annotationType)) {
-            return true;
-        }
-        return AnnotationPredicates.hasQualifierAnnotation(annotationType)
-                || AnnotationPredicates.hasStereotypeAnnotation(annotationType)
-                || AnnotationPredicates.hasInterceptorBindingAnnotation(annotationType);
     }
 }

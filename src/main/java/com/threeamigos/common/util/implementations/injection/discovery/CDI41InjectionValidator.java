@@ -1,7 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
-
 import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
@@ -2684,7 +2682,7 @@ public class CDI41InjectionValidator {
                     declaringBean.getBeanClass(),
                     method.getDeclaringClass()
             );
-            InjectionPoint injectionPoint = new InjectionPointImpl(
+            InjectionPoint injectionPoint = new InjectionPointImpl<>(
                     parameter.parameter,
                     declaringBean,
                     parameterType,
@@ -3020,9 +3018,5 @@ public class CDI41InjectionValidator {
             current = current.getSuperclass();
         }
         return out;
-    }
-
-    private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        return AnnotationPredicates.hasSpecializesAnnotation(beanClass);
     }
 }

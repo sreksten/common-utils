@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.collections.Cache;
+import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
@@ -9,6 +10,8 @@ import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.isAnyQualifier;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.isDefaultQualifier;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.Instance;
@@ -149,7 +152,7 @@ class ClassResolver {
         if (alternativeClass == null) {
             throw new IllegalArgumentException("alternativeClass cannot be null");
         }
-        if (!isAlternativeAnnotationPresent(alternativeClass)) {
+        if (!hasAlternativeAnnotation(alternativeClass)) {
             throw new IllegalArgumentException(alternativeClass.getName() + " is not annotated with @Alternative");
         }
         enabledAlternatives.add(alternativeClass);
@@ -221,13 +224,14 @@ class ClassResolver {
         // Filter out alternatives
         List<Class<? extends T>> activeClasses = resolvedClasses
                 .stream()
-                .filter(clazz -> !isAlternativeAnnotationPresent(clazz))
+                .filter(clazz -> !hasAlternativeAnnotation(clazz))
                 .collect(Collectors.toList());
 
         // If no qualifiers requested and every implementation is qualified, CDI should report unsatisfied
         if (qualifiers == null || qualifiers.isEmpty()) {
             boolean hasUnqualified = activeClasses.stream()
-                    .anyMatch(c -> Arrays.stream(c.getAnnotations()).noneMatch(this::isQualifierAnnotation));
+                    .anyMatch(c -> Arrays.stream(c.getAnnotations())
+                            .noneMatch(QualifiersHelper::isQualifierAnnotation));
             if (!hasUnqualified) {
                 throw new UnsatisfiedResolutionException(formatUnsatisfiedError(typeToResolve, qualifiers));
             }
@@ -348,7 +352,7 @@ class ClassResolver {
 
             if (isDefaultQualifier(qualifier)) {
                 return Arrays.stream(clazz.getAnnotations())
-                        .noneMatch(this::isQualifierAnnotation);
+                        .noneMatch(QualifiersHelper::isQualifierAnnotation);
             }
 
             if (isAnyQualifier(qualifier)) {
@@ -357,24 +361,6 @@ class ClassResolver {
 
             return false;
         });
-    }
-
-    private boolean isQualifierAnnotation(Annotation annotation) {
-        Class<? extends Annotation> at = annotation.annotationType();
-        return hasQualifierAnnotation(at)
-                || hasNamedAnnotation(at);
-    }
-
-    private boolean isDefaultQualifier(Annotation annotation) {
-        return annotation != null && hasDefaultAnnotation(annotation.annotationType());
-    }
-
-    private boolean isAnyQualifier(Annotation annotation) {
-        return annotation != null && hasAnyAnnotation(annotation.annotationType());
-    }
-
-    private boolean isAlternativeAnnotationPresent(Class<?> clazz) {
-        return hasAlternativeAnnotation(clazz);
     }
 
     /**

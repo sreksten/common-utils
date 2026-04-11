@@ -133,6 +133,18 @@ public final class QualifiersHelper {
         return new Annotation[0];
     }
 
+    public static boolean isQualifierAnnotation(Annotation annotation) {
+        if (annotation == null) {
+            return false;
+        }
+        Class<? extends Annotation> annotationType = annotation.annotationType();
+        return hasQualifierAnnotation(annotationType) || hasNamedAnnotation(annotationType);
+    }
+
+    public static boolean isAnyQualifier(Annotation annotation) {
+        return annotation != null && hasAnyAnnotation(annotation.annotationType());
+    }
+
     /**
      * Returns true if the available set contains all required qualifiers, respecting @Named values
      * and @Nonbinding semantics.
@@ -236,7 +248,7 @@ public final class QualifiersHelper {
         return false;
     }
 
-    private static boolean isDefaultQualifier(Annotation annotation) {
+    public static boolean isDefaultQualifier(Annotation annotation) {
         if (annotation == null) {
             return false;
         }

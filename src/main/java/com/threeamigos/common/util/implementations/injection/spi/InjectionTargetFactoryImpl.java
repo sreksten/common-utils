@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
@@ -28,6 +29,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasInjectAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasPostConstructAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasPreDestroyAnnotation;
 
 /**
  * Factory for creating InjectionTarget instances.
@@ -690,43 +695,15 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private boolean isInjectableConstructor(Constructor<?> constructor) {
-            return injectableConstructors.contains(constructor) || hasInjectAnnotation(constructor);
+            return injectableConstructors.contains(constructor) || AnnotationPredicates.hasInjectAnnotation(constructor);
         }
 
         private boolean isInjectableField(Field field) {
-            return injectableFields.contains(field) || hasInjectAnnotation(field);
+            return injectableFields.contains(field) || AnnotationPredicates.hasInjectAnnotation(field);
         }
 
         private boolean isInjectableMethod(Method method) {
-            return injectableMethods.contains(method) || hasInjectAnnotation(method);
-        }
-
-        private boolean hasInjectAnnotation(Set<Annotation> annotations) {
-            if (annotations == null || annotations.isEmpty()) {
-                return false;
-            }
-            for (Annotation annotation : annotations) {
-                if (annotation == null) {
-                    continue;
-                }
-                if (AnnotationPredicates
-                        .hasInjectAnnotation(annotation.annotationType())) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private boolean hasInjectAnnotation(java.lang.reflect.AnnotatedElement element) {
-            return AnnotationPredicates.hasInjectAnnotation(element);
-        }
-
-        private boolean hasPostConstructAnnotation(Method method) {
-            return AnnotationPredicates.hasPostConstructAnnotation(method);
-        }
-
-        private boolean hasPreDestroyAnnotation(Method method) {
-            return AnnotationPredicates.hasPreDestroyAnnotation(method);
+            return injectableMethods.contains(method) || AnnotationPredicates.hasInjectAnnotation(method);
         }
 
         private static final class ResolvedInjectionPoint implements InjectionPoint, java.io.Serializable {

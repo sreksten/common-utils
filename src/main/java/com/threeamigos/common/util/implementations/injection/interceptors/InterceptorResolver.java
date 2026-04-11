@@ -1,8 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
@@ -15,6 +14,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
 
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.isInterceptorBindingMetaAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasActivateRequestContextAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasInterceptorBindingAnnotation;
 
@@ -380,13 +380,6 @@ public class InterceptorResolver {
             }
         }
         return filtered;
-    }
-
-    private boolean isInterceptorBindingMetaAnnotation(Class<? extends Annotation> annotationType) {
-        if (annotationType == null) {
-            return false;
-        }
-        return AnnotationsEnum.INTERCEPTOR_BINDING.matches(annotationType);
     }
 
     @Override

@@ -18,6 +18,7 @@ import com.threeamigos.common.util.implementations.injection.builtinbeans.Inject
 import com.threeamigos.common.util.implementations.injection.builtinbeans.InterceptionFactoryBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.RequestContextControllerBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ActivateRequestContextInterceptor;
+import com.threeamigos.common.util.implementations.injection.discovery.validation.CDI41BeanValidator;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.discovery.*;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;

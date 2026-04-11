@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
@@ -32,6 +33,9 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasAroundInvokeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasExcludeClassInterceptorsAnnotation;
 
 /**
  * CDI 4.1 - 2 - A <i>bean</i> is a source of contextual objects that define application state and/or logic.
@@ -2519,7 +2523,8 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         List<Method> methods = new ArrayList<>();
         for (Class<?> hierarchyType : hierarchy) {
             for (Method method : hierarchyType.getDeclaredMethods()) {
-                if (!hasAroundInvokeAnnotation(method, override) || Modifier.isStatic(method.getModifiers())) {
+                if (!hasAroundInvokeAnnotation(method, override)
+                        || Modifier.isStatic(method.getModifiers())) {
                     continue;
                 }
                 if (method.getParameterCount() == 1 &&
@@ -2552,24 +2557,6 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         return method.getAnnotations();
     }
 
-    private boolean hasAroundInvokeAnnotation(Method method, jakarta.enterprise.inject.spi.AnnotatedType<?> override) {
-        if (method == null) {
-            return false;
-        }
-        Annotation[] annotations = override != null
-                ? AnnotatedMetadataHelper.annotationsOf(override, method)
-                : method.getAnnotations();
-        if (annotations == null) {
-            return false;
-        }
-        for (Annotation annotation : annotations) {
-            if (annotation != null && AnnotationsEnum.AROUND_INVOKE.matches(annotation.annotationType())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private List<Class<?>> extractLegacyInterceptorClasses(Annotation[] annotations) {
         if (annotations == null) {
             return Collections.emptyList();
@@ -2591,21 +2578,6 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             }
         }
         return Collections.emptyList();
-    }
-
-    private boolean hasExcludeClassInterceptorsAnnotation(Annotation[] annotations) {
-        if (annotations == null) {
-            return false;
-        }
-        for (Annotation annotation : annotations) {
-            if (annotation == null || annotation.annotationType() == null) {
-                continue;
-            }
-            if (AnnotationsEnum.EXCLUDE_CLASS_INTERCEPTORS.matches(annotation.annotationType())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private InterceptorChain buildLegacyInterceptorChain(List<Class<?>> interceptorClasses) {

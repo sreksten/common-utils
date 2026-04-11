@@ -6,7 +6,6 @@ import com.threeamigos.common.util.implementations.injection.annotations.Annotat
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.BeanManagerBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ConversationBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.InjectionPointBean;
@@ -21,7 +20,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyG
 import com.threeamigos.common.util.implementations.injection.scopes.ConversationImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
-import com.threeamigos.common.util.implementations.injection.discovery.CDI41BeanValidator;
+import com.threeamigos.common.util.implementations.injection.discovery.validation.CDI41BeanValidator;
 import com.threeamigos.common.util.implementations.injection.discovery.CDI41InjectionValidator;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
