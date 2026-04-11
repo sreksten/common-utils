@@ -37,6 +37,7 @@ import java.lang.annotation.Annotation;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
+import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.collectClassHierarchyFromObject;
 
 import java.lang.reflect.*;
 import java.util.*;
@@ -719,7 +720,7 @@ public class InjectorImpl implements Injector {
             T t = buildInstance(constructor, args);
 
             // Collect all classes in the hierarchy, from top to bottom
-            List<Class<?>> hierarchy = LifecycleMethodHelper.buildHierarchy(t);
+            List<Class<?>> hierarchy = collectClassHierarchyFromObject(t);
 
             for (Class<?> clazz : hierarchy) {
                 injectFields(t, typeContext, stack, clazz, resolvedClass, true);

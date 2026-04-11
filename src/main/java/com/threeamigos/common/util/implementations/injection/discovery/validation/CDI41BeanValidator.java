@@ -33,6 +33,8 @@ import java.util.stream.Collectors;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
+import static com.threeamigos.common.util.implementations.injection.types.TypesHelper.containsTypeVariable;
+import static com.threeamigos.common.util.implementations.injection.types.TypesHelper.normalizeResolvedType;
 
 /**
  * Validates that a Java class is a CDI Managed Bean, according to CDI 4.1 rules.
@@ -2409,36 +2411,6 @@ public class CDI41BeanValidator {
                 "must declare @Dependent scope, but declares @" + scope.getSimpleName());
     }
 
-    private boolean containsTypeVariable(Type[] types) {
-        for (Type type : types) {
-            if (containsTypeVariable(type)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean containsTypeVariable(Type type) {
-        if (type instanceof TypeVariable) {
-            return true;
-        }
-        if (type instanceof ParameterizedType) {
-            return containsTypeVariable(((ParameterizedType) type).getActualTypeArguments());
-        }
-        if (type instanceof GenericArrayType) {
-            return containsTypeVariable(((GenericArrayType) type).getGenericComponentType());
-        }
-        if (type instanceof Class && ((Class<?>) type).isArray()) {
-            return containsTypeVariable(((Class<?>) type).getComponentType());
-        }
-        if (type instanceof WildcardType) {
-            WildcardType wildcardType = (WildcardType) type;
-            return containsTypeVariable(wildcardType.getLowerBounds()) ||
-                    containsTypeVariable(wildcardType.getUpperBounds());
-        }
-        return false;
-    }
-
     private void checkInjectionTypeValidity(Type type) {
         checkInjectionTypeValidity(type, false, null);
     }
@@ -3237,18 +3209,6 @@ public class CDI41BeanValidator {
         return new ResolvedInjectionPoint(delegate, normalizeResolvedType(resolvedType));
     }
 
-    private Type normalizeResolvedType(Type resolvedType) {
-        if (!(resolvedType instanceof GenericArrayType)) {
-            return resolvedType;
-        }
-
-        Type component = ((GenericArrayType) resolvedType).getGenericComponentType();
-        if (component instanceof Class<?>) {
-            return java.lang.reflect.Array.newInstance((Class<?>) component, 0).getClass();
-        }
-        return resolvedType;
-    }
-
     // InjectionPoint best-effort creation
     // -----------------------
 
@@ -3256,72 +3216,18 @@ public class CDI41BeanValidator {
         try {
             if (element instanceof Field) {
                 Field field = (Field) element;
-                return new InjectionPointImpl<>(
-                        field,
-                        owningBean,
-                        baseTypeOf(field),
-                        annotationsOf(field),
+                return new InjectionPointImpl<>(field, owningBean, baseTypeOf(field), annotationsOf(field),
                         annotatedOf(field));
             }
             if (element instanceof Parameter) {
                 Parameter parameter = (Parameter) element;
-                return new InjectionPointImpl<>(
-                        parameter,
-                        owningBean,
-                        baseTypeOf(parameter),
-                        annotationsOf(parameter),
+                return new InjectionPointImpl<>(parameter, owningBean, baseTypeOf(parameter), annotationsOf(parameter),
                         annotatedOf(parameter));
             }
         } catch (Throwable ignored) {
             // Best-effort only. Bean can still be registered without concrete injection point objects.
         }
         return null;
-    }
-
-    private static final class ResolvedInjectionPoint implements InjectionPoint, Serializable {
-        private static final long serialVersionUID = 1L;
-        private final InjectionPoint delegate;
-        private final Type resolvedType;
-
-        private ResolvedInjectionPoint(InjectionPoint delegate, Type resolvedType) {
-            this.delegate = delegate;
-            this.resolvedType = resolvedType;
-        }
-
-        @Override
-        public Type getType() {
-            return resolvedType != null ? resolvedType : delegate.getType();
-        }
-
-        @Override
-        public Set<Annotation> getQualifiers() {
-            return delegate.getQualifiers();
-        }
-
-        @Override
-        public Bean<?> getBean() {
-            return delegate.getBean();
-        }
-
-        @Override
-        public Member getMember() {
-            return delegate.getMember();
-        }
-
-        @Override
-        public Annotated getAnnotated() {
-            return delegate.getAnnotated();
-        }
-
-        @Override
-        public boolean isDelegate() {
-            return delegate.isDelegate();
-        }
-
-        @Override
-        public boolean isTransient() {
-            return delegate.isTransient();
-        }
     }
 
     // -----------------------

@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
@@ -36,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasAroundInvokeAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasExcludeClassInterceptorsAnnotation;
+import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.collectClassHierarchyFromObject;
 
 /**
  * CDI 4.1 - 2 - A <i>bean</i> is a source of contextual objects that define application state and/or logic.
@@ -720,7 +720,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      */
     private void performFieldInjection(T instance, CreationalContext<T> creationalContext) throws Exception {
         // Build hierarchy: superclass first, then subclass
-        List<Class<?>> hierarchy = LifecycleMethodHelper.buildHierarchy(instance);
+        List<Class<?>> hierarchy = collectClassHierarchyFromObject(instance);
 
         // Inject fields in hierarchy order (parent → child)
         for (Class<?> clazz : hierarchy) {
@@ -772,7 +772,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
      */
     private void performMethodInjection(T instance, CreationalContext<T> creationalContext) throws Exception {
         // Build hierarchy: superclass first, then subclass
-        List<Class<?>> hierarchy = LifecycleMethodHelper.buildHierarchy(instance);
+        List<Class<?>> hierarchy = collectClassHierarchyFromObject(instance);
 
         // Inject methods in hierarchy order (parent → child)
         for (Class<?> clazz : hierarchy) {

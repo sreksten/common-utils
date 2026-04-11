@@ -27,6 +27,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.collectClassHierarchyFromObject;
+
 /**
  * Implementation of SessionScoped context.
  * Maintains instances for the duration of a user session.
@@ -429,7 +431,7 @@ public class SessionScopedContext implements ScopeContext {
             return;
         }
         try {
-            for (Class<?> clazz : LifecycleMethodHelper.buildHierarchy(instance)) {
+            for (Class<?> clazz : collectClassHierarchyFromObject(instance)) {
                 for (Method method : clazz.getDeclaredMethods()) {
                     if (annotationType.isPresent(method)) {
                         method.setAccessible(true);

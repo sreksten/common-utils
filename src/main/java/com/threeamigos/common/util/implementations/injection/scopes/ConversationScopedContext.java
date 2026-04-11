@@ -27,6 +27,8 @@ import java.util.Set;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
+import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.collectClassHierarchyFromObject;
+
 /**
  * Implementation of ConversationScoped context.
  * Maintains instances for the duration of a conversation, which spans multiple requests
@@ -633,7 +635,7 @@ public class ConversationScopedContext implements ScopeContext {
             return;
         }
         try {
-            for (Class<?> clazz : LifecycleMethodHelper.buildHierarchy(instance)) {
+            for (Class<?> clazz : collectClassHierarchyFromObject(instance)) {
                 for (Method method : clazz.getDeclaredMethods()) {
                     if (annotationType.isPresent(method)) {
                         method.setAccessible(true);

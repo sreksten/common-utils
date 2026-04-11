@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
@@ -33,6 +32,7 @@ import java.util.WeakHashMap;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasInjectAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasPostConstructAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasPreDestroyAnnotation;
+import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.collectClassHierarchy;
 
 /**
  * Factory for creating InjectionTarget instances.
@@ -206,7 +206,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         public void inject(T instance, CreationalContext<T> ctx) {
             try {
                 T targetInstance = unwrapProxyTarget(instance);
-                List<Class<?>> hierarchy = buildHierarchy(targetInstance.getClass());
+                List<Class<?>> hierarchy = collectClassHierarchy(targetInstance.getClass());
 
                 // Inject fields
             for (Class<?> clazz : hierarchy) {
@@ -441,7 +441,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         private Set<InjectionPoint> discoverInjectionPoints() {
             Set<InjectionPoint> points = new HashSet<>();
             Class<T> javaClass = annotatedType.getJavaClass();
-            List<Class<?>> hierarchy = buildHierarchy(javaClass);
+            List<Class<?>> hierarchy = collectClassHierarchy(javaClass);
 
             // Constructor parameters
             for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
@@ -473,16 +473,6 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
             }
 
             return points;
-        }
-
-        private List<Class<?>> buildHierarchy(Class<?> leafClass) {
-            List<Class<?>> hierarchy = new ArrayList<>();
-            Class<?> current = leafClass;
-            while (current != null && current != Object.class) {
-                hierarchy.add(0, current);
-                current = current.getSuperclass();
-            }
-            return hierarchy;
         }
 
         @SuppressWarnings("unchecked")
@@ -559,7 +549,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private List<Method> collectLifecycleMethods(Class<?> beanClass, boolean postConstruct) {
-            List<Class<?>> hierarchy = buildHierarchy(beanClass);
+            List<Class<?>> hierarchy = collectClassHierarchy(beanClass);
             List<Method> lifecycleMethods = new ArrayList<>();
 
             for (int i = 0; i < hierarchy.size(); i++) {
