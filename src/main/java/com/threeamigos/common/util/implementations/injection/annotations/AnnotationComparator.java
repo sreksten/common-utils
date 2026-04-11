@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection.util;
+package com.threeamigos.common.util.implementations.injection.annotations;
 
 import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
 

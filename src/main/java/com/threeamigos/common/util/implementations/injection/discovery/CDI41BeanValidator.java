@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
 import com.threeamigos.common.util.implementations.injection.*;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -4908,7 +4909,7 @@ public class CDI41BeanValidator {
         Class<? extends Annotation> bindingType = binding.annotationType();
         Annotation existing = collectedBindings.get(bindingType);
         if (existing != null &&
-                !com.threeamigos.common.util.implementations.injection.util.AnnotationComparator.equals(existing, binding)) {
+                !AnnotationComparator.equals(existing, binding)) {
             // CDI 4.1 §8.3: a bean class-level interceptor binding overrides the same
             // interceptor binding declared by an applied stereotype.
             if (directBindingTypes.contains(bindingType)) {

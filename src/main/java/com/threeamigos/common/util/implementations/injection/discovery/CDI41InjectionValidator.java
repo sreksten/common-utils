@@ -12,7 +12,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.TypeChec
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
-import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;

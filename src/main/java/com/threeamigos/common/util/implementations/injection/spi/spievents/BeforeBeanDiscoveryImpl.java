@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasNonbindingAnnotation;
 import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.registerDynamicNonbindingMember;
-import static com.threeamigos.common.util.implementations.injection.util.AnnotationHelper.toList;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.toList;
 
 /**
  * BeforeBeanDiscovery event implementation.

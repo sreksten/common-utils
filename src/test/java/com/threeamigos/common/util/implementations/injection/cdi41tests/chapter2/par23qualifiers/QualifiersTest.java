@@ -2,9 +2,8 @@ package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
-import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
-import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationLiteral;
 
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Default;

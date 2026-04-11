@@ -27,8 +27,8 @@ import com.threeamigos.common.util.implementations.injection.testpackages.interf
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.testpackages.optional.*;
 import com.threeamigos.common.util.implementations.injection.testpackages.scopes.*;
-import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.testpackages.methods.ClassWithMethodWithInvalidParameter;
 import com.threeamigos.common.util.implementations.injection.testpackages.methods.ClassWithMethodWithValidParameters;
 import com.threeamigos.common.util.implementations.injection.testpackages.methods.FirstMethodParameter;

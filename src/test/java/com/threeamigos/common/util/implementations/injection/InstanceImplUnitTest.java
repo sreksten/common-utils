@@ -1,10 +1,9 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl;
 import jakarta.enterprise.inject.*;
 import jakarta.enterprise.inject.spi.Bean;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

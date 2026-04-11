@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
 import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.inject.spi.configurator.InjectionPointConfigurator;
 

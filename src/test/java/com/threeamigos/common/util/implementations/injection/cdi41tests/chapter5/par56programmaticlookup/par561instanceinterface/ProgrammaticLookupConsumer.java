@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter5.par56programmaticlookup.par561instanceinterface;
 
-import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationLiteral;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;

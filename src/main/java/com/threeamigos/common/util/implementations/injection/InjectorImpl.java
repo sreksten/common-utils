@@ -9,7 +9,7 @@ import com.threeamigos.common.util.implementations.injection.discovery.CDI41Inje
 import com.threeamigos.common.util.implementations.injection.discovery.ClassProcessor;
 import com.threeamigos.common.util.implementations.injection.discovery.ParallelClasspathScanner;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.scopehandlers.SingletonScopeHandler;

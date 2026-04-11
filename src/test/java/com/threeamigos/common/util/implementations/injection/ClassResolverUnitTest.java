@@ -24,8 +24,8 @@ import com.threeamigos.common.util.implementations.injection.testpackages.interf
 import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.singleimplementation.SingleImplementationInterface;
 import com.threeamigos.common.util.implementations.injection.testpackages.interfaces.multiplenotannotatedimplementations.MultipleNotAnnotatedImplementationsInterface;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;

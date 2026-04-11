@@ -17,8 +17,8 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Inter
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.SimpleAnnotatedType;
-import com.threeamigos.common.util.implementations.injection.util.AnyLiteral;
-import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.annotations.AnyLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;

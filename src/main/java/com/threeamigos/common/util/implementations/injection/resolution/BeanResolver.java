@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.propagation.RegistryContextTokenProvider;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
@@ -1340,7 +1341,7 @@ public class BeanResolver implements DependencyResolver {
         }
 
         Set<Annotation> normalizedQualifiers = new HashSet<>(qualifiers);
-        normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
+        normalizedQualifiers.add(new AnyLiteral());
 
         Set<Type> instanceBeanTypes = new HashSet<>();
         instanceBeanTypes.add(Instance.class);
@@ -1497,7 +1498,7 @@ public class BeanResolver implements DependencyResolver {
      */
     private <T> Event<T> createEventWrapper(Type eventType, Set<Annotation> qualifiers) {
         Set<Annotation> normalizedQualifiers = new HashSet<>(qualifiers);
-        normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
+        normalizedQualifiers.add(new AnyLiteral());
         InjectionPoint ownerInjectionPoint = getCurrentInjectionPoint();
         Event<T> baseEvent = new EventImpl<>(eventType, normalizedQualifiers, knowledgeBase, this, contextManager,
                 transactionServices, contextTokenProvider, ownerInjectionPoint);
@@ -1529,7 +1530,7 @@ public class BeanResolver implements DependencyResolver {
         }
 
         Set<Annotation> normalizedQualifiers = extractQualifiers(qualifiers);
-        normalizedQualifiers.add(new com.threeamigos.common.util.implementations.injection.util.AnyLiteral());
+        normalizedQualifiers.add(new AnyLiteral());
 
         Set<Type> injectionPointTypes = new HashSet<>();
         injectionPointTypes.add(InjectionPoint.class);

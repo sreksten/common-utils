@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection.util;
+package com.threeamigos.common.util.implementations.injection.annotations;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Proxy;

@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.implementations.injection.util.AnnotationLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationLiteral;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -1,5 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.util;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.annotations.AnyLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
+
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.*;

@@ -19,7 +19,7 @@ import com.threeamigos.common.util.implementations.injection.discovery.CDI41Inje
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
-import com.threeamigos.common.util.implementations.injection.util.DefaultLiteral;
+import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanResolver;
 import com.threeamigos.common.util.implementations.injection.spi.CDIImpl;

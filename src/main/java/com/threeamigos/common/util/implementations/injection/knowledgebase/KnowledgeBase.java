@@ -1,145 +1,58 @@
 package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
 import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.builtinbeans.ActivateRequestContextInterceptor;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
-import com.threeamigos.common.util.implementations.injection.util.AnnotationComparator;
-import com.threeamigos.common.util.implementations.injection.util.AnnotationHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.context.spi.AlterableContext;
-import jakarta.enterprise.inject.spi.AnnotatedType;
-import jakarta.enterprise.inject.spi.Bean;
-import jakarta.enterprise.inject.spi.Extension;
-import jakarta.enterprise.inject.spi.InterceptionType;
+import jakarta.enterprise.inject.spi.*;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.Collectors;
 
 public class KnowledgeBase {
 
     private final MessageHandler messageHandler;
-    private final Set<Class<?>> excludedClasses = new HashSet<>();
-
-    // Use Set to prevent duplicate class registrations
-    private final Set<Class<?>> classes = ConcurrentHashMap.newKeySet();
-    // Track BeanArchiveMode per discovered class (explicit/implicit)
-    private final Map<Class<?>, BeanArchiveMode> classArchiveModes =
-            new ConcurrentHashMap<>();
-    // AnnotatedType replacements supplied by ProcessAnnotatedType#setAnnotatedType
-    private final Map<Class<?>, jakarta.enterprise.inject.spi.AnnotatedType<?>> annotatedTypeOverrides =
-            new ConcurrentHashMap<>();
-    private final Collection<Bean<?>> beans = new ConcurrentLinkedQueue<>();
-
-    private final Map<Class<?>, Constructor<?>> constructorsMap = new ConcurrentHashMap<>();
-
-    // Producer/Disposer tracking
-    // ProducerBeans are also added to the bean collection, but we keep separate reference for convenience
-    private final Collection<ProducerBean<?>> producerBeans = new ConcurrentLinkedQueue<>();
-
-    // Interceptor/Decorator tracking (legacy - for backward compatibility)
-    private final Collection<Class<?>> interceptors = new ConcurrentLinkedQueue<>();
-    private final Collection<Class<?>> decorators = new ConcurrentLinkedQueue<>();
-
-    // Enhanced tracking with full metadata
-    private final Collection<InterceptorInfo> interceptorInfos = new ConcurrentLinkedQueue<>();
-    private final Collection<DecoratorInfo> decoratorInfos = new ConcurrentLinkedQueue<>();
-    private final Collection<ObserverMethodInfo> observerMethodInfos = new ConcurrentLinkedQueue<>();
-    private volatile boolean observerMethodsDiscovered;
-
-    private final List<String> warnings = new ArrayList<>();
-    private final List<String> errors = new ArrayList<>();
-    private final List<String> definitionErrors = new ArrayList<>();
-    private final List<String> deploymentErrors = new ArrayList<>();
-    private final List<String> injectionErrors = new ArrayList<>();
-    private final List<String> illegalProductErrors = new ArrayList<>();
-
-    // Programmatically registered stereotypes (via BeforeBeanDiscovery.addStereotype)
-    // Maps stereotype class -> set of meta-annotations that define the stereotype
-    private final Map<Class<? extends Annotation>, Set<Annotation>> registeredStereotypes = new ConcurrentHashMap<>();
-
-    // Programmatically registered qualifiers (via BeforeBeanDiscovery.addQualifier)
-    private final Set<Class<? extends Annotation>> registeredQualifiers = ConcurrentHashMap.newKeySet();
-
-    // Programmatically registered scopes (via BeforeBeanDiscovery.addScope)
-    // Maps scope annotation class -> ScopeMetadata containing normal/passivating flags
-    private final Map<Class<? extends Annotation>, ScopeMetadata> registeredScopes = new ConcurrentHashMap<>();
-    // Programmatically registered context implementations (via Build Compatible Extension MetaAnnotations.addContext)
-    private final Map<Class<? extends Annotation>, List<Class<? extends AlterableContext>>> registeredContextImplementations =
-            new ConcurrentHashMap<>();
-
-    // Programmatically registered interceptor bindings (via BeforeBeanDiscovery.addInterceptorBinding)
-    // Maps interceptor binding class -> set of meta-annotations that define the binding
-    private final Map<Class<? extends Annotation>, Set<Annotation>> registeredInterceptorBindings = new ConcurrentHashMap<>();
-
-    // Programmatically registered annotated types (via BeforeBeanDiscovery.addAnnotatedType)
-    // Maps ID -> AnnotatedType for synthetic types added by extensions
-    private final Map<String, jakarta.enterprise.inject.spi.AnnotatedType<?>> registeredAnnotatedTypes = new ConcurrentHashMap<>();
-    // Tracks the extension source for synthetic annotated types.
-    private final Map<String, Extension> registeredAnnotatedTypeSources = new ConcurrentHashMap<>();
-
-    // Programmatically registered synthetic observer methods (via AfterBeanDiscovery.addObserverMethod)
-    private final Collection<jakarta.enterprise.inject.spi.ObserverMethod<?>> syntheticObserverMethods = new ConcurrentLinkedQueue<>();
-    // Beans marked by ProcessBeanAttributes.ignoreFinalMethods()
-    private final Set<Bean<?>> ignoreFinalMethodsBeans =
-            Collections.newSetFromMap(new IdentityHashMap<>());
-
-    // beans.xml configurations from all scanned archives
-    // Collection is used instead of merging because each archive may have different configurations
-    private final Collection<BeansXml> beansXmlConfigurations = new ConcurrentLinkedQueue<>();
-
-    // Vetoed types (types vetoed by extensions during ProcessAnnotatedType)
-    private final Set<Class<?>> vetoedTypes = ConcurrentHashMap.newKeySet();
-
-    // Programmatically enabled alternatives (fully qualified class names)
-    private final Set<String> programmaticallyEnabledAlternatives = ConcurrentHashMap.newKeySet();
-    // Final application interceptor order (e.g., from AfterTypeDiscovery / beans.xml)
-    private final Map<String, Integer> applicationInterceptorOrder = new ConcurrentHashMap<>();
-    // Final application alternative order (e.g., from AfterTypeDiscovery)
-    private final Map<String, Integer> applicationAlternativeOrder = new ConcurrentHashMap<>();
-    // Final application decorator order (e.g., from AfterTypeDiscovery)
-    private final Map<String, Integer> applicationDecoratorOrder = new ConcurrentHashMap<>();
-    // True when AfterTypeDiscovery observers changed the corresponding list from its initial value.
-    private volatile boolean afterTypeDiscoveryAlternativesCustomized;
-    private volatile boolean afterTypeDiscoveryInterceptorsCustomized;
-    private volatile boolean afterTypeDiscoveryDecoratorsCustomized;
-    // Java SE 27.1: implicit bean archive scanning switch
-    private volatile boolean implicitBeanArchiveScanningEnabled = true;
-
+    private final KnowledgeBaseDiscoveryStore discoveryStore = new KnowledgeBaseDiscoveryStore();
+    private final KnowledgeBaseBeanRegistryStore beanRegistryStore = new KnowledgeBaseBeanRegistryStore();
+    private final KnowledgeBaseExtensionRegistrationStore extensionRegistrationStore =
+            new KnowledgeBaseExtensionRegistrationStore();
+    private final KnowledgeBaseEnablementStore enablementStore = new KnowledgeBaseEnablementStore();
+    private final KnowledgeBaseProblemCollector problemCollector = new KnowledgeBaseProblemCollector();
     public KnowledgeBase(MessageHandler messageHandler) {
         this.messageHandler = messageHandler;
     }
 
     public void exclude(Class<?>... excludedClasses) {
-        this.excludedClasses.addAll(Arrays.asList(excludedClasses));
+        discoveryStore.exclude(excludedClasses);
     }
 
     public Collection<Class<?>> getExcludedClasses() {
-        return excludedClasses;
+        return discoveryStore.getExcludedClasses();
     }
 
     public void add(Class<?> clazz) {
-        if (!excludedClasses.contains(clazz)) {
-            classes.add(clazz);
-        }
+        discoveryStore.addDiscoveredClass(clazz);
     }
 
     public void add(Class<?> clazz, BeanArchiveMode mode) {
-        if (!excludedClasses.contains(clazz) && !classes.contains(clazz)) {
-            classes.add(clazz);
+        if (!discoveryStore.isExcluded(clazz) && !discoveryStore.containsClass(clazz)) {
+            discoveryStore.addDiscoveredClass(clazz);
             if (mode != null) {
-                classArchiveModes.put(clazz, mode);
+                discoveryStore.setBeanArchiveMode(clazz, mode);
             }
-        } else if (!excludedClasses.contains(clazz) && mode != null) {
-            classArchiveModes.compute(clazz, (k, currentMode) -> mergeBeanArchiveMode(currentMode, mode));
+        } else if (!discoveryStore.isExcluded(clazz) && mode != null) {
+            discoveryStore.mergeBeanArchiveMode(clazz, mode, this::mergeBeanArchiveMode);
         }
     }
 
@@ -182,158 +95,154 @@ public class KnowledgeBase {
         if (clazz == null) {
             return;
         }
-        classes.add(clazz);
+        discoveryStore.addProgrammaticClass(clazz);
         if (mode != null) {
-            classArchiveModes.put(clazz, mode);
+            discoveryStore.setBeanArchiveMode(clazz, mode);
         }
     }
 
     public Collection<Class<?>> getClasses() {
-        return classes;
+        return discoveryStore.getClasses();
     }
 
     public void removeDiscoveredClass(Class<?> clazz) {
         if (clazz == null) {
             return;
         }
-        classes.remove(clazz);
-        classArchiveModes.remove(clazz);
-        annotatedTypeOverrides.remove(clazz);
-        constructorsMap.remove(clazz);
-        vetoedTypes.remove(clazz);
+        discoveryStore.removeDiscoveredClass(clazz);
     }
 
     public boolean isImplicitBeanArchiveScanningDisabled() {
-        return !implicitBeanArchiveScanningEnabled;
+        return !discoveryStore.isImplicitBeanArchiveScanningEnabled();
     }
 
     public void setImplicitBeanArchiveScanningEnabled(boolean implicitBeanArchiveScanningEnabled) {
-        this.implicitBeanArchiveScanningEnabled = implicitBeanArchiveScanningEnabled;
+        discoveryStore.setImplicitBeanArchiveScanningEnabled(implicitBeanArchiveScanningEnabled);
     }
 
     public BeanArchiveMode getBeanArchiveMode(Class<?> clazz) {
-        return classArchiveModes.getOrDefault(clazz, BeanArchiveMode.IMPLICIT);
+        return discoveryStore.getBeanArchiveModeOrDefault(clazz);
     }
 
     public void setBeanArchiveMode(Class<?> clazz, BeanArchiveMode mode) {
         if (clazz == null || mode == null) {
             return;
         }
-        classArchiveModes.put(clazz, mode);
+        discoveryStore.setBeanArchiveMode(clazz, mode);
     }
 
     public void setAnnotatedTypeOverride(Class<?> clazz, AnnotatedType<?> annotatedType) {
         if (clazz != null && annotatedType != null) {
-            annotatedTypeOverrides.put(clazz, annotatedType);
+            discoveryStore.setAnnotatedTypeOverride(clazz, annotatedType);
         }
     }
 
     @SuppressWarnings("unchecked")
     public <T> AnnotatedType<T> getAnnotatedTypeOverride(Class<T> clazz) {
-        return (AnnotatedType<T>) annotatedTypeOverrides.get(clazz);
+        return (AnnotatedType<T>) discoveryStore.getAnnotatedTypeOverride(clazz);
     }
 
     public void addBean(Bean<?> bean) {
-        beans.add(bean);
+        beanRegistryStore.addBean(bean);
     }
 
     public Collection<Bean<?>> getBeans() {
-        return beans;
+        return beanRegistryStore.getBeans();
     }
 
     public void markIgnoreFinalMethods(Bean<?> bean) {
         if (bean != null) {
-            ignoreFinalMethodsBeans.add(bean);
+            beanRegistryStore.markIgnoreFinalMethods(bean);
         }
     }
 
     public boolean shouldIgnoreFinalMethods(Bean<?> bean) {
-        return bean != null && ignoreFinalMethodsBeans.contains(bean);
+        return bean != null && beanRegistryStore.shouldIgnoreFinalMethods(bean);
     }
 
     public <T> void addConstructor(Class<T> clazz, Constructor<T> constructor) {
-        constructorsMap.put(clazz, constructor);
+        discoveryStore.setConstructor(clazz, constructor);
     }
 
     @SuppressWarnings("unchecked")
     public <T> Constructor<T> getConstructor(Class<T> clazz) {
-        return (Constructor<T>)constructorsMap.get(clazz);
+        return (Constructor<T>)discoveryStore.getConstructor(clazz);
     }
 
     public void addWarning(String warning) {
-        warnings.add(warning);
+        problemCollector.addWarning(warning);
     }
 
     public void addWarning(Phase phase, String warning) {
-        warnings.add("[" + phase.getDescription() + "] " + warning);
+        problemCollector.addWarning("[" + phase.getDescription() + "] " + warning);
     }
 
     public List<String> getWarnings() {
-        return warnings;
+        return problemCollector.getWarnings();
     }
 
     public void addError(String error) {
-        errors.add(error);
+        problemCollector.addError(error);
     }
 
     public void addError(@Nonnull Phase phase, @Nonnull String error, Throwable t) {
         if (t != null) {
-            definitionErrors.add("[" + phase.getDescription() + "] " + error + ": " + t.getMessage());
+            problemCollector.addDefinitionError("[" + phase.getDescription() + "] " + error + ": " + t.getMessage());
         } else {
-            definitionErrors.add("[" + phase.getDescription() + "] " + error);
+            problemCollector.addDefinitionError("[" + phase.getDescription() + "] " + error);
         }
     }
 
     public List<String> getErrors() {
-        return errors;
+        return problemCollector.getErrors();
     }
 
     public void addDefinitionError(String error) {
-        definitionErrors.add(error);
+        problemCollector.addDefinitionError(error);
     }
 
     public void addDefinitionError(@Nonnull Phase phase, @Nonnull String error, Throwable t) {
         if (t != null) {
-            definitionErrors.add("[" + phase.getDescription() + "] " + error + ": " + t.getMessage());
+            problemCollector.addDefinitionError("[" + phase.getDescription() + "] " + error + ": " + t.getMessage());
         } else {
-            definitionErrors.add("[" + phase.getDescription() + "] " + error);
+            problemCollector.addDefinitionError("[" + phase.getDescription() + "] " + error);
         }
     }
 
     public void addDefinitionError(String error, Throwable t) {
         if (t != null) {
-            definitionErrors.add(error + ": " + t.getMessage());
+            problemCollector.addDefinitionError(error + ": " + t.getMessage());
         } else {
-            definitionErrors.add(error);
+            problemCollector.addDefinitionError(error);
         }
     }
 
     public List<String> getDefinitionErrors() {
-        return definitionErrors;
+        return problemCollector.getDefinitionErrors();
     }
 
     public void addDeploymentError(@Nonnull Phase phase, @Nonnull String error, Throwable t) {
         if (t != null) {
-            definitionErrors.add("[" + phase.getDescription() + "] " + error + ": " + t.getMessage());
+            problemCollector.addDefinitionError("[" + phase.getDescription() + "] " + error + ": " + t.getMessage());
         } else {
-            definitionErrors.add("[" + phase.getDescription() + "] " + error);
+            problemCollector.addDefinitionError("[" + phase.getDescription() + "] " + error);
         }
     }
 
     public void addInjectionError(String error) {
-        injectionErrors.add(error);
+        problemCollector.addInjectionError(error);
     }
 
     public List<String> getInjectionErrors() {
-        return injectionErrors;
+        return problemCollector.getInjectionErrors();
     }
 
     public void addIllegalProductError(String error) {
-        illegalProductErrors.add(error);
+        problemCollector.addIllegalProductError(error);
     }
 
     public List<String> getIllegalProductErrors() {
-        return illegalProductErrors;
+        return problemCollector.getIllegalProductErrors();
     }
 
     /**
@@ -343,7 +252,7 @@ public class KnowledgeBase {
      * @return true if there are any errors that should stop the application
      */
     public boolean hasErrors() {
-        return !definitionErrors.isEmpty() || !injectionErrors.isEmpty() || !errors.isEmpty();
+        return problemCollector.hasErrors();
     }
 
     /**
@@ -355,7 +264,7 @@ public class KnowledgeBase {
      */
     public Collection<Bean<?>> getBeansWithValidationErrors() {
         List<Bean<?>> beansWithErrors = new ArrayList<>();
-        for (Bean<?> bean : beans) {
+        for (Bean<?> bean : beanRegistryStore.getBeans()) {
             if (bean instanceof BeanImpl && ((BeanImpl<?>) bean).hasValidationErrors()) {
                 beansWithErrors.add(bean);
             }
@@ -371,7 +280,7 @@ public class KnowledgeBase {
      */
     public Collection<Bean<?>> getValidBeans() {
         List<Bean<?>> validBeans = new ArrayList<>();
-        for (Bean<?> bean : beans) {
+        for (Bean<?> bean : beanRegistryStore.getBeans()) {
             if (!(bean instanceof BeanImpl) || !((BeanImpl<?>) bean).hasValidationErrors()) {
                 validBeans.add(bean);
             }
@@ -386,33 +295,33 @@ public class KnowledgeBase {
      * ProducerBeans are also added to the general beans' collection.
      */
     public void addProducerBean(ProducerBean<?> producerBean) {
-        producerBeans.add(producerBean);
-        beans.add(producerBean); // Also add to general bean collection
+        beanRegistryStore.addProducerBean(producerBean);
+        beanRegistryStore.addBean(producerBean); // Also add to general bean collection
     }
 
     /**
      * Returns all producer beans (convenience method).
      */
     public Collection<ProducerBean<?>> getProducerBeans() {
-        return producerBeans;
+        return beanRegistryStore.getProducerBeans();
     }
 
     // Interceptor/Decorator methods (legacy)
 
     public void addInterceptor(Class<?> interceptorClass) {
-        interceptors.add(interceptorClass);
+        beanRegistryStore.addInterceptorClass(interceptorClass);
     }
 
     public Collection<Class<?>> getInterceptors() {
-        return interceptors;
+        return beanRegistryStore.getInterceptorClasses();
     }
 
     public void addDecorator(Class<?> decoratorClass) {
-        decorators.add(decoratorClass);
+        beanRegistryStore.addDecoratorClass(decoratorClass);
     }
 
     public Collection<Class<?>> getDecorators() {
-        return decorators;
+        return beanRegistryStore.getDecoratorClasses();
     }
 
     // Enhanced Interceptor/Decorator/Observer methods
@@ -424,7 +333,7 @@ public class KnowledgeBase {
      * @param interceptorInfo the validated interceptor metadata
      */
     public void addInterceptorInfo(InterceptorInfo interceptorInfo) {
-        interceptorInfos.add(interceptorInfo);
+        beanRegistryStore.addInterceptorInfo(interceptorInfo);
     }
 
     /**
@@ -434,7 +343,7 @@ public class KnowledgeBase {
      * @return collection of interceptor metadata
      */
     public Collection<InterceptorInfo> getInterceptorInfos() {
-        return interceptorInfos;
+        return beanRegistryStore.getInterceptorInfos();
     }
 
     /**
@@ -444,7 +353,7 @@ public class KnowledgeBase {
      * @param decoratorInfo the validated decorator metadata
      */
     public void addDecoratorInfo(DecoratorInfo decoratorInfo) {
-        decoratorInfos.add(decoratorInfo);
+        beanRegistryStore.addDecoratorInfo(decoratorInfo);
     }
 
     /**
@@ -454,7 +363,7 @@ public class KnowledgeBase {
      * @return collection of decorator metadata
      */
     public Collection<DecoratorInfo> getDecoratorInfos() {
-        return decoratorInfos;
+        return beanRegistryStore.getDecoratorInfos();
     }
 
     /**
@@ -468,13 +377,13 @@ public class KnowledgeBase {
      * @return zero-based order, or -1 if not listed
      */
     public int getDecoratorBeansXmlOrder(Class<?> decoratorClass) {
-        if (decoratorClass == null || beansXmlConfigurations.isEmpty()) {
+        if (decoratorClass == null || discoveryStore.hasNotBeansXmlConfigurations()) {
             return -1;
         }
 
         Map<String, Integer> orderMap = new LinkedHashMap<>();
         int counter = 0;
-        for (BeansXml beansXml : beansXmlConfigurations) {
+        for (BeansXml beansXml : discoveryStore.getBeansXmlConfigurations()) {
             if (beansXml.getDecorators() == null || beansXml.getDecorators().isEmpty()) {
                 continue;
             }
@@ -489,13 +398,13 @@ public class KnowledgeBase {
     }
 
     public int getInterceptorBeansXmlOrder(Class<?> interceptorClass) {
-        if (interceptorClass == null || beansXmlConfigurations.isEmpty()) {
+        if (interceptorClass == null || discoveryStore.hasNotBeansXmlConfigurations()) {
             return -1;
         }
 
         Map<String, Integer> orderMap = new LinkedHashMap<>();
         int counter = 0;
-        for (BeansXml beansXml : beansXmlConfigurations) {
+        for (BeansXml beansXml : discoveryStore.getBeansXmlConfigurations()) {
             if (beansXml.getInterceptors() == null || beansXml.getInterceptors().isEmpty()) {
                 continue;
             }
@@ -516,7 +425,7 @@ public class KnowledgeBase {
      * @param observerMethodInfo the validated observer method metadata
      */
     public void addObserverMethodInfo(ObserverMethodInfo observerMethodInfo) {
-        observerMethodInfos.add(observerMethodInfo);
+        beanRegistryStore.addObserverMethodInfo(observerMethodInfo);
     }
 
     /**
@@ -526,15 +435,15 @@ public class KnowledgeBase {
      * @return collection of observer method metadata
      */
     public Collection<ObserverMethodInfo> getObserverMethodInfos() {
-        return observerMethodInfos;
+        return beanRegistryStore.getObserverMethodInfos();
     }
 
     public boolean isObserverMethodsDiscovered() {
-        return observerMethodsDiscovered;
+        return beanRegistryStore.isObserverMethodsDiscovered();
     }
 
     public void setObserverMethodsDiscovered(boolean observerMethodsDiscovered) {
-        this.observerMethodsDiscovered = observerMethodsDiscovered;
+        beanRegistryStore.setObserverMethodsDiscovered(observerMethodsDiscovered);
     }
 
     // ============================================================
@@ -571,7 +480,7 @@ public class KnowledgeBase {
             return Collections.emptyList();
         }
 
-        return interceptorInfos.stream()
+        return beanRegistryStore.getInterceptorInfos().stream()
                 .filter(this::isInterceptorEnabledForResolution)
                 .filter(info -> supportsInterceptionType(info, interceptionType))
                 .filter(info -> hasMatchingBindings(info, targetBindings))
@@ -611,7 +520,7 @@ public class KnowledgeBase {
     public List<InterceptorInfo> getInterceptorsByType(
             InterceptionType interceptionType) {
 
-        return interceptorInfos.stream()
+        return beanRegistryStore.getInterceptorInfos().stream()
                 .filter(this::isInterceptorEnabledForResolution)
                 .filter(info -> supportsInterceptionType(info, interceptionType))
                 .sorted(this::compareInterceptors)
@@ -632,7 +541,7 @@ public class KnowledgeBase {
             return Collections.emptyList();
         }
 
-        return interceptorInfos.stream()
+        return beanRegistryStore.getInterceptorInfos().stream()
                 .filter(this::isInterceptorEnabledForResolution)
                 .filter(info -> hasMatchingBindings(info, targetBindings))
                 .sorted(this::compareInterceptors)
@@ -647,8 +556,7 @@ public class KnowledgeBase {
         if (interceptorClass == null) {
             return false;
         }
-        if ("com.threeamigos.common.util.implementations.injection.builtinbeans.ActivateRequestContextInterceptor"
-                .equals(interceptorClass.getName())) {
+        if (ActivateRequestContextInterceptor.class.getName().equals(interceptorClass.getName())) {
             return true;
         }
 
@@ -659,117 +567,63 @@ public class KnowledgeBase {
     }
 
     public void setApplicationInterceptorOrder(List<Class<?>> orderedInterceptors) {
-        applicationInterceptorOrder.clear();
-        if (orderedInterceptors == null || orderedInterceptors.isEmpty()) {
-            return;
-        }
-
-        int index = 0;
-        for (Class<?> interceptorClass : orderedInterceptors) {
-            if (interceptorClass == null) {
-                continue;
-            }
-            String className = interceptorClass.getName();
-            if (!applicationInterceptorOrder.containsKey(className)) {
-                applicationInterceptorOrder.put(className, index++);
-            }
-        }
+        enablementStore.setApplicationInterceptorOrder(orderedInterceptors);
     }
 
     public int getApplicationInterceptorOrder(Class<?> interceptorClass) {
-        if (interceptorClass == null) {
-            return -1;
-        }
-        Integer index = applicationInterceptorOrder.get(interceptorClass.getName());
-        return index != null ? index : -1;
+        return enablementStore.getApplicationInterceptorOrder(interceptorClass);
     }
 
     public void setApplicationAlternativeOrder(List<Class<?>> orderedAlternatives) {
-        applicationAlternativeOrder.clear();
-        if (orderedAlternatives == null || orderedAlternatives.isEmpty()) {
-            return;
-        }
-
-        int index = 0;
-        for (Class<?> alternativeClass : orderedAlternatives) {
-            if (alternativeClass == null) {
-                continue;
-            }
-            String className = alternativeClass.getName();
-            if (!applicationAlternativeOrder.containsKey(className)) {
-                applicationAlternativeOrder.put(className, index++);
-            }
-        }
+        enablementStore.setApplicationAlternativeOrder(orderedAlternatives);
     }
 
     public int getApplicationAlternativeOrder(Class<?> alternativeClass) {
-        if (alternativeClass == null) {
-            return -1;
-        }
-        Integer index = applicationAlternativeOrder.get(alternativeClass.getName());
-        return index != null ? index : -1;
+        return enablementStore.getApplicationAlternativeOrder(alternativeClass);
     }
 
     public boolean hasApplicationAlternativeSelection() {
-        return !applicationAlternativeOrder.isEmpty();
+        return enablementStore.hasApplicationAlternativeSelection();
     }
 
     public void setApplicationDecoratorOrder(List<Class<?>> orderedDecorators) {
-        applicationDecoratorOrder.clear();
-        if (orderedDecorators == null || orderedDecorators.isEmpty()) {
-            return;
-        }
-
-        int index = 0;
-        for (Class<?> decoratorClass : orderedDecorators) {
-            if (decoratorClass == null) {
-                continue;
-            }
-            String className = decoratorClass.getName();
-            if (!applicationDecoratorOrder.containsKey(className)) {
-                applicationDecoratorOrder.put(className, index++);
-            }
-        }
+        enablementStore.setApplicationDecoratorOrder(orderedDecorators);
     }
 
     public int getApplicationDecoratorOrder(Class<?> decoratorClass) {
-        if (decoratorClass == null) {
-            return -1;
-        }
-        Integer index = applicationDecoratorOrder.get(decoratorClass.getName());
-        return index != null ? index : -1;
+        return enablementStore.getApplicationDecoratorOrder(decoratorClass);
     }
 
     public boolean hasApplicationDecoratorSelection() {
-        return !applicationDecoratorOrder.isEmpty();
+        return enablementStore.hasApplicationDecoratorSelection();
     }
 
     public boolean hasApplicationInterceptorSelection() {
-        return !applicationInterceptorOrder.isEmpty();
+        return enablementStore.hasApplicationInterceptorSelection();
     }
 
     public void setAfterTypeDiscoveryAlternativesCustomized(boolean customized) {
-        this.afterTypeDiscoveryAlternativesCustomized = customized;
+        enablementStore.setAfterTypeDiscoveryAlternativesCustomized(customized);
     }
 
     public boolean hasAfterTypeDiscoveryAlternativesCustomized() {
-        return afterTypeDiscoveryAlternativesCustomized;
+        return enablementStore.isAfterTypeDiscoveryAlternativesCustomized();
     }
 
     public void setAfterTypeDiscoveryInterceptorsCustomized(boolean customized) {
-        this.afterTypeDiscoveryInterceptorsCustomized = customized;
+        enablementStore.setAfterTypeDiscoveryInterceptorsCustomized(customized);
     }
 
     public boolean hasAfterTypeDiscoveryInterceptorsCustomized() {
-        return afterTypeDiscoveryInterceptorsCustomized;
+        return enablementStore.isAfterTypeDiscoveryInterceptorsCustomized();
     }
 
     public void setAfterTypeDiscoveryDecoratorsCustomized(boolean customized) {
-        this.afterTypeDiscoveryDecoratorsCustomized = customized;
+        enablementStore.setAfterTypeDiscoveryDecoratorsCustomized(customized);
     }
 
     public boolean hasAfterTypeDiscoveryDecoratorsCustomized() {
-        return afterTypeDiscoveryDecoratorsCustomized;
+        return enablementStore.isAfterTypeDiscoveryDecoratorsCustomized();
     }
 
     /**
@@ -781,7 +635,7 @@ public class KnowledgeBase {
      * @return set of all interceptor binding annotation types
      */
     public Set<Class<? extends Annotation>> getAllInterceptorBindingTypes() {
-        return interceptorInfos.stream()
+        return beanRegistryStore.getInterceptorInfos().stream()
                 .flatMap(info -> info.getInterceptorBindings().stream())
                 .map(Annotation::annotationType)
                 .collect(Collectors.toSet());
@@ -948,7 +802,7 @@ public class KnowledgeBase {
      * @param bean the bean implementation
      */
     public void addProgrammaticBean(jakarta.enterprise.inject.spi.Bean<?> bean) {
-        beans.add(bean);
+        beanRegistryStore.addBean(bean);
     }
 
     /**
@@ -969,7 +823,7 @@ public class KnowledgeBase {
                     alternativeClass.getName() + " is not an @Alternative bean class (directly or via stereotype)");
         }
 
-        programmaticallyEnabledAlternatives.add(alternativeClass.getName());
+        enablementStore.enableAlternative(alternativeClass.getName());
         messageHandler.handleInfoMessage("[KnowledgeBase] Programmatically enabled alternative: " + alternativeClass.getName());
     }
 
@@ -977,7 +831,7 @@ public class KnowledgeBase {
         if (className == null || className.isEmpty()) {
             return false;
         }
-        return programmaticallyEnabledAlternatives.contains(className);
+        return enablementStore.isAlternativeEnabled(className);
     }
 
     private boolean isAlternativeDeclaration(Class<?> beanClass) {
@@ -1036,7 +890,7 @@ public class KnowledgeBase {
             definitions.addAll(Arrays.asList(stereotypeDef));
         }
 
-        registeredStereotypes.put(stereotype, definitions);
+        extensionRegistrationStore.registerStereotype(stereotype, definitions);
         AnnotationsEnum.registerDynamicStereotype(stereotype);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered stereotype: " + stereotype.getSimpleName() +
@@ -1050,7 +904,7 @@ public class KnowledgeBase {
      * @return true if it's a programmatically registered stereotype
      */
     public boolean isRegisteredStereotype(Class<? extends Annotation> annotationType) {
-        return registeredStereotypes.containsKey(annotationType);
+        return extensionRegistrationStore.isStereotypeRegistered(annotationType);
     }
 
     /**
@@ -1060,7 +914,7 @@ public class KnowledgeBase {
      * @return set of meta-annotations, or null if not registered
      */
     public Set<Annotation> getStereotypeDefinition(Class<? extends Annotation> stereotype) {
-        return registeredStereotypes.get(stereotype);
+        return extensionRegistrationStore.getStereotypeDefinition(stereotype);
     }
 
     /**
@@ -1069,7 +923,7 @@ public class KnowledgeBase {
      * @return map of stereotype class to their definitions
      */
     public Map<Class<? extends Annotation>, Set<Annotation>> getRegisteredStereotypes() {
-        return Collections.unmodifiableMap(registeredStereotypes);
+        return Collections.unmodifiableMap(extensionRegistrationStore.getRegisteredStereotypes());
     }
 
     /**
@@ -1085,7 +939,7 @@ public class KnowledgeBase {
             throw new IllegalArgumentException("Qualifier cannot be null");
         }
 
-        registeredQualifiers.add(qualifier);
+        extensionRegistrationStore.registerQualifier(qualifier);
         AnnotationsEnum.registerDynamicQualifier(qualifier);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered qualifier: " + qualifier.getSimpleName());
@@ -1098,7 +952,7 @@ public class KnowledgeBase {
      * @return true if it's a programmatically registered qualifier
      */
     public boolean isRegisteredQualifier(Class<? extends Annotation> annotationType) {
-        return registeredQualifiers.contains(annotationType);
+        return extensionRegistrationStore.isQualifierRegistered(annotationType);
     }
 
     /**
@@ -1107,7 +961,7 @@ public class KnowledgeBase {
      * @return set of registered qualifier annotation classes
      */
     public Set<Class<? extends Annotation>> getRegisteredQualifiers() {
-        return Collections.unmodifiableSet(registeredQualifiers);
+        return Collections.unmodifiableSet(extensionRegistrationStore.getRegisteredQualifiers());
     }
 
     /**
@@ -1126,7 +980,7 @@ public class KnowledgeBase {
         }
 
         ScopeMetadata metadata = new ScopeMetadata(scopeType, normal, passivating);
-        registeredScopes.put(scopeType, metadata);
+        extensionRegistrationStore.registerScope(scopeType, metadata);
         AnnotationsEnum.registerDynamicScope(scopeType);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered scope: " + scopeType.getSimpleName() +
@@ -1140,7 +994,7 @@ public class KnowledgeBase {
      * @return true if it's a programmatically registered scope
      */
     public boolean isRegisteredScope(Class<? extends Annotation> annotationType) {
-        return registeredScopes.containsKey(annotationType);
+        return extensionRegistrationStore.isScopeRegistered(annotationType);
     }
 
     /**
@@ -1150,7 +1004,7 @@ public class KnowledgeBase {
      * @return scope metadata, or null if not registered
      */
     public ScopeMetadata getScopeMetadata(Class<? extends Annotation> scopeType) {
-        return registeredScopes.get(scopeType);
+        return extensionRegistrationStore.getScopeMetadata(scopeType);
     }
 
     /**
@@ -1159,7 +1013,7 @@ public class KnowledgeBase {
      * @return map of scope class to their metadata
      */
     public Map<Class<? extends Annotation>, ScopeMetadata> getRegisteredScopes() {
-        return Collections.unmodifiableMap(registeredScopes);
+        return Collections.unmodifiableMap(extensionRegistrationStore.getRegisteredScopes());
     }
 
     /**
@@ -1177,22 +1031,14 @@ public class KnowledgeBase {
             throw new IllegalArgumentException("Context implementation cannot be null");
         }
 
-        registeredContextImplementations
-                .computeIfAbsent(scopeType, key -> Collections.synchronizedList(new ArrayList<>()))
-                .add(contextImplementation);
+        extensionRegistrationStore.addContextImplementation(scopeType, contextImplementation);
     }
 
     /**
      * Gets all context implementations registered for the given scope.
      */
     public List<Class<? extends AlterableContext>> getContextImplementations(Class<? extends Annotation> scopeType) {
-        List<Class<? extends AlterableContext>> implementations = registeredContextImplementations.get(scopeType);
-        if (implementations == null || implementations.isEmpty()) {
-            return Collections.emptyList();
-        }
-        synchronized (implementations) {
-            return Collections.unmodifiableList(new ArrayList<>(implementations));
-        }
+        return extensionRegistrationStore.getContextImplementations(scopeType);
     }
 
     /**
@@ -1214,7 +1060,7 @@ public class KnowledgeBase {
             definitions.addAll(Arrays.asList(bindingTypeDef));
         }
 
-        registeredInterceptorBindings.put(bindingType, definitions);
+        extensionRegistrationStore.registerInterceptorBinding(bindingType, definitions);
         AnnotationsEnum.registerDynamicInterceptorBinding(bindingType);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered interceptor binding: " + bindingType.getSimpleName() +
@@ -1228,7 +1074,7 @@ public class KnowledgeBase {
      * @return true if it's a programmatically registered interceptor binding
      */
     public boolean isRegisteredInterceptorBinding(Class<? extends Annotation> annotationType) {
-        return registeredInterceptorBindings.containsKey(annotationType);
+        return extensionRegistrationStore.isInterceptorBindingRegistered(annotationType);
     }
 
     /**
@@ -1238,7 +1084,7 @@ public class KnowledgeBase {
      * @return set of meta-annotations, or null if not registered
      */
     public Set<Annotation> getInterceptorBindingDefinition(Class<? extends Annotation> bindingType) {
-        return registeredInterceptorBindings.get(bindingType);
+        return extensionRegistrationStore.getInterceptorBindingDefinition(bindingType);
     }
 
     /**
@@ -1247,7 +1093,7 @@ public class KnowledgeBase {
      * @return map of interceptor-binding class to their definitions
      */
     public Map<Class<? extends Annotation>, Set<Annotation>> getRegisteredInterceptorBindings() {
-        return Collections.unmodifiableMap(registeredInterceptorBindings);
+        return Collections.unmodifiableMap(extensionRegistrationStore.getRegisteredInterceptorBindings());
     }
 
     /**
@@ -1271,13 +1117,13 @@ public class KnowledgeBase {
             throw new IllegalArgumentException("ID cannot be null");
         }
 
-        if (registeredAnnotatedTypes.containsKey(id)) {
+        if (extensionRegistrationStore.hasAnnotatedType(id)) {
             throw new IllegalArgumentException("Annotated type with ID '" + id + "' already registered");
         }
 
-        registeredAnnotatedTypes.put(id, type);
+        extensionRegistrationStore.registerAnnotatedType(id, type);
         if (source != null) {
-            registeredAnnotatedTypeSources.put(id, source);
+            extensionRegistrationStore.registerAnnotatedTypeSource(id, source);
         }
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered annotated type: " + type.getJavaClass().getName() +
@@ -1290,8 +1136,8 @@ public class KnowledgeBase {
      * @param id the unique identifier
      * @return the annotated type, or null if not found
      */
-    public jakarta.enterprise.inject.spi.AnnotatedType<?> getRegisteredAnnotatedType(String id) {
-        return registeredAnnotatedTypes.get(id);
+    public AnnotatedType<?> getRegisteredAnnotatedType(String id) {
+        return extensionRegistrationStore.getRegisteredAnnotatedType(id);
     }
 
     /**
@@ -1299,15 +1145,15 @@ public class KnowledgeBase {
      *
      * @return map of ID to annotated type
      */
-    public Map<String, jakarta.enterprise.inject.spi.AnnotatedType<?>> getRegisteredAnnotatedTypes() {
-        return Collections.unmodifiableMap(registeredAnnotatedTypes);
+    public Map<String, AnnotatedType<?>> getRegisteredAnnotatedTypes() {
+        return Collections.unmodifiableMap(extensionRegistrationStore.getRegisteredAnnotatedTypes());
     }
 
     public Extension getRegisteredAnnotatedTypeSource(String id) {
         if (id == null) {
             return null;
         }
-        return registeredAnnotatedTypeSources.get(id);
+        return extensionRegistrationStore.getRegisteredAnnotatedTypeSource(id);
     }
 
     /**
@@ -1318,12 +1164,12 @@ public class KnowledgeBase {
      *
      * @param observerMethod the synthetic observer method to register
      */
-    public void addSyntheticObserverMethod(jakarta.enterprise.inject.spi.ObserverMethod<?> observerMethod) {
+    public void addSyntheticObserverMethod(ObserverMethod<?> observerMethod) {
         if (observerMethod == null) {
             throw new IllegalArgumentException("Observer method cannot be null");
         }
 
-        syntheticObserverMethods.add(observerMethod);
+        beanRegistryStore.addSyntheticObserverMethod(observerMethod);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered synthetic observer method: " +
                           "observedType=" + observerMethod.getObservedType() +
@@ -1335,8 +1181,8 @@ public class KnowledgeBase {
      *
      * @return collection of synthetic observer methods
      */
-    public Collection<jakarta.enterprise.inject.spi.ObserverMethod<?>> getSyntheticObserverMethods() {
-        return syntheticObserverMethods;
+    public Collection<ObserverMethod<?>> getSyntheticObserverMethods() {
+        return beanRegistryStore.getSyntheticObserverMethods();
     }
 
     /**
@@ -1355,7 +1201,7 @@ public class KnowledgeBase {
 
         // Only add non-empty configurations to avoid clutter
         if (!beansXml.isEmpty()) {
-            beansXmlConfigurations.add(beansXml);
+            discoveryStore.addBeansXmlConfiguration(beansXml);
             messageHandler.handleInfoMessage("[KnowledgeBase] Registered beans.xml configuration: " + beansXml);
         }
     }
@@ -1366,7 +1212,7 @@ public class KnowledgeBase {
      * @return collection of BeansXml objects
      */
     public Collection<BeansXml> getBeansXmlConfigurations() {
-        return Collections.unmodifiableCollection(beansXmlConfigurations);
+        return Collections.unmodifiableCollection(discoveryStore.getBeansXmlConfigurations());
     }
 
     /**
@@ -1386,7 +1232,7 @@ public class KnowledgeBase {
             return false;
         }
 
-        for (BeansXml beansXml : beansXmlConfigurations) {
+        for (BeansXml beansXml : discoveryStore.getBeansXmlConfigurations()) {
             if (beansXml.getAlternatives() != null) {
                 // Check if it's listed as an alternative class
                 if (beansXml.getAlternatives().getClasses().contains(className)) {
@@ -1411,7 +1257,7 @@ public class KnowledgeBase {
      * @param clazz the class to veto
      */
     public void vetoType(Class<?> clazz) {
-        vetoedTypes.add(clazz);
+        discoveryStore.vetoType(clazz);
     }
 
     /**
@@ -1421,7 +1267,7 @@ public class KnowledgeBase {
      * @return true if the type was vetoed
      */
     public boolean isTypeVetoed(Class<?> clazz) {
-        return vetoedTypes.contains(clazz);
+        return discoveryStore.isTypeVetoed(clazz);
     }
 
     /**
@@ -1430,11 +1276,11 @@ public class KnowledgeBase {
      * @return set of vetoed types
      */
     public Set<Class<?>> getVetoedTypes() {
-        return Collections.unmodifiableSet(vetoedTypes);
+        return Collections.unmodifiableSet(discoveryStore.getVetoedTypes());
     }
 
     public List<String> getDeploymentErrors() {
-        return deploymentErrors;
+        return problemCollector.getDeploymentErrors();
     }
 
     /**
@@ -1442,45 +1288,10 @@ public class KnowledgeBase {
      * Intended to be called during container shutdown to release references.
      */
     public void clearAllState() {
-        excludedClasses.clear();
-        classes.clear();
-        classArchiveModes.clear();
-        annotatedTypeOverrides.clear();
-        beans.clear();
-        constructorsMap.clear();
-        producerBeans.clear();
-        interceptors.clear();
-        decorators.clear();
-        interceptorInfos.clear();
-        decoratorInfos.clear();
-        observerMethodInfos.clear();
-        observerMethodsDiscovered = false;
-
-        warnings.clear();
-        errors.clear();
-        definitionErrors.clear();
-        deploymentErrors.clear();
-        injectionErrors.clear();
-        illegalProductErrors.clear();
-
-        registeredStereotypes.clear();
-        registeredQualifiers.clear();
-        registeredScopes.clear();
-        registeredContextImplementations.clear();
-        registeredInterceptorBindings.clear();
-        registeredAnnotatedTypes.clear();
-        registeredAnnotatedTypeSources.clear();
-        syntheticObserverMethods.clear();
-        ignoreFinalMethodsBeans.clear();
-        beansXmlConfigurations.clear();
-        vetoedTypes.clear();
-        programmaticallyEnabledAlternatives.clear();
-        applicationInterceptorOrder.clear();
-        applicationAlternativeOrder.clear();
-        applicationDecoratorOrder.clear();
-        afterTypeDiscoveryAlternativesCustomized = false;
-        afterTypeDiscoveryInterceptorsCustomized = false;
-        afterTypeDiscoveryDecoratorsCustomized = false;
-        implicitBeanArchiveScanningEnabled = true;
+        discoveryStore.clear();
+        beanRegistryStore.clear();
+        problemCollector.clear();
+        extensionRegistrationStore.clear();
+        enablementStore.clear();
     }
 }

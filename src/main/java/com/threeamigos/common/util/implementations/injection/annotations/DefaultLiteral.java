@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection.util;
+package com.threeamigos.common.util.implementations.injection.annotations;
 
 import jakarta.enterprise.inject.Default;
 import java.lang.annotation.Annotation;

@@ -606,21 +606,6 @@ public enum AnnotationsEnum {
     }
 
     /**
-     * Checks whether the fully qualified annotation type name matches this enum value.
-     */
-    public boolean matchesName(String annotationClassName) {
-        if (annotationClassName == null || annotationClassName.trim().isEmpty()) {
-            return false;
-        }
-        for (Class<? extends Annotation> annotationClass : annotations) {
-            if (annotationClassName.equals(annotationClass.getName())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
      * Checks whether the annotation instance type matches this enum value.
      */
     public boolean matches(Annotation annotation) {
