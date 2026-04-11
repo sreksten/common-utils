@@ -1,20 +1,12 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.inject.spi.DefinitionException;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;

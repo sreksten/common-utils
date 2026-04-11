@@ -1,12 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+import com.threeamigos.common.util.implementations.injection.annotations.*;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptionFactoryImpl;
@@ -24,9 +19,7 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Inter
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.SimpleAnnotatedType;
-import com.threeamigos.common.util.implementations.injection.annotations.AnyLiteral;
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
-import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.legacy.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
@@ -67,10 +60,9 @@ import java.util.stream.Collectors;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
-import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.extractQualifiers;
-import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.normalizeBeanQualifiers;
-import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.qualifiersMatch;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.extractQualifiers;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.normalizeBeanQualifiers;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.qualifiersMatch;
 
 /**
  * Implementation of the CDI 4.1 BeanManager interface.
@@ -4975,7 +4967,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
 
     private Set<Annotation> extractBeanQualifiers(jakarta.enterprise.inject.spi.Annotated annotated) {
         Set<Annotation> qualifiers = new LinkedHashSet<>(
-                com.threeamigos.common.util.implementations.injection.util.QualifiersHelper
+                QualifiersHelper
                         .extractQualifierAnnotations(annotated.getAnnotations().toArray(new Annotation[0])));
         for (Class<? extends Annotation> stereotype : extractStereotypesFromAnnotated(annotated)) {
             qualifiers.addAll(extractQualifiersFromStereotype(stereotype, new HashSet<>()));

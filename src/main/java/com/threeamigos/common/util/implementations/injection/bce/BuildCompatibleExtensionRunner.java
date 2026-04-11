@@ -1,12 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
-
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;

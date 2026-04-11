@@ -1,12 +1,8 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
@@ -20,9 +16,9 @@ import com.threeamigos.common.util.implementations.injection.scopes.InjectionPoi
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
-import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
-import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
-import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
+import com.threeamigos.common.util.implementations.injection.resolution.GenericTypeResolver;
+import com.threeamigos.common.util.implementations.injection.annotations.legacy.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
@@ -43,7 +39,7 @@ import java.lang.annotation.Annotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -2780,7 +2776,7 @@ public class CDI41InjectionValidator {
         }
 
         // Handles standard qualifiers and repeatable qualifier containers.
-        qualifiers.addAll(com.threeamigos.common.util.implementations.injection.util.QualifiersHelper
+        qualifiers.addAll(QualifiersHelper
                 .extractQualifierAnnotations(annotations));
 
         // Also honor dynamically registered qualifiers from extensions.

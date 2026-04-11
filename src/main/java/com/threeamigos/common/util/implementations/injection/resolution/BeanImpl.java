@@ -19,8 +19,7 @@ import com.threeamigos.common.util.implementations.injection.scopes.ContextManag
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.RequestScopedContext;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
-import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
-import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.RequestScoped;

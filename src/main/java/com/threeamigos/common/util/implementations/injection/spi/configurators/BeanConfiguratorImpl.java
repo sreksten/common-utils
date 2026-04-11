@@ -24,10 +24,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
 /**
  * Implementation of BeanConfigurator for building synthetic beans programmatically.

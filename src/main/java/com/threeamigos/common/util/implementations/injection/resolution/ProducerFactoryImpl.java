@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.injection.resolution;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.*;

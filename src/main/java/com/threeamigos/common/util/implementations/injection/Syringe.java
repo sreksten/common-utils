@@ -2,12 +2,10 @@ package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.bce.BceSupportedPhase;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.Alternatives;
@@ -47,8 +45,8 @@ import com.threeamigos.common.util.implementations.injection.spi.SyringeCDIProvi
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
-import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
-import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
+import com.threeamigos.common.util.implementations.injection.resolution.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -95,7 +93,6 @@ import java.util.function.Function;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
 /**
  * Syringe - CDI 4.1 compliant container implementation.
@@ -3566,7 +3563,7 @@ public class Syringe {
             return new HashSet<>();
         }
         return new HashSet<>(
-                com.threeamigos.common.util.implementations.injection.util.QualifiersHelper
+                QualifiersHelper
                         .extractQualifierAnnotations(observedParameterAnnotations));
     }
 

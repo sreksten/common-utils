@@ -1,9 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
 import com.threeamigos.common.util.implementations.injection.*;
@@ -14,12 +10,12 @@ import com.threeamigos.common.util.implementations.injection.knowledgebase.Inter
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.ScopeMetadata;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
-import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
-import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
-import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
+import com.threeamigos.common.util.implementations.injection.resolution.GenericTypeResolver;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.annotation.Nonnull;
@@ -48,7 +44,6 @@ import java.util.stream.Collectors;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
 /**
  * Validates that a Java class is a CDI Managed Bean, according to CDI 4.1 rules.

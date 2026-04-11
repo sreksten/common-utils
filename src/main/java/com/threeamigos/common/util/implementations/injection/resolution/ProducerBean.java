@@ -1,17 +1,10 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
-
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;

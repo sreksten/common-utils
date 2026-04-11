@@ -2,8 +2,6 @@ package com.threeamigos.common.util.implementations.injection.discovery;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;

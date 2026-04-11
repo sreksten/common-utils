@@ -1,7 +1,6 @@
-package com.threeamigos.common.util.implementations.injection.util;
+package com.threeamigos.common.util.implementations.injection.annotations.legacy;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
-
+import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import jakarta.enterprise.inject.spi.DefinitionException;
 
 import java.lang.annotation.Annotation;

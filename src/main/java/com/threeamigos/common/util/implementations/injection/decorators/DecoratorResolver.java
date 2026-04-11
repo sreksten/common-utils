@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.injection.decorators;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
@@ -22,8 +21,8 @@ import java.lang.reflect.WildcardType;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.normalizeQualifiers;
-import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.qualifiersMatch;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.normalizeQualifiers;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.qualifiersMatch;
 
 /**
  * Resolves decorators for target beans based on type matching.

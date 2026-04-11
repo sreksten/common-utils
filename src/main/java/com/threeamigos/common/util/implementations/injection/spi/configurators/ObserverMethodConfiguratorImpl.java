@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.ObservesAsync;
 import jakarta.enterprise.event.Reception;

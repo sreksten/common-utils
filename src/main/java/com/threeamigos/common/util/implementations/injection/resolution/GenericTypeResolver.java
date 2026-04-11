@@ -1,4 +1,4 @@
-package com.threeamigos.common.util.implementations.injection.util;
+package com.threeamigos.common.util.implementations.injection.resolution;
 
 import jakarta.annotation.Nonnull;
 

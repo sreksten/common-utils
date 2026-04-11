@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.util;
 
+import com.threeamigos.common.util.implementations.injection.resolution.GenericTypeResolver;
 import jakarta.enterprise.util.TypeLiteral;
 import org.junit.jupiter.api.Test;
 

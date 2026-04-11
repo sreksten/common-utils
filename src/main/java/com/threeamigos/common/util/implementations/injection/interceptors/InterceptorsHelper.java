@@ -3,7 +3,6 @@ package com.threeamigos.common.util.implementations.injection.interceptors;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ActivateRequestContextInterceptor;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import jakarta.enterprise.inject.spi.InterceptionType;

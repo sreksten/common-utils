@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
 import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.annotations.AlternativesHelper;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlOrderingHelper;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;

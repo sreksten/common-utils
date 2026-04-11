@@ -1,12 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.annotations.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.propagation.RegistryContextTokenProvider;
@@ -22,7 +17,7 @@ import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticProducerBeanImpl;
 import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
-import com.threeamigos.common.util.implementations.injection.util.LegacyNewQualifierHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.legacy.LegacyNewQualifierHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
@@ -56,9 +51,7 @@ import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
-import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.*;
 
 /**
  * Resolves dependencies by finding matching beans from the KnowledgeBase.

@@ -1,11 +1,5 @@
 package com.threeamigos.common.util.implementations.injection;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
-
 import com.threeamigos.common.util.implementations.collections.Cache;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
@@ -14,10 +8,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.TypeChec
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.Instance;

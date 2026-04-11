@@ -5,7 +5,7 @@ import com.threeamigos.common.util.implementations.injection.annotations.Annotat
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
-import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
 import jakarta.enterprise.inject.spi.InterceptionType;
 import jakarta.enterprise.inject.spi.AnnotatedType;
 

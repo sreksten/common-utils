@@ -2,7 +2,6 @@ package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedConstructorWrapper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedMethodWrapper;

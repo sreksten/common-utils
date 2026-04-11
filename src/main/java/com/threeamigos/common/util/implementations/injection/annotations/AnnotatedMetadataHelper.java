@@ -1,5 +1,6 @@
-package com.threeamigos.common.util.implementations.injection.util;
+package com.threeamigos.common.util.implementations.injection.annotations;
 
+import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.AnnotatedCallable;
 import jakarta.enterprise.inject.spi.AnnotatedConstructor;

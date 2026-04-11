@@ -2,12 +2,11 @@ package com.threeamigos.common.util.implementations.injection.spi;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
-import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
+import com.threeamigos.common.util.implementations.injection.resolution.GenericTypeResolver;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.CreationException;

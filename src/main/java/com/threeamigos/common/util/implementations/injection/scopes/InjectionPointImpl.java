@@ -1,12 +1,10 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
-
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.spi.spievents.SimpleAnnotatedType;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedConstructorWrapper;
 import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
-import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedMethodWrapper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedParameterWrapper;

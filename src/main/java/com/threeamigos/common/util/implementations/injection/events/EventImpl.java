@@ -1,12 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.events;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
-
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.scopes.RequestScopedContext;
@@ -19,11 +16,11 @@ import com.threeamigos.common.util.implementations.injection.resolution.Instance
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
-import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
-import com.threeamigos.common.util.implementations.injection.util.GenericTypeResolver;
+import com.threeamigos.common.util.implementations.injection.resolution.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
-import com.threeamigos.common.util.implementations.injection.util.QualifiersHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
@@ -76,7 +73,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
 /**
  * CDI 4.1 Event implementation for firing synchronous and asynchronous events.

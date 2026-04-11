@@ -12,7 +12,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.normalizeBeanQualifiers;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.normalizeBeanQualifiers;
 
 /**
  * Implementation of {@link BeanAttributesConfigurator} used by ProcessBeanAttributes events.
