@@ -2,6 +2,7 @@ package com.threeamigos.common.util.implementations.injection.discovery;
 
 import com.threeamigos.common.util.implementations.injection.*;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -38,7 +39,7 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 
 /**
  * Validates that a Java class is a CDI Managed Bean, according to CDI 4.1 rules.

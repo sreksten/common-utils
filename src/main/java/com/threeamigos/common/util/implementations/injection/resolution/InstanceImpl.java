@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
@@ -23,8 +24,8 @@ import java.io.Serializable;
 import java.util.*;
 import java.util.function.Function;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDependentAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.PRE_DESTROY;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDependentAnnotation;
 
 /**
  * Generic wrapper implementing CDI {@link Instance} interface for lazy and programmatic
@@ -636,7 +637,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             return null;
         }
         for (Annotation annotation : annotations) {
-            if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRIORITY
+            if (AnnotationsEnum.PRIORITY
                     .matches(annotation.annotationType())) {
                 try {
                     Method valueMethod = annotation.annotationType().getMethod("value");
@@ -698,10 +699,10 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                     continue;
                 }
                 Class<? extends Annotation> qualifierType = qualifier.annotationType();
-                if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDefaultAnnotation(qualifierType)) {
+                if (AnnotationsEnum.hasDefaultAnnotation(qualifierType)) {
                     hasDefault = true;
                 }
-                if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasAnyAnnotation(qualifierType)) {
+                if (AnnotationsEnum.hasAnyAnnotation(qualifierType)) {
                     hasAny = true;
                 }
             }
@@ -716,11 +717,11 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                 continue;
             }
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (!com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDefaultAnnotation(annotationType)
-                    && !com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasAnyAnnotation(annotationType)) {
+            if (!AnnotationsEnum.hasDefaultAnnotation(annotationType)
+                    && !AnnotationsEnum.hasAnyAnnotation(annotationType)) {
                 hasExplicitAdditionalQualifier = true;
             }
-            if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasRepeatableAnnotation(annotationType)) {
+            if (AnnotationsEnum.hasRepeatableAnnotation(annotationType)) {
                 if (!merged.contains(annotation)) {
                     merged.add(annotation);
                 }
@@ -734,7 +735,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             merged.removeIf(existingQualifier ->
                     existingQualifier != null &&
                             replacedNonRepeatableTypes.contains(existingQualifier.annotationType()) &&
-                            !com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+                            !AnnotationsEnum
                                     .hasRepeatableAnnotation(existingQualifier.annotationType()));
         }
 
@@ -742,7 +743,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         // through select(...), keep @Any but drop inherited @Default to avoid over-constraining resolution.
         if (hasDefault && hasAny && hasExplicitAdditionalQualifier) {
             merged.removeIf(existingQualifier -> existingQualifier != null &&
-                    com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+                    AnnotationsEnum
                             .hasDefaultAnnotation(existingQualifier.annotationType()));
         }
 
@@ -769,7 +770,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
             int count = counts.getOrDefault(annotationType, 0) + 1;
             counts.put(annotationType, count);
-            if (count > 1 && !com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasRepeatableAnnotation(annotationType)) {
+            if (count > 1 && !AnnotationsEnum.hasRepeatableAnnotation(annotationType)) {
                 throw new IllegalArgumentException(
                         "Duplicate non-repeating qualifier type passed to select(): @" + annotationType.getName());
             }
@@ -780,7 +781,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         if (annotationType == null) {
             return false;
         }
-        if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasQualifierAnnotation(annotationType)) {
+        if (AnnotationsEnum.hasQualifierAnnotation(annotationType)) {
             return true;
         }
 

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
@@ -707,7 +708,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 if (annotation == null) {
                     continue;
                 }
-                if (com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+                if (AnnotationsEnum
                         .hasInjectAnnotation(annotation.annotationType())) {
                     return true;
                 }
@@ -716,15 +717,15 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private boolean hasInjectAnnotation(java.lang.reflect.AnnotatedElement element) {
-            return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasInjectAnnotation(element);
+            return AnnotationsEnum.hasInjectAnnotation(element);
         }
 
         private boolean hasPostConstructAnnotation(Method method) {
-            return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasPostConstructAnnotation(method);
+            return AnnotationsEnum.hasPostConstructAnnotation(method);
         }
 
         private boolean hasPreDestroyAnnotation(Method method) {
-            return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasPreDestroyAnnotation(method);
+            return AnnotationsEnum.hasPreDestroyAnnotation(method);
         }
 
         private static final class ResolvedInjectionPoint implements InjectionPoint, java.io.Serializable {

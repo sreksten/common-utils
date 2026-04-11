@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
@@ -33,7 +34,7 @@ import jakarta.inject.Provider;
 
 import java.lang.annotation.Annotation;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -3017,6 +3018,6 @@ public class CDI41InjectionValidator {
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasSpecializesAnnotation(beanClass);
+        return AnnotationsEnum.hasSpecializesAnnotation(beanClass);
     }
 }

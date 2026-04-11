@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter6.par65contextualinstancescontextualreferences;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;

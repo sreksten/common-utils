@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 
 import java.io.File;

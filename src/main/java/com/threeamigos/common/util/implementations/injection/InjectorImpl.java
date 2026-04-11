@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.InstanceImpl;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
@@ -32,7 +33,7 @@ import jakarta.annotation.PreDestroy;
 
 import java.lang.annotation.Annotation;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;

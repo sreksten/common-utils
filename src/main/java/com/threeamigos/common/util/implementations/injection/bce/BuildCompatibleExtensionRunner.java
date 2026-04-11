@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
@@ -56,7 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.spi.SPIUtils.*;
 
 /**
@@ -209,7 +209,7 @@ public class BuildCompatibleExtensionRunner {
     }
 
     private int priorityOf(Method method) {
-        Integer priority = com.threeamigos.common.util.implementations.injection.AnnotationsEnum.getPriorityValue(method);
+        Integer priority = AnnotationsEnum.getPriorityValue(method);
         return priority != null ? priority : Interceptor.Priority.APPLICATION + 500;
     }
 
@@ -711,7 +711,7 @@ public class BuildCompatibleExtensionRunner {
         List<ObserverInfo> out = new ArrayList<>(BceObserverInfo.from(knowledgeBase.getObserverMethodInfos()));
         out.addAll(BceObserverInfo.fromSynthetic(knowledgeBase.getSyntheticObserverMethods()));
         if (phase == BceSupportedPhase.REGISTRATION) {
-            Registration registration = com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+            Registration registration = AnnotationsEnum
                 .getRegistrationAnnotation(phaseMethod);
             Class<?>[] acceptedTypes = registration != null ? registration.types() : new Class<?>[0];
             if (acceptedTypes.length > 0) {

@@ -1,11 +1,11 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.inject.spi.DefinitionException;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;

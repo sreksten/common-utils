@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.events;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
 import com.threeamigos.common.util.implementations.injection.scopes.RequestScopedContext;
@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 
 /**
  * CDI 4.1 Event implementation for firing synchronous and asynchronous events.

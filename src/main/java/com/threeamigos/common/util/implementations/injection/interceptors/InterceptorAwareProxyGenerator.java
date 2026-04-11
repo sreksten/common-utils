@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;

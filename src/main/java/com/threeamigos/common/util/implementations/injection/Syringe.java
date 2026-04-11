@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection;
 
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.bce.BceSupportedPhase;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.beansxml.Alternatives;
@@ -85,7 +86,7 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 
 /**
  * Syringe - CDI 4.1 compliant container implementation.

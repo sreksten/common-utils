@@ -10,8 +10,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasAnyAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasNewAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasAnyAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasNewAnnotation;
 
 /**
  * Helper utilities for legacy CDI 1.0 {@code @javax.enterprise.inject.New} support.

@@ -34,8 +34,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDelegateAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasNamedAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDelegateAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasNamedAnnotation;
 
 /**
  * Implementation of CDI InjectionPoint SPI.

@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
-import com.threeamigos.common.util.implementations.injection.*;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorChain;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorResolver;

@@ -1,15 +1,17 @@
 package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
-import com.threeamigos.common.util.implementations.injection.builtinbeans.ActivateRequestContextInterceptor;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AlternativesHelper;
+import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlOrderingHelper;
 import com.threeamigos.common.util.implementations.injection.events.ObserverMethodInfo;
+import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorsHelper;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.StereotypesHelper;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.context.spi.AlterableContext;
@@ -18,7 +20,6 @@ import jakarta.enterprise.inject.spi.*;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class KnowledgeBase {
 
@@ -29,8 +30,17 @@ public class KnowledgeBase {
             new KnowledgeBaseExtensionRegistrationStore();
     private final KnowledgeBaseEnablementStore enablementStore = new KnowledgeBaseEnablementStore();
     private final KnowledgeBaseProblemCollector problemCollector = new KnowledgeBaseProblemCollector();
+    private final AlternativesHelper alternativesHelper;
+    private final BeansXmlOrderingHelper beansXmlOrderingHelper;
+    private final InterceptorsHelper interceptorsHelper;
     public KnowledgeBase(MessageHandler messageHandler) {
         this.messageHandler = messageHandler;
+        this.alternativesHelper = new AlternativesHelper(new StereotypesHelper());
+        this.beansXmlOrderingHelper = new BeansXmlOrderingHelper(discoveryStore.getBeansXmlConfigurations());
+        this.interceptorsHelper = new InterceptorsHelper(
+                beanRegistryStore.getInterceptorInfos(),
+                this::getApplicationInterceptorOrder,
+                this::getInterceptorBeansXmlOrder);
     }
 
     public void exclude(Class<?>... excludedClasses) {
@@ -52,35 +62,7 @@ public class KnowledgeBase {
                 discoveryStore.setBeanArchiveMode(clazz, mode);
             }
         } else if (!discoveryStore.isExcluded(clazz) && mode != null) {
-            discoveryStore.mergeBeanArchiveMode(clazz, mode, this::mergeBeanArchiveMode);
-        }
-    }
-
-    private BeanArchiveMode mergeBeanArchiveMode(BeanArchiveMode currentMode, BeanArchiveMode incomingMode) {
-        if (incomingMode == null) {
-            return currentMode;
-        }
-        if (currentMode == null) {
-            return incomingMode;
-        }
-        return beanArchiveModeRank(incomingMode) > beanArchiveModeRank(currentMode) ? incomingMode : currentMode;
-    }
-
-    private int beanArchiveModeRank(BeanArchiveMode mode) {
-        if (mode == null) {
-            return -1;
-        }
-        switch (mode) {
-            case NONE:
-                return 0;
-            case IMPLICIT:
-                return 1;
-            case TRIMMED:
-                return 2;
-            case EXPLICIT:
-                return 3;
-            default:
-                return -1;
+            discoveryStore.mergeBeanArchiveMode(clazz, mode);
         }
     }
 
@@ -377,45 +359,11 @@ public class KnowledgeBase {
      * @return zero-based order, or -1 if not listed
      */
     public int getDecoratorBeansXmlOrder(Class<?> decoratorClass) {
-        if (decoratorClass == null || discoveryStore.hasNotBeansXmlConfigurations()) {
-            return -1;
-        }
-
-        Map<String, Integer> orderMap = new LinkedHashMap<>();
-        int counter = 0;
-        for (BeansXml beansXml : discoveryStore.getBeansXmlConfigurations()) {
-            if (beansXml.getDecorators() == null || beansXml.getDecorators().isEmpty()) {
-                continue;
-            }
-            for (String className : beansXml.getDecorators().getClasses()) {
-                if (!orderMap.containsKey(className)) {
-                    orderMap.put(className, counter++);
-                }
-            }
-        }
-
-        return orderMap.getOrDefault(decoratorClass.getName(), -1);
+        return beansXmlOrderingHelper.getDecoratorOrder(decoratorClass);
     }
 
     public int getInterceptorBeansXmlOrder(Class<?> interceptorClass) {
-        if (interceptorClass == null || discoveryStore.hasNotBeansXmlConfigurations()) {
-            return -1;
-        }
-
-        Map<String, Integer> orderMap = new LinkedHashMap<>();
-        int counter = 0;
-        for (BeansXml beansXml : discoveryStore.getBeansXmlConfigurations()) {
-            if (beansXml.getInterceptors() == null || beansXml.getInterceptors().isEmpty()) {
-                continue;
-            }
-            for (String className : beansXml.getInterceptors().getClasses()) {
-                if (!orderMap.containsKey(className)) {
-                    orderMap.put(className, counter++);
-                }
-            }
-        }
-
-        return orderMap.getOrDefault(interceptorClass.getName(), -1);
+        return beansXmlOrderingHelper.getInterceptorOrder(interceptorClass);
     }
 
     /**
@@ -475,17 +423,7 @@ public class KnowledgeBase {
     public List<InterceptorInfo> getInterceptorsByBindingsAndType(
             InterceptionType interceptionType,
             Set<Annotation> targetBindings) {
-
-        if (targetBindings == null || targetBindings.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return beanRegistryStore.getInterceptorInfos().stream()
-                .filter(this::isInterceptorEnabledForResolution)
-                .filter(info -> supportsInterceptionType(info, interceptionType))
-                .filter(info -> hasMatchingBindings(info, targetBindings))
-                .sorted(this::compareInterceptors)
-                .collect(Collectors.toList());
+        return interceptorsHelper.getInterceptorsByBindingsAndType(interceptionType, targetBindings);
     }
 
     /**
@@ -500,12 +438,7 @@ public class KnowledgeBase {
     public List<InterceptorInfo> getInterceptorsByBindingAndType(
             InterceptionType interceptionType,
             Annotation binding) {
-
-        if (binding == null) {
-            return Collections.emptyList();
-        }
-
-        return getInterceptorsByBindingsAndType(interceptionType, Collections.singleton(binding));
+        return interceptorsHelper.getInterceptorsByBindingAndType(interceptionType, binding);
     }
 
     /**
@@ -519,12 +452,7 @@ public class KnowledgeBase {
      */
     public List<InterceptorInfo> getInterceptorsByType(
             InterceptionType interceptionType) {
-
-        return beanRegistryStore.getInterceptorInfos().stream()
-                .filter(this::isInterceptorEnabledForResolution)
-                .filter(info -> supportsInterceptionType(info, interceptionType))
-                .sorted(this::compareInterceptors)
-                .collect(Collectors.toList());
+        return interceptorsHelper.getInterceptorsByType(interceptionType);
     }
 
     /**
@@ -537,33 +465,7 @@ public class KnowledgeBase {
      * @return list of matching interceptors sorted by priority
      */
     public List<InterceptorInfo> getInterceptorsByBindings(Set<Annotation> targetBindings) {
-        if (targetBindings == null || targetBindings.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return beanRegistryStore.getInterceptorInfos().stream()
-                .filter(this::isInterceptorEnabledForResolution)
-                .filter(info -> hasMatchingBindings(info, targetBindings))
-                .sorted(this::compareInterceptors)
-                .collect(Collectors.toList());
-    }
-
-    private boolean isInterceptorEnabledForResolution(InterceptorInfo info) {
-        if (info == null) {
-            return false;
-        }
-        Class<?> interceptorClass = info.getInterceptorClass();
-        if (interceptorClass == null) {
-            return false;
-        }
-        if (ActivateRequestContextInterceptor.class.getName().equals(interceptorClass.getName())) {
-            return true;
-        }
-
-        // CDI Full enablement: interceptor is enabled only when selected by application ordering
-        // (@Priority and/or AfterTypeDiscovery) or explicitly listed in beans.xml.
-        return getApplicationInterceptorOrder(interceptorClass) >= 0
-                || getInterceptorBeansXmlOrder(interceptorClass) >= 0;
+        return interceptorsHelper.getInterceptorsByBindings(targetBindings);
     }
 
     public void setApplicationInterceptorOrder(List<Class<?>> orderedInterceptors) {
@@ -635,160 +537,7 @@ public class KnowledgeBase {
      * @return set of all interceptor binding annotation types
      */
     public Set<Class<? extends Annotation>> getAllInterceptorBindingTypes() {
-        return beanRegistryStore.getInterceptorInfos().stream()
-                .flatMap(info -> info.getInterceptorBindings().stream())
-                .map(Annotation::annotationType)
-                .collect(Collectors.toSet());
-    }
-
-    /**
-     * Checks if an interceptor supports a specific interception type.
-     *
-     * <p>An interceptor supports a type if it has the corresponding interceptor method:
-     * <ul>
-     *   <li>AROUND_INVOKE → @AroundInvoke method</li>
-     *   <li>AROUND_CONSTRUCT → @AroundConstruct method</li>
-     *   <li>POST_CONSTRUCT → @PostConstruct method</li>
-     *   <li>PRE_DESTROY → @PreDestroy method</li>
-     * </ul>
-     *
-     * @param interceptorInfo the interceptor to check
-     * @param interceptionType the interception type to check for
-     * @return true if the interceptor supports this type
-     */
-    private boolean supportsInterceptionType(
-            InterceptorInfo interceptorInfo,
-            InterceptionType interceptionType) {
-
-        switch (interceptionType) {
-            case AROUND_INVOKE:
-                return interceptorInfo.hasAroundInvoke();
-
-            case AROUND_CONSTRUCT:
-                return interceptorInfo.hasAroundConstruct();
-
-            case POST_CONSTRUCT:
-                return interceptorInfo.getPostConstructMethod() != null;
-
-            case PRE_DESTROY:
-                return interceptorInfo.getPreDestroyMethod() != null;
-
-            case AROUND_TIMEOUT:
-                // EJB feature - not supported in this implementation
-                return false;
-
-            default:
-                return false;
-        }
-    }
-
-    /**
-     * Checks if an interceptor's bindings match the target's bindings.
-     *
-     * <p><b>CDI 4.1 Binding Matching Rules:</b>
-     * <ul>
-     *   <li>ALL the interceptor's bindings must be present on the target</li>
-     *   <li>The target may have additional bindings that the interceptor doesn't have</li>
-     *   <li>Binding values (annotation attributes) must also match</li>
-     * </ul>
-     *
-     * <p>Example:
-     * <pre>
-     * Interceptor has: @Transactional, @Logged
-     * Target has: @Transactional, @Logged, @Secured
-     * Result: MATCH (target has all interceptor bindings)
-     *
-     * Interceptor has: @Transactional, @Logged
-     * Target has: @Transactional
-     * Result: NO MATCH (target is missing @Logged)
-     * </pre>
-     *
-     * @param interceptorInfo the interceptor to check
-     * @param targetBindings the bindings on the target bean/method
-     * @return true if all interceptor bindings are present on the target
-     */
-    private boolean hasMatchingBindings(InterceptorInfo interceptorInfo, Set<Annotation> targetBindings) {
-        Set<Annotation> interceptorBindings = interceptorInfo.getInterceptorBindings();
-
-        // Check if ALL interceptor bindings are present on the target
-        for (Annotation interceptorBinding : interceptorBindings) {
-            boolean found = false;
-
-            for (Annotation targetBinding : targetBindings) {
-                if (areBindingsEqual(interceptorBinding, targetBinding)) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
-                // Interceptor has a binding that target doesn't have
-                return false;
-            }
-        }
-
-        return true; // All interceptor bindings found on target
-    }
-
-    private int compareInterceptors(InterceptorInfo left, InterceptorInfo right) {
-        boolean leftPriority = AnnotationsEnum.hasPriorityAnnotation(left.getInterceptorClass());
-        boolean rightPriority = AnnotationsEnum.hasPriorityAnnotation(right.getInterceptorClass());
-
-        if (leftPriority && rightPriority) {
-            int byPriority = Integer.compare(left.getPriority(), right.getPriority());
-            if (byPriority != 0) {
-                return byPriority;
-            }
-        } else if (leftPriority != rightPriority) {
-            return leftPriority ? -1 : 1;
-        }
-
-        int leftOrder = getApplicationInterceptorOrder(left.getInterceptorClass());
-        int rightOrder = getApplicationInterceptorOrder(right.getInterceptorClass());
-        if (leftOrder >= 0 && rightOrder >= 0) {
-            int byOrder = Integer.compare(leftOrder, rightOrder);
-            if (byOrder != 0) {
-                return byOrder;
-            }
-        } else if (leftOrder >= 0 || rightOrder >= 0) {
-            return leftOrder >= 0 ? -1 : 1;
-        }
-
-        int leftBeansXmlOrder = getInterceptorBeansXmlOrder(left.getInterceptorClass());
-        int rightBeansXmlOrder = getInterceptorBeansXmlOrder(right.getInterceptorClass());
-        if (leftBeansXmlOrder >= 0 && rightBeansXmlOrder >= 0) {
-            int byBeansXmlOrder = Integer.compare(leftBeansXmlOrder, rightBeansXmlOrder);
-            if (byBeansXmlOrder != 0) {
-                return byBeansXmlOrder;
-            }
-        } else if (leftBeansXmlOrder >= 0 || rightBeansXmlOrder >= 0) {
-            return leftBeansXmlOrder >= 0 ? -1 : 1;
-        }
-
-        return left.getInterceptorClass().getName().compareTo(right.getInterceptorClass().getName());
-    }
-
-    /**
-     * Checks if two interceptor binding annotations are equal.
-     *
-     * <p>Two bindings are equal if:
-     * <ul>
-     *   <li>They are the same annotation type</li>
-     *   <li>All their attributes (members) have equal values</li>
-     * </ul>
-     *
-     * <p>This uses the annotation's built-in equals() method, which compares
-     * all annotation attributes according to the Java Language Specification.
-     *
-     * @param binding1 first binding annotation
-     * @param binding2 second binding annotation
-     * @return true if the bindings are equal
-     */
-    private boolean areBindingsEqual(Annotation binding1, Annotation binding2) {
-        // Use AnnotationComparator to respect @Nonbinding members;
-        // According to CDI 4.1 spec, interceptor binding members marked with @Nonbinding
-        // must be ignored when comparing bindings for interceptor resolution
-        return AnnotationComparator.equals(binding1, binding2);
+        return interceptorsHelper.getAllInterceptorBindingTypes();
     }
 
     // === Programmatic Bean Registration (for InjectorImpl2) ===
@@ -818,7 +567,7 @@ public class KnowledgeBase {
             throw new IllegalArgumentException("alternativeClass cannot be null");
         }
 
-        if (!isAlternativeDeclaration(alternativeClass)) {
+        if (!alternativesHelper.isAlternativeDeclaration(alternativeClass)) {
             throw new IllegalArgumentException(
                     alternativeClass.getName() + " is not an @Alternative bean class (directly or via stereotype)");
         }
@@ -832,43 +581,6 @@ public class KnowledgeBase {
             return false;
         }
         return enablementStore.isAlternativeEnabled(className);
-    }
-
-    private boolean isAlternativeDeclaration(Class<?> beanClass) {
-        if (AnnotationsEnum.hasAlternativeAnnotation(beanClass)) {
-            return true;
-        }
-
-        Set<Class<? extends Annotation>> visited = new HashSet<>();
-        for (Annotation annotation : beanClass.getAnnotations()) {
-            Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (AnnotationsEnum.hasStereotypeAnnotation(annotationType) &&
-                stereotypeDeclaresAlternative(annotationType, visited)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean stereotypeDeclaresAlternative(Class<? extends Annotation> stereotypeType,
-                                                  Set<Class<? extends Annotation>> visited) {
-        if (!visited.add(stereotypeType)) {
-            return false;
-        }
-
-        if (AnnotationsEnum.hasAlternativeAnnotation(stereotypeType)) {
-            return true;
-        }
-
-        for (Annotation meta : stereotypeType.getAnnotations()) {
-            Class<? extends Annotation> metaType = meta.annotationType();
-            if (AnnotationsEnum.hasStereotypeAnnotation(metaType) &&
-                stereotypeDeclaresAlternative(metaType, visited)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -1228,24 +940,7 @@ public class KnowledgeBase {
      * @return true if the class/stereotype is declared in any beans.xml alternatives section
      */
     public boolean isAlternativeEnabledInBeansXml(String className) {
-        if (className == null || className.isEmpty()) {
-            return false;
-        }
-
-        for (BeansXml beansXml : discoveryStore.getBeansXmlConfigurations()) {
-            if (beansXml.getAlternatives() != null) {
-                // Check if it's listed as an alternative class
-                if (beansXml.getAlternatives().getClasses().contains(className)) {
-                    return true;
-                }
-                // Check if it's listed as an alternative stereotype
-                if (beansXml.getAlternatives().getStereotypes().contains(className)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return alternativesHelper.isAlternativeEnabledInBeansXml(className, discoveryStore.getBeansXmlConfigurations());
     }
 
     // ==================== Vetoed Types Management ====================

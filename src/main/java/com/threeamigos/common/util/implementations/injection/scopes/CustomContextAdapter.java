@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.AlterableContext;
 import jakarta.enterprise.context.spi.Contextual;

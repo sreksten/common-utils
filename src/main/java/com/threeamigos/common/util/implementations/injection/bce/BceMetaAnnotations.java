@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.spi.AlterableContext;

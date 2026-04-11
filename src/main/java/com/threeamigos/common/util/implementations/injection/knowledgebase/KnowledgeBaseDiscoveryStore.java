@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.BinaryOperator;
 
 final class KnowledgeBaseDiscoveryStore {
 
@@ -60,10 +59,36 @@ final class KnowledgeBaseDiscoveryStore {
         classArchiveModes.put(clazz, mode);
     }
 
-    void mergeBeanArchiveMode(Class<?> clazz,
-                              BeanArchiveMode incomingMode,
-                              BinaryOperator<BeanArchiveMode> mergeFunction) {
-        classArchiveModes.compute(clazz, (ignored, currentMode) -> mergeFunction.apply(currentMode, incomingMode));
+    void mergeBeanArchiveMode(Class<?> clazz, BeanArchiveMode incomingMode) {
+        classArchiveModes.compute(clazz, (ignored, currentMode) -> mergeBeanArchiveMode(currentMode, incomingMode));
+    }
+
+    private BeanArchiveMode mergeBeanArchiveMode(BeanArchiveMode currentMode, BeanArchiveMode incomingMode) {
+        if (incomingMode == null) {
+            return currentMode;
+        }
+        if (currentMode == null) {
+            return incomingMode;
+        }
+        return beanArchiveModeRank(incomingMode) > beanArchiveModeRank(currentMode) ? incomingMode : currentMode;
+    }
+
+    private int beanArchiveModeRank(BeanArchiveMode mode) {
+        if (mode == null) {
+            return -1;
+        }
+        switch (mode) {
+            case NONE:
+                return 0;
+            case IMPLICIT:
+                return 1;
+            case TRIMMED:
+                return 2;
+            case EXPLICIT:
+                return 3;
+            default:
+                return -1;
+        }
     }
 
     BeanArchiveMode getBeanArchiveModeOrDefault(Class<?> clazz) {
@@ -92,10 +117,6 @@ final class KnowledgeBaseDiscoveryStore {
         annotatedTypeOverrides.remove(clazz);
         constructorsMap.remove(clazz);
         vetoedTypes.remove(clazz);
-    }
-
-    boolean hasNotBeansXmlConfigurations() {
-        return beansXmlConfigurations.isEmpty();
     }
 
     void addBeansXmlConfiguration(BeansXml beansXml) {

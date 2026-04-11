@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.annotations.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.events.propagation.RegistryContextTokenProvider;
@@ -47,7 +48,7 @@ import java.lang.reflect.Type;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.*;
 
 /**
@@ -563,7 +564,7 @@ public class BeanResolver implements DependencyResolver {
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasSpecializesAnnotation(beanClass);
+        return AnnotationsEnum.hasSpecializesAnnotation(beanClass);
     }
 
     private Object resolveDecoratorMetadata(InjectionPoint injectionPoint, ParameterizedType requiredType) {

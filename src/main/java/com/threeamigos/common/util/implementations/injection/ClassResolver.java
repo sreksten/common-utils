@@ -8,7 +8,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.TypeChec
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.enterprise.inject.UnsatisfiedResolutionException;
 import jakarta.enterprise.inject.Instance;

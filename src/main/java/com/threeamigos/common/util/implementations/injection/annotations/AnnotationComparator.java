@@ -1,7 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.annotations;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
-
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Arrays;

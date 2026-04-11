@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.util.AnnotatedMetadataHelper;
@@ -13,8 +13,8 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasActivateRequestContextAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasInterceptorBindingAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasActivateRequestContextAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasInterceptorBindingAnnotation;
 
 /**
  * Resolves interceptors for target beans, methods, and constructors.

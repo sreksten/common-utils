@@ -42,9 +42,9 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDelegateAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasInjectAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDelegateAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasInjectAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.PRE_DESTROY;
 
 /**
  * Generates decorator proxies that wrap bean instances with decorator chains.

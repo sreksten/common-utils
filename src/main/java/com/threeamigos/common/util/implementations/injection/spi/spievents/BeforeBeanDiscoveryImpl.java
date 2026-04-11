@@ -12,8 +12,8 @@ import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasNonbindingAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.registerDynamicNonbindingMember;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasNonbindingAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.registerDynamicNonbindingMember;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.toList;
 
 /**

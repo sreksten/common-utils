@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
-import com.threeamigos.common.util.implementations.injection.AnnotationsEnum;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;

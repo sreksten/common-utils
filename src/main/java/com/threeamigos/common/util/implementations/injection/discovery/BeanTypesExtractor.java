@@ -18,8 +18,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.getTypedAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasTypedAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.getTypedAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasTypedAnnotation;
 
 /**
  * Extracts bean type sets for managed beans and producers.

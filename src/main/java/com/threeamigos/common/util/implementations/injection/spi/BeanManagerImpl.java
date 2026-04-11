@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptionFactoryImpl;
@@ -57,7 +58,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.extractQualifiers;
 import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.normalizeBeanQualifiers;
 import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.qualifiersMatch;
@@ -1028,7 +1029,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        return com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasSpecializesAnnotation(beanClass);
+        return AnnotationsEnum.hasSpecializesAnnotation(beanClass);
     }
 
     private boolean isBeanEnabledForResolution(Bean<?> bean) {
@@ -1709,7 +1710,7 @@ public class BeanManagerImpl implements BeanManager, Serializable {
             return false;
         }
         // Check both annotation-based and programmatically registered interceptor bindings
-        return com.threeamigos.common.util.implementations.injection.AnnotationsEnum
+        return AnnotationsEnum
                    .hasActivateRequestContextAnnotation(annotationType) ||
                hasInterceptorBindingAnnotation(annotationType) ||
                knowledgeBase.isRegisteredInterceptorBinding(annotationType);

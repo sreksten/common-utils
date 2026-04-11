@@ -12,8 +12,8 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasAnyAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDefaultAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasAnyAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDefaultAnnotation;
 
 /**
  * Implementation of {@link InjectionPointConfigurator} used for ProcessInjectionPoint events.

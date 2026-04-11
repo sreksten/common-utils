@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.BeanManagerBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ConversationBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.InjectionPointBean;

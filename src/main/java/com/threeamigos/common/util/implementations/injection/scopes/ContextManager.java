@@ -20,8 +20,8 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.APPLICATION_SCOPED;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.DEPENDENT;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.APPLICATION_SCOPED;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.DEPENDENT;
 
 /**
  * Manages all scoped contexts for the CDI container.

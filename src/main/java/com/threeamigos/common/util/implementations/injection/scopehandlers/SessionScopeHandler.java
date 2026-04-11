@@ -2,12 +2,11 @@ package com.threeamigos.common.util.implementations.injection.scopehandlers;
 
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 
-import jakarta.annotation.PreDestroy;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.PRE_DESTROY;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.PRE_DESTROY;
 
 @Deprecated
 public class SessionScopeHandler implements ScopeHandler {

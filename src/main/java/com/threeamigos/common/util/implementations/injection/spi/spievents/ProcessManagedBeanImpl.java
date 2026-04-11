@@ -27,10 +27,10 @@ import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.CompletionStage;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasBuiltInNormalScopeAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDependentAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDecoratorAnnotation;
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasInterceptorAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasBuiltInNormalScopeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDependentAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDecoratorAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasInterceptorAnnotation;
 
 /**
  * ProcessManagedBean event implementation.

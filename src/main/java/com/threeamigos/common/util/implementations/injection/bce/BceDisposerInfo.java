@@ -9,7 +9,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.List;
 
-import static com.threeamigos.common.util.implementations.injection.AnnotationsEnum.hasDisposesAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDisposesAnnotation;
 
 final class BceDisposerInfo implements DisposerInfo {
 
