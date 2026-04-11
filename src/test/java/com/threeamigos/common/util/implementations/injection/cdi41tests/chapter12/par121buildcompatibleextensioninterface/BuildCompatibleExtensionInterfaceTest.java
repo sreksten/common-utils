@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter12.par121buildcompatibleextensioninterface;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
@@ -82,11 +84,11 @@ public class BuildCompatibleExtensionInterfaceTest {
         Method synthesis = PhaseAnnotatedMethods.class.getDeclaredMethod("onSynthesis", SyntheticComponents.class);
         Method validation = PhaseAnnotatedMethods.class.getDeclaredMethod("onValidation");
 
-        assertTrue(AnnotationsEnum.hasDiscoveryAnnotation(discovery));
-        assertTrue(AnnotationsEnum.hasEnhancementAnnotation(enhancement));
-        assertTrue(AnnotationsEnum.hasRegistrationAnnotation(registration));
-        assertTrue(AnnotationsEnum.hasSynthesisAnnotation(synthesis));
-        assertTrue(AnnotationsEnum.hasValidationAnnotation(validation));
+        assertTrue(AnnotationPredicates.hasDiscoveryAnnotation(discovery));
+        assertTrue(AnnotationPredicates.hasEnhancementAnnotation(enhancement));
+        assertTrue(AnnotationPredicates.hasRegistrationAnnotation(registration));
+        assertTrue(AnnotationPredicates.hasSynthesisAnnotation(synthesis));
+        assertTrue(AnnotationPredicates.hasValidationAnnotation(validation));
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 
@@ -377,7 +379,7 @@ public class ParallelClasspathScanner {
         try {
             String packageInfoClass = packageName + ".package-info";
             Class<?> pkgInfo = Class.forName(packageInfoClass, false, classLoader);
-            return AnnotationsEnum.hasVetoedAnnotation(pkgInfo);
+            return AnnotationPredicates.hasVetoedAnnotation(pkgInfo);
         } catch (ClassNotFoundException e) {
             // No package-info.java exists - package is not vetoed
             return false;

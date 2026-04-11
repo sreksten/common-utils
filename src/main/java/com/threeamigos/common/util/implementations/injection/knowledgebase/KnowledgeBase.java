@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.knowledgebase;
 
+import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.annotations.AlternativesHelper;
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXmlOrderingHelper;
@@ -603,7 +605,7 @@ public class KnowledgeBase {
         }
 
         extensionRegistrationStore.registerStereotype(stereotype, definitions);
-        AnnotationsEnum.registerDynamicStereotype(stereotype);
+        DynamicAnnotationRegistry.registerDynamicStereotype(stereotype);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered stereotype: " + stereotype.getSimpleName() +
                           " with meta-annotation(s) " + AnnotationHelper.toList(stereotypeDef));
@@ -652,7 +654,7 @@ public class KnowledgeBase {
         }
 
         extensionRegistrationStore.registerQualifier(qualifier);
-        AnnotationsEnum.registerDynamicQualifier(qualifier);
+        DynamicAnnotationRegistry.registerDynamicQualifier(qualifier);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered qualifier: " + qualifier.getSimpleName());
     }
@@ -693,7 +695,7 @@ public class KnowledgeBase {
 
         ScopeMetadata metadata = new ScopeMetadata(scopeType, normal, passivating);
         extensionRegistrationStore.registerScope(scopeType, metadata);
-        AnnotationsEnum.registerDynamicScope(scopeType);
+        DynamicAnnotationRegistry.registerDynamicScope(scopeType);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered scope: " + scopeType.getSimpleName() +
                           " (normal=" + normal + ", passivating=" + passivating + ")");
@@ -773,7 +775,7 @@ public class KnowledgeBase {
         }
 
         extensionRegistrationStore.registerInterceptorBinding(bindingType, definitions);
-        AnnotationsEnum.registerDynamicInterceptorBinding(bindingType);
+        DynamicAnnotationRegistry.registerDynamicInterceptorBinding(bindingType);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered interceptor binding: " + bindingType.getSimpleName() +
                           " with  meta-annotation(s) " + AnnotationHelper.toList(definitions));

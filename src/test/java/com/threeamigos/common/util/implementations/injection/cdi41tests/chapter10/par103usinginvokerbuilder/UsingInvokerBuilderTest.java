@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.cdi41tests.chapter10.par103usinginvokerbuilder;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
@@ -90,7 +92,7 @@ public class UsingInvokerBuilderTest {
     public void shouldAllowInvokerFactoryParameterOnRegistrationMethod() throws Exception {
         Method registration = ExampleBuildCompatibleExtension.class.getDeclaredMethod("registration", InvokerFactory.class);
 
-        assertTrue(AnnotationsEnum.hasRegistrationAnnotation(registration));
+        assertTrue(AnnotationPredicates.hasRegistrationAnnotation(registration));
         assertEquals(1, registration.getParameterCount());
         assertEquals(InvokerFactory.class, registration.getParameterTypes()[0]);
     }

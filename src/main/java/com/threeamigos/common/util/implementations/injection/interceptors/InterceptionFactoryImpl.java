@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator;
@@ -293,7 +295,7 @@ public class InterceptionFactoryImpl<T> implements InterceptionFactory<T> {
      */
     private Method findAroundInvokeMethod(Class<?> interceptorClass) {
         for (Method method : interceptorClass.getDeclaredMethods()) {
-            if (AnnotationsEnum.hasAroundInvokeAnnotation(method)) {
+            if (AnnotationPredicates.hasAroundInvokeAnnotation(method)) {
                 return method;
             }
         }

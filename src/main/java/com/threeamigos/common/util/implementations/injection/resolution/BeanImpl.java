@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.decorators.DecoratorChain;
@@ -557,7 +559,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         }
 
         // Check if the scope is explicitly @Dependent
-        return AnnotationsEnum.hasDependentAnnotation(scope);
+        return AnnotationPredicates.hasDependentAnnotation(scope);
     }
 
     @Override
@@ -836,7 +838,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 injectionPoint.getAnnotated().getAnnotations() != null) {
             for (Annotation annotation : injectionPoint.getAnnotated().getAnnotations()) {
                 if (annotation != null &&
-                        AnnotationsEnum.hasTransientReferenceAnnotation(annotation.annotationType())) {
+                        AnnotationPredicates.hasTransientReferenceAnnotation(annotation.annotationType())) {
                     return true;
                 }
             }
@@ -846,7 +848,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         }
         for (Annotation annotation : fallbackAnnotations) {
             if (annotation != null &&
-                    AnnotationsEnum.hasTransientReferenceAnnotation(annotation.annotationType())) {
+                    AnnotationPredicates.hasTransientReferenceAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
@@ -897,7 +899,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
                 Set<Bean<?>> beans = beanManager.getBeans(argument.type, qualifiers);
                 if (beans != null && !beans.isEmpty()) {
                     Bean<?> resolved = beanManager.resolve(beans);
-                    if (resolved != null && AnnotationsEnum.hasDependentAnnotation(resolved.getScope())) {
+                    if (resolved != null && AnnotationPredicates.hasDependentAnnotation(resolved.getScope())) {
                         CreationalContext context = beanManager.createCreationalContext((Bean) resolved);
                         ((Bean) resolved).destroy(argument.instance, context);
                         return;
@@ -920,7 +922,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             if (annotation == null || annotation.annotationType() == null) {
                 continue;
             }
-            if (AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
+            if (AnnotationPredicates.hasQualifierAnnotation(annotation.annotationType())) {
                 qualifiers.add(annotation);
             }
         }
@@ -2127,16 +2129,16 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             return false;
         }
         if (interceptionType == InterceptionType.AROUND_INVOKE) {
-            return AnnotationsEnum.hasAroundInvokeAnnotation(method);
+            return AnnotationPredicates.hasAroundInvokeAnnotation(method);
         }
         if (interceptionType == InterceptionType.AROUND_CONSTRUCT) {
-            return AnnotationsEnum.hasAroundConstructAnnotation(method);
+            return AnnotationPredicates.hasAroundConstructAnnotation(method);
         }
         if (interceptionType == InterceptionType.POST_CONSTRUCT) {
-            return AnnotationsEnum.hasPostConstructAnnotation(method);
+            return AnnotationPredicates.hasPostConstructAnnotation(method);
         }
         if (interceptionType == InterceptionType.PRE_DESTROY) {
-            return AnnotationsEnum.hasPreDestroyAnnotation(method);
+            return AnnotationPredicates.hasPreDestroyAnnotation(method);
         }
         return false;
     }
@@ -2633,7 +2635,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         Class<?> current = interceptorClass;
         while (current != null && current != Object.class) {
             for (Method method : current.getDeclaredMethods()) {
-                if (AnnotationsEnum.hasAroundInvokeAnnotation(method)) {
+                if (AnnotationPredicates.hasAroundInvokeAnnotation(method)) {
                     if (Modifier.isStatic(method.getModifiers())) {
                         continue;
                     }
@@ -2688,7 +2690,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
 
         // Look for @Inject constructor
         for (Constructor<?> ctor : constructors) {
-            if (AnnotationsEnum.hasInjectAnnotation(ctor)) {
+            if (AnnotationPredicates.hasInjectAnnotation(ctor)) {
                 return ctor;
             }
         }
@@ -2762,7 +2764,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         Class<?> currentClass = clazz;
         while (currentClass != null && currentClass != Object.class) {
             for (Field field : currentClass.getDeclaredFields()) {
-                if (AnnotationsEnum.hasInjectAnnotation(field)) {
+                if (AnnotationPredicates.hasInjectAnnotation(field)) {
                     field.setAccessible(true);
 
                     Type fieldType = field.getGenericType();
@@ -2803,7 +2805,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         Class<?> currentClass = clazz;
         while (currentClass != null && currentClass != Object.class) {
             for (Method method : currentClass.getDeclaredMethods()) {
-                if (AnnotationsEnum.hasInjectAnnotation(method)) {
+                if (AnnotationPredicates.hasInjectAnnotation(method)) {
                     method.setAccessible(true);
 
                     // Resolve method parameters
@@ -3053,7 +3055,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
             return false;
         }
         for (Annotation annotation : annotations) {
-            if (annotation != null && AnnotationsEnum.hasInterceptedAnnotation(annotation.annotationType())) {
+            if (annotation != null && AnnotationPredicates.hasInterceptedAnnotation(annotation.annotationType())) {
                 return true;
             }
         }
@@ -3073,7 +3075,7 @@ public class BeanImpl<T> implements Bean<T>, PassivationCapable, Serializable {
         Class<?> currentClass = clazz;
         while (currentClass != null && currentClass != Object.class) {
             for (Method method : currentClass.getDeclaredMethods()) {
-                if (AnnotationsEnum.hasPostConstructAnnotation(method) && method.getParameterCount() == 0) {
+                if (AnnotationPredicates.hasPostConstructAnnotation(method) && method.getParameterCount() == 0) {
                     method.setAccessible(true);
                     method.invoke(instance);
                     return; // Only one @PostConstruct per class hierarchy

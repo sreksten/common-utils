@@ -1,5 +1,11 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
+import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.annotations.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
@@ -49,6 +55,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 import static com.threeamigos.common.util.implementations.injection.util.QualifiersHelper.*;
 
 /**
@@ -564,7 +573,7 @@ public class BeanResolver implements DependencyResolver {
     }
 
     private boolean hasSpecializesAnnotation(Class<?> beanClass) {
-        return AnnotationsEnum.hasSpecializesAnnotation(beanClass);
+        return AnnotationPredicates.hasSpecializesAnnotation(beanClass);
     }
 
     private Object resolveDecoratorMetadata(InjectionPoint injectionPoint, ParameterizedType requiredType) {

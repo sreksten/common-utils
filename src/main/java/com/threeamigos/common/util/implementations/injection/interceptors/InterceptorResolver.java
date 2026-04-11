@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -13,8 +15,8 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasActivateRequestContextAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasInterceptorBindingAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasActivateRequestContextAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasInterceptorBindingAnnotation;
 
 /**
  * Resolves interceptors for target beans, methods, and constructors.
@@ -223,7 +225,7 @@ public class InterceptorResolver {
             }
 
             // Handle nested stereotypes (stereotype on stereotype)
-            if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
+            if (AnnotationPredicates.hasStereotypeAnnotation(annotation.annotationType())) {
                 for (Annotation nestedBinding : extractInterceptorBindingsFromStereotype(annotation.annotationType())) {
                     bindings.putIfAbsent(nestedBinding.annotationType(), nestedBinding);
                 }
@@ -260,7 +262,7 @@ public class InterceptorResolver {
         // 2) Add stereotype-declared bindings only when the bean class doesn't already
         // declare the same interceptor binding type.
         for (Annotation annotation : classAnnotations) {
-            if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
+            if (AnnotationPredicates.hasStereotypeAnnotation(annotation.annotationType())) {
                 Set<Annotation> stereotypeBindings = extractInterceptorBindingsFromStereotype(annotation.annotationType());
                 for (Annotation stereotypeBinding : stereotypeBindings) {
                     if (!bindingsByType.containsKey(stereotypeBinding.annotationType())) {

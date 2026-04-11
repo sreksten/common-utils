@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
@@ -27,10 +29,10 @@ import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.CompletionStage;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasBuiltInNormalScopeAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDependentAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDecoratorAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasInterceptorAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasBuiltInNormalScopeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasDependentAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasDecoratorAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasInterceptorAnnotation;
 
 /**
  * ProcessManagedBean event implementation.

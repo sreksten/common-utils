@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
@@ -25,7 +27,7 @@ import java.util.*;
 import java.util.function.Function;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.PRE_DESTROY;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDependentAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasDependentAnnotation;
 
 /**
  * Generic wrapper implementing CDI {@link Instance} interface for lazy and programmatic
@@ -699,10 +701,10 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                     continue;
                 }
                 Class<? extends Annotation> qualifierType = qualifier.annotationType();
-                if (AnnotationsEnum.hasDefaultAnnotation(qualifierType)) {
+                if (AnnotationPredicates.hasDefaultAnnotation(qualifierType)) {
                     hasDefault = true;
                 }
-                if (AnnotationsEnum.hasAnyAnnotation(qualifierType)) {
+                if (AnnotationPredicates.hasAnyAnnotation(qualifierType)) {
                     hasAny = true;
                 }
             }
@@ -717,11 +719,11 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
                 continue;
             }
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (!AnnotationsEnum.hasDefaultAnnotation(annotationType)
-                    && !AnnotationsEnum.hasAnyAnnotation(annotationType)) {
+            if (!AnnotationPredicates.hasDefaultAnnotation(annotationType)
+                    && !AnnotationPredicates.hasAnyAnnotation(annotationType)) {
                 hasExplicitAdditionalQualifier = true;
             }
-            if (AnnotationsEnum.hasRepeatableAnnotation(annotationType)) {
+            if (AnnotationPredicates.hasRepeatableAnnotation(annotationType)) {
                 if (!merged.contains(annotation)) {
                     merged.add(annotation);
                 }
@@ -735,7 +737,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
             merged.removeIf(existingQualifier ->
                     existingQualifier != null &&
                             replacedNonRepeatableTypes.contains(existingQualifier.annotationType()) &&
-                            !AnnotationsEnum
+                            !AnnotationPredicates
                                     .hasRepeatableAnnotation(existingQualifier.annotationType()));
         }
 
@@ -743,7 +745,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         // through select(...), keep @Any but drop inherited @Default to avoid over-constraining resolution.
         if (hasDefault && hasAny && hasExplicitAdditionalQualifier) {
             merged.removeIf(existingQualifier -> existingQualifier != null &&
-                    AnnotationsEnum
+                    AnnotationPredicates
                             .hasDefaultAnnotation(existingQualifier.annotationType()));
         }
 
@@ -770,7 +772,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
 
             int count = counts.getOrDefault(annotationType, 0) + 1;
             counts.put(annotationType, count);
-            if (count > 1 && !AnnotationsEnum.hasRepeatableAnnotation(annotationType)) {
+            if (count > 1 && !AnnotationPredicates.hasRepeatableAnnotation(annotationType)) {
                 throw new IllegalArgumentException(
                         "Duplicate non-repeating qualifier type passed to select(): @" + annotationType.getName());
             }
@@ -781,7 +783,7 @@ public class InstanceImpl<T> implements Instance<T>, Serializable {
         if (annotationType == null) {
             return false;
         }
-        if (AnnotationsEnum.hasQualifierAnnotation(annotationType)) {
+        if (AnnotationPredicates.hasQualifierAnnotation(annotationType)) {
             return true;
         }
 

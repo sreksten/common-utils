@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
@@ -408,7 +410,7 @@ final class BceSyntheticBeanBuilderImpl<T> extends BceSyntheticAbstractBuilder i
                             throw new jakarta.enterprise.inject.UnsatisfiedResolutionException(
                                     "No bean found for type " + type.getName());
                         }
-                        if (bean.getScope() == null || AnnotationsEnum.hasDependentAnnotation(bean.getScope())) {
+                        if (bean.getScope() == null || AnnotationPredicates.hasDependentAnnotation(bean.getScope())) {
                             Bean<Object> dependentBean = (Bean<Object>) bean;
                             CreationalContext<Object> childContext = beanManager.createCreationalContext(dependentBean);
                             Object instance = dependentBean.create(childContext);

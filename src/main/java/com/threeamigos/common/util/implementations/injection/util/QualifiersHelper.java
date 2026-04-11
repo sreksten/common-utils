@@ -1,5 +1,11 @@
 package com.threeamigos.common.util.implementations.injection.util;
 
+import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.annotations.AnyLiteral;
 import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
@@ -9,6 +15,9 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
 /**
  * Shared qualifier utilities used across resolution components.

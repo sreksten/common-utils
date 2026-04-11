@@ -1,5 +1,11 @@
 package com.threeamigos.common.util.implementations.injection.events;
 
+import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.scopes.ContextManager;
 import com.threeamigos.common.util.implementations.injection.scopes.ScopeContext;
@@ -68,6 +74,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
 /**
  * CDI 4.1 Event implementation for firing synchronous and asynchronous events.
@@ -631,7 +640,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             }
 
             Class<? extends Annotation> qualifierType = qualifier.annotationType();
-            if (!AnnotationsEnum.hasQualifierAnnotation(qualifierType)) {
+            if (!AnnotationPredicates.hasQualifierAnnotation(qualifierType)) {
                 throw new IllegalArgumentException(
                         "Annotation is not a qualifier type: " + qualifierType.getName());
             }
@@ -737,7 +746,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             }
         }
 
-        if (AnnotationsEnum.isContainerLifecyclePayloadTypeName(runtimeType.getName()) && !allowStartupEventDispatch) {
+        if (AnnotationPredicates.isContainerLifecyclePayloadTypeName(runtimeType.getName()) && !allowStartupEventDispatch) {
             throw new IllegalArgumentException(
                     "Application must not manually fire events with payload type " + runtimeType.getName());
         }
@@ -1388,7 +1397,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
                 // Get the bean instance that declares this observer method
                 // For Reception.ALWAYS (default): This will create the bean if it doesn't exist
                 // For Reception.IF_EXISTS: This is only called after checking bean existence
-                if (declaringBean != null && AnnotationsEnum.hasDependentAnnotation(method.getDeclaringClass())) {
+                if (declaringBean != null && AnnotationPredicates.hasDependentAnnotation(method.getDeclaringClass())) {
                     BeanManager beanManager = resolveBeanManager();
                     observerCreationalContext = beanManager.createCreationalContext(declaringBean);
                     beanInstance = beanManager.getReference(declaringBean, declaringBean.getBeanClass(),
@@ -1566,7 +1575,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             return;
         }
 
-        if (AnnotationsEnum.hasDependentAnnotation(method.getDeclaringClass())) {
+        if (AnnotationPredicates.hasDependentAnnotation(method.getDeclaringClass())) {
             if (destroyBeanInstance(declaringBean, beanInstance)) {
                 return;
             }
@@ -1637,7 +1646,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
             return false;
         }
         String eventClassName = event.getClass().getName();
-        return AnnotationsEnum.isContainerLifecyclePayloadTypeName(eventClassName);
+        return AnnotationPredicates.isContainerLifecyclePayloadTypeName(eventClassName);
     }
 
     private boolean isContextLifecycleEvent() {
@@ -1736,8 +1745,8 @@ public class EventImpl<T> implements Event<T>, Serializable {
 
         int discovered = -1;
         for (int i = 0; i < parameters.length; i++) {
-            if (AnnotationsEnum.hasObservesAnnotation(parameters[i]) ||
-                    AnnotationsEnum.hasObservesAsyncAnnotation(parameters[i])) {
+            if (AnnotationPredicates.hasObservesAnnotation(parameters[i]) ||
+                    AnnotationPredicates.hasObservesAsyncAnnotation(parameters[i])) {
                 if (discovered >= 0) {
                     return -1;
                 }
@@ -1797,7 +1806,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
         if (parameterType == null) {
             return false;
         }
-        return AnnotationsEnum.hasDependentAnnotation(parameterType);
+        return AnnotationPredicates.hasDependentAnnotation(parameterType);
     }
 
     private void invokeObserverList(List<ObserverMethodInfo> observers, Object event) {
@@ -1835,8 +1844,8 @@ public class EventImpl<T> implements Event<T>, Serializable {
         }
         Class<? extends Annotation> scope = declaringBean.getScope();
         // Dependent/Application are always safe
-        if (AnnotationsEnum.hasDependentAnnotation(scope) ||
-            AnnotationsEnum.hasApplicationScopedAnnotation(scope)) {
+        if (AnnotationPredicates.hasDependentAnnotation(scope) ||
+            AnnotationPredicates.hasApplicationScopedAnnotation(scope)) {
             return ContextActivation.NOOP;
         }
 
@@ -2073,7 +2082,7 @@ public class EventImpl<T> implements Event<T>, Serializable {
                     continue;
                 }
                 java.lang.annotation.Repeatable repeatable =
-                        AnnotationsEnum.getRepeatableAnnotation(qualifier.annotationType());
+                        AnnotationExtractors.getRepeatableAnnotation(qualifier.annotationType());
                 if (repeatable == null || repeatable.value() == null) {
                     continue;
                 }

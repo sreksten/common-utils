@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.spi.configured.ConfiguredInjectionPoint;
 import com.threeamigos.common.util.implementations.injection.annotations.DefaultLiteral;
 import jakarta.enterprise.inject.spi.InjectionPoint;
@@ -12,8 +14,8 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasAnyAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasDefaultAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasAnyAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasDefaultAnnotation;
 
 /**
  * Implementation of {@link InjectionPointConfigurator} used for ProcessInjectionPoint events.

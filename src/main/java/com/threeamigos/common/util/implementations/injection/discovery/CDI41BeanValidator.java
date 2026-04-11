@@ -1,5 +1,11 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
+import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.*;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
@@ -40,6 +46,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
 /**
  * Validates that a Java class is a CDI Managed Bean, according to CDI 4.1 rules.
@@ -297,7 +306,7 @@ public class CDI41BeanValidator {
 
         // 6) Constructor rules (only if it is a bean OR it has injection points / producers)
         boolean hasInjectConstructor = Arrays.stream(clazz.getDeclaredConstructors())
-                .anyMatch(AnnotationsEnum::hasInjectAnnotation);
+                .anyMatch(AnnotationPredicates::hasInjectAnnotation);
         boolean relevantClass = hasInjectionPoints || hasAnyProducer(clazz) || hasInjectConstructor;
         if (relevantClass) {
             @SuppressWarnings("unchecked")
@@ -2952,7 +2961,7 @@ public class CDI41BeanValidator {
 
     private boolean hasValidBeanConstructorSignature(Class<?> clazz) {
         List<Constructor<?>> injectConstructors = Arrays.stream(clazz.getDeclaredConstructors())
-                .filter(AnnotationsEnum::hasInjectAnnotation)
+                .filter(AnnotationPredicates::hasInjectAnnotation)
                 .collect(Collectors.toList());
 
         if (injectConstructors.size() > 1) {
@@ -3636,7 +3645,7 @@ public class CDI41BeanValidator {
      */
     private boolean hasDelegateAnnotation(java.lang.reflect.AnnotatedElement element) {
         for (Annotation ann : annotationsOf(element)) {
-            if (AnnotationsEnum.hasDelegateAnnotation(ann.annotationType())) {
+            if (AnnotationPredicates.hasDelegateAnnotation(ann.annotationType())) {
                 return true;
             }
         }

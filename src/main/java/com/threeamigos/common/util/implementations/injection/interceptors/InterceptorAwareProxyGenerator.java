@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.resolution.DestroyedInstanceTracker;
@@ -521,7 +523,7 @@ public class InterceptorAwareProxyGenerator {
             } else {
                 while (current != null && current != Object.class && found == null) {
                     for (Method candidate : current.getDeclaredMethods()) {
-                        if (AnnotationsEnum.hasAroundInvokeAnnotation(candidate)) {
+                        if (AnnotationPredicates.hasAroundInvokeAnnotation(candidate)) {
                             if (candidate.getParameterCount() == 1 &&
                                     jakarta.interceptor.InvocationContext.class.isAssignableFrom(candidate.getParameterTypes()[0])) {
                                 candidate.setAccessible(true);

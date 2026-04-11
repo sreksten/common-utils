@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedConstructorWrapper;
 import com.threeamigos.common.util.implementations.injection.spi.wrappers.AnnotatedFieldWrapper;
@@ -106,7 +108,7 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
                 if (annotationsByType.containsKey(annotationType)) {
                     continue;
                 }
-                if (!AnnotationsEnum.hasInheritedAnnotation(annotationType)) {
+                if (!AnnotationPredicates.hasInheritedAnnotation(annotationType)) {
                     continue;
                 }
                 if (!isCdiInheritableTypeAnnotation(annotationType)) {
@@ -222,8 +224,8 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
     }
 
     private boolean isScopeAnnotation(Class<? extends Annotation> annotationType) {
-        return AnnotationsEnum.hasScopeAnnotation(annotationType) ||
-                AnnotationsEnum.hasNormalScopeAnnotation(annotationType);
+        return AnnotationPredicates.hasScopeAnnotation(annotationType) ||
+                AnnotationPredicates.hasNormalScopeAnnotation(annotationType);
     }
 
     private boolean isCdiInheritableTypeAnnotation(Class<? extends Annotation> annotationType) {
@@ -233,8 +235,8 @@ public class SimpleAnnotatedType<T> implements AnnotatedType<T> {
         if (isScopeAnnotation(annotationType)) {
             return true;
         }
-        return AnnotationsEnum.hasQualifierAnnotation(annotationType)
-                || AnnotationsEnum.hasStereotypeAnnotation(annotationType)
-                || AnnotationsEnum.hasInterceptorBindingAnnotation(annotationType);
+        return AnnotationPredicates.hasQualifierAnnotation(annotationType)
+                || AnnotationPredicates.hasStereotypeAnnotation(annotationType)
+                || AnnotationPredicates.hasInterceptorBindingAnnotation(annotationType);
     }
 }

@@ -1,5 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.spi.SyntheticBean;
@@ -499,7 +503,7 @@ public final class BceMetadata {
         public Collection<AnnotationInfo> qualifiers() {
             List<AnnotationInfo> result = new ArrayList<>();
             for (Annotation annotation : beanClass.getAnnotations()) {
-                if (AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
+                if (AnnotationPredicates.hasQualifierAnnotation(annotation.annotationType())) {
                     result.add(new ReflectionAnnotationInfo(annotation));
                 }
             }
@@ -543,12 +547,12 @@ public final class BceMetadata {
 
         @Override
         public boolean isAlternative() {
-            return AnnotationsEnum.hasAlternativeAnnotation(beanClass);
+            return AnnotationPredicates.hasAlternativeAnnotation(beanClass);
         }
 
         @Override
         public Integer priority() {
-            return AnnotationsEnum.getPriorityValue(beanClass);
+            return AnnotationExtractors.getPriorityValue(beanClass);
         }
 
         @Override
@@ -565,7 +569,7 @@ public final class BceMetadata {
         public Collection<StereotypeInfo> stereotypes() {
             List<StereotypeInfo> out = new ArrayList<>();
             for (Annotation annotation : beanClass.getAnnotations()) {
-                if (AnnotationsEnum.hasStereotypeAnnotation(annotation.annotationType())) {
+                if (AnnotationPredicates.hasStereotypeAnnotation(annotation.annotationType())) {
                     out.add(new ReflectionStereotypeInfo(annotation.annotationType()));
                 }
             }
@@ -578,7 +582,7 @@ public final class BceMetadata {
             Class<?> current = beanClass;
             while (current != null && current != Object.class) {
                 for (Field field : current.getDeclaredFields()) {
-                    if (AnnotationsEnum.hasInjectAnnotation(field)) {
+                    if (AnnotationPredicates.hasInjectAnnotation(field)) {
                         out.add(new ReflectionInjectionPointInfo(
                             toType(field.getGenericType(), field.getAnnotatedType()),
                             qualifierAnnotations(field.getAnnotations()),
@@ -587,12 +591,12 @@ public final class BceMetadata {
                     }
                 }
                 for (Constructor<?> constructor : current.getDeclaredConstructors()) {
-                    if (AnnotationsEnum.hasInjectAnnotation(constructor)) {
+                    if (AnnotationPredicates.hasInjectAnnotation(constructor)) {
                         eval(new ReflectionMethodInfo(constructor), constructor.getParameters(), out);
                     }
                 }
                 for (Method method : current.getDeclaredMethods()) {
-                    if (AnnotationsEnum.hasInjectAnnotation(method)) {
+                    if (AnnotationPredicates.hasInjectAnnotation(method)) {
                         eval(new ReflectionMethodInfo(method), method.getParameters(), out);
                     }
                 }
@@ -721,7 +725,7 @@ public final class BceMetadata {
                     return priority;
                 }
             }
-            return AnnotationsEnum.getPriorityValue(beanClass);
+            return AnnotationExtractors.getPriorityValue(beanClass);
         }
 
         @Override
@@ -758,7 +762,7 @@ public final class BceMetadata {
         }
         List<AnnotationInfo> out = new ArrayList<>();
         for (Annotation annotation : annotations) {
-            if (AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
+            if (AnnotationPredicates.hasQualifierAnnotation(annotation.annotationType())) {
                 out.add(new ReflectionAnnotationInfo(annotation));
             }
         }
@@ -825,8 +829,8 @@ public final class BceMetadata {
     private static Class<? extends Annotation> resolveScope(Class<?> beanClass) {
         for (Annotation annotation : beanClass.getAnnotations()) {
             Class<? extends Annotation> type = annotation.annotationType();
-            if (AnnotationsEnum.hasNormalScopeAnnotation(type) ||
-                AnnotationsEnum.hasScopeAnnotation(type)) {
+            if (AnnotationPredicates.hasNormalScopeAnnotation(type) ||
+                AnnotationPredicates.hasScopeAnnotation(type)) {
                 return type;
             }
         }
@@ -848,7 +852,7 @@ public final class BceMetadata {
         @Override
         public boolean isNormal() {
             Class<?> clazz = unwrapClassInfo(annotation);
-            return AnnotationsEnum.hasNormalScopeAnnotation(clazz);
+            return AnnotationPredicates.hasNormalScopeAnnotation(clazz);
         }
     }
 
@@ -892,8 +896,8 @@ public final class BceMetadata {
         public ScopeInfo defaultScope() {
             for (Annotation annotation : stereotypeType.getAnnotations()) {
                 Class<? extends Annotation> annotationType = annotation.annotationType();
-                if (AnnotationsEnum.hasNormalScopeAnnotation(annotationType) ||
-                    AnnotationsEnum.hasScopeAnnotation(annotationType)) {
+                if (AnnotationPredicates.hasNormalScopeAnnotation(annotationType) ||
+                    AnnotationPredicates.hasScopeAnnotation(annotationType)) {
                     return new ReflectionScopeInfo(annotationType);
                 }
             }
@@ -904,7 +908,7 @@ public final class BceMetadata {
         public Collection<AnnotationInfo> interceptorBindings() {
             List<AnnotationInfo> out = new ArrayList<>();
             for (Annotation annotation : stereotypeType.getAnnotations()) {
-                if (AnnotationsEnum.hasInterceptorBindingAnnotation(annotation.annotationType())) {
+                if (AnnotationPredicates.hasInterceptorBindingAnnotation(annotation.annotationType())) {
                     out.add(new ReflectionAnnotationInfo(annotation));
                 }
             }
@@ -913,17 +917,17 @@ public final class BceMetadata {
 
         @Override
         public boolean isAlternative() {
-            return AnnotationsEnum.hasAlternativeAnnotation(stereotypeType);
+            return AnnotationPredicates.hasAlternativeAnnotation(stereotypeType);
         }
 
         @Override
         public Integer priority() {
-            return AnnotationsEnum.getPriorityValue(stereotypeType);
+            return AnnotationExtractors.getPriorityValue(stereotypeType);
         }
 
         @Override
         public boolean isNamed() {
-            return AnnotationsEnum.hasNamedAnnotation(stereotypeType);
+            return AnnotationPredicates.hasNamedAnnotation(stereotypeType);
         }
     }
 

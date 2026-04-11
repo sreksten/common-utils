@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.scopes;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.context.spi.AlterableContext;
@@ -173,7 +175,7 @@ public class CustomContextAdapter implements ScopeContext {
         if (scope == null) {
             return false;
         }
-        Boolean passivating = AnnotationsEnum.getNormalScopePassivatingValue(scope);
+        Boolean passivating = AnnotationExtractors.getNormalScopePassivatingValue(scope);
         return Boolean.TRUE.equals(passivating);
     }
 

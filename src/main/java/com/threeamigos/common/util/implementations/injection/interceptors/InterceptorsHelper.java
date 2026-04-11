@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ActivateRequestContextInterceptor;
@@ -148,8 +150,8 @@ public class InterceptorsHelper {
     }
 
     private int compareInterceptors(InterceptorInfo left, InterceptorInfo right) {
-        boolean leftPriority = AnnotationsEnum.hasPriorityAnnotation(left.getInterceptorClass());
-        boolean rightPriority = AnnotationsEnum.hasPriorityAnnotation(right.getInterceptorClass());
+        boolean leftPriority = AnnotationPredicates.hasPriorityAnnotation(left.getInterceptorClass());
+        boolean rightPriority = AnnotationPredicates.hasPriorityAnnotation(right.getInterceptorClass());
 
         if (leftPriority && rightPriority) {
             int byPriority = Integer.compare(left.getPriority(), right.getPriority());

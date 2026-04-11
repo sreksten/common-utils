@@ -1,5 +1,11 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.events.EventImpl;
@@ -34,6 +40,9 @@ import jakarta.annotation.PreDestroy;
 import java.lang.annotation.Annotation;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -1333,7 +1342,7 @@ public class InjectorImpl implements Injector {
      */
     Collection<Annotation> getQualifiers(Parameter param) {
         Collection<Annotation> qualifiers = Arrays.stream(param.getAnnotations())
-                .filter(a -> AnnotationsEnum.hasQualifierAnnotation(a.annotationType()))
+                .filter(a -> AnnotationPredicates.hasQualifierAnnotation(a.annotationType()))
                 .collect(Collectors.toList());
         if (qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());
@@ -1353,7 +1362,7 @@ public class InjectorImpl implements Injector {
      */
     Collection<Annotation> getQualifiers(Field field) {
         Collection<Annotation> qualifiers = Arrays.stream(field.getAnnotations())
-                .filter(a -> AnnotationsEnum.hasQualifierAnnotation(a.annotationType()))
+                .filter(a -> AnnotationPredicates.hasQualifierAnnotation(a.annotationType()))
                 .collect(Collectors.toList());
         if (qualifiers.isEmpty()) {
             qualifiers.add(new DefaultLiteral());

@@ -1,5 +1,9 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
 
@@ -18,8 +22,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.getTypedAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasTypedAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.getTypedAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasTypedAnnotation;
 
 /**
  * Extracts bean type sets for managed beans and producers.

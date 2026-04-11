@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.decorators;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -223,7 +225,7 @@ public class DecoratorResolver {
         if (decoratorClass == null) {
             return Integer.MAX_VALUE;
         }
-        Integer priority = AnnotationsEnum.getPriorityValue(decoratorClass);
+        Integer priority = AnnotationExtractors.getPriorityValue(decoratorClass);
         return priority != null ? priority : Integer.MAX_VALUE;
     }
 

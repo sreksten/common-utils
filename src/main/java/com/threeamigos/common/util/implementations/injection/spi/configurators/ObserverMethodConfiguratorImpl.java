@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi.configurators;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.ObservesAsync;
@@ -169,7 +171,7 @@ public class ObserverMethodConfiguratorImpl<T> implements ObserverMethodConfigur
                 continue;
             }
 
-            if (AnnotationsEnum.hasQualifierAnnotation(annotation.annotationType())) {
+            if (AnnotationPredicates.hasQualifierAnnotation(annotation.annotationType())) {
                 resolvedQualifiers.add(annotation);
             }
         }

@@ -5,8 +5,8 @@ import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import java.lang.annotation.Annotation;
 import java.util.Collection;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasAlternativeAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.hasStereotypeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasAlternativeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasStereotypeAnnotation;
 
 /**
  * Helper for alternative-related annotation decisions.

@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.resolution;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.scopes.InjectionPointImpl;
 import jakarta.enterprise.context.spi.CreationalContext;
@@ -291,7 +293,7 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
 
     private static int findDisposerParameterIndex(Parameter[] parameters) {
         for (int i = 0; i < parameters.length; i++) {
-            if (AnnotationsEnum.hasDisposesAnnotation(parameters[i])) {
+            if (AnnotationPredicates.hasDisposesAnnotation(parameters[i])) {
                 return i;
             }
         }
@@ -310,7 +312,7 @@ public class ProducerFactoryImpl<X> implements ProducerFactory<X> {
 
         for (int i = 0; i < parameters.length; i++) {
             Parameter parameter = parameters[i];
-            if (AnnotationsEnum.hasDisposesAnnotation(parameter)) {
+            if (AnnotationPredicates.hasDisposesAnnotation(parameter)) {
                 args[i] = disposedInstance;
             } else {
                 InjectionPoint ip = new InjectionPointImpl<>(parameter, declaringBean);

@@ -4,6 +4,9 @@ import java.lang.annotation.Annotation;
 import java.util.HashSet;
 import java.util.Set;
 
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasAlternativeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasStereotypeAnnotation;
+
 /**
  * Helper for stereotype-related annotation decisions.
  */
@@ -23,13 +26,13 @@ public class StereotypesHelper {
             return false;
         }
 
-        if (AnnotationsEnum.hasAlternativeAnnotation(stereotypeType)) {
+        if (hasAlternativeAnnotation(stereotypeType)) {
             return true;
         }
 
         for (Annotation meta : stereotypeType.getAnnotations()) {
             Class<? extends Annotation> metaType = meta.annotationType();
-            if (AnnotationsEnum.hasStereotypeAnnotation(metaType) && declaresAlternative(metaType, visited)) {
+            if (hasStereotypeAnnotation(metaType) && declaresAlternative(metaType, visited)) {
                 return true;
             }
         }

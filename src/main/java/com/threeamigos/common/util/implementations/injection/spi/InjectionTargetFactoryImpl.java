@@ -1,5 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.spi;
 
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.interceptors.InterceptorAwareProxyGenerator;
 import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl;
@@ -708,7 +710,7 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
                 if (annotation == null) {
                     continue;
                 }
-                if (AnnotationsEnum
+                if (AnnotationPredicates
                         .hasInjectAnnotation(annotation.annotationType())) {
                     return true;
                 }
@@ -717,15 +719,15 @@ public class InjectionTargetFactoryImpl<T> implements InjectionTargetFactory<T> 
         }
 
         private boolean hasInjectAnnotation(java.lang.reflect.AnnotatedElement element) {
-            return AnnotationsEnum.hasInjectAnnotation(element);
+            return AnnotationPredicates.hasInjectAnnotation(element);
         }
 
         private boolean hasPostConstructAnnotation(Method method) {
-            return AnnotationsEnum.hasPostConstructAnnotation(method);
+            return AnnotationPredicates.hasPostConstructAnnotation(method);
         }
 
         private boolean hasPreDestroyAnnotation(Method method) {
-            return AnnotationsEnum.hasPreDestroyAnnotation(method);
+            return AnnotationPredicates.hasPreDestroyAnnotation(method);
         }
 
         private static final class ResolvedInjectionPoint implements InjectionPoint, java.io.Serializable {

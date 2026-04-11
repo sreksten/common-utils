@@ -1,5 +1,11 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.BeanManagerBean;
 import com.threeamigos.common.util.implementations.injection.builtinbeans.ConversationBean;
@@ -170,7 +176,7 @@ public class InjectorImpl2 implements Injector {
         // Create a BeanManager instance
         this.beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
         this.dynamicAnnotationClassLoader = beanManager.getRegistrationClassLoader();
-        AnnotationsEnum.retainDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
+        DynamicAnnotationRegistry.retainDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
 
         // Register container for proxy deserialization
         // This allows serialized client proxies (e.g., from @SessionScoped beans) to be
@@ -421,7 +427,7 @@ public class InjectorImpl2 implements Injector {
             throw new IllegalArgumentException("Alternative class cannot be null");
         }
 
-        if (!AnnotationsEnum.hasAlternativeAnnotation(alternativeClass)) {
+        if (!AnnotationPredicates.hasAlternativeAnnotation(alternativeClass)) {
             throw new IllegalArgumentException(
                     "Class " + alternativeClass.getName() + " is not marked with @Alternative");
         }
@@ -512,7 +518,7 @@ public class InjectorImpl2 implements Injector {
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCacheForClassLoader(classLoader);
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCache();
         BeansXmlParser.clearJaxbContextCacheForClassLoader(classLoader);
-        AnnotationsEnum.releaseDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
+        DynamicAnnotationRegistry.releaseDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
         ConversationImpl.clearAllGlobalState();
         ConversationPropagationRegistry.clear();
         DestroyedInstanceTracker.clear();
@@ -601,7 +607,7 @@ public class InjectorImpl2 implements Injector {
      */
     private int getBeanPriority(Bean<?> bean) {
         Class<?> beanClass = bean.getBeanClass();
-        Integer priority = AnnotationsEnum.getPriorityValue(beanClass);
+        Integer priority = AnnotationExtractors.getPriorityValue(beanClass);
         if (priority != null) {
             return priority;
         }

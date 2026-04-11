@@ -1,5 +1,11 @@
 package com.threeamigos.common.util.implementations.injection;
 
+import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.concurrency.ParallelTaskExecutor;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.bce.BceSupportedPhase;
@@ -87,6 +93,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 
 /**
  * Syringe - CDI 4.1 compliant container implementation.
@@ -594,7 +603,7 @@ public class Syringe {
         // Step 1.2: Create BeanManager
         beanManager = new BeanManagerImpl(knowledgeBase, contextManager);
         dynamicAnnotationClassLoader = beanManager.getRegistrationClassLoader();
-        AnnotationsEnum.retainDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
+        DynamicAnnotationRegistry.retainDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
         dynamicAnnotationsRetained = true;
         beanManager.setLegacyCdi10NewEnabled(legacyCdi10NewEnabled);
         beanManager.registerExtensions(extensions);
@@ -1072,7 +1081,7 @@ public class Syringe {
         InterceptorAwareProxyGenerator.clearTargetAroundInvokeCacheForClassLoader(classLoader);
         BeansXmlParser.clearJaxbContextCacheForClassLoader(classLoader);
         if (dynamicAnnotationsRetained && dynamicAnnotationClassLoader != null) {
-            AnnotationsEnum.releaseDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
+            DynamicAnnotationRegistry.releaseDynamicAnnotationsForClassLoader(dynamicAnnotationClassLoader);
         }
         ConversationImpl.clearAllGlobalState();
         ConversationPropagationRegistry.clear();
@@ -4762,7 +4771,7 @@ public class Syringe {
 
         for (Field field : clazz.getDeclaredFields()) {
             for (Annotation annotation : field.getAnnotations()) {
-                if (AnnotationsEnum.hasDelegateAnnotation(annotation.annotationType())) {
+                if (AnnotationPredicates.hasDelegateAnnotation(annotation.annotationType())) {
                     return true;
                 }
             }
@@ -4771,7 +4780,7 @@ public class Syringe {
         for (Method method : clazz.getDeclaredMethods()) {
             for (Parameter parameter : method.getParameters()) {
                 for (Annotation annotation : parameter.getAnnotations()) {
-                    if (AnnotationsEnum.hasDelegateAnnotation(annotation.annotationType())) {
+                    if (AnnotationPredicates.hasDelegateAnnotation(annotation.annotationType())) {
                         return true;
                     }
                 }
@@ -4781,7 +4790,7 @@ public class Syringe {
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
             for (Parameter parameter : constructor.getParameters()) {
                 for (Annotation annotation : parameter.getAnnotations()) {
-                    if (AnnotationsEnum.hasDelegateAnnotation(annotation.annotationType())) {
+                    if (AnnotationPredicates.hasDelegateAnnotation(annotation.annotationType())) {
                         return true;
                     }
                 }

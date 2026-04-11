@@ -1,5 +1,11 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
+import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
+
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
+
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
@@ -61,14 +67,14 @@ final class BceMetaAnnotations implements MetaAnnotations {
     @Override
     public void addContext(Class<? extends Annotation> scopeAnnotation,
                            Class<? extends AlterableContext> contextImplementation) {
-        addContext(scopeAnnotation, AnnotationsEnum.hasNormalScopeAnnotation(scopeAnnotation), contextImplementation);
+        addContext(scopeAnnotation, AnnotationPredicates.hasNormalScopeAnnotation(scopeAnnotation), contextImplementation);
     }
 
     @Override
     public void addContext(Class<? extends Annotation> scopeAnnotation,
                            boolean isNormal,
                            Class<? extends AlterableContext> contextImplementation) {
-        boolean passivating = Boolean.TRUE.equals(AnnotationsEnum.getNormalScopePassivatingValue(scopeAnnotation));
+        boolean passivating = Boolean.TRUE.equals(AnnotationExtractors.getNormalScopePassivatingValue(scopeAnnotation));
         knowledgeBase.addScope(scopeAnnotation, isNormal, isNormal && passivating);
         knowledgeBase.addContextImplementation(scopeAnnotation, contextImplementation);
         messageHandler.handleInfoMessage("[BCE] Registered context for scope " +
@@ -173,8 +179,8 @@ final class BceMetaAnnotations implements MetaAnnotations {
 
         @Override
         public MethodConfig addAnnotation(Class<? extends Annotation> annotationType) {
-            if (AnnotationsEnum.hasNonbindingAnnotation(annotationType)) {
-                AnnotationsEnum.registerDynamicNonbindingMember(this.annotationType, methodName);
+            if (AnnotationPredicates.hasNonbindingAnnotation(annotationType)) {
+                DynamicAnnotationRegistry.registerDynamicNonbindingMember(this.annotationType, methodName);
             }
             return this;
         }
@@ -183,15 +189,15 @@ final class BceMetaAnnotations implements MetaAnnotations {
         public MethodConfig addAnnotation(AnnotationInfo annotation) {
             if (annotation != null &&
                     isNonbindingAnnotationName(annotation.declaration() != null ? annotation.declaration().name() : null)) {
-                AnnotationsEnum.registerDynamicNonbindingMember(this.annotationType, methodName);
+                DynamicAnnotationRegistry.registerDynamicNonbindingMember(this.annotationType, methodName);
             }
             return this;
         }
 
         @Override
         public MethodConfig addAnnotation(Annotation annotation) {
-            if (annotation != null && AnnotationsEnum.hasNonbindingAnnotation(annotation.annotationType())) {
-                AnnotationsEnum.registerDynamicNonbindingMember(this.annotationType, methodName);
+            if (annotation != null && AnnotationPredicates.hasNonbindingAnnotation(annotation.annotationType())) {
+                DynamicAnnotationRegistry.registerDynamicNonbindingMember(this.annotationType, methodName);
             }
             return this;
         }

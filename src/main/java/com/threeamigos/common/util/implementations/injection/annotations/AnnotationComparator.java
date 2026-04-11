@@ -64,7 +64,7 @@ public class AnnotationComparator {
 
         for (Method method : methods) {
             // Skip members marked with @Nonbinding
-            if (AnnotationsEnum.hasNonbindingAnnotation(method)) {
+            if (AnnotationPredicates.hasNonbindingAnnotation(method)) {
                 continue;
             }
 
@@ -162,7 +162,7 @@ public class AnnotationComparator {
         Method[] methods = annotation.annotationType().getDeclaredMethods();
         for (Method method : methods) {
             // Skip members marked with @Nonbinding
-            if (AnnotationsEnum.hasNonbindingAnnotation(method)) {
+            if (AnnotationPredicates.hasNonbindingAnnotation(method)) {
                 continue;
             }
 
