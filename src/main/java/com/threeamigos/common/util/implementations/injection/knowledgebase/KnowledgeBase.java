@@ -12,7 +12,6 @@ import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper;
-import com.threeamigos.common.util.implementations.injection.annotations.StereotypesHelper;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.context.spi.AlterableContext;
@@ -21,6 +20,8 @@ import jakarta.enterprise.inject.spi.*;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.util.*;
+
+import static com.threeamigos.common.util.implementations.injection.annotations.AlternativesHelper.isAlternativeViaAnnotationOrStereotype;
 
 public class KnowledgeBase {
 
@@ -31,12 +32,10 @@ public class KnowledgeBase {
             new KnowledgeBaseExtensionRegistrationStore();
     private final KnowledgeBaseEnablementStore enablementStore = new KnowledgeBaseEnablementStore();
     private final KnowledgeBaseProblemCollector problemCollector = new KnowledgeBaseProblemCollector();
-    private final AlternativesHelper alternativesHelper;
     private final BeansXmlOrderingHelper beansXmlOrderingHelper;
     private final InterceptorsHelper interceptorsHelper;
     public KnowledgeBase(MessageHandler messageHandler) {
         this.messageHandler = messageHandler;
-        this.alternativesHelper = new AlternativesHelper(new StereotypesHelper());
         this.beansXmlOrderingHelper = new BeansXmlOrderingHelper(discoveryStore.getBeansXmlConfigurations());
         this.interceptorsHelper = new InterceptorsHelper(
                 beanRegistryStore.getInterceptorInfos(),
@@ -568,7 +567,7 @@ public class KnowledgeBase {
             throw new IllegalArgumentException("alternativeClass cannot be null");
         }
 
-        if (!alternativesHelper.isAlternativeDeclaration(alternativeClass)) {
+        if (!isAlternativeViaAnnotationOrStereotype(alternativeClass)) {
             throw new IllegalArgumentException(
                     alternativeClass.getName() + " is not an @Alternative bean class (directly or via stereotype)");
         }
@@ -941,7 +940,7 @@ public class KnowledgeBase {
      * @return true if the class/stereotype is declared in any beans.xml alternatives section
      */
     public boolean isAlternativeEnabledInBeansXml(String className) {
-        return alternativesHelper.isAlternativeEnabledInBeansXml(className, discoveryStore.getBeansXmlConfigurations());
+        return AlternativesHelper.isAlternativeEnabledInBeansXml(className, discoveryStore.getBeansXmlConfigurations());
     }
 
     // ==================== Vetoed Types Management ====================

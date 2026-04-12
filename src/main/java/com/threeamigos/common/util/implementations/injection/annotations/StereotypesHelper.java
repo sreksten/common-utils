@@ -12,11 +12,13 @@ import static com.threeamigos.common.util.implementations.injection.annotations.
  */
 public class StereotypesHelper {
 
-    public boolean declaresAlternative(Class<? extends Annotation> stereotypeType) {
+    private StereotypesHelper() {}
+
+    public static boolean declaresAlternative(Class<? extends Annotation> stereotypeType) {
         return declaresAlternative(stereotypeType, new HashSet<>());
     }
 
-    private boolean declaresAlternative(Class<? extends Annotation> stereotypeType,
+    public static boolean declaresAlternative(Class<? extends Annotation> stereotypeType,
                                         Set<Class<? extends Annotation>> visited) {
         if (stereotypeType == null) {
             return false;

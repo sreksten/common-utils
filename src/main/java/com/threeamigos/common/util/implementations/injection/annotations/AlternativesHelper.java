@@ -7,39 +7,37 @@ import java.util.Collection;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasAlternativeAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasStereotypeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.StereotypesHelper.declaresAlternative;
 
 /**
  * Helper for alternative-related annotation decisions.
  */
 public class AlternativesHelper {
 
-    private final StereotypesHelper stereotypesHelper;
+    private AlternativesHelper() {}
 
-    public AlternativesHelper(StereotypesHelper stereotypesHelper) {
-        this.stereotypesHelper = stereotypesHelper;
-    }
-
-    public boolean isAlternativeDeclaration(Class<?> beanClass) {
+    /**
+     * Checks if the given class is an alternative declaration.
+     * @param beanClass the class to check
+     * @return true if the class is an alternative declaration, false otherwise
+     */
+    public static boolean isAlternativeViaAnnotationOrStereotype(Class<?> beanClass) {
         if (beanClass == null) {
             return false;
         }
-
         if (hasAlternativeAnnotation(beanClass)) {
             return true;
         }
-
         for (Annotation annotation : beanClass.getAnnotations()) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (hasStereotypeAnnotation(annotationType)
-                    && stereotypesHelper.declaresAlternative(annotationType)) {
+            if (hasStereotypeAnnotation(annotationType) && declaresAlternative(annotationType)) {
                 return true;
             }
         }
-
         return false;
     }
 
-    public boolean isAlternativeEnabledInBeansXml(String className, Collection<BeansXml> beansXmlConfigurations) {
+    public static boolean isAlternativeEnabledInBeansXml(String className, Collection<BeansXml> beansXmlConfigurations) {
         if (className == null || className.isEmpty() || beansXmlConfigurations == null) {
             return false;
         }

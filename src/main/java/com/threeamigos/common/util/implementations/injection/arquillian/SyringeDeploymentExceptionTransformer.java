@@ -18,7 +18,7 @@ public class SyringeDeploymentExceptionTransformer implements DeploymentExceptio
     private static final String JAKARTA_DEFINITION_EXCEPTION_MARKER =
             jakarta.enterprise.inject.spi.DefinitionException.class.getName();
     private static final String NON_PORTABLE_BEHAVIOUR_EXCEPTION_MARKER =
-            NonPortableBehaviourException.class.getName();
+            "com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException";
 
     @Override
     public Throwable transform(final Throwable throwable) {
