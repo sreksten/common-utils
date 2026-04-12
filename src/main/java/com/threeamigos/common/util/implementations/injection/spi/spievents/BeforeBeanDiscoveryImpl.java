@@ -1,9 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.spi.spievents;
 
-import com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
-
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
 import com.threeamigos.common.util.implementations.injection.spi.configurators.AnnotatedTypeConfiguratorImpl;
@@ -18,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasNonbindingAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.registerDynamicNonbindingMember;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.toList;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper.toList;
 
 /**
  * BeforeBeanDiscovery event implementation.

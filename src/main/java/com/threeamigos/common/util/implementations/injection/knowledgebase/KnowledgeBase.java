@@ -11,7 +11,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.Producer
 import com.threeamigos.common.util.implementations.injection.beansxml.BeansXml;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
 import com.threeamigos.common.util.implementations.injection.spi.Phase;
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
+import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.StereotypesHelper;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.annotation.Nonnull;
@@ -607,7 +607,7 @@ public class KnowledgeBase {
         DynamicAnnotationRegistry.registerDynamicStereotype(stereotype);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered stereotype: " + stereotype.getSimpleName() +
-                          " with meta-annotation(s) " + AnnotationHelper.toList(stereotypeDef));
+                          " with meta-annotation(s) " + AnnotationsHelper.toList(stereotypeDef));
     }
 
     /**
@@ -777,7 +777,7 @@ public class KnowledgeBase {
         DynamicAnnotationRegistry.registerDynamicInterceptorBinding(bindingType);
 
         messageHandler.handleInfoMessage("[KnowledgeBase] Registered interceptor binding: " + bindingType.getSimpleName() +
-                          " with  meta-annotation(s) " + AnnotationHelper.toList(definitions));
+                          " with  meta-annotation(s) " + AnnotationsHelper.toList(definitions));
     }
 
     /**

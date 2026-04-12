@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasAroundInvokeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper.hasAroundInvokeAnnotation;
 
 /**
  * Generates proxies that integrate interceptor chain execution with business method calls.

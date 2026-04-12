@@ -15,9 +15,9 @@ import java.util.stream.Stream;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasNamedAnnotation;
 
-public class AnnotationHelper {
+public class AnnotationsHelper {
 
-    private AnnotationHelper() {
+    private AnnotationsHelper() {
     }
 
     @Nonnull

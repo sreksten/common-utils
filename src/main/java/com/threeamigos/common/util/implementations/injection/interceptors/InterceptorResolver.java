@@ -1,6 +1,5 @@
 package com.threeamigos.common.util.implementations.injection.interceptors;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -14,7 +13,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.isInterceptorBindingMetaAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper.isInterceptorBindingMetaAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasActivateRequestContextAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasInterceptorBindingAnnotation;
 

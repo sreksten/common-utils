@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
 
@@ -60,11 +59,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasRequiredEnhancementAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper.hasRequiredEnhancementAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
-import static com.threeamigos.common.util.implementations.injection.annotations.DynamicAnnotationRegistry.*;
 import static com.threeamigos.common.util.implementations.injection.spi.SPIUtils.*;
 
 /**

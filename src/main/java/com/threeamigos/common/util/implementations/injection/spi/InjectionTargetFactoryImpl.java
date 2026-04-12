@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasInjectAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper.hasInjectAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasPostConstructAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasPreDestroyAnnotation;
 import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.collectClassHierarchy;

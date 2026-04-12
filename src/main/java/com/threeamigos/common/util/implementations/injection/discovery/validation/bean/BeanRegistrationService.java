@@ -11,7 +11,6 @@ import com.threeamigos.common.util.implementations.injection.resolution.Producer
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.spi.Annotated;
 import jakarta.enterprise.inject.spi.AnnotatedType;
-import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.inject.Named;
 
@@ -27,7 +26,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.getPriorityValue;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.findNamedQualifier;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper.findNamedQualifier;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasNamedAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.normalizeSingletonToApplicationScoped;
 import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.normalizeBeanName;

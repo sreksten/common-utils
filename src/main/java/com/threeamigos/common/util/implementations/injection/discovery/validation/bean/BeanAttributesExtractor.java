@@ -1,18 +1,16 @@
 package com.threeamigos.common.util.implementations.injection.discovery.validation.bean;
 
 import com.threeamigos.common.util.implementations.injection.discovery.validation.CDI41BeanValidator;
-import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.context.Dependent;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.getNamedAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.readNamedValue;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper.readNamedValue;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasInheritedAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasNamedAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.normalizeSingletonToApplicationScoped;

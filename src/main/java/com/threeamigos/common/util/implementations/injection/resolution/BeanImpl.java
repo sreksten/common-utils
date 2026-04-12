@@ -33,8 +33,8 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasAroundInvokeAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.hasExcludeClassInterceptorsAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper.hasAroundInvokeAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsHelper.hasExcludeClassInterceptorsAnnotation;
 import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.collectClassHierarchyFromObject;
 
 /**
