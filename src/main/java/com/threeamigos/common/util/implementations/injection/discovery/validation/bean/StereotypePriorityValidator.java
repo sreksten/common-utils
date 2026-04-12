@@ -6,7 +6,6 @@ import jakarta.enterprise.inject.spi.DefinitionException;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Target;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -24,7 +23,7 @@ import static com.threeamigos.common.util.implementations.injection.annotations.
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasStereotypeAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasTargetAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasTypedAnnotation;
-import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.PRIORITY;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.*;
 
 /**
  * Validates stereotype-related declarations and collects stereotype priorities.
@@ -188,7 +187,7 @@ public final class StereotypePriorityValidator {
 
         Annotation named = getNamedAnnotation(stereotypeType);
         if (named != null) {
-            String value = readNamedValue(named);
+            String value = getNamedValue(named);
             if (value != null && !value.trim().isEmpty()) {
                 throw new DefinitionException(stereotypeType.getName() +
                         ": stereotype declares non-empty @Named(\"" + value + "\")");
@@ -261,7 +260,7 @@ public final class StereotypePriorityValidator {
             return;
         }
 
-        Integer declaredPriority = extractDeclaredPriority(stereotypeType.getAnnotations());
+        Integer declaredPriority = getPriorityValue(stereotypeType.getAnnotations());
         if (declaredPriority != null) {
             priorities.add(declaredPriority);
         }
@@ -274,40 +273,4 @@ public final class StereotypePriorityValidator {
         }
     }
 
-    private Integer extractDeclaredPriority(Annotation[] annotations) {
-        if (annotations == null) {
-            return null;
-        }
-
-        for (Annotation annotation : annotations) {
-            if (annotation != null && PRIORITY.matches(annotation.annotationType())) {
-                return readPriorityValue(annotation);
-            }
-        }
-
-        return null;
-    }
-
-    private Integer readPriorityValue(Annotation priorityAnnotation) {
-        try {
-            Method valueMethod = priorityAnnotation.annotationType().getMethod("value");
-            Object value = valueMethod.invoke(priorityAnnotation);
-            if (value instanceof Integer) {
-                return (Integer) value;
-            }
-        } catch (ReflectiveOperationException ignored) {
-            // Ignore malformed annotation implementations and treat as absent.
-        }
-        return null;
-    }
-
-    private String readNamedValue(Annotation namedAnnotation) {
-        try {
-            Method value = namedAnnotation.annotationType().getMethod("value");
-            Object raw = value.invoke(namedAnnotation);
-            return raw == null ? "" : raw.toString();
-        } catch (ReflectiveOperationException ignored) {
-            return "";
-        }
-    }
 }

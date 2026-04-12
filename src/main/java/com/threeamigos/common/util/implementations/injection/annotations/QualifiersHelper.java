@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.PRIORITY;
 
 /**
  * Shared qualifier utilities used across resolution components.
@@ -285,9 +286,36 @@ public final class QualifiersHelper {
 
     public static String getNamedValue(Annotation namedAnnotation) {
         try {
-            return (String) namedAnnotation.annotationType().getMethod("value").invoke(namedAnnotation);
-        } catch (Exception e) {
+            Method value = namedAnnotation.annotationType().getMethod("value");
+            Object raw = value.invoke(namedAnnotation);
+            return raw == null ? "" : raw.toString();
+        } catch (ReflectiveOperationException ignored) {
             return "";
         }
+    }
+
+    public static Integer getPriorityValue(Annotation[] annotations) {
+        if (annotations == null) {
+            return null;
+        }
+        for (Annotation annotation : annotations) {
+            if (annotation != null && PRIORITY.matches(annotation.annotationType())) {
+                return getPriorityValue(annotation);
+            }
+        }
+        return null;
+    }
+
+    public static Integer getPriorityValue(Annotation priorityAnnotation) {
+        try {
+            Method valueMethod = priorityAnnotation.annotationType().getMethod("value");
+            Object value = valueMethod.invoke(priorityAnnotation);
+            if (value instanceof Integer) {
+                return (Integer) value;
+            }
+        } catch (ReflectiveOperationException ignored) {
+            // Ignore malformed annotation implementations and treat as absent.
+        }
+        return null;
     }
 }

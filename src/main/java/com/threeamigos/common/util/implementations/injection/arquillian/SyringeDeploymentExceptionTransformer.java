@@ -2,6 +2,8 @@ package com.threeamigos.common.util.implementations.injection.arquillian;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
+
+import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import org.jboss.arquillian.container.spi.client.container.DeploymentException;
 import org.jboss.arquillian.container.spi.client.container.DeploymentExceptionTransformer;
 
@@ -14,9 +16,9 @@ import org.jboss.arquillian.container.spi.client.container.DeploymentExceptionTr
 public class SyringeDeploymentExceptionTransformer implements DeploymentExceptionTransformer {
 
     private static final String JAKARTA_DEFINITION_EXCEPTION_MARKER =
-            "jakarta.enterprise.inject.spi.DefinitionException";
+            jakarta.enterprise.inject.spi.DefinitionException.class.getName();
     private static final String NON_PORTABLE_BEHAVIOUR_EXCEPTION_MARKER =
-            "com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException";
+            NonPortableBehaviourException.class.getName();
 
     @Override
     public Throwable transform(final Throwable throwable) {

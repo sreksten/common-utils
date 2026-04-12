@@ -22,7 +22,7 @@ import com.threeamigos.common.util.implementations.injection.resolution.GenericT
 import com.threeamigos.common.util.implementations.injection.util.LifecycleMethodHelper;
 import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.types.RawTypeExtractor;
-import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
+import com.threeamigos.common.util.implementations.injection.types.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.NoOpTransactionServices;
 import com.threeamigos.common.util.implementations.injection.util.tx.TransactionSynchronizationCallbacks;

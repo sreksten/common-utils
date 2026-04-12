@@ -13,6 +13,8 @@ import java.util.Collection;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasNamedAnnotation;
+
 public class AnnotationHelper {
 
     private AnnotationHelper() {
@@ -193,4 +195,24 @@ public class AnnotationHelper {
                 || AnnotationPredicates.hasStereotypeAnnotation(annotationType)
                 || AnnotationPredicates.hasInterceptorBindingAnnotation(annotationType);
     }
+
+    public static String readNamedValue(Annotation namedAnnotation) {
+        try {
+            Method value = namedAnnotation.annotationType().getMethod("value");
+            Object raw = value.invoke(namedAnnotation);
+            return raw == null ? "" : raw.toString();
+        } catch (ReflectiveOperationException ignored) {
+            return "";
+        }
+    }
+
+    public static Annotation findNamedQualifier(Annotation[] annotations) {
+        for (Annotation annotation : annotations) {
+            if (hasNamedAnnotation(annotation.annotationType())) {
+                return annotation;
+            }
+        }
+        return null;
+    }
+
 }

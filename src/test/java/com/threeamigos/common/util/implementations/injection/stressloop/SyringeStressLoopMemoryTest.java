@@ -285,7 +285,7 @@ class SyringeStressLoopMemoryTest {
 
     @SuppressWarnings("unchecked")
     private static void assertFalseClientProxyContainerRetains(ClassLoader deploymentClassLoader) throws Exception {
-        Field field = Class.forName("com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator")
+        Field field = com.threeamigos.common.util.implementations.injection.scopes.ClientProxyGenerator.class
                 .getDeclaredField("containerRegistry");
         field.setAccessible(true);
         Map<ClassLoader, ?> registry = (Map<ClassLoader, ?>) field.get(null);

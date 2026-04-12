@@ -48,7 +48,7 @@ import com.threeamigos.common.util.implementations.injection.spi.SyntheticProduc
 import com.threeamigos.common.util.implementations.injection.spi.spievents.*;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.resolution.GenericTypeResolver;
-import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
+import com.threeamigos.common.util.implementations.injection.types.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.messagehandler.ConsoleMessageHandler;
 import com.threeamigos.common.util.interfaces.messagehandler.MessageHandler;
 import jakarta.enterprise.context.ApplicationScoped;

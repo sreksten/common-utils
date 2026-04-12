@@ -69,6 +69,19 @@ public class ClassHelper {
     }
 
     /**
+     * Normalizes a bean name by trimming and removing any leading or trailing whitespace.
+     * @param beanName the bean name to normalize
+     * @return the normalized bean name, or null if the input is null or empty
+     */
+    public static String normalizeBeanName(String beanName) {
+        if (beanName == null) {
+            return null;
+        }
+        String trimmed = beanName.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
      * Returns the declared method with the given name and parameter types if it exists.
      * @param clazz the class to search in
      * @param methodName the method name

@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.discovery.validation.bean;
 
+import com.threeamigos.common.util.implementations.injection.discovery.validation.CDI41BeanValidator;
 import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.context.Dependent;
@@ -11,42 +12,38 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.getNamedAnnotation;
+import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationHelper.readNamedValue;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasInheritedAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.hasNamedAnnotation;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.normalizeSingletonToApplicationScoped;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.extractQualifierAnnotations;
+import static com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper.normalizeBeanQualifiers;
+import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.defaultedBeanName;
 
 /**
  * Extracted bean-attributes extraction rules for CDI41BeanValidator.
  */
 public class BeanAttributesExtractor {
 
-    public interface Ops {
-        Annotation[] annotationsOf(Class<?> clazz);
-        Annotation[] declaredAnnotationsOf(Class<?> clazz);
-        boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType);
-        boolean isScopeAnnotationType(Class<? extends Annotation> annotationType);
-        boolean isQualifierAnnotationType(Class<? extends Annotation> annotationType);
-    }
-
     private final KnowledgeBase knowledgeBase;
-    private final Ops ops;
+    private final CDI41BeanValidator validator;
 
-    public BeanAttributesExtractor(KnowledgeBase knowledgeBase, Ops ops) {
+    public BeanAttributesExtractor(KnowledgeBase knowledgeBase, CDI41BeanValidator validator) {
         this.knowledgeBase = knowledgeBase;
-        this.ops = ops;
+        this.validator = validator;
     }
 
     public String extractBeanName(Class<?> clazz) {
-        for (Annotation annotation : ops.annotationsOf(clazz)) {
+        for (Annotation annotation : validator.annotationsOf(clazz)) {
             if (hasNamedAnnotation(annotation.annotationType())) {
                 return defaultedBeanName(readNamedValue(annotation), clazz);
             }
         }
 
         Set<Class<? extends Annotation>> visited = new HashSet<>();
-        for (Annotation annotation : ops.annotationsOf(clazz)) {
+        for (Annotation annotation : validator.annotationsOf(clazz)) {
             Class<? extends Annotation> at = annotation.annotationType();
-            if (ops.isStereotypeAnnotationType(at)) {
+            if (validator.isStereotypeAnnotationType(at)) {
                 String stereotypeName = extractNameFromStereotype(at, clazz, visited);
                 if (stereotypeName != null) {
                     return stereotypeName;
@@ -58,23 +55,23 @@ public class BeanAttributesExtractor {
     }
 
     public Set<Annotation> extractBeanQualifiers(Class<?> clazz) {
-        Set<Annotation> result = QualifiersHelper.extractQualifierAnnotations(ops.annotationsOf(clazz));
-        for (Annotation annotation : ops.annotationsOf(clazz)) {
+        Set<Annotation> result = extractQualifierAnnotations(validator.annotationsOf(clazz));
+        for (Annotation annotation : validator.annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (ops.isStereotypeAnnotationType(annotationType)) {
+            if (validator.isStereotypeAnnotationType(annotationType)) {
                 result.addAll(extractQualifiersFromStereotype(annotationType));
             }
-            if (ops.isQualifierAnnotationType(annotationType)) {
+            if (validator.isQualifierAnnotationType(annotationType)) {
                 result.add(annotation);
             }
         }
-        return QualifiersHelper.normalizeBeanQualifiers(result);
+        return normalizeBeanQualifiers(result);
     }
 
     public Class<? extends Annotation> extractBeanScope(Class<?> clazz) {
-        for (Annotation annotation : ops.declaredAnnotationsOf(clazz)) {
+        for (Annotation annotation : validator.declaredAnnotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (ops.isScopeAnnotationType(annotationType)) {
+            if (validator.isScopeAnnotationType(annotationType)) {
                 return normalizeSingletonToApplicationScoped(annotationType);
             }
         }
@@ -85,9 +82,9 @@ public class BeanAttributesExtractor {
         }
 
         Class<? extends Annotation> inheritedScope = null;
-        for (Annotation annotation : ops.annotationsOf(clazz)) {
+        for (Annotation annotation : validator.annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (!ops.isStereotypeAnnotationType(annotationType)) {
+            if (!validator.isStereotypeAnnotationType(annotationType)) {
                 continue;
             }
             Class<? extends Annotation> stereotypeScope = extractScopeFromStereotype(annotationType);
@@ -115,30 +112,13 @@ public class BeanAttributesExtractor {
 
     public Set<Class<? extends Annotation>> extractBeanStereotypes(Class<?> clazz) {
         Set<Class<? extends Annotation>> stereotypes = new HashSet<>();
-        for (Annotation annotation : ops.annotationsOf(clazz)) {
+        for (Annotation annotation : validator.annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (ops.isStereotypeAnnotationType(annotationType)) {
+            if (validator.isStereotypeAnnotationType(annotationType)) {
                 stereotypes.add(annotationType);
             }
         }
         return stereotypes;
-    }
-
-    private String defaultedBeanName(String rawName, Class<?> beanClass) {
-        if (rawName != null && !rawName.trim().isEmpty()) {
-            return rawName.trim();
-        }
-        return decapitalize(beanClass.getSimpleName());
-    }
-
-    private String readNamedValue(Annotation namedAnnotation) {
-        try {
-            Method value = namedAnnotation.annotationType().getMethod("value");
-            Object raw = value.invoke(namedAnnotation);
-            return raw == null ? "" : raw.toString();
-        } catch (ReflectiveOperationException ignored) {
-            return "";
-        }
     }
 
     private String extractNameFromStereotype(Class<? extends Annotation> stereotypeAnnotation,
@@ -169,7 +149,7 @@ public class BeanAttributesExtractor {
 
         for (Annotation meta : stereotypeAnnotation.getAnnotations()) {
             Class<? extends Annotation> metaType = meta.annotationType();
-            if (ops.isStereotypeAnnotationType(metaType)) {
+            if (validator.isStereotypeAnnotationType(metaType)) {
                 String nested = extractNameFromStereotype(metaType, beanClass, visited);
                 if (nested != null) {
                     return nested;
@@ -195,18 +175,11 @@ public class BeanAttributesExtractor {
     private Class<? extends Annotation> firstDeclaredScope(Class<?> clazz) {
         for (Annotation annotation : clazz.getDeclaredAnnotations()) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (ops.isScopeAnnotationType(annotationType)) {
+            if (validator.isScopeAnnotationType(annotationType)) {
                 return normalizeSingletonToApplicationScoped(annotationType);
             }
         }
         return null;
-    }
-
-    private String decapitalize(String value) {
-        if (value == null || value.isEmpty()) {
-            return value;
-        }
-        return Character.toLowerCase(value.charAt(0)) + value.substring(1);
     }
 
     public Class<? extends Annotation> extractScopeFromStereotype(Class<? extends Annotation> stereotypeClass) {
@@ -218,7 +191,7 @@ public class BeanAttributesExtractor {
                         continue;
                     }
                     Class<? extends Annotation> annotationType = annotation.annotationType();
-                    if (ops.isScopeAnnotationType(annotationType)) {
+                    if (validator.isScopeAnnotationType(annotationType)) {
                         return normalizeSingletonToApplicationScoped(annotationType);
                     }
                 }
@@ -227,14 +200,14 @@ public class BeanAttributesExtractor {
 
         for (Annotation annotation : stereotypeClass.getAnnotations()) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (ops.isScopeAnnotationType(annotationType)) {
+            if (validator.isScopeAnnotationType(annotationType)) {
                 return normalizeSingletonToApplicationScoped(annotationType);
             }
         }
 
         for (Annotation annotation : stereotypeClass.getAnnotations()) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (ops.isStereotypeAnnotationType(annotationType)) {
+            if (validator.isStereotypeAnnotationType(annotationType)) {
                 Class<? extends Annotation> nestedScope = extractScopeFromStereotype(annotationType);
                 if (nestedScope != null) {
                     return nestedScope;
@@ -246,7 +219,7 @@ public class BeanAttributesExtractor {
     }
 
     private Set<Annotation> extractQualifiersFromStereotype(Class<? extends Annotation> stereotypeClass) {
-        Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(stereotypeClass.getAnnotations())
+        Set<Annotation> qualifiers = extractQualifierAnnotations(stereotypeClass.getAnnotations())
                 .stream()
                 .filter(annotation -> !hasNamedAnnotation(annotation.annotationType()))
                 .collect(Collectors.toSet());
@@ -259,7 +232,7 @@ public class BeanAttributesExtractor {
                         continue;
                     }
                     Class<? extends Annotation> annotationType = annotation.annotationType();
-                    if (ops.isQualifierAnnotationType(annotationType) && !hasNamedAnnotation(annotationType)) {
+                    if (validator.isQualifierAnnotationType(annotationType) && !hasNamedAnnotation(annotationType)) {
                         qualifiers.add(annotation);
                     }
                 }
@@ -268,7 +241,7 @@ public class BeanAttributesExtractor {
 
         for (Annotation annotation : stereotypeClass.getAnnotations()) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
-            if (ops.isStereotypeAnnotationType(annotationType)) {
+            if (validator.isStereotypeAnnotationType(annotationType)) {
                 qualifiers.addAll(extractQualifiersFromStereotype(annotationType));
             }
         }

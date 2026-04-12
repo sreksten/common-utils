@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.cditcktests.full.extensions.interceptors.custom;
 
-import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
+import com.threeamigos.common.util.implementations.injection.types.TypeClosureHelper;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.InjectionPoint;

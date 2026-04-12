@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.discovery.validation.bean;
 
+import com.threeamigos.common.util.implementations.injection.discovery.validation.CDI41BeanValidator;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.NonPortableBehaviourException;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
@@ -36,72 +37,17 @@ import static com.threeamigos.common.util.implementations.injection.annotations.
  * Extracted constructor/injection metadata validation rules.
  */
 public class InjectionMetadataValidator {
-
-    public interface Ops {
-        boolean hasInjectAnnotation(AnnotatedElement element);
-
-        boolean hasProducesAnnotation(AnnotatedElement element);
-
-        boolean hasDisposesAnnotation(AnnotatedElement element);
-
-        boolean hasObservesAnnotation(AnnotatedElement element);
-
-        boolean hasObservesAsyncAnnotation(AnnotatedElement element);
-
-        boolean hasDecoratorAnnotation(Class<?> clazz);
-
-        boolean hasDelegateAnnotation(AnnotatedElement element);
-
-        boolean hasAnyParameterWithDisposesAnnotation(Method method);
-
-        Type baseTypeOf(Field field);
-
-        Type baseTypeOf(Method method);
-
-        Type baseTypeOf(Parameter parameter);
-
-        Annotation[] annotationsOf(AnnotatedElement element);
-
-        void checkInjectionTypeValidity(Type type);
-
-        void checkInjectionTypeValidity(Type type, boolean allowTypeVariableArguments, Class<?> declaringBeanClass);
-
-        void validateQualifiers(Annotation[] annotations, String location);
-
-        boolean allowsBeanClassTypeVariableArguments(Type injectionType, Class<?> declaringBeanClass);
-
-        boolean hasDefaultQualifier(Annotation[] annotations);
-
-        boolean hasQualifier(Annotation[] annotations, AnnotationsEnum qualifierType);
-
-        boolean declaresNonDependentScope(Class<?> clazz);
-
-        boolean isInterceptorClass(Class<?> clazz);
-
-        Type findDecoratorDelegateType(Class<?> decoratorClass);
-
-        String fmtField(Field field);
-
-        String fmtMethod(Method method);
-
-        String fmtConstructor(Constructor<?> constructor);
-
-        String fmtParameter(Parameter parameter);
-
-        String safeParamName(Parameter parameter);
-    }
-
     private final KnowledgeBase knowledgeBase;
-    private final Ops ops;
+    private final CDI41BeanValidator validator;
 
-    public InjectionMetadataValidator(KnowledgeBase knowledgeBase, Ops ops) {
+    public InjectionMetadataValidator(KnowledgeBase knowledgeBase, CDI41BeanValidator validator) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
-        this.ops = Objects.requireNonNull(ops, "ops cannot be null");
+        this.validator = Objects.requireNonNull(validator, "validator cannot be null");
     }
 
     public Constructor<?> findBeanConstructor(Class<?> clazz) {
         List<Constructor<?>> constructors = Arrays.stream(clazz.getDeclaredConstructors())
-                .filter(ops::hasInjectAnnotation)
+                .filter(validator::hasInjectAnnotation)
                 .collect(Collectors.toList());
 
         if (constructors.size() > 1) {
@@ -143,22 +89,22 @@ public class InjectionMetadataValidator {
     public boolean validateIllegalConstructorParameterAnnotations(Class<?> clazz) {
         boolean valid = true;
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
-            if (ops.hasInjectAnnotation(constructor)) {
+            if (validator.hasInjectAnnotation(constructor)) {
                 continue;
             }
             for (Parameter parameter : constructor.getParameters()) {
-                if (ops.hasDisposesAnnotation(parameter)) {
-                    knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+                if (validator.hasDisposesAnnotation(parameter)) {
+                    knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                             ": bean constructor parameter may not be annotated @Disposes");
                     valid = false;
                 }
-                if (ops.hasObservesAnnotation(parameter)) {
-                    knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+                if (validator.hasObservesAnnotation(parameter)) {
+                    knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                             ": bean constructor parameter may not be annotated @Observes");
                     valid = false;
                 }
-                if (ops.hasObservesAsyncAnnotation(parameter)) {
-                    knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+                if (validator.hasObservesAsyncAnnotation(parameter)) {
+                    knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                             ": bean constructor parameter may not be annotated @ObservesAsync");
                     valid = false;
                 }
@@ -171,33 +117,33 @@ public class InjectionMetadataValidator {
         boolean valid = true;
 
         if (Modifier.isFinal(field.getModifiers())) {
-            knowledgeBase.addDefinitionError(ops.fmtField(field) + ": final fields are not valid injection points");
+            knowledgeBase.addDefinitionError(validator.fmtField(field) + ": final fields are not valid injection points");
             valid = false;
         }
 
         if (Modifier.isStatic(field.getModifiers())) {
-            knowledgeBase.addDefinitionError(ops.fmtField(field) + ": static field injection is not a valid CDI injection point");
+            knowledgeBase.addDefinitionError(validator.fmtField(field) + ": static field injection is not a valid CDI injection point");
             valid = false;
         }
 
-        Type fieldBaseType = ops.baseTypeOf(field);
+        Type fieldBaseType = validator.baseTypeOf(field);
         boolean allowTypeVariableArguments =
-                (ops.hasDecoratorAnnotation(field.getDeclaringClass()) && ops.hasDelegateAnnotation(field))
-                        || ops.allowsBeanClassTypeVariableArguments(fieldBaseType, field.getDeclaringClass());
+                (validator.hasDecoratorAnnotation(field.getDeclaringClass()) && validator.hasDelegateAnnotation(field))
+                        || validator.allowsBeanClassTypeVariableArguments(fieldBaseType, field.getDeclaringClass());
         try {
-            ops.checkInjectionTypeValidity(fieldBaseType, allowTypeVariableArguments, field.getDeclaringClass());
+            validator.checkInjectionTypeValidity(fieldBaseType, allowTypeVariableArguments, field.getDeclaringClass());
         } catch (IllegalArgumentException e) {
-            knowledgeBase.addInjectionError(ops.fmtField(field) + ": " + e.getMessage());
+            knowledgeBase.addInjectionError(validator.fmtField(field) + ": " + e.getMessage());
             valid = false;
         } catch (DefinitionException e) {
-            knowledgeBase.addDefinitionError(ops.fmtField(field) + ": " + e.getMessage());
+            knowledgeBase.addDefinitionError(validator.fmtField(field) + ": " + e.getMessage());
             valid = false;
         }
 
         try {
-            ops.validateQualifiers(ops.annotationsOf(field), ops.fmtField(field));
+            validator.validateQualifiers(validator.annotationsOf(field), validator.fmtField(field));
         } catch (DefinitionException e) {
-            knowledgeBase.addDefinitionError(ops.fmtField(field) + ": " + e.getMessage());
+            knowledgeBase.addDefinitionError(validator.fmtField(field) + ": " + e.getMessage());
             valid = false;
         }
 
@@ -219,43 +165,43 @@ public class InjectionMetadataValidator {
         boolean valid = true;
 
         if (Modifier.isAbstract(method.getModifiers())) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": cannot inject into an abstract initializer method");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": cannot inject into an abstract initializer method");
             valid = false;
         }
 
         if (Modifier.isStatic(method.getModifiers())) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": static initializer methods are not valid CDI injection points");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": static initializer methods are not valid CDI injection points");
             valid = false;
         }
 
         if (method.getTypeParameters().length > 0) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": generic methods are not valid CDI initializer methods");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": generic methods are not valid CDI initializer methods");
             valid = false;
         }
 
-        if (ops.hasProducesAnnotation(method)) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": initializer method may not be annotated @Produces");
+        if (validator.hasProducesAnnotation(method)) {
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": initializer method may not be annotated @Produces");
             valid = false;
         }
-        if (ops.hasAnyParameterWithDisposesAnnotation(method)) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": initializer method may not declare a @Disposes parameter");
+        if (validator.hasAnyParameterWithDisposesAnnotation(method)) {
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": initializer method may not declare a @Disposes parameter");
             valid = false;
         }
         for (Parameter parameter : method.getParameters()) {
-            if (ops.hasObservesAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasObservesAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": initializer method parameter may not be annotated @Observes");
                 valid = false;
                 continue;
             }
-            if (ops.hasObservesAsyncAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasObservesAsyncAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": initializer method parameter may not be annotated @ObservesAsync");
                 valid = false;
             }
         }
 
-        if (hasNotValidInjectionParameters(method.getParameters(), ops.fmtMethod(method))) {
+        if (hasNotValidInjectionParameters(method.getParameters(), validator.fmtMethod(method))) {
             valid = false;
         }
 
@@ -265,31 +211,31 @@ public class InjectionMetadataValidator {
     public boolean hasNotValidInjectionParameters(Parameter[] parameters, String owner) {
         boolean valid = true;
         for (Parameter parameter : parameters) {
-            if (ops.hasDisposesAnnotation(parameter)) {
+            if (validator.hasDisposesAnnotation(parameter)) {
                 continue;
             }
 
             try {
-                Type parameterBaseType = ops.baseTypeOf(parameter);
+                Type parameterBaseType = validator.baseTypeOf(parameter);
                 boolean allowTypeVariableArguments =
-                        (ops.hasDecoratorAnnotation(parameter.getDeclaringExecutable().getDeclaringClass()) &&
-                                ops.hasDelegateAnnotation(parameter))
-                                || ops.allowsBeanClassTypeVariableArguments(parameterBaseType,
+                        (validator.hasDecoratorAnnotation(parameter.getDeclaringExecutable().getDeclaringClass()) &&
+                                validator.hasDelegateAnnotation(parameter))
+                                || validator.allowsBeanClassTypeVariableArguments(parameterBaseType,
                                 parameter.getDeclaringExecutable().getDeclaringClass());
-                ops.checkInjectionTypeValidity(parameterBaseType, allowTypeVariableArguments,
+                validator.checkInjectionTypeValidity(parameterBaseType, allowTypeVariableArguments,
                         parameter.getDeclaringExecutable().getDeclaringClass());
             } catch (IllegalArgumentException e) {
-                knowledgeBase.addInjectionError(ops.fmtParameter(parameter) + ": " + e.getMessage());
+                knowledgeBase.addInjectionError(validator.fmtParameter(parameter) + ": " + e.getMessage());
                 valid = false;
             } catch (DefinitionException e) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) + ": " + e.getMessage());
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) + ": " + e.getMessage());
                 valid = false;
             }
 
             try {
-                ops.validateQualifiers(ops.annotationsOf(parameter), owner + " parameter " + ops.safeParamName(parameter));
+                validator.validateQualifiers(validator.annotationsOf(parameter), owner + " parameter " + validator.safeParamName(parameter));
             } catch (DefinitionException e) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) + ": " + e.getMessage());
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) + ": " + e.getMessage());
                 valid = false;
             }
 
@@ -314,19 +260,19 @@ public class InjectionMetadataValidator {
 
         if (element instanceof Field) {
             Field field = (Field) element;
-            type = ops.baseTypeOf(field);
-            annotations = ops.annotationsOf(field);
+            type = validator.baseTypeOf(field);
+            annotations = validator.annotationsOf(field);
         } else if (element instanceof Parameter) {
             Parameter parameter = (Parameter) element;
-            type = ops.baseTypeOf(parameter);
-            annotations = ops.annotationsOf(parameter);
+            type = validator.baseTypeOf(parameter);
+            annotations = validator.annotationsOf(parameter);
         }
 
         if (!isInterceptionFactoryType(type)) {
             return false;
         }
 
-        if (!ops.hasDefaultQualifier(annotations)) {
+        if (!validator.hasDefaultQualifier(annotations)) {
             return false;
         }
 
@@ -349,14 +295,14 @@ public class InjectionMetadataValidator {
     public boolean isNotValidInjectionPointMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter) {
         boolean valid = true;
 
-        if (isInjectionPointMetadataType(injectionPoint) && ops.hasDefaultQualifier(ops.annotationsOf(injectionPoint))) {
+        if (isInjectionPointMetadataType(injectionPoint) && validator.hasDefaultQualifier(validator.annotationsOf(injectionPoint))) {
             if (disposerParameter) {
                 knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
                         ": disposer method injection point of type InjectionPoint with qualifier @Default is not allowed");
                 valid = false;
             } else {
                 Class<?> declaringClass = declaringClassOf(injectionPoint);
-                if (declaringClass != null && ops.declaresNonDependentScope(declaringClass)) {
+                if (declaringClass != null && validator.declaresNonDependentScope(declaringClass)) {
                     knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
                             ": bean declares scope other than @Dependent and may not inject InjectionPoint with qualifier @Default");
                     valid = false;
@@ -376,7 +322,7 @@ public class InjectionMetadataValidator {
     }
 
     public boolean isNotValidNamedInjectionPointUsage(AnnotatedElement injectionPoint) {
-        Annotation named = findNamedQualifier(ops.annotationsOf(injectionPoint));
+        Annotation named = findNamedQualifier(validator.annotationsOf(injectionPoint));
         if (named == null) {
             return false;
         }
@@ -398,20 +344,20 @@ public class InjectionMetadataValidator {
     private boolean validateBeanConstructorParameters(Constructor<?> constructor) {
         boolean valid = true;
         for (Parameter parameter : constructor.getParameters()) {
-            if (ops.hasDisposesAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasDisposesAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": bean constructor parameter may not be annotated @Disposes");
                 valid = false;
                 continue;
             }
-            if (ops.hasObservesAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasObservesAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": bean constructor parameter may not be annotated @Observes");
                 valid = false;
                 continue;
             }
-            if (ops.hasObservesAsyncAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasObservesAsyncAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": bean constructor parameter may not be annotated @ObservesAsync");
                 valid = false;
                 continue;
@@ -424,7 +370,7 @@ public class InjectionMetadataValidator {
             }
         }
 
-        if (hasNotValidInjectionParameters(constructor.getParameters(), ops.fmtConstructor(constructor))) {
+        if (hasNotValidInjectionParameters(constructor.getParameters(), validator.fmtConstructor(constructor))) {
             valid = false;
         }
 
@@ -485,9 +431,9 @@ public class InjectionMetadataValidator {
         }
 
         Class<?> declaringClass = declaringClassOf(injectionPoint);
-        boolean interceptorDeclaringClass = declaringClass != null && ops.isInterceptorClass(declaringClass);
-        boolean interceptedQualified = ops.hasQualifier(ops.annotationsOf(injectionPoint), INTERCEPTED);
-        boolean defaultQualified = ops.hasDefaultQualifier(ops.annotationsOf(injectionPoint));
+        boolean interceptorDeclaringClass = declaringClass != null && validator.isInterceptorClass(declaringClass);
+        boolean interceptedQualified = validator.hasQualifier(validator.annotationsOf(injectionPoint), INTERCEPTED);
+        boolean defaultQualified = validator.hasDefaultQualifier(validator.annotationsOf(injectionPoint));
         Type metadataArgument = getSingleTypeArgument(injectionPoint);
 
         if (interceptorMetadata && !interceptorDeclaringClass) {
@@ -536,7 +482,7 @@ public class InjectionMetadataValidator {
 
             if (isProducerMethodParameter(injectionPoint)) {
                 Method producerMethod = (Method) ((Parameter) injectionPoint).getDeclaringExecutable();
-                Type expectedType = ops.baseTypeOf(producerMethod);
+                Type expectedType = validator.baseTypeOf(producerMethod);
                 if (isNotSameType(metadataArgument, expectedType)) {
                     knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
                             ": producer method parameter Bean metadata type must match producer return type " +
@@ -567,7 +513,7 @@ public class InjectionMetadataValidator {
 
     private boolean isDecoratedBeanMetadataType(AnnotatedElement injectionPoint) {
         return isBeanMetadataType(injectionPoint)
-                && ops.hasQualifier(ops.annotationsOf(injectionPoint), DECORATED);
+                && validator.hasQualifier(validator.annotationsOf(injectionPoint), DECORATED);
     }
 
     private Type metadataRawType(AnnotatedElement injectionPoint) {
@@ -580,10 +526,10 @@ public class InjectionMetadataValidator {
 
     private Type metadataGenericType(AnnotatedElement injectionPoint) {
         if (injectionPoint instanceof Field) {
-            return ops.baseTypeOf((Field) injectionPoint);
+            return validator.baseTypeOf((Field) injectionPoint);
         }
         if (injectionPoint instanceof Parameter) {
-            return ops.baseTypeOf((Parameter) injectionPoint);
+            return validator.baseTypeOf((Parameter) injectionPoint);
         }
         return null;
     }
@@ -623,7 +569,7 @@ public class InjectionMetadataValidator {
             return false;
         }
         Method method = (Method) executable;
-        return ops.hasInjectAnnotation(method) && !ops.hasProducesAnnotation(method);
+        return validator.hasInjectAnnotation(method) && !validator.hasProducesAnnotation(method);
     }
 
     private boolean isProducerMethodParameter(AnnotatedElement injectionPoint) {
@@ -631,7 +577,7 @@ public class InjectionMetadataValidator {
             return false;
         }
         Executable executable = ((Parameter) injectionPoint).getDeclaringExecutable();
-        return executable instanceof Method && ops.hasProducesAnnotation(executable);
+        return executable instanceof Method && validator.hasProducesAnnotation(executable);
     }
 
     private boolean validateDecoratorMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter) {
@@ -642,7 +588,7 @@ public class InjectionMetadataValidator {
         }
 
         Class<?> declaringClass = declaringClassOf(injectionPoint);
-        if (!ops.hasDecoratorAnnotation(declaringClass)) {
+        if (!validator.hasDecoratorAnnotation(declaringClass)) {
             knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
                     ": Decorator metadata and @Decorated Bean metadata may only be injected into decorator instances");
             return false;
@@ -650,7 +596,7 @@ public class InjectionMetadataValidator {
 
         Type metadataArgument = getSingleTypeArgument(injectionPoint);
 
-        if (isDecoratorMetadataType(injectionPoint) && ops.hasDefaultQualifier(ops.annotationsOf(injectionPoint))) {
+        if (isDecoratorMetadataType(injectionPoint) && validator.hasDefaultQualifier(validator.annotationsOf(injectionPoint))) {
             if (isNotSameType(metadataArgument, declaringClass)) {
                 knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
                         ": Decorator metadata with qualifier @Default must declare type parameter " +
@@ -660,7 +606,7 @@ public class InjectionMetadataValidator {
         }
 
         if (isDecoratedBeanMetadataType(injectionPoint)) {
-            Type delegateType = ops.findDecoratorDelegateType(declaringClass);
+            Type delegateType = validator.findDecoratorDelegateType(declaringClass);
             if (delegateType == null || isNotSameType(metadataArgument, delegateType)) {
                 String expected = delegateType == null ? "<unknown>" : delegateType.getTypeName();
                 knowledgeBase.addDefinitionError(describeInjectionPoint(injectionPoint) +
@@ -690,16 +636,16 @@ public class InjectionMetadataValidator {
 
     private String describeInjectionPoint(AnnotatedElement injectionPoint) {
         if (injectionPoint instanceof Parameter) {
-            return ops.fmtParameter((Parameter) injectionPoint);
+            return validator.fmtParameter((Parameter) injectionPoint);
         }
         if (injectionPoint instanceof Field) {
-            return ops.fmtField((Field) injectionPoint);
+            return validator.fmtField((Field) injectionPoint);
         }
         if (injectionPoint instanceof Method) {
-            return ops.fmtMethod((Method) injectionPoint);
+            return validator.fmtMethod((Method) injectionPoint);
         }
         if (injectionPoint instanceof Constructor) {
-            return ops.fmtConstructor((Constructor<?>) injectionPoint);
+            return validator.fmtConstructor((Constructor<?>) injectionPoint);
         }
         return injectionPoint.toString();
     }

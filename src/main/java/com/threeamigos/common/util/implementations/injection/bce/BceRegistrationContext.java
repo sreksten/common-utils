@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.bce;
 
+import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.lang.model.declarations.MethodInfo;
@@ -12,6 +13,8 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+
+import static com.threeamigos.common.util.implementations.injection.types.ClassHelper.packageName;
 
 /**
  * Registration-phase view over container-discovered bean and method metadata.
@@ -32,7 +35,7 @@ public class BceRegistrationContext {
                 continue;
             }
             // Ignore container internals and synthetic runtime placeholders.
-            if (beanClass.getName().startsWith("com.threeamigos.common.util.implementations.injection")) {
+            if (beanClass.getName().startsWith(packageName(Syringe.class))) {
                 continue;
             }
             result.add(BceMetadata.beanInfo(beanClass));

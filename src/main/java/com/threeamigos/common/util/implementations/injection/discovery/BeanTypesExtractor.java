@@ -1,6 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
+import com.threeamigos.common.util.implementations.injection.util.SimpleParameterizedType;
+import com.threeamigos.common.util.implementations.injection.types.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.types.RawTypeExtractor;
 
 import java.lang.annotation.Annotation;
@@ -173,8 +174,7 @@ public final class BeanTypesExtractor {
     }
 
     private boolean isTypeClosureSyntheticParameterizedType(Type type) {
-        return type != null && "com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper$SimpleParameterizedType"
-                .equals(type.getClass().getName());
+        return type != null && SimpleParameterizedType.class.getName().equals(type.getClass().getName());
     }
 
     private boolean hasArrayTypeArgument(ParameterizedType parameterizedType) {

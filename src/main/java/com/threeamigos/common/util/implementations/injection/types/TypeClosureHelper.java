@@ -1,14 +1,14 @@
-package com.threeamigos.common.util.implementations.injection.util;
+package com.threeamigos.common.util.implementations.injection.types;
 
-import com.threeamigos.common.util.implementations.injection.types.RawTypeExtractor;
-import jakarta.annotation.Nonnull;
+import com.threeamigos.common.util.implementations.injection.util.SimpleGenericArrayType;
+import com.threeamigos.common.util.implementations.injection.util.SimpleParameterizedType;
+import com.threeamigos.common.util.implementations.injection.util.SimpleWildcardType;
 
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -186,110 +186,4 @@ public final class TypeClosureHelper {
         return type;
     }
 
-    private static final class SimpleParameterizedType implements ParameterizedType {
-        private final Class<?> rawType;
-        private final Type[] actualTypeArguments;
-        private final Type ownerType;
-
-        private SimpleParameterizedType(Class<?> rawType, Type[] actualTypeArguments, Type ownerType) {
-            this.rawType = rawType;
-            this.actualTypeArguments = actualTypeArguments.clone();
-            this.ownerType = ownerType;
-        }
-
-        @Override
-        public @Nonnull Type[] getActualTypeArguments() {
-            return actualTypeArguments.clone();
-        }
-
-        @Override
-        public @Nonnull Type getRawType() {
-            return rawType;
-        }
-
-        @Override
-        public Type getOwnerType() {
-            return ownerType;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (!(o instanceof ParameterizedType)) {
-                return false;
-            }
-            ParameterizedType that = (ParameterizedType) o;
-            return Objects.equals(rawType, that.getRawType())
-                    && Objects.equals(ownerType, that.getOwnerType())
-                    && Arrays.equals(actualTypeArguments, that.getActualTypeArguments());
-        }
-
-        @Override
-        public int hashCode() {
-            return Arrays.hashCode(actualTypeArguments)
-                    ^ Objects.hashCode(ownerType)
-                    ^ Objects.hashCode(rawType);
-        }
-    }
-
-    private static final class SimpleGenericArrayType implements GenericArrayType {
-        private final Type componentType;
-
-        private SimpleGenericArrayType(Type componentType) {
-            this.componentType = componentType;
-        }
-
-        @Override
-        public @Nonnull Type getGenericComponentType() {
-            return componentType;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (!(o instanceof GenericArrayType)) {
-                return false;
-            }
-            GenericArrayType that = (GenericArrayType) o;
-            return Objects.equals(componentType, that.getGenericComponentType());
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hashCode(componentType);
-        }
-    }
-
-    private static final class SimpleWildcardType implements WildcardType {
-        private final Type[] upperBounds;
-        private final Type[] lowerBounds;
-
-        private SimpleWildcardType(Type[] upperBounds, Type[] lowerBounds) {
-            this.upperBounds = upperBounds.clone();
-            this.lowerBounds = lowerBounds.clone();
-        }
-
-        @Override
-        public @Nonnull Type[] getUpperBounds() {
-            return upperBounds.clone();
-        }
-
-        @Override
-        public @Nonnull Type[] getLowerBounds() {
-            return lowerBounds.clone();
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (!(o instanceof WildcardType)) {
-                return false;
-            }
-            WildcardType that = (WildcardType) o;
-            return Arrays.equals(upperBounds, that.getUpperBounds())
-                    && Arrays.equals(lowerBounds, that.getLowerBounds());
-        }
-
-        @Override
-        public int hashCode() {
-            return Arrays.hashCode(upperBounds) ^ Arrays.hashCode(lowerBounds);
-        }
-    }
 }

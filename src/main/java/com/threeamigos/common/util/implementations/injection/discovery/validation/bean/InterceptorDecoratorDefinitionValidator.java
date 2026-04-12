@@ -1,11 +1,12 @@
 package com.threeamigos.common.util.implementations.injection.discovery.validation.bean;
 
+import com.threeamigos.common.util.implementations.injection.discovery.validation.CDI41BeanValidator;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationComparator;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.DecoratorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.InterceptorInfo;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.types.RawTypeExtractor;
-import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
+import com.threeamigos.common.util.implementations.injection.types.TypeClosureHelper;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 
@@ -36,47 +37,12 @@ import static com.threeamigos.common.util.implementations.injection.annotations.
  * Extracted interceptor/decorator definition validation and registration rules.
  */
 public class InterceptorDecoratorDefinitionValidator {
-
-    public interface Ops {
-        Annotation[] annotationsOf(Class<?> clazz);
-
-        Annotation[] annotationsOf(AnnotatedElement element);
-
-        Integer getPriorityValue(Class<?> clazz);
-
-        boolean hasObservesAnnotation(AnnotatedElement element);
-
-        boolean hasObservesAsyncAnnotation(AnnotatedElement element);
-
-        boolean hasAroundInvokeAnnotation(AnnotatedElement element);
-
-        boolean hasAroundConstructAnnotation(AnnotatedElement element);
-
-        boolean hasPostConstructAnnotation(AnnotatedElement element);
-
-        boolean hasPreDestroyAnnotation(AnnotatedElement element);
-
-        boolean hasInjectAnnotation(AnnotatedElement element);
-
-        boolean hasDelegateAnnotation(AnnotatedElement element);
-
-        boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType);
-
-        String fmtField(Field field);
-
-        String fmtMethod(Method method);
-
-        String fmtConstructor(Constructor<?> constructor);
-
-        InjectionPoint tryCreateInjectionPoint(AnnotatedElement element);
-    }
-
     private final KnowledgeBase knowledgeBase;
-    private final Ops ops;
+    private final CDI41BeanValidator validator;
 
-    public InterceptorDecoratorDefinitionValidator(KnowledgeBase knowledgeBase, Ops ops) {
+    public InterceptorDecoratorDefinitionValidator(KnowledgeBase knowledgeBase, CDI41BeanValidator validator) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
-        this.ops = Objects.requireNonNull(ops, "ops cannot be null");
+        this.validator = Objects.requireNonNull(validator, "validator cannot be null");
     }
 
     public void validateAndRegisterInterceptor(Class<?> clazz) {
@@ -90,7 +56,7 @@ public class InterceptorDecoratorDefinitionValidator {
         }
 
         int priority = Integer.MAX_VALUE;
-        Integer declaredPriority = ops.getPriorityValue(clazz);
+        Integer declaredPriority = validator.getPriorityValue(clazz);
         if (declaredPriority != null) {
             priority = declaredPriority;
         }
@@ -111,28 +77,28 @@ public class InterceptorDecoratorDefinitionValidator {
 
         if (aroundInvokeMethod != null && !isValidAroundInvoke(aroundInvokeMethod)) {
             if (interceptorEnabled) {
-                knowledgeBase.addDefinitionError(ops.fmtMethod(aroundInvokeMethod) +
+                knowledgeBase.addDefinitionError(validator.fmtMethod(aroundInvokeMethod) +
                         ": @AroundInvoke must be non-static, return Object, and accept a single InvocationContext parameter");
             }
             valid = false;
         }
         if (aroundConstructMethod != null && !isValidAroundConstruct(aroundConstructMethod)) {
             if (interceptorEnabled) {
-                knowledgeBase.addDefinitionError(ops.fmtMethod(aroundConstructMethod) +
+                knowledgeBase.addDefinitionError(validator.fmtMethod(aroundConstructMethod) +
                         ": @AroundConstruct must be non-static, return Object, and accept a single InvocationContext parameter");
             }
             valid = false;
         }
         if (postConstructMethod != null && isNotValidInterceptorLifecycleMethod(postConstructMethod)) {
             if (interceptorEnabled) {
-                knowledgeBase.addDefinitionError(ops.fmtMethod(postConstructMethod) +
+                knowledgeBase.addDefinitionError(validator.fmtMethod(postConstructMethod) +
                         ": @PostConstruct interceptor method must be non-static, void/Object, and take a single InvocationContext parameter");
             }
             valid = false;
         }
         if (preDestroyMethod != null && isNotValidInterceptorLifecycleMethod(preDestroyMethod)) {
             if (interceptorEnabled) {
-                knowledgeBase.addDefinitionError(ops.fmtMethod(preDestroyMethod) +
+                knowledgeBase.addDefinitionError(validator.fmtMethod(preDestroyMethod) +
                         ": @PreDestroy interceptor method must be non-static, void/Object, and take a single InvocationContext parameter");
             }
             valid = false;
@@ -159,14 +125,14 @@ public class InterceptorDecoratorDefinitionValidator {
     public void validateConflictingInterceptorBindings(Class<?> clazz) {
         Map<Class<? extends Annotation>, Annotation> collectedBindings = new LinkedHashMap<>();
         Set<Class<? extends Annotation>> directBindingTypes = new HashSet<>();
-        for (Annotation annotation : ops.annotationsOf(clazz)) {
+        for (Annotation annotation : validator.annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
             if (isInterceptorBinding(annotationType)) {
                 directBindingTypes.add(annotationType);
                 collectInterceptorBinding(annotation, collectedBindings, new HashSet<>(), clazz.getName(), directBindingTypes);
             }
         }
-        for (Annotation annotation : ops.annotationsOf(clazz)) {
+        for (Annotation annotation : validator.annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
             if (isStereotypeAnnotationType(annotationType)) {
                 collectStereotypeInterceptorBindings(annotationType, collectedBindings, new HashSet<>(), clazz.getName(), directBindingTypes);
@@ -178,10 +144,10 @@ public class InterceptorDecoratorDefinitionValidator {
         int delegateCount = 0;
 
         for (Field field : clazz.getDeclaredFields()) {
-            if (ops.hasDelegateAnnotation(field)) {
-                if (!ops.hasInjectAnnotation(field)) {
+            if (validator.hasDelegateAnnotation(field)) {
+                if (!validator.hasInjectAnnotation(field)) {
                     knowledgeBase.addDefinitionError(clazz.getName() +
-                            ": @Delegate field " + ops.fmtField(field) + " must be an injected field (@Inject)");
+                            ": @Delegate field " + validator.fmtField(field) + " must be an injected field (@Inject)");
                 } else {
                     delegateCount++;
                 }
@@ -190,10 +156,10 @@ public class InterceptorDecoratorDefinitionValidator {
 
         for (Method method : clazz.getDeclaredMethods()) {
             for (Parameter param : method.getParameters()) {
-                if (ops.hasDelegateAnnotation(param)) {
-                    if (!ops.hasInjectAnnotation(method)) {
+                if (validator.hasDelegateAnnotation(param)) {
+                    if (!validator.hasInjectAnnotation(method)) {
                         knowledgeBase.addDefinitionError(clazz.getName() +
-                                ": @Delegate parameter in method " + ops.fmtMethod(method) +
+                                ": @Delegate parameter in method " + validator.fmtMethod(method) +
                                 " must be declared on an initializer method annotated @Inject");
                     } else {
                         delegateCount++;
@@ -204,10 +170,10 @@ public class InterceptorDecoratorDefinitionValidator {
 
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
             for (Parameter param : constructor.getParameters()) {
-                if (ops.hasDelegateAnnotation(param)) {
-                    if (!ops.hasInjectAnnotation(constructor)) {
+                if (validator.hasDelegateAnnotation(param)) {
+                    if (!validator.hasInjectAnnotation(constructor)) {
                         knowledgeBase.addDefinitionError(clazz.getName() +
-                                ": @Delegate parameter in constructor " + ops.fmtConstructor(constructor) +
+                                ": @Delegate parameter in constructor " + validator.fmtConstructor(constructor) +
                                 " must be declared on the bean constructor (@Inject)");
                     } else {
                         delegateCount++;
@@ -233,10 +199,10 @@ public class InterceptorDecoratorDefinitionValidator {
     public void validateDecoratorDoesNotDeclareObserverMethods(Class<?> clazz) {
         for (Method method : clazz.getDeclaredMethods()) {
             for (Parameter parameter : method.getParameters()) {
-                if (ops.hasObservesAnnotation(parameter) || ops.hasObservesAsyncAnnotation(parameter)) {
+                if (validator.hasObservesAnnotation(parameter) || validator.hasObservesAsyncAnnotation(parameter)) {
                     knowledgeBase.addDefinitionError(clazz.getName() +
                             ": decorators may not declare observer methods. Found observer parameter in " +
-                            ops.fmtMethod(method));
+                            validator.fmtMethod(method));
                     return;
                 }
             }
@@ -249,14 +215,14 @@ public class InterceptorDecoratorDefinitionValidator {
         }
 
         for (Field field : clazz.getDeclaredFields()) {
-            if (ops.hasDelegateAnnotation(field)) {
+            if (validator.hasDelegateAnnotation(field)) {
                 return true;
             }
         }
 
         for (Method method : clazz.getDeclaredMethods()) {
             for (Parameter parameter : method.getParameters()) {
-                if (ops.hasDelegateAnnotation(parameter)) {
+                if (validator.hasDelegateAnnotation(parameter)) {
                     return true;
                 }
             }
@@ -264,7 +230,7 @@ public class InterceptorDecoratorDefinitionValidator {
 
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
             for (Parameter parameter : constructor.getParameters()) {
-                if (ops.hasDelegateAnnotation(parameter)) {
+                if (validator.hasDelegateAnnotation(parameter)) {
                     return true;
                 }
             }
@@ -275,7 +241,7 @@ public class InterceptorDecoratorDefinitionValidator {
 
     public void validateAndRegisterDecorator(Class<?> clazz) {
         int priority = Integer.MAX_VALUE;
-        Integer priorityAnnotation = ops.getPriorityValue(clazz);
+        Integer priorityAnnotation = validator.getPriorityValue(clazz);
         if (priorityAnnotation != null) {
             priority = priorityAnnotation;
         }
@@ -307,10 +273,10 @@ public class InterceptorDecoratorDefinitionValidator {
     private boolean declaresObserverMethod(Class<?> clazz) {
         for (Method method : clazz.getDeclaredMethods()) {
             for (Parameter parameter : method.getParameters()) {
-                if (ops.hasObservesAnnotation(parameter) || ops.hasObservesAsyncAnnotation(parameter)) {
+                if (validator.hasObservesAnnotation(parameter) || validator.hasObservesAsyncAnnotation(parameter)) {
                     knowledgeBase.addDefinitionError(clazz.getName()
                             + ": interceptors may not declare observer methods. Found observer parameter in "
-                            + ops.fmtMethod(method));
+                            + validator.fmtMethod(method));
                     return true;
                 }
             }
@@ -328,7 +294,7 @@ public class InterceptorDecoratorDefinitionValidator {
         if (knowledgeBase.getInterceptorBeansXmlOrder(interceptorClass) >= 0) {
             return true;
         }
-        return ops.getPriorityValue(interceptorClass) != null;
+        return validator.getPriorityValue(interceptorClass) != null;
     }
 
     private boolean isValidAroundInvoke(Method m) {
@@ -356,7 +322,7 @@ public class InterceptorDecoratorDefinitionValidator {
 
     private Set<Annotation> extractInterceptorBindings(Class<?> clazz) {
         Set<Annotation> bindings = new HashSet<>();
-        for (Annotation annotation : ops.annotationsOf(clazz)) {
+        for (Annotation annotation : validator.annotationsOf(clazz)) {
             if (isInterceptorBinding(annotation.annotationType())) {
                 bindings.add(annotation);
             }
@@ -370,7 +336,7 @@ public class InterceptorDecoratorDefinitionValidator {
     }
 
     private boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
-        return ops.isStereotypeAnnotationType(annotationType) ||
+        return validator.isStereotypeAnnotationType(annotationType) ||
                 knowledgeBase.isRegisteredStereotype(annotationType);
     }
 
@@ -429,7 +395,7 @@ public class InterceptorDecoratorDefinitionValidator {
 
     private Method findAroundInvokeMethod(Class<?> clazz) {
         for (Method method : getAllMethods(clazz)) {
-            if (ops.hasAroundInvokeAnnotation(method)) {
+            if (validator.hasAroundInvokeAnnotation(method)) {
                 return method;
             }
         }
@@ -438,7 +404,7 @@ public class InterceptorDecoratorDefinitionValidator {
 
     private Method findAroundConstructMethod(Class<?> clazz) {
         for (Method method : getAllMethods(clazz)) {
-            if (ops.hasAroundConstructAnnotation(method)) {
+            if (validator.hasAroundConstructAnnotation(method)) {
                 return method;
             }
         }
@@ -447,7 +413,7 @@ public class InterceptorDecoratorDefinitionValidator {
 
     private Method findPostConstructMethod(Class<?> clazz) {
         for (Method method : getAllMethods(clazz)) {
-            if (ops.hasPostConstructAnnotation(method)) {
+            if (validator.hasPostConstructAnnotation(method)) {
                 return method;
             }
         }
@@ -456,7 +422,7 @@ public class InterceptorDecoratorDefinitionValidator {
 
     private Method findPreDestroyMethod(Class<?> clazz) {
         for (Method method : getAllMethods(clazz)) {
-            if (ops.hasPreDestroyAnnotation(method)) {
+            if (validator.hasPreDestroyAnnotation(method)) {
                 return method;
             }
         }
@@ -501,7 +467,7 @@ public class InterceptorDecoratorDefinitionValidator {
             }
             if (!decoratedMethodSignatures.contains(methodSignature(method))) {
                 knowledgeBase.addDefinitionError(decoratorClass.getName() +
-                        ": abstract method " + ops.fmtMethod(method) +
+                        ": abstract method " + validator.fmtMethod(method) +
                         " is not declared by any decorated type");
             }
         }
@@ -528,12 +494,12 @@ public class InterceptorDecoratorDefinitionValidator {
                     Method impl = decoratorClass.getMethod(m.getName(), m.getParameterTypes());
                     if (Modifier.isAbstract(impl.getModifiers())) {
                         knowledgeBase.addDefinitionError(decoratorClass.getName() +
-                                ": abstract method " + ops.fmtMethod(m) +
+                                ": abstract method " + validator.fmtMethod(m) +
                                 " must be implemented with a concrete method in the decorator.");
                     }
                 } catch (NoSuchMethodException e) {
                     knowledgeBase.addDefinitionError(decoratorClass.getName() +
-                            ": missing implementation for abstract method " + ops.fmtMethod(m) +
+                            ": missing implementation for abstract method " + validator.fmtMethod(m) +
                             " from decorated type " + decoratedClass.getName());
                 }
             }
@@ -542,24 +508,24 @@ public class InterceptorDecoratorDefinitionValidator {
 
     private InjectionPoint findDelegateInjectionPoint(Class<?> clazz) {
         for (Field field : clazz.getDeclaredFields()) {
-            if (ops.hasDelegateAnnotation(field)) {
-                return ops.tryCreateInjectionPoint(field);
+            if (validator.hasDelegateAnnotation(field)) {
+                return validator.tryCreateInjectionPoint(field, null);
             }
         }
 
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
             for (Parameter parameter : constructor.getParameters()) {
-                if (ops.hasDelegateAnnotation(parameter)) {
-                    return ops.tryCreateInjectionPoint(parameter);
+                if (validator.hasDelegateAnnotation(parameter)) {
+                    return validator.tryCreateInjectionPoint(parameter, null);
                 }
             }
         }
 
         for (Method method : clazz.getDeclaredMethods()) {
-            if (ops.hasInjectAnnotation(method)) {
+            if (validator.hasInjectAnnotation(method)) {
                 for (Parameter parameter : method.getParameters()) {
-                    if (ops.hasDelegateAnnotation(parameter)) {
-                        return ops.tryCreateInjectionPoint(parameter);
+                    if (validator.hasDelegateAnnotation(parameter)) {
+                        return validator.tryCreateInjectionPoint(parameter, null);
                     }
                 }
             }
@@ -575,20 +541,20 @@ public class InterceptorDecoratorDefinitionValidator {
         int count = 0;
 
         for (Field field : clazz.getDeclaredFields()) {
-            if (ops.hasInjectAnnotation(field)) {
+            if (validator.hasInjectAnnotation(field)) {
                 count++;
             }
         }
 
         for (Method method : clazz.getDeclaredMethods()) {
-            if (!ops.hasInjectAnnotation(method)) {
+            if (!validator.hasInjectAnnotation(method)) {
                 continue;
             }
             count += method.getParameterCount();
         }
 
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
-            if (!ops.hasInjectAnnotation(constructor)) {
+            if (!validator.hasInjectAnnotation(constructor)) {
                 continue;
             }
             count += constructor.getParameterCount();
@@ -599,26 +565,26 @@ public class InterceptorDecoratorDefinitionValidator {
 
     private InjectionPoint findSingleInjectableDecoratorInjectionPoint(Class<?> clazz) {
         for (Field field : clazz.getDeclaredFields()) {
-            if (ops.hasInjectAnnotation(field)) {
-                return ops.tryCreateInjectionPoint(field);
+            if (validator.hasInjectAnnotation(field)) {
+                return validator.tryCreateInjectionPoint(field, null);
             }
         }
 
         for (Method method : clazz.getDeclaredMethods()) {
-            if (!ops.hasInjectAnnotation(method)) {
+            if (!validator.hasInjectAnnotation(method)) {
                 continue;
             }
             for (Parameter parameter : method.getParameters()) {
-                return ops.tryCreateInjectionPoint(parameter);
+                return validator.tryCreateInjectionPoint(parameter, null);
             }
         }
 
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
-            if (!ops.hasInjectAnnotation(constructor)) {
+            if (!validator.hasInjectAnnotation(constructor)) {
                 continue;
             }
             for (Parameter parameter : constructor.getParameters()) {
-                return ops.tryCreateInjectionPoint(parameter);
+                return validator.tryCreateInjectionPoint(parameter, null);
             }
         }
 

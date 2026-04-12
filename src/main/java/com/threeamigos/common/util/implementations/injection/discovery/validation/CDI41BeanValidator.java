@@ -1,7 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.discovery.validation;
 
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
-
 import com.threeamigos.common.util.implementations.injection.*;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum;
 import com.threeamigos.common.util.implementations.injection.discovery.*;
@@ -14,7 +13,6 @@ import com.threeamigos.common.util.implementations.injection.resolution.BeanImpl
 import com.threeamigos.common.util.implementations.injection.resolution.ProducerBean;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
-import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
 import com.threeamigos.common.util.implementations.injection.types.RawTypeExtractor;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.Annotated;
@@ -33,6 +31,7 @@ import java.util.stream.Collectors;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationsEnum.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates.*;
 import static com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.*;
+import static com.threeamigos.common.util.implementations.injection.types.TypeClosureHelper.parameterizedDeclarationOf;
 import static com.threeamigos.common.util.implementations.injection.types.TypesHelper.containsTypeVariable;
 import static com.threeamigos.common.util.implementations.injection.types.TypesHelper.normalizeResolvedType;
 
@@ -86,641 +85,19 @@ public class CDI41BeanValidator {
         this.beanTypesExtractor = new BeanTypesExtractor();
         this.typeChecker = new TypeChecker();
         this.stereotypePriorityValidator = new StereotypePriorityValidator(this::isScopeAnnotationType);
-        this.beanClassEligibilityValidator = new BeanClassEligibilityValidator(new BeanClassEligibilityValidator.Ops() {
-            @Override
-            public boolean hasBeanDefiningAnnotation(Class<?> clazz) {
-                return CDI41BeanValidator.this.hasBeanDefiningAnnotation(clazz);
-            }
-
-            @Override
-            public boolean isCurrentValidatedTypeOverridden(Class<?> clazz) {
-                return CDI41BeanValidator.this.isCurrentValidatedTypeOverridden(clazz);
-            }
-
-            @Override
-            public boolean hasBeanDefiningAnnotationFromReflection(Class<?> clazz) {
-                return CDI41BeanValidator.this.hasBeanDefiningAnnotationFromReflection(clazz);
-            }
-
-            @Override
-            public boolean hasAlternativeAnnotation(Class<?> clazz) {
-                return AnnotationPredicates.hasAlternativeAnnotation(clazz);
-            }
-
-            @Override
-            public boolean hasDecoratorAnnotation(Class<?> clazz) {
-                return AnnotationPredicates.hasDecoratorAnnotation(clazz);
-            }
-
-            @Override
-            public boolean hasNoArgsConstructor(Class<?> clazz) {
-                return CDI41BeanValidator.this.hasNoArgsConstructor(clazz);
-            }
-
-            @Override
-            public boolean hasNotInjectConstructor(Class<?> clazz) {
-                return CDI41BeanValidator.this.hasNotInjectConstructor(clazz);
-            }
-
-            @Override
-            public boolean hasResolvableInjectConstructor(Class<?> clazz) {
-                return CDI41BeanValidator.this.hasResolvableInjectConstructor(clazz);
-            }
-
-            @Override
-            public boolean hasAnyDisposer(Class<?> clazz) {
-                return CDI41BeanValidator.this.hasAnyDisposer(clazz);
-            }
-
-            @Override
-            public boolean hasAnyProducer(Class<?> clazz) {
-                return CDI41BeanValidator.this.hasAnyProducer(clazz);
-            }
-
-            @Override
-            public boolean hasOnlyStaticProducersAndDisposers(Class<?> clazz) {
-                return CDI41BeanValidator.this.hasOnlyStaticProducersAndDisposers(clazz);
-            }
-        });
-        this.beanAttributesExtractor = new BeanAttributesExtractor(knowledgeBase, new BeanAttributesExtractor.Ops() {
-            @Override
-            public Annotation[] annotationsOf(Class<?> clazz) {
-                return CDI41BeanValidator.this.annotationsOf(clazz);
-            }
-
-            @Override
-            public Annotation[] declaredAnnotationsOf(Class<?> clazz) {
-                return CDI41BeanValidator.this.declaredAnnotationsOf(clazz);
-            }
-
-            @Override
-            public boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
-                return CDI41BeanValidator.this.isStereotypeAnnotationType(annotationType);
-            }
-
-            @Override
-            public boolean isScopeAnnotationType(Class<? extends Annotation> annotationType) {
-                return CDI41BeanValidator.this.isScopeAnnotationType(annotationType);
-            }
-
-            @Override
-            public boolean isQualifierAnnotationType(Class<? extends Annotation> annotationType) {
-                return CDI41BeanValidator.this.isQualifierAnnotationType(annotationType);
-            }
-        });
-        this.interceptorDecoratorDefinitionValidator = new InterceptorDecoratorDefinitionValidator(
-                knowledgeBase,
-                new InterceptorDecoratorDefinitionValidator.Ops() {
-                    @Override
-                    public Annotation[] annotationsOf(Class<?> clazz) {
-                        return CDI41BeanValidator.this.annotationsOf(clazz);
-                    }
-
-                    @Override
-                    public Annotation[] annotationsOf(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.annotationsOf(element);
-                    }
-
-                    @Override
-                    public Integer getPriorityValue(Class<?> clazz) {
-                        return com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.getPriorityValue(clazz);
-                    }
-
-                    @Override
-                    public boolean hasObservesAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasObservesAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasObservesAsyncAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasAroundInvokeAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasAroundInvokeAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasAroundConstructAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasAroundConstructAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasPostConstructAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasPostConstructAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasPreDestroyAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasPreDestroyAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasInjectAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasInjectAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasDelegateAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasDelegateAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
-                        return CDI41BeanValidator.this.isStereotypeAnnotationType(annotationType);
-                    }
-
-                    @Override
-                    public String fmtField(Field field) {
-                        return CDI41BeanValidator.this.fmtField(field);
-                    }
-
-                    @Override
-                    public String fmtMethod(Method method) {
-                        return CDI41BeanValidator.this.fmtMethod(method);
-                    }
-
-                    @Override
-                    public String fmtConstructor(Constructor<?> constructor) {
-                        return CDI41BeanValidator.this.fmtConstructor(constructor);
-                    }
-
-                    @Override
-                    public InjectionPoint tryCreateInjectionPoint(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.tryCreateInjectionPoint(element, null);
-                    }
-                });
-        this.injectionMetadataValidator = new InjectionMetadataValidator(
-                knowledgeBase,
-                new InjectionMetadataValidator.Ops() {
-                    @Override
-                    public boolean hasInjectAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasInjectAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasProducesAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasProducesAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasDisposesAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasDisposesAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasObservesAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasObservesAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasObservesAsyncAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasDecoratorAnnotation(Class<?> clazz) {
-                        return AnnotationPredicates.hasDecoratorAnnotation(clazz);
-                    }
-
-                    @Override
-                    public boolean hasDelegateAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasDelegateAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasAnyParameterWithDisposesAnnotation(Method method) {
-                        return CDI41BeanValidator.this.hasAnyParameterWithDisposesAnnotation(method);
-                    }
-
-                    @Override
-                    public Type baseTypeOf(Field field) {
-                        return CDI41BeanValidator.this.baseTypeOf(field);
-                    }
-
-                    @Override
-                    public Type baseTypeOf(Method method) {
-                        return CDI41BeanValidator.this.baseTypeOf(method);
-                    }
-
-                    @Override
-                    public Type baseTypeOf(Parameter parameter) {
-                        return CDI41BeanValidator.this.baseTypeOf(parameter);
-                    }
-
-                    @Override
-                    public Annotation[] annotationsOf(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.annotationsOf(element);
-                    }
-
-                    @Override
-                    public void checkInjectionTypeValidity(Type type) {
-                        CDI41BeanValidator.this.checkInjectionTypeValidity(type);
-                    }
-
-                    @Override
-                    public void checkInjectionTypeValidity(Type type, boolean allowTypeVariableArguments, Class<?> declaringBeanClass) {
-                        CDI41BeanValidator.this.checkInjectionTypeValidity(type, allowTypeVariableArguments, declaringBeanClass);
-                    }
-
-                    @Override
-                    public void validateQualifiers(Annotation[] annotations, String location) {
-                        CDI41BeanValidator.this.validateQualifiers(annotations, location);
-                    }
-
-                    @Override
-                    public boolean allowsBeanClassTypeVariableArguments(Type injectionType, Class<?> declaringBeanClass) {
-                        return CDI41BeanValidator.this.allowsBeanClassTypeVariableArguments(injectionType, declaringBeanClass);
-                    }
-
-                    @Override
-                    public boolean hasDefaultQualifier(Annotation[] annotations) {
-                        return CDI41BeanValidator.this.hasDefaultQualifier(annotations);
-                    }
-
-                    @Override
-                    public boolean hasQualifier(Annotation[] annotations, AnnotationsEnum qualifierType) {
-                        return CDI41BeanValidator.this.hasQualifier(annotations, qualifierType);
-                    }
-
-                    @Override
-                    public boolean declaresNonDependentScope(Class<?> clazz) {
-                        return CDI41BeanValidator.this.declaresNonDependentScope(clazz);
-                    }
-
-                    @Override
-                    public boolean isInterceptorClass(Class<?> clazz) {
-                        return CDI41BeanValidator.this.isInterceptorClass(clazz);
-                    }
-
-                    @Override
-                    public Type findDecoratorDelegateType(Class<?> decoratorClass) {
-                        return CDI41BeanValidator.this.findDecoratorDelegateType(decoratorClass);
-                    }
-
-                    @Override
-                    public String fmtField(Field field) {
-                        return CDI41BeanValidator.this.fmtField(field);
-                    }
-
-                    @Override
-                    public String fmtMethod(Method method) {
-                        return CDI41BeanValidator.this.fmtMethod(method);
-                    }
-
-                    @Override
-                    public String fmtConstructor(Constructor<?> constructor) {
-                        return CDI41BeanValidator.this.fmtConstructor(constructor);
-                    }
-
-                    @Override
-                    public String fmtParameter(Parameter parameter) {
-                        return CDI41BeanValidator.this.fmtParameter(parameter);
-                    }
-
-                    @Override
-                    public String safeParamName(Parameter parameter) {
-                        return CDI41BeanValidator.this.safeParamName(parameter);
-                    }
-                });
+        this.beanClassEligibilityValidator = new BeanClassEligibilityValidator(this);
+        this.beanAttributesExtractor = new BeanAttributesExtractor(knowledgeBase, this);
+        this.interceptorDecoratorDefinitionValidator = new InterceptorDecoratorDefinitionValidator(knowledgeBase, this);
+        this.injectionMetadataValidator = new InjectionMetadataValidator(knowledgeBase, this);
         this.producerDisposerValidator = new ProducerDisposerValidator(
                 knowledgeBase,
                 typeChecker,
-                new ProducerDisposerValidator.Ops() {
-                    @Override
-                    public boolean hasInjectAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasInjectAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasProducesAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasProducesAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasDisposesAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasDisposesAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasObservesAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasObservesAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasObservesAsyncAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean hasSpecializesAnnotation(AnnotatedElement element) {
-                        return AnnotationPredicates.hasSpecializesAnnotation(element);
-                    }
-
-                    @Override
-                    public Type baseTypeOf(Field field) {
-                        return CDI41BeanValidator.this.baseTypeOf(field);
-                    }
-
-                    @Override
-                    public Type baseTypeOf(Method method) {
-                        return CDI41BeanValidator.this.baseTypeOf(method);
-                    }
-
-                    @Override
-                    public Type baseTypeOf(Parameter parameter) {
-                        return CDI41BeanValidator.this.baseTypeOf(parameter);
-                    }
-
-                    @Override
-                    public Set<Type> typeClosureOf(Method method) {
-                        return CDI41BeanValidator.this.typeClosureOf(method);
-                    }
-
-                    @Override
-                    public Set<Type> typeClosureOf(Field field) {
-                        return CDI41BeanValidator.this.typeClosureOf(field);
-                    }
-
-                    @Override
-                    public Annotation[] annotationsOf(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.annotationsOf(element);
-                    }
-
-                    @Override
-                    public void checkProducerTypeValidity(Type type) {
-                        CDI41BeanValidator.this.checkProducerTypeValidity(type);
-                    }
-
-                    @Override
-                    public void validateProducerMethodTypeVariableScopeConstraint(Method method) {
-                        CDI41BeanValidator.this.validateProducerMethodTypeVariableScopeConstraint(method);
-                    }
-
-                    @Override
-                    public void validateProducerFieldTypeVariableScopeConstraint(Field field) {
-                        CDI41BeanValidator.this.validateProducerFieldTypeVariableScopeConstraint(field);
-                    }
-
-                    @Override
-                    public void checkInjectionTypeValidity(Type type) {
-                        CDI41BeanValidator.this.checkInjectionTypeValidity(type);
-                    }
-
-                    @Override
-                    public void validateQualifiers(Annotation[] annotations, String location) {
-                        CDI41BeanValidator.this.validateQualifiers(annotations, location);
-                    }
-
-                    @Override
-                    public boolean isNotValidNamedInjectionPointUsage(AnnotatedElement injectionPoint) {
-                        return CDI41BeanValidator.this.isNotValidNamedInjectionPointUsage(injectionPoint);
-                    }
-
-                    @Override
-                    public boolean isNotValidInjectionPointMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter) {
-                        return CDI41BeanValidator.this.isNotValidInjectionPointMetadataUsage(injectionPoint, disposerParameter);
-                    }
-
-                    @Override
-                    public boolean isNotValidInterceptionFactoryInjectionPointUsage(AnnotatedElement element, boolean producerMethodParameter) {
-                        return CDI41BeanValidator.this.isNotValidInterceptionFactoryInjectionPointUsage(
-                                element, producerMethodParameter);
-                    }
-
-                    @Override
-                    public String extractProducerName(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.extractProducerName(element);
-                    }
-
-                    @Override
-                    public Set<Annotation> extractQualifiers(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.extractQualifiers(element);
-                    }
-
-                    @Override
-                    public boolean isAlternativeDeclared(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.isAlternativeDeclared(element);
-                    }
-
-                    @Override
-                    public boolean isAlternativeEnabled(AnnotatedElement element, Class<?> declaringClass, boolean alternativeDeclared) {
-                        return CDI41BeanValidator.this.isAlternativeEnabled(
-                                element, declaringClass, alternativeDeclared);
-                    }
-
-                    @Override
-                    public String fmtField(Field field) {
-                        return CDI41BeanValidator.this.fmtField(field);
-                    }
-
-                    @Override
-                    public String fmtMethod(Method method) {
-                        return CDI41BeanValidator.this.fmtMethod(method);
-                    }
-
-                    @Override
-                    public String fmtParameter(Parameter parameter) {
-                        return CDI41BeanValidator.this.fmtParameter(parameter);
-                    }
-                },
+                this,
                 specializingProducerMethodsBySpecializedSignature);
         this.beanRegistrationService = new BeanRegistrationService(
                 knowledgeBase,
                 beanTypesExtractor,
-                new BeanRegistrationService.Ops() {
-                    @Override
-                    public boolean isAlternativeDeclared(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.isAlternativeDeclared(element);
-                    }
-
-                    @Override
-                    public boolean isAlternativeEnabled(AnnotatedElement element, Class<?> declaringClass, boolean alternativeDeclared) {
-                        return CDI41BeanValidator.this.isAlternativeEnabled(
-                                element, declaringClass, alternativeDeclared);
-                    }
-
-                    @Override
-                    public Method resolveDirectlyOverriddenProducerMethod(Method method) {
-                        return CDI41BeanValidator.this.resolveDirectlyOverriddenProducerMethod(method);
-                    }
-
-                    @Override
-                    public boolean hasSpecializesAnnotation(AnnotatedElement element) {
-                        return AnnotationPredicates.hasSpecializesAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean isSpecializingProducerMethodEnabled(Method method) {
-                        return CDI41BeanValidator.this.isSpecializingProducerMethodEnabled(method);
-                    }
-
-                    @Override
-                    public String producerMethodSpecializationSignature(Method method) {
-                        return CDI41BeanValidator.this.producerMethodSpecializationSignature(method);
-                    }
-
-                    @Override
-                    public boolean hasDisposesAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasDisposesAnnotation(element);
-                    }
-
-                    @Override
-                    public InjectionPoint tryCreateInjectionPoint(AnnotatedElement element, Bean<?> owningBean) {
-                        return CDI41BeanValidator.this.tryCreateInjectionPoint(element, owningBean);
-                    }
-
-                    @Override
-                    public Method findDisposerForProducer(Class<?> clazz, Set<Type> producerTypes, Set<Annotation> producerQualifiers) {
-                        return CDI41BeanValidator.this.findDisposerForProducer(clazz, producerTypes, producerQualifiers);
-                    }
-
-                    @Override
-                    public Annotation[] annotationsOf(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.annotationsOf(element);
-                    }
-
-                    @Override
-                    public boolean isQualifierAnnotationType(Class<? extends Annotation> annotationType) {
-                        return CDI41BeanValidator.this.isQualifierAnnotationType(annotationType);
-                    }
-
-                    @Override
-                    public boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
-                        return CDI41BeanValidator.this.isStereotypeAnnotationType(annotationType);
-                    }
-
-                    @Override
-                    public boolean isScopeAnnotationType(Class<? extends Annotation> annotationType) {
-                        return CDI41BeanValidator.this.isScopeAnnotationType(annotationType);
-                    }
-
-                    @Override
-                    public Class<? extends Annotation> extractScopeFromStereotype(Class<? extends Annotation> stereotypeClass) {
-                        return CDI41BeanValidator.this.extractScopeFromStereotype(stereotypeClass);
-                    }
-
-                    @Override
-                    public Integer extractEffectivePriority(Class<?> clazz) {
-                        return CDI41BeanValidator.this.extractEffectivePriority(clazz);
-                    }
-
-                    @Override
-                    public String extractBeanName(Class<?> clazz) {
-                        return CDI41BeanValidator.this.extractBeanName(clazz);
-                    }
-
-                    @Override
-                    public Set<Annotation> extractBeanQualifiers(Class<?> clazz) {
-                        return CDI41BeanValidator.this.extractBeanQualifiers(clazz);
-                    }
-
-                    @Override
-                    public Class<? extends Annotation> extractBeanScope(Class<?> clazz, Class<? extends Annotation> discoveredScope) {
-                        return CDI41BeanValidator.this.extractBeanScope(clazz, discoveredScope);
-                    }
-
-                    @Override
-                    public void validateManagedBeanPublicFieldScopeConstraint(Class<?> clazz, Class<? extends Annotation> scopeAnnotation) {
-                        CDI41BeanValidator.this.validateManagedBeanPublicFieldScopeConstraint(clazz, scopeAnnotation);
-                    }
-
-                    @Override
-                    public void validateManagedBeanGenericTypeScopeConstraint(Class<?> clazz, Class<? extends Annotation> scopeAnnotation) {
-                        CDI41BeanValidator.this.validateManagedBeanGenericTypeScopeConstraint(clazz, scopeAnnotation);
-                    }
-
-                    @Override
-                    public void validateProgrammaticPassivatingScopeConstraint(Class<?> clazz, Class<? extends Annotation> scopeAnnotation) {
-                        CDI41BeanValidator.this.validateProgrammaticPassivatingScopeConstraint(clazz, scopeAnnotation);
-                    }
-
-                    @Override
-                    public Set<Class<? extends Annotation>> extractBeanStereotypes(Class<?> clazz) {
-                        return CDI41BeanValidator.this.extractBeanStereotypes(clazz);
-                    }
-
-                    @Override
-                    public void addValidationError(Class<?> clazz, String message) {
-                        CDI41BeanValidator.this.addValidationError(clazz, message);
-                    }
-
-                    @Override
-                    public void addGenericSelfTypeForManagedBean(BeanImpl<?> bean, Class<?> beanClass) {
-                        CDI41BeanValidator.this.addGenericSelfTypeForManagedBean(bean, beanClass);
-                    }
-
-                    @Override
-                    public void applySpecializationInheritance(BeanImpl<?> bean, Class<?> clazz, BeanArchiveMode beanArchiveMode) {
-                        CDI41BeanValidator.this.applySpecializationInheritance(bean, clazz, beanArchiveMode);
-                    }
-
-                    @Override
-                    public <T> void populateInjectionMetadata(BeanImpl<T> bean, Class<T> clazz) {
-                        CDI41BeanValidator.this.populateInjectionMetadata(bean, clazz);
-                    }
-
-                    @Override
-                    public List<Class<?>> collectClassHierarchy(Class<?> clazz) {
-                        return CDI41BeanValidator.this.collectClassHierarchy(clazz);
-                    }
-
-                    @Override
-                    public boolean hasInjectAnnotation(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.hasInjectAnnotation(element);
-                    }
-
-                    @Override
-                    public boolean isOverriddenForInjectionMetadata(Method superMethod, Class<?> leafClass) {
-                        return CDI41BeanValidator.this.isOverriddenForInjectionMetadata(superMethod, leafClass);
-                    }
-
-                    @Override
-                    public InjectionPoint resolvedInjectionPoint(InjectionPoint delegate, Type resolvedType) {
-                        return CDI41BeanValidator.this.resolvedInjectionPoint(delegate, resolvedType);
-                    }
-
-                    @Override
-                    public Annotated annotatedOf(AnnotatedElement element) {
-                        return CDI41BeanValidator.this.annotatedOf(element);
-                    }
-
-                    @Override
-                    public Set<Type> typeClosureOf(Method method) {
-                        return CDI41BeanValidator.this.typeClosureOf(method);
-                    }
-
-                    @Override
-                    public Set<Type> typeClosureOf(Field field) {
-                        return CDI41BeanValidator.this.typeClosureOf(field);
-                    }
-
-                    @Override
-                    public Type baseTypeOf(Method method) {
-                        return CDI41BeanValidator.this.baseTypeOf(method);
-                    }
-
-                    @Override
-                    public Type baseTypeOf(Field field) {
-                        return CDI41BeanValidator.this.baseTypeOf(field);
-                    }
-
-                    @Override
-                    public Type baseTypeOf(Parameter parameter) {
-                        return CDI41BeanValidator.this.baseTypeOf(parameter);
-                    }
-
-                    @Override
-                    public String fmtMethod(Method method) {
-                        return CDI41BeanValidator.this.fmtMethod(method);
-                    }
-
-                    @Override
-                    public String fmtField(Field field) {
-                        return CDI41BeanValidator.this.fmtField(field);
-                    }
-                },
+                this,
                 producerBeansByMethodSignature,
                 suppressedSpecializedProducerMethodSignatures);
         this.cdiFullLegacyInterceptionEnabled = cdiFullLegacyInterceptionEnabled;
@@ -1038,7 +415,7 @@ public class CDI41BeanValidator {
         annotatedTypeOverride.getMethods();
     }
 
-    private void addGenericSelfTypeForManagedBean(BeanImpl<?> bean, Class<?> beanClass) {
+    public void addGenericSelfTypeForManagedBean(BeanImpl<?> bean, Class<?> beanClass) {
         if (bean == null || beanClass == null) {
             return;
         }
@@ -1047,7 +424,7 @@ public class CDI41BeanValidator {
         }
         Set<Type> updatedTypes = new LinkedHashSet<>(bean.getTypes());
         updatedTypes.remove(beanClass);
-        updatedTypes.add(TypeClosureHelper.parameterizedDeclarationOf(beanClass));
+        updatedTypes.add(parameterizedDeclarationOf(beanClass));
         bean.setTypes(updatedTypes);
     }
 
@@ -1308,7 +685,7 @@ public class CDI41BeanValidator {
         stereotypePriorityValidator.validateStereotypeNonPortableDeclarations(clazz);
     }
 
-    private Integer extractEffectivePriority(Class<?> clazz) {
+    public Integer extractEffectivePriority(Class<?> clazz) {
         Integer explicitPriority = extractDeclaredPriorityFromClass(clazz);
         if (explicitPriority != null) {
             return explicitPriority;
@@ -1378,7 +755,7 @@ public class CDI41BeanValidator {
         return null;
     }
 
-    private Annotation[] annotationsOf(Class<?> clazz) {
+    public Annotation[] annotationsOf(Class<?> clazz) {
         if (overrideAnnotations != null && overrideAnnotationsClass != null &&
                 overrideAnnotationsClass.equals(clazz)) {
             return overrideAnnotations;
@@ -1386,7 +763,7 @@ public class CDI41BeanValidator {
         return clazz.getAnnotations();
     }
 
-    private Annotation[] declaredAnnotationsOf(Class<?> clazz) {
+    public Annotation[] declaredAnnotationsOf(Class<?> clazz) {
         if (overrideAnnotations != null && overrideAnnotationsClass != null &&
                 overrideAnnotationsClass.equals(clazz)) {
             // ProcessAnnotatedType#setAnnotatedType replaces metadata; declared annotation
@@ -1396,7 +773,7 @@ public class CDI41BeanValidator {
         return clazz.getDeclaredAnnotations();
     }
 
-    private Annotation[] annotationsOf(AnnotatedElement element) {
+    public Annotation[] annotationsOf(AnnotatedElement element) {
         if (element == null) {
             return new Annotation[0];
         }
@@ -1406,64 +783,80 @@ public class CDI41BeanValidator {
         return AnnotatedMetadataHelper.annotationsOf(currentAnnotatedTypeOverride, element);
     }
 
-    private Type baseTypeOf(Field field) {
+    public Type baseTypeOf(Field field) {
         return AnnotatedMetadataHelper.baseTypeOf(currentAnnotatedTypeOverride, field);
     }
 
-    private Type baseTypeOf(Method method) {
+    public Type baseTypeOf(Method method) {
         return AnnotatedMetadataHelper.baseTypeOf(currentAnnotatedTypeOverride, method);
     }
 
-    private Type baseTypeOf(Parameter parameter) {
+    public Type baseTypeOf(Parameter parameter) {
         return AnnotatedMetadataHelper.baseTypeOf(currentAnnotatedTypeOverride, parameter);
     }
 
-    private Set<Type> typeClosureOf(Method method) {
+    public Set<Type> typeClosureOf(Method method) {
         return AnnotatedMetadataHelper.typeClosureOf(currentAnnotatedTypeOverride, method);
     }
 
-    private Set<Type> typeClosureOf(Field field) {
+    public Set<Type> typeClosureOf(Field field) {
         return AnnotatedMetadataHelper.typeClosureOf(currentAnnotatedTypeOverride, field);
     }
 
-    private Annotated annotatedOf(AnnotatedElement element) {
+    public Annotated annotatedOf(AnnotatedElement element) {
         return AnnotatedMetadataHelper.annotatedOf(currentAnnotatedTypeOverride, element);
     }
 
-    private boolean hasInjectAnnotation(AnnotatedElement element) {
+    public boolean hasInjectAnnotation(AnnotatedElement element) {
         return hasAnnotation(element, INJECT);
     }
 
-    private boolean hasProducesAnnotation(AnnotatedElement element) {
+    public boolean hasProducesAnnotation(AnnotatedElement element) {
         return hasAnnotation(element, PRODUCES);
     }
 
-    private boolean hasDisposesAnnotation(AnnotatedElement element) {
+    public boolean hasDisposesAnnotation(AnnotatedElement element) {
         return hasAnnotation(element, DISPOSES);
     }
 
-    private boolean hasObservesAnnotation(AnnotatedElement element) {
+    public boolean hasObservesAnnotation(AnnotatedElement element) {
         return hasAnnotation(element, OBSERVES);
     }
 
-    private boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
+    public boolean hasObservesAsyncAnnotation(AnnotatedElement element) {
         return hasAnnotation(element, OBSERVES_ASYNC);
     }
 
-    private boolean hasPostConstructAnnotation(AnnotatedElement element) {
+    public boolean hasPostConstructAnnotation(AnnotatedElement element) {
         return hasAnnotation(element, POST_CONSTRUCT);
     }
 
-    private boolean hasPreDestroyAnnotation(AnnotatedElement element) {
+    public boolean hasPreDestroyAnnotation(AnnotatedElement element) {
         return hasAnnotation(element, PRE_DESTROY);
     }
 
-    private boolean hasAroundInvokeAnnotation(AnnotatedElement element) {
+    public boolean hasAroundInvokeAnnotation(AnnotatedElement element) {
         return hasAnnotation(element, AROUND_INVOKE);
     }
 
-    private boolean hasAroundConstructAnnotation(AnnotatedElement element) {
+    public boolean hasAroundConstructAnnotation(AnnotatedElement element) {
         return hasAnnotation(element, AROUND_CONSTRUCT);
+    }
+
+    public boolean hasAlternativeAnnotation(AnnotatedElement element) {
+        return AnnotationPredicates.hasAlternativeAnnotation(element);
+    }
+
+    public boolean hasDecoratorAnnotation(Class<?> clazz) {
+        return AnnotationPredicates.hasDecoratorAnnotation(clazz);
+    }
+
+    public boolean hasSpecializesAnnotation(AnnotatedElement element) {
+        return AnnotationPredicates.hasSpecializesAnnotation(element);
+    }
+
+    public Integer getPriorityValue(AnnotatedElement element) {
+        return com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors.getPriorityValue(element);
     }
 
     private boolean hasAnnotation(AnnotatedElement element, AnnotationsEnum annotation) {
@@ -1475,23 +868,23 @@ public class CDI41BeanValidator {
         return false;
     }
 
-    private String extractBeanName(Class<?> clazz) {
+    public String extractBeanName(Class<?> clazz) {
         return beanAttributesExtractor.extractBeanName(clazz);
     }
 
-    private Set<Annotation> extractBeanQualifiers(Class<?> clazz) {
+    public Set<Annotation> extractBeanQualifiers(Class<?> clazz) {
         return beanAttributesExtractor.extractBeanQualifiers(clazz);
     }
 
-    private Class<? extends Annotation> extractBeanScope(Class<?> clazz) {
+    public Class<? extends Annotation> extractBeanScope(Class<?> clazz) {
         return beanAttributesExtractor.extractBeanScope(clazz);
     }
 
-    private Set<Class<? extends Annotation>> extractBeanStereotypes(Class<?> clazz) {
+    public Set<Class<? extends Annotation>> extractBeanStereotypes(Class<?> clazz) {
         return beanAttributesExtractor.extractBeanStereotypes(clazz);
     }
 
-    private Class<? extends Annotation> extractScopeFromStereotype(Class<? extends Annotation> stereotypeClass) {
+    public Class<? extends Annotation> extractScopeFromStereotype(Class<? extends Annotation> stereotypeClass) {
         return beanAttributesExtractor.extractScopeFromStereotype(stereotypeClass);
     }
 
@@ -1546,7 +939,7 @@ public class CDI41BeanValidator {
         return producerDisposerValidator.validateProducerMethod(method);
     }
 
-    private boolean isNotValidInterceptionFactoryInjectionPointUsage(AnnotatedElement element,
+    public boolean isNotValidInterceptionFactoryInjectionPointUsage(AnnotatedElement element,
                                                                      boolean producerMethodParameter) {
         return injectionMetadataValidator.isNotValidInterceptionFactoryInjectionPointUsage(
                 element, producerMethodParameter);
@@ -1560,15 +953,15 @@ public class CDI41BeanValidator {
         return producerDisposerValidator.validateSpecializingProducerMethodConstraint(method);
     }
 
-    private Method resolveDirectlyOverriddenProducerMethod(Method method) {
+    public Method resolveDirectlyOverriddenProducerMethod(Method method) {
         return producerDisposerValidator.resolveDirectlyOverriddenProducerMethod(method);
     }
 
-    private boolean isSpecializingProducerMethodEnabled(Method method) {
+    public boolean isSpecializingProducerMethodEnabled(Method method) {
         return producerDisposerValidator.isSpecializingProducerMethodEnabled(method);
     }
 
-    private String producerMethodSpecializationSignature(Method method) {
+    public String producerMethodSpecializationSignature(Method method) {
         return producerDisposerValidator.producerMethodSpecializationSignature(method);
     }
 
@@ -1593,11 +986,11 @@ public class CDI41BeanValidator {
         return producerDisposerValidator.validateDisposerMethod(method);
     }
 
-    private boolean isNotValidInjectionPointMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter) {
+    public boolean isNotValidInjectionPointMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter) {
         return injectionMetadataValidator.isNotValidInjectionPointMetadataUsage(injectionPoint, disposerParameter);
     }
 
-    private Type findDecoratorDelegateType(Class<?> decoratorClass) {
+    public Type findDecoratorDelegateType(Class<?> decoratorClass) {
         if (decoratorClass == null) {
             return null;
         }
@@ -1629,7 +1022,7 @@ public class CDI41BeanValidator {
         return null;
     }
 
-    private boolean isInterceptorClass(Class<?> clazz) {
+    public boolean isInterceptorClass(Class<?> clazz) {
         for (Annotation annotation : annotationsOf(clazz)) {
             if (hasInterceptorAnnotation(annotation.annotationType())) {
                 return true;
@@ -1638,7 +1031,7 @@ public class CDI41BeanValidator {
         return false;
     }
 
-    private boolean hasQualifier(Annotation[] annotations, AnnotationsEnum qualifierType) {
+    public boolean hasQualifier(Annotation[] annotations, AnnotationsEnum qualifierType) {
         if (qualifierType == null) {
             return false;
         }
@@ -1651,7 +1044,7 @@ public class CDI41BeanValidator {
         return false;
     }
 
-    private boolean declaresNonDependentScope(Class<?> clazz) {
+    public boolean declaresNonDependentScope(Class<?> clazz) {
         for (Annotation annotation : annotationsOf(clazz)) {
             Class<? extends Annotation> annotationType = annotation.annotationType();
             if (hasDependentAnnotation(annotationType)) {
@@ -1664,7 +1057,7 @@ public class CDI41BeanValidator {
         return false;
     }
 
-    private boolean hasDefaultQualifier(Annotation[] annotations) {
+    public boolean hasDefaultQualifier(Annotation[] annotations) {
         Set<Annotation> qualifiers = QualifiersHelper.extractQualifierAnnotations(annotations);
         if (qualifiers.isEmpty()) {
             return true;
@@ -1677,7 +1070,7 @@ public class CDI41BeanValidator {
         return false;
     }
 
-    private boolean hasAnyProducer(Class<?> clazz) {
+    public boolean hasAnyProducer(Class<?> clazz) {
         for (Field f : clazz.getDeclaredFields()) {
             if (hasProducesAnnotation(f)) return true;
         }
@@ -1687,7 +1080,7 @@ public class CDI41BeanValidator {
         return false;
     }
 
-    private boolean hasAnyDisposer(Class<?> clazz) {
+    public boolean hasAnyDisposer(Class<?> clazz) {
         for (Method method : clazz.getDeclaredMethods()) {
             if (hasDisposesParameter(method)) {
                 return true;
@@ -1696,7 +1089,7 @@ public class CDI41BeanValidator {
         return false;
     }
 
-    private boolean hasOnlyStaticProducersAndDisposers(Class<?> clazz) {
+    public boolean hasOnlyStaticProducersAndDisposers(Class<?> clazz) {
         boolean foundProducerOrDisposer = false;
 
         for (Field field : clazz.getDeclaredFields()) {
@@ -1725,7 +1118,7 @@ public class CDI41BeanValidator {
     /**
      * Returns true when a class is declared as an alternative directly or via stereotype.
      */
-    private boolean isAlternativeDeclared(Class<?> clazz) {
+    public boolean isAlternativeDeclared(Class<?> clazz) {
         if (hasAlternativeAnnotation(clazz)) {
             return true;
         }
@@ -1746,7 +1139,7 @@ public class CDI41BeanValidator {
      * Returns true when an annotated element (for example, a producer method/field)
      * declares an alternative directly or via an applied stereotype.
      */
-    private boolean isAlternativeDeclared(AnnotatedElement element) {
+    public boolean isAlternativeDeclared(AnnotatedElement element) {
         if (element == null) {
             return false;
         }
@@ -1798,7 +1191,7 @@ public class CDI41BeanValidator {
      *   <li>programmatic enablement via {@link Syringe#enableAlternative(Class)}</li>
      * </ul>
      */
-    private boolean isAlternativeEnabled(AnnotatedElement element,
+    public boolean isAlternativeEnabled(AnnotatedElement element,
                                          Class<?> declaringClass,
                                          boolean alternativeDeclared) {
         if (!alternativeDeclared) {
@@ -1907,7 +1300,7 @@ public class CDI41BeanValidator {
         return scopes.isEmpty() ? null : scopes.get(0);
     }
 
-    private Class<? extends Annotation> extractBeanScope(Class<?> clazz, Class<? extends Annotation> discoveredScope) {
+    public Class<? extends Annotation> extractBeanScope(Class<?> clazz, Class<? extends Annotation> discoveredScope) {
         if (discoveredScope != null) {
             return normalizeSingletonToApplicationScoped(discoveredScope);
         }
@@ -1920,7 +1313,7 @@ public class CDI41BeanValidator {
      * CDI 4.1 §3.1: A managed bean with a non-static public field must declare a pseudo-scope.
      * A normal scope on such a bean is a definition error.
      */
-    private void validateManagedBeanPublicFieldScopeConstraint(Class<?> clazz,
+    public void validateManagedBeanPublicFieldScopeConstraint(Class<?> clazz,
                                                                Class<? extends Annotation> scopeAnnotation) {
         // Applies to managed beans; types without a bean constructor are not managed beans.
         if (isNotManagedBeanConstructorCandidate(clazz)) {
@@ -1984,7 +1377,7 @@ public class CDI41BeanValidator {
     /**
      * CDI 4.1 §3.1: a managed bean with a parameterized bean class must have @Dependent scope.
      */
-    private void validateManagedBeanGenericTypeScopeConstraint(Class<?> clazz,
+    public void validateManagedBeanGenericTypeScopeConstraint(Class<?> clazz,
                                                                Class<? extends Annotation> scopeAnnotation) {
         // Applies to managed beans; types without a bean constructor are not managed beans.
         if (isNotManagedBeanConstructorCandidate(clazz)) {
@@ -2026,7 +1419,7 @@ public class CDI41BeanValidator {
         return hasNormalScopeAnnotation(scopeAnnotation);
     }
 
-    private void validateProgrammaticPassivatingScopeConstraint(Class<?> clazz,
+    public void validateProgrammaticPassivatingScopeConstraint(Class<?> clazz,
                                                                 Class<? extends Annotation> scopeAnnotation) {
         if (clazz == null || scopeAnnotation == null) {
             return;
@@ -2046,7 +1439,7 @@ public class CDI41BeanValidator {
                 " must implement java.io.Serializable");
     }
 
-    private void applySpecializationInheritance(BeanImpl<?> bean, Class<?> clazz, BeanArchiveMode beanArchiveMode) {
+    public void applySpecializationInheritance(BeanImpl<?> bean, Class<?> clazz, BeanArchiveMode beanArchiveMode) {
         if (!hasSpecializesAnnotation(clazz)) {
             return;
         }
@@ -2229,7 +1622,7 @@ public class CDI41BeanValidator {
                         constructor.getParameterCount() == 0 && !Modifier.isPrivate(constructor.getModifiers()));
     }
 
-    private boolean isScopeAnnotationType(Class<? extends Annotation> at) {
+    public boolean isScopeAnnotationType(Class<? extends Annotation> at) {
         // Scope meta-annotations themselves are not bean scope types.
         if (SCOPE.matches(at) || NORMAL_SCOPE.matches(at)) {
             return false;
@@ -2246,7 +1639,7 @@ public class CDI41BeanValidator {
                 || CONVERSATION_SCOPED.matches(at);
     }
 
-    private void validateQualifiers(Annotation[] annotations, String location) {
+    public void validateQualifiers(Annotation[] annotations, String location) {
         // CDI allows multiple qualifiers, but they must actually be qualifiers (meta-annotated @Qualifier),
         // and you can't repeat the *same* qualifier type twice.
         List<Annotation> qualifiers = Arrays.stream(annotations)
@@ -2271,7 +1664,7 @@ public class CDI41BeanValidator {
      * - If an injected field declares @Named with no value, the field name is assumed.
      * - Any other injection point declaring @Named with no value is a definition error.
      */
-    private boolean isNotValidNamedInjectionPointUsage(AnnotatedElement injectionPoint) {
+    public boolean isNotValidNamedInjectionPointUsage(AnnotatedElement injectionPoint) {
         return injectionMetadataValidator.isNotValidNamedInjectionPointUsage(injectionPoint);
     }
 
@@ -2291,7 +1684,7 @@ public class CDI41BeanValidator {
         return injectionPoint.toString();
     }
 
-    private boolean isQualifierAnnotationType(Class<? extends Annotation> at) {
+    public boolean isQualifierAnnotationType(Class<? extends Annotation> at) {
         return hasQualifierAnnotation(at) || knowledgeBase.isRegisteredQualifier(at);
     }
 
@@ -2308,11 +1701,11 @@ public class CDI41BeanValidator {
      * @param type the producer return/field type to validate
      * @throws DefinitionException if the type is invalid
      */
-    private void checkProducerTypeValidity(Type type) {
+    public void checkProducerTypeValidity(Type type) {
         checkProducerTypeValidity(type, true);
     }
 
-    private void checkProducerTypeValidity(Type type, boolean topLevel) {
+    public void checkProducerTypeValidity(Type type, boolean topLevel) {
         if (type instanceof WildcardType) {
             throw new DefinitionException("type may not contain a wildcard (" + type.getTypeName() + ")");
         }
@@ -2369,7 +1762,7 @@ public class CDI41BeanValidator {
      * CDI 4.1 §3.2: a producer method whose return type is a parameterized type that contains
      * a type variable must declare @Dependent scope.
      */
-    private void validateProducerMethodTypeVariableScopeConstraint(Method method) {
+    public void validateProducerMethodTypeVariableScopeConstraint(Method method) {
         Type returnType = baseTypeOf(method);
         if (!(returnType instanceof ParameterizedType)) {
             return;
@@ -2392,7 +1785,7 @@ public class CDI41BeanValidator {
      * CDI 4.1 §3.3: a producer field whose type is a parameterized type that contains
      * a type variable must declare @Dependent scope.
      */
-    private void validateProducerFieldTypeVariableScopeConstraint(Field field) {
+    public void validateProducerFieldTypeVariableScopeConstraint(Field field) {
         Type fieldType = baseTypeOf(field);
         if (!(fieldType instanceof ParameterizedType)) {
             return;
@@ -2411,11 +1804,11 @@ public class CDI41BeanValidator {
                 "must declare @Dependent scope, but declares @" + scope.getSimpleName());
     }
 
-    private void checkInjectionTypeValidity(Type type) {
+    public void checkInjectionTypeValidity(Type type) {
         checkInjectionTypeValidity(type, false, null);
     }
 
-    private void checkInjectionTypeValidity(Type type,
+    public void checkInjectionTypeValidity(Type type,
                                             boolean allowTypeVariableArguments,
                                             Class<?> declaringBeanClass) {
         if (type instanceof Class && jakarta.enterprise.inject.Instance.class.equals(type)) {
@@ -2461,7 +1854,7 @@ public class CDI41BeanValidator {
         }
     }
 
-    private boolean allowsBeanClassTypeVariableArguments(Type injectionType, Class<?> declaringBeanClass) {
+    public boolean allowsBeanClassTypeVariableArguments(Type injectionType, Class<?> declaringBeanClass) {
         if (!(injectionType instanceof ParameterizedType) || declaringBeanClass == null) {
             return false;
         }
@@ -2497,11 +1890,11 @@ public class CDI41BeanValidator {
         return beanClassEligibilityValidator.isCandidateBeanClass(clazz, beanArchiveMode);
     }
 
-    private boolean hasBeanDefiningAnnotation(Class<?> clazz) {
+    public boolean hasBeanDefiningAnnotation(Class<?> clazz) {
         return hasBeanDefiningAnnotationFrom(annotationsOf(clazz), declaredAnnotationsOf(clazz));
     }
 
-    private boolean hasBeanDefiningAnnotationFromReflection(Class<?> clazz) {
+    public boolean hasBeanDefiningAnnotationFromReflection(Class<?> clazz) {
         return hasBeanDefiningAnnotationFrom(clazz.getAnnotations(), clazz.getDeclaredAnnotations());
     }
 
@@ -2539,7 +1932,7 @@ public class CDI41BeanValidator {
         return false;
     }
 
-    private boolean isCurrentValidatedTypeOverridden(Class<?> clazz) {
+    public boolean isCurrentValidatedTypeOverridden(Class<?> clazz) {
         return currentAnnotatedTypeOverride != null
                 && overrideAnnotationsClass != null
                 && overrideAnnotationsClass.equals(clazz);
@@ -2574,7 +1967,7 @@ public class CDI41BeanValidator {
      * @param clazz the class to check
      * @return true if the class has a no-args constructor
      */
-    private boolean hasNoArgsConstructor(Class<?> clazz) {
+    public boolean hasNoArgsConstructor(Class<?> clazz) {
         try {
             // Try to get any no-args constructor (public, protected, package, or private)
             Constructor<?>[] constructors = clazz.getDeclaredConstructors();
@@ -2591,7 +1984,7 @@ public class CDI41BeanValidator {
         }
     }
 
-    private boolean hasNotInjectConstructor(Class<?> clazz) {
+    public boolean hasNotInjectConstructor(Class<?> clazz) {
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
             if (hasInjectAnnotation(constructor)) {
                 return false;
@@ -2600,7 +1993,7 @@ public class CDI41BeanValidator {
         return true;
     }
 
-    private boolean hasResolvableInjectConstructor(Class<?> clazz) {
+    public boolean hasResolvableInjectConstructor(Class<?> clazz) {
         for (Constructor<?> constructor : clazz.getDeclaredConstructors()) {
             if (!hasInjectAnnotation(constructor)) {
                 continue;
@@ -2634,24 +2027,24 @@ public class CDI41BeanValidator {
     // Formatting
     // -----------------------
 
-    private String fmtField(Field field) {
+    public String fmtField(Field field) {
         return "Field " + field.getName() + " of class " + field.getDeclaringClass().getName();
     }
 
-    private String fmtMethod(Method method) {
+    public String fmtMethod(Method method) {
         return "Method " + method.getName() + " of class " + method.getDeclaringClass().getName();
     }
 
-    private String fmtConstructor(Constructor<?> c) {
+    public String fmtConstructor(Constructor<?> c) {
         return "Constructor of class " + c.getDeclaringClass().getName();
     }
 
-    private String fmtParameter(Parameter parameter) {
+    public String fmtParameter(Parameter parameter) {
         Executable ex = parameter.getDeclaringExecutable();
         return "Parameter " + safeParamName(parameter) + " of " + ex.getName() + " of class " + ex.getDeclaringClass().getName();
     }
 
-    private String safeParamName(Parameter p) {
+    public String safeParamName(Parameter p) {
         // Parameter names may be synthetic unless compiled with -parameters
         return (p.isNamePresent() ? p.getName() : "<param>");
     }
@@ -2659,7 +2052,7 @@ public class CDI41BeanValidator {
     /**
      * Adds a validation error for a class to the knowledge base.
      */
-    private void addValidationError(Class<?> clazz, String message) {
+    public void addValidationError(Class<?> clazz, String message) {
         knowledgeBase.addDefinitionError(clazz.getName() + ": " + message);
     }
 
@@ -2667,7 +2060,7 @@ public class CDI41BeanValidator {
     // Annotation utilities
     // -----------------------
 
-    private boolean hasAnyParameterWithDisposesAnnotation(Method method) {
+    public boolean hasAnyParameterWithDisposesAnnotation(Method method) {
         for (Parameter p : method.getParameters()) {
             if (hasDisposesAnnotation(p)) return true;
         }
@@ -2716,7 +2109,7 @@ public class CDI41BeanValidator {
      * @param element the field or parameter to check
      * @return true if @Delegate annotation is present
      */
-    private boolean hasDelegateAnnotation(java.lang.reflect.AnnotatedElement element) {
+    public boolean hasDelegateAnnotation(java.lang.reflect.AnnotatedElement element) {
         for (Annotation ann : annotationsOf(element)) {
             if (AnnotationPredicates.hasDelegateAnnotation(ann.annotationType())) {
                 return true;
@@ -2744,14 +2137,14 @@ public class CDI41BeanValidator {
     /**
      * Extracts producer name from @Named annotation, or returns empty string.
      */
-    private String extractProducerName(AnnotatedElement element) {
+    public String extractProducerName(AnnotatedElement element) {
         return beanRegistrationService.extractProducerName(element);
     }
 
     /**
      * Extracts qualifiers from an annotated element.
      */
-    private Set<Annotation> extractQualifiers(AnnotatedElement element) {
+    public Set<Annotation> extractQualifiers(AnnotatedElement element) {
         return beanRegistrationService.extractQualifiers(element);
     }
 
@@ -2776,7 +2169,7 @@ public class CDI41BeanValidator {
     /**
      * Finds the disposer method for a producer member by matching a disposed parameter type and qualifiers.
      */
-    private Method findDisposerForProducer(Class<?> clazz,
+    public Method findDisposerForProducer(Class<?> clazz,
                                            Set<Type> producerTypes,
                                            Set<Annotation> producerQualifiers) {
         return producerDisposerValidator.findDisposerForProducer(clazz, producerTypes, producerQualifiers);
@@ -2807,7 +2200,7 @@ public class CDI41BeanValidator {
      * - @PostConstruct method
      * - @PreDestroy method
      */
-    private <T> void populateInjectionMetadata(BeanImpl<T> bean, Class<T> clazz) {
+    public <T> void populateInjectionMetadata(BeanImpl<T> bean, Class<T> clazz) {
         // 1. Find and set a constructor per JSR-330 rules (only in the bean class itself)
         // - If there's an @Inject constructor, use it
         // - Otherwise, leave null (BeanImpl will use no-args constructor)
@@ -3158,7 +2551,7 @@ public class CDI41BeanValidator {
         return sb.toString();
     }
 
-    private List<Class<?>> collectClassHierarchy(Class<?> leafClass) {
+    public List<Class<?>> collectClassHierarchy(Class<?> leafClass) {
         List<Class<?>> hierarchy = new ArrayList<>();
         Class<?> current = leafClass;
         while (current != null && current != Object.class) {
@@ -3168,7 +2561,7 @@ public class CDI41BeanValidator {
         return hierarchy;
     }
 
-    private boolean isOverriddenForInjectionMetadata(Method superMethod, Class<?> leafClass) {
+    public boolean isOverriddenForInjectionMetadata(Method superMethod, Class<?> leafClass) {
         if (Modifier.isPrivate(superMethod.getModifiers())) {
             return false;
         }
@@ -3202,7 +2595,7 @@ public class CDI41BeanValidator {
         return false;
     }
 
-    private InjectionPoint resolvedInjectionPoint(InjectionPoint delegate, Type resolvedType) {
+    public InjectionPoint resolvedInjectionPoint(InjectionPoint delegate, Type resolvedType) {
         if (delegate == null) {
             return null;
         }
@@ -3212,7 +2605,7 @@ public class CDI41BeanValidator {
     // InjectionPoint best-effort creation
     // -----------------------
 
-    private InjectionPoint tryCreateInjectionPoint(AnnotatedElement element, Bean<?> owningBean) {
+    public InjectionPoint tryCreateInjectionPoint(AnnotatedElement element, Bean<?> owningBean) {
         try {
             if (element instanceof Field) {
                 Field field = (Field) element;
@@ -3251,7 +2644,7 @@ public class CDI41BeanValidator {
         interceptorDecoratorDefinitionValidator.validateAndRegisterInterceptor(clazz);
     }
 
-    private boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
+    public boolean isStereotypeAnnotationType(Class<? extends Annotation> annotationType) {
         return hasStereotypeAnnotation(annotationType) ||
                 knowledgeBase.isRegisteredStereotype(annotationType);
     }

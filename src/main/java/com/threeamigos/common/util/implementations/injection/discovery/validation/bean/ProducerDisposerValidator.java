@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.discovery.validation.bean;
 
+import com.threeamigos.common.util.implementations.injection.discovery.validation.CDI41BeanValidator;
 import com.threeamigos.common.util.implementations.injection.annotations.QualifiersHelper;
 import com.threeamigos.common.util.implementations.injection.knowledgebase.KnowledgeBase;
 import com.threeamigos.common.util.implementations.injection.resolution.TypeChecker;
@@ -25,75 +26,18 @@ import static com.threeamigos.common.util.implementations.injection.annotations.
  * Extracted producer/disposer validation rules and specialization matching.
  */
 public class ProducerDisposerValidator {
-
-    public interface Ops {
-        boolean hasInjectAnnotation(AnnotatedElement element);
-
-        boolean hasProducesAnnotation(AnnotatedElement element);
-
-        boolean hasDisposesAnnotation(AnnotatedElement element);
-
-        boolean hasObservesAnnotation(AnnotatedElement element);
-
-        boolean hasObservesAsyncAnnotation(AnnotatedElement element);
-
-        boolean hasSpecializesAnnotation(AnnotatedElement element);
-
-        Type baseTypeOf(Field field);
-
-        Type baseTypeOf(Method method);
-
-        Type baseTypeOf(Parameter parameter);
-
-        Set<Type> typeClosureOf(Method method);
-
-        Set<Type> typeClosureOf(Field field);
-
-        Annotation[] annotationsOf(AnnotatedElement element);
-
-        void checkProducerTypeValidity(Type type);
-
-        void validateProducerMethodTypeVariableScopeConstraint(Method method);
-
-        void validateProducerFieldTypeVariableScopeConstraint(Field field);
-
-        void checkInjectionTypeValidity(Type type);
-
-        void validateQualifiers(Annotation[] annotations, String location);
-
-        boolean isNotValidNamedInjectionPointUsage(AnnotatedElement injectionPoint);
-
-        boolean isNotValidInjectionPointMetadataUsage(AnnotatedElement injectionPoint, boolean disposerParameter);
-
-        boolean isNotValidInterceptionFactoryInjectionPointUsage(AnnotatedElement element, boolean producerMethodParameter);
-
-        String extractProducerName(AnnotatedElement element);
-
-        Set<Annotation> extractQualifiers(AnnotatedElement element);
-
-        boolean isAlternativeDeclared(AnnotatedElement element);
-
-        boolean isAlternativeEnabled(AnnotatedElement element, Class<?> declaringClass, boolean alternativeDeclared);
-
-        String fmtField(Field field);
-
-        String fmtMethod(Method method);
-
-        String fmtParameter(Parameter parameter);
-    }
-
     private final KnowledgeBase knowledgeBase;
     private final TypeChecker typeChecker;
-    private final Ops ops;
+    private final CDI41BeanValidator validator;
     private final Map<String, Method> specializingProducerMethodsBySpecializedSignature;
 
     public ProducerDisposerValidator(KnowledgeBase knowledgeBase,
                               TypeChecker typeChecker,
-                              Ops ops,
+                              CDI41BeanValidator validator,
                               Map<String, Method> specializingProducerMethodsBySpecializedSignature) {
         this.knowledgeBase = Objects.requireNonNull(knowledgeBase, "knowledgeBase cannot be null");
         this.typeChecker = Objects.requireNonNull(typeChecker, "typeChecker cannot be null");
-        this.ops = Objects.requireNonNull(ops, "ops cannot be null");
+        this.validator = Objects.requireNonNull(validator, "validator cannot be null");
         this.specializingProducerMethodsBySpecializedSignature = Objects.requireNonNull(
                 specializingProducerMethodsBySpecializedSignature,
                 "specializingProducerMethodsBySpecializedSignature cannot be null");
@@ -102,22 +46,22 @@ public class ProducerDisposerValidator {
     public boolean validateProducerField(Field field) {
         boolean valid = true;
 
-        if (ops.hasInjectAnnotation(field)) {
-            knowledgeBase.addDefinitionError(ops.fmtField(field) + ": producer field may not be annotated @Inject");
+        if (validator.hasInjectAnnotation(field)) {
+            knowledgeBase.addDefinitionError(validator.fmtField(field) + ": producer field may not be annotated @Inject");
             valid = false;
         }
 
         try {
-            ops.checkProducerTypeValidity(ops.baseTypeOf(field));
+            validator.checkProducerTypeValidity(validator.baseTypeOf(field));
         } catch (DefinitionException e) {
-            knowledgeBase.addDefinitionError(ops.fmtField(field) + ": " + e.getMessage());
+            knowledgeBase.addDefinitionError(validator.fmtField(field) + ": " + e.getMessage());
             valid = false;
         }
 
         try {
-            ops.validateProducerFieldTypeVariableScopeConstraint(field);
+            validator.validateProducerFieldTypeVariableScopeConstraint(field);
         } catch (DefinitionException e) {
-            knowledgeBase.addDefinitionError(ops.fmtField(field) + ": " + e.getMessage());
+            knowledgeBase.addDefinitionError(validator.fmtField(field) + ": " + e.getMessage());
             valid = false;
         }
 
@@ -128,22 +72,22 @@ public class ProducerDisposerValidator {
         boolean valid = true;
 
         if (Modifier.isAbstract(method.getModifiers())) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": producer method must not be abstract");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": producer method must not be abstract");
             valid = false;
         }
 
         if (method.getTypeParameters().length > 0) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": producer method must not be generic");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": producer method must not be generic");
             valid = false;
         }
 
         if (method.isVarArgs()) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": producer method must not be varargs");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": producer method must not be varargs");
             valid = false;
         }
 
-        if (ops.hasInjectAnnotation(method)) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": producer method must not be annotated @Inject");
+        if (validator.hasInjectAnnotation(method)) {
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": producer method must not be annotated @Inject");
             valid = false;
         }
 
@@ -152,63 +96,63 @@ public class ProducerDisposerValidator {
         }
 
         try {
-            ops.checkProducerTypeValidity(ops.baseTypeOf(method));
+            validator.checkProducerTypeValidity(validator.baseTypeOf(method));
         } catch (DefinitionException e) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": " + e.getMessage());
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": " + e.getMessage());
             valid = false;
         }
 
         try {
-            ops.validateProducerMethodTypeVariableScopeConstraint(method);
+            validator.validateProducerMethodTypeVariableScopeConstraint(method);
         } catch (DefinitionException e) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": " + e.getMessage());
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": " + e.getMessage());
             valid = false;
         }
 
         for (Parameter parameter : method.getParameters()) {
-            if (ops.hasDisposesAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasDisposesAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": producer method parameter may not be annotated @Disposes");
                 valid = false;
                 continue;
             }
-            if (ops.hasObservesAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasObservesAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": producer method parameter may not be annotated @Observes");
                 valid = false;
                 continue;
             }
-            if (ops.hasObservesAsyncAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasObservesAsyncAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": producer method parameter may not be annotated @ObservesAsync");
                 valid = false;
                 continue;
             }
 
             try {
-                ops.checkInjectionTypeValidity(ops.baseTypeOf(parameter));
+                validator.checkInjectionTypeValidity(validator.baseTypeOf(parameter));
             } catch (IllegalArgumentException e) {
-                knowledgeBase.addInjectionError(ops.fmtParameter(parameter) + ": " + e.getMessage());
+                knowledgeBase.addInjectionError(validator.fmtParameter(parameter) + ": " + e.getMessage());
                 valid = false;
             } catch (DefinitionException e) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) + ": " + e.getMessage());
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) + ": " + e.getMessage());
                 valid = false;
             }
             try {
-                ops.validateQualifiers(ops.annotationsOf(parameter), ops.fmtMethod(method));
+                validator.validateQualifiers(validator.annotationsOf(parameter), validator.fmtMethod(method));
             } catch (DefinitionException e) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) + ": " + e.getMessage());
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) + ": " + e.getMessage());
                 valid = false;
             }
 
-            if (ops.isNotValidNamedInjectionPointUsage(parameter)) {
+            if (validator.isNotValidNamedInjectionPointUsage(parameter)) {
                 valid = false;
             }
 
-            if (ops.isNotValidInjectionPointMetadataUsage(parameter, false)) {
+            if (validator.isNotValidInjectionPointMetadataUsage(parameter, false)) {
                 valid = false;
             }
-            if (ops.isNotValidInterceptionFactoryInjectionPointUsage(parameter, true)) {
+            if (validator.isNotValidInterceptionFactoryInjectionPointUsage(parameter, true)) {
                 valid = false;
             }
         }
@@ -220,91 +164,91 @@ public class ProducerDisposerValidator {
         boolean valid = true;
 
         if (Modifier.isAbstract(method.getModifiers())) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": disposer method must not be abstract");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": disposer method must not be abstract");
             valid = false;
         }
 
         if (method.getTypeParameters().length > 0) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": disposer method must not be generic");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": disposer method must not be generic");
             valid = false;
         }
 
-        if (ops.hasProducesAnnotation(method)) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": disposer method may not be annotated @Produces");
+        if (validator.hasProducesAnnotation(method)) {
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": disposer method may not be annotated @Produces");
             valid = false;
         }
 
-        if (ops.hasInjectAnnotation(method)) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": disposer method may not be annotated @Inject");
+        if (validator.hasInjectAnnotation(method)) {
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": disposer method may not be annotated @Inject");
             valid = false;
         }
 
         int disposesCount = 0;
         Parameter disposesParam = null;
         for (Parameter parameter : method.getParameters()) {
-            if (ops.hasDisposesAnnotation(parameter)) {
+            if (validator.hasDisposesAnnotation(parameter)) {
                 disposesCount++;
                 disposesParam = parameter;
             }
         }
 
         if (disposesCount == 0) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": disposer method must have exactly one @Disposes parameter (found 0)");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": disposer method must have exactly one @Disposes parameter (found 0)");
             valid = false;
         } else if (disposesCount > 1) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) + ": disposer method must have exactly one @Disposes parameter (found " + disposesCount + ")");
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) + ": disposer method must have exactly one @Disposes parameter (found " + disposesCount + ")");
             valid = false;
         }
 
         if (disposesParam != null) {
             try {
-                ops.checkInjectionTypeValidity(ops.baseTypeOf(disposesParam));
+                validator.checkInjectionTypeValidity(validator.baseTypeOf(disposesParam));
             } catch (IllegalArgumentException e) {
-                knowledgeBase.addInjectionError(ops.fmtParameter(disposesParam) + ": " + e.getMessage());
+                knowledgeBase.addInjectionError(validator.fmtParameter(disposesParam) + ": " + e.getMessage());
                 valid = false;
             } catch (DefinitionException e) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(disposesParam) + ": " + e.getMessage());
+                knowledgeBase.addDefinitionError(validator.fmtParameter(disposesParam) + ": " + e.getMessage());
                 valid = false;
             }
         }
 
         for (Parameter parameter : method.getParameters()) {
-            if (ops.hasObservesAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasObservesAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": disposer method parameter may not be annotated @Observes");
                 valid = false;
             }
-            if (ops.hasObservesAsyncAnnotation(parameter)) {
-                knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) +
+            if (validator.hasObservesAsyncAnnotation(parameter)) {
+                knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) +
                         ": disposer method parameter may not be annotated @ObservesAsync");
                 valid = false;
             }
         }
 
         for (Parameter parameter : method.getParameters()) {
-            if (!ops.hasDisposesAnnotation(parameter)) {
+            if (!validator.hasDisposesAnnotation(parameter)) {
                 try {
-                    ops.checkInjectionTypeValidity(ops.baseTypeOf(parameter));
+                    validator.checkInjectionTypeValidity(validator.baseTypeOf(parameter));
                 } catch (IllegalArgumentException e) {
-                    knowledgeBase.addInjectionError(ops.fmtParameter(parameter) + ": " + e.getMessage());
+                    knowledgeBase.addInjectionError(validator.fmtParameter(parameter) + ": " + e.getMessage());
                     valid = false;
                 } catch (DefinitionException e) {
-                    knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) + ": " + e.getMessage());
+                    knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) + ": " + e.getMessage());
                     valid = false;
                 }
 
                 try {
-                    ops.validateQualifiers(ops.annotationsOf(parameter), ops.fmtMethod(method));
+                    validator.validateQualifiers(validator.annotationsOf(parameter), validator.fmtMethod(method));
                 } catch (DefinitionException e) {
-                    knowledgeBase.addDefinitionError(ops.fmtParameter(parameter) + ": " + e.getMessage());
+                    knowledgeBase.addDefinitionError(validator.fmtParameter(parameter) + ": " + e.getMessage());
                     valid = false;
                 }
 
-                if (ops.isNotValidNamedInjectionPointUsage(parameter)) {
+                if (validator.isNotValidNamedInjectionPointUsage(parameter)) {
                     valid = false;
                 }
 
-                if (ops.isNotValidInjectionPointMetadataUsage(parameter, true)) {
+                if (validator.isNotValidInjectionPointMetadataUsage(parameter, true)) {
                     valid = false;
                 }
             }
@@ -314,12 +258,12 @@ public class ProducerDisposerValidator {
     }
 
     public boolean validateSpecializingProducerMethodConstraint(Method method) {
-        if (!ops.hasSpecializesAnnotation(method)) {
+        if (!validator.hasSpecializesAnnotation(method)) {
             return true;
         }
 
         if (Modifier.isStatic(method.getModifiers())) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) +
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) +
                     ": producer method annotated @Specializes must be non-static");
             return false;
         }
@@ -327,21 +271,21 @@ public class ProducerDisposerValidator {
         Class<?> declaringClass = method.getDeclaringClass();
         Class<?> directSuperclass = declaringClass.getSuperclass();
         if (directSuperclass == null || Object.class.equals(directSuperclass)) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) +
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) +
                     ": producer method annotated @Specializes must directly override another producer method");
             return false;
         }
 
         Method overridden = resolveDirectlyOverriddenProducerMethod(method);
         if (overridden == null) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) +
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) +
                     ": producer method annotated @Specializes must directly override another producer method");
             return false;
         }
 
-        String inheritedName = ops.extractProducerName(overridden);
+        String inheritedName = validator.extractProducerName(overridden);
         if (!inheritedName.isEmpty() && declaresBeanNameExplicitly(method)) {
-            knowledgeBase.addDefinitionError(ops.fmtMethod(method) +
+            knowledgeBase.addDefinitionError(validator.fmtMethod(method) +
                     ": specializing producer method may not explicitly declare @Named when specialized producer has name '" +
                     inheritedName + "'");
             return false;
@@ -351,9 +295,9 @@ public class ProducerDisposerValidator {
             String specializedSignature = producerMethodSpecializationSignature(overridden);
             Method previousSpecializer = specializingProducerMethodsBySpecializedSignature.get(specializedSignature);
             if (previousSpecializer != null && !previousSpecializer.equals(method)) {
-                knowledgeBase.addError(ops.fmtMethod(method) +
-                        ": inconsistent specialization. Both " + ops.fmtMethod(previousSpecializer) +
-                        " and " + ops.fmtMethod(method) + " specialize " + ops.fmtMethod(overridden));
+                knowledgeBase.addError(validator.fmtMethod(method) +
+                        ": inconsistent specialization. Both " + validator.fmtMethod(previousSpecializer) +
+                        " and " + validator.fmtMethod(method) + " specialize " + validator.fmtMethod(overridden));
                 return false;
             }
             specializingProducerMethodsBySpecializedSignature.put(specializedSignature, method);
@@ -373,7 +317,7 @@ public class ProducerDisposerValidator {
         }
         try {
             Method overridden = directSuperclass.getDeclaredMethod(method.getName(), method.getParameterTypes());
-            if (!ops.hasProducesAnnotation(overridden)) {
+            if (!validator.hasProducesAnnotation(overridden)) {
                 return null;
             }
             return overridden;
@@ -387,13 +331,13 @@ public class ProducerDisposerValidator {
             return false;
         }
         Class<?> declaringClass = method.getDeclaringClass();
-        boolean methodAlternative = ops.isAlternativeDeclared(method);
-        boolean classAlternative = ops.isAlternativeDeclared(declaringClass);
+        boolean methodAlternative = validator.isAlternativeDeclared(method);
+        boolean classAlternative = validator.isAlternativeDeclared(declaringClass);
         if (!methodAlternative && !classAlternative) {
             return true;
         }
         AnnotatedElement enablementElement = methodAlternative ? method : declaringClass;
-        return ops.isAlternativeEnabled(enablementElement, declaringClass, true);
+        return validator.isAlternativeEnabled(enablementElement, declaringClass, true);
     }
 
     public String producerMethodSpecializationSignature(Method method) {
@@ -448,32 +392,32 @@ public class ProducerDisposerValidator {
             return false;
         }
 
-        Type disposesType = ops.baseTypeOf(disposesParameter);
-        Set<Annotation> requiredQualifiers = QualifiersHelper.extractQualifiers(ops.annotationsOf(disposesParameter));
+        Type disposesType = validator.baseTypeOf(disposesParameter);
+        Set<Annotation> requiredQualifiers = QualifiersHelper.extractQualifiers(validator.annotationsOf(disposesParameter));
 
         for (Method producerMethod : clazz.getDeclaredMethods()) {
-            if (!ops.hasProducesAnnotation(producerMethod)) {
+            if (!validator.hasProducesAnnotation(producerMethod)) {
                 continue;
             }
-            for (Type producerType : ops.typeClosureOf(producerMethod)) {
-                if (matchesDisposesParameter(disposesParameter, producerType, ops.extractQualifiers(producerMethod))) {
+            for (Type producerType : validator.typeClosureOf(producerMethod)) {
+                if (matchesDisposesParameter(disposesParameter, producerType, validator.extractQualifiers(producerMethod))) {
                     return true;
                 }
             }
         }
 
         for (Field producerField : clazz.getDeclaredFields()) {
-            if (!ops.hasProducesAnnotation(producerField)) {
+            if (!validator.hasProducesAnnotation(producerField)) {
                 continue;
             }
-            for (Type producerType : ops.typeClosureOf(producerField)) {
-                if (matchesDisposesParameter(disposesParameter, producerType, ops.extractQualifiers(producerField))) {
+            for (Type producerType : validator.typeClosureOf(producerField)) {
+                if (matchesDisposesParameter(disposesParameter, producerType, validator.extractQualifiers(producerField))) {
                     return true;
                 }
             }
         }
 
-        knowledgeBase.addDefinitionError(ops.fmtMethod(disposerMethod) +
+        knowledgeBase.addDefinitionError(validator.fmtMethod(disposerMethod) +
                 ": @Disposes parameter type/qualifiers do not match any producer method return type or producer field type " +
                 "(type=" + disposesType.getTypeName() + ", qualifiers=" + formatQualifiers(requiredQualifiers) + ")");
         return false;
@@ -481,7 +425,7 @@ public class ProducerDisposerValidator {
 
     public Parameter getDisposesParameter(Method method) {
         for (Parameter param : method.getParameters()) {
-            if (ops.hasDisposesAnnotation(param)) {
+            if (validator.hasDisposesAnnotation(param)) {
                 return param;
             }
         }
@@ -490,7 +434,7 @@ public class ProducerDisposerValidator {
 
     public boolean hasDisposesParameter(Method method) {
         for (Parameter param : method.getParameters()) {
-            if (ops.hasDisposesAnnotation(param)) {
+            if (validator.hasDisposesAnnotation(param)) {
                 return true;
             }
         }
@@ -501,7 +445,7 @@ public class ProducerDisposerValidator {
         if (element == null) {
             return false;
         }
-        for (Annotation annotation : ops.annotationsOf(element)) {
+        for (Annotation annotation : validator.annotationsOf(element)) {
             if (annotation != null && hasNamedAnnotation(annotation.annotationType())) {
                 return true;
             }
@@ -512,18 +456,18 @@ public class ProducerDisposerValidator {
     private boolean matchesDisposesParameter(Parameter disposesParameter,
                                              Type producerType,
                                              Set<Annotation> producerQualifiers) {
-        Set<Annotation> requiredQualifiers = QualifiersHelper.extractQualifiers(ops.annotationsOf(disposesParameter));
+        Set<Annotation> requiredQualifiers = QualifiersHelper.extractQualifiers(validator.annotationsOf(disposesParameter));
         if (!QualifiersHelper.qualifiersMatch(requiredQualifiers, producerQualifiers)) {
             return false;
         }
 
-        Type disposesType = ops.baseTypeOf(disposesParameter);
+        Type disposesType = validator.baseTypeOf(disposesParameter);
         try {
             return typeChecker.isAssignable(disposesType, producerType);
         } catch (DefinitionException e) {
             return false;
         } catch (IllegalStateException e) {
-            knowledgeBase.addDefinitionError(ops.fmtParameter(disposesParameter) +
+            knowledgeBase.addDefinitionError(validator.fmtParameter(disposesParameter) +
                     ": failed to compare @Disposes type against producer type " + producerType.getTypeName() +
                     " (" + e.getMessage() + ")");
             return false;
