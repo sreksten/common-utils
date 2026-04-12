@@ -2,7 +2,7 @@ package com.threeamigos.common.util.implementations.injection.resolution;
 
 import com.threeamigos.common.util.implementations.collections.Cache;
 
-import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
+import com.threeamigos.common.util.implementations.injection.types.RawTypeExtractor;
 import jakarta.annotation.Nonnull;
 import jakarta.enterprise.inject.spi.DefinitionException;
 import java.lang.reflect.*;

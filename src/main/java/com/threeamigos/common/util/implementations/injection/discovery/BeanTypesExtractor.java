@@ -1,11 +1,7 @@
 package com.threeamigos.common.util.implementations.injection.discovery;
 
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationExtractors;
-
-import com.threeamigos.common.util.implementations.injection.annotations.AnnotationPredicates;
-
 import com.threeamigos.common.util.implementations.injection.util.TypeClosureHelper;
-import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
+import com.threeamigos.common.util.implementations.injection.types.RawTypeExtractor;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.GenericArrayType;

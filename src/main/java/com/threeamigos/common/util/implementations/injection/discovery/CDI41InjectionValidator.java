@@ -17,7 +17,7 @@ import com.threeamigos.common.util.implementations.injection.annotations.Annotat
 import com.threeamigos.common.util.implementations.injection.annotations.AnnotatedMetadataHelper;
 import com.threeamigos.common.util.implementations.injection.resolution.GenericTypeResolver;
 import com.threeamigos.common.util.implementations.injection.annotations.legacy.LegacyNewQualifierHelper;
-import com.threeamigos.common.util.implementations.injection.util.RawTypeExtractor;
+import com.threeamigos.common.util.implementations.injection.types.RawTypeExtractor;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.spi.DefinitionException;

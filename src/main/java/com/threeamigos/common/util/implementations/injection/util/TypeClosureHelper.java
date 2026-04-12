@@ -1,5 +1,6 @@
 package com.threeamigos.common.util.implementations.injection.util;
 
+import com.threeamigos.common.util.implementations.injection.types.RawTypeExtractor;
 import jakarta.annotation.Nonnull;
 
 import java.lang.reflect.GenericArrayType;
