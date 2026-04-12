@@ -4,6 +4,7 @@ package com.threeamigos.common.util.implementations.injection.discovery;
  * Consumer for classes discovered during classpath scanning.
  * Implementations of this interface process discovered classes and determine if they are CDI beans.
  */
+@FunctionalInterface
 public interface ClassConsumer {
 
     /**
