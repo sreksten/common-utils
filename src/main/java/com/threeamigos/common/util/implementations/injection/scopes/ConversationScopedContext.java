@@ -439,7 +439,7 @@ public class ConversationScopedContext implements ScopeContext {
                     try {
                         beanImpl.invokePrePassivate(instance);
                     } catch (Exception e) {
-                        messageHandler.handleException(
+                        messageHandler.exception(
                             "Error invoking @PrePassivate on bean " + bean.getBeanClass().getName() +
                                 " in conversation " + conversationId + ": " + e.getMessage(),
                             e
@@ -532,7 +532,7 @@ public class ConversationScopedContext implements ScopeContext {
                 try {
                     beanImpl.invokePostActivate(instance);
                 } catch (Exception e) {
-                    messageHandler.handleException(
+                    messageHandler.exception(
                         "Error invoking @PostActivate on bean " + bean.getBeanClass().getName() +
                             " in conversation " + conversationId + ": " + e.getMessage(),
                         e
@@ -558,7 +558,7 @@ public class ConversationScopedContext implements ScopeContext {
             ConversationMetadata metadata = entry.getValue();
 
             if (metadata.isTimedOut()) {
-                messageHandler.handleInfoMessage("Conversation " + conversationId + " timed out after " +
+                messageHandler.info("Conversation " + conversationId + " timed out after " +
                     TimeUnit.MILLISECONDS.toMinutes(metadata.getTimeoutMillis()) + " minutes of inactivity. Destroying...");
                 destroyConversation(conversationId);
             }
@@ -581,7 +581,7 @@ public class ConversationScopedContext implements ScopeContext {
                 try {
                     bean.destroy(instance, ctx);
                 } catch (Exception e) {
-                    messageHandler.handleException(
+                    messageHandler.exception(
                         "Error destroying bean " + bean.getBeanClass().getName() +
                             " in conversation " + conversationId + ": " + e.getMessage(),
                         e
@@ -644,7 +644,7 @@ public class ConversationScopedContext implements ScopeContext {
                 }
             }
         } catch (Exception e) {
-            messageHandler.handleException(
+            messageHandler.exception(
                 "Error invoking @" + annotationType.name() + " on " + instance.getClass().getName() +
                     ": " + e.getMessage(),
                 e

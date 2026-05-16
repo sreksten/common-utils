@@ -193,7 +193,7 @@ public class BuildCompatibleExtensionRunner {
             method.setAccessible(true);
             Object[] args = resolvePhaseMethodArguments(method, phase, syntheticComponents);
             method.invoke(invocation.extension, args);
-            messageHandler.handleInfoMessage("[Syringe] Invoked BCE phase method: " +
+            messageHandler.info("[Syringe] Invoked BCE phase method: " +
                 invocation.extension.getClass().getSimpleName() + "." + method.getName() +
                 " (" + phase + ")");
         } catch (IllegalAccessException e) {
@@ -1098,7 +1098,7 @@ public class BuildCompatibleExtensionRunner {
                 args[i] = common;
             }
             phaseMethod.invoke(invocation.extension, args);
-            messageHandler.handleInfoMessage("[Syringe] Invoked BCE " + phase + " method: " +
+            messageHandler.info("[Syringe] Invoked BCE " + phase + " method: " +
                 invocation.extension.getClass().getSimpleName() + "." + phaseMethod.getName());
         } catch (IllegalAccessException e) {
             throw new DefinitionException("Cannot access BCE " + phase + " method " +
@@ -1188,7 +1188,7 @@ public class BuildCompatibleExtensionRunner {
                 args[i] = mapped;
             }
             phaseMethod.invoke(invocation.extension, args);
-            messageHandler.handleInfoMessage("[Syringe] Invoked BCE ENHANCEMENT method: " +
+            messageHandler.info("[Syringe] Invoked BCE ENHANCEMENT method: " +
                 invocation.extension.getClass().getSimpleName() + "." + phaseMethod.getName());
         } catch (IllegalAccessException e) {
             throw new DefinitionException("Cannot access BCE ENHANCEMENT method " +

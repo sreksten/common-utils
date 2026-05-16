@@ -5,7 +5,7 @@ import com.threeamigos.common.util.implementations.json.JsonBuilderFactory;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.implementations.persistence.file.rootpathprovider.RootPathProviderImpl;
 import com.threeamigos.common.util.interfaces.json.Json;
-import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ThrowableHandler;
 import com.threeamigos.common.util.interfaces.persistence.PersistResult;
 import com.threeamigos.common.util.interfaces.persistence.file.FilePersistResult;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
@@ -36,13 +36,13 @@ class JsonFilePersisterIntegrationTest {
 
     private ResourceBundle filePersistResultBundle;
 
-    private ExceptionHandler exceptionHandler;
+    private ThrowableHandler throwableHandler;
 
     private File temporaryDirectory;
 
     @BeforeEach
     void setup(@TempDir File temporaryDirectory) {
-        exceptionHandler = new InMemoryMessageHandler();
+        throwableHandler = new InMemoryMessageHandler();
         this.temporaryDirectory = temporaryDirectory;
 
         filePersistResultBundle = ResourceBundle.getBundle("com.threeamigos.common.util.implementations.persistence.file.FilePersistResultImpl.FilePersistResultImpl");
@@ -250,7 +250,7 @@ class JsonFilePersisterIntegrationTest {
         void setup() {
             synchronized (System.getProperties()) {
                 System.setProperty(RootPathProviderImpl.ROOT_PATH_DIRECTORY_PARAMETER, temporaryDirectory.getAbsolutePath());
-                rootPathProvider = new RootPathProviderImpl(this, exceptionHandler);
+                rootPathProvider = new RootPathProviderImpl(this, throwableHandler);
             }
             json = JsonBuilderFactory.builder().build(TestClass.class);
         }
@@ -260,7 +260,7 @@ class JsonFilePersisterIntegrationTest {
         void shouldNotBeSuccessfulWhenFailingToSaveFileToTargetDirectory() {
             // Given
             TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
-            JsonFilePersister<TestClass> sut = new FailingJsonFilePersister<>("filename-write", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+            JsonFilePersister<TestClass> sut = new FailingJsonFilePersister<>("filename-write", ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
             // When
             PersistResult result = sut.save(instance);
             // Then
@@ -273,7 +273,7 @@ class JsonFilePersisterIntegrationTest {
         void shouldNotBeSuccessfulWhenFailingToReadExistingFileFromTargetDirectory() throws IOException {
             // Given
             TestClass entity = new TestClass();
-            JsonFilePersister<TestClass> sut = new FailingJsonFilePersister<>("corrupted-filename", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+            JsonFilePersister<TestClass> sut = new FailingJsonFilePersister<>("corrupted-filename", ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
             createFileWithJsonRepresentation(sut.getFilenameWithPath());
             // When
             PersistResult persistResult = sut.load(entity);
@@ -285,8 +285,8 @@ class JsonFilePersisterIntegrationTest {
 
         private class FailingJsonFilePersister<T> extends JsonFilePersister<T> {
 
-            public FailingJsonFilePersister(String filename, String entityDescription, RootPathProvider rootPathProvider, ExceptionHandler exceptionHandler, Json<T> json) {
-                super(filename, entityDescription, rootPathProvider, exceptionHandler, json);
+            public FailingJsonFilePersister(String filename, String entityDescription, RootPathProvider rootPathProvider, ThrowableHandler throwableHandler, Json<T> json) {
+                super(filename, entityDescription, rootPathProvider, throwableHandler, json);
             }
 
             @Override
@@ -305,10 +305,10 @@ class JsonFilePersisterIntegrationTest {
         RootPathProvider rootPathProvider;
         synchronized (System.getProperties()) {
             System.setProperty(RootPathProviderImpl.ROOT_PATH_DIRECTORY_PARAMETER, directory.getAbsolutePath());
-            rootPathProvider = new RootPathProviderImpl(this, exceptionHandler);
+            rootPathProvider = new RootPathProviderImpl(this, throwableHandler);
         }
         Json<TestClass> json = JsonBuilderFactory.builder().build(TestClass.class);
-        return new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        return new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
     }
 
     private void createFileWithJsonRepresentation(String filename) throws IOException {

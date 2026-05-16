@@ -52,7 +52,7 @@ public class RootPathProviderUnitTest {
         }
 
         @Test
-        @DisplayName("Should throw NullExceptionHandlerException when exceptionHandler parameter is null")
+        @DisplayName("Should throw NullExceptionHandlerException when throwableHandler parameter is null")
         void shouldThrowsExceptionWhenExceptionHandlerIsNull() {
             assertThrows(NullExceptionHandlerException.class, () -> new RootPathProviderImpl(this, null));
         }
@@ -116,8 +116,8 @@ public class RootPathProviderUnitTest {
             // When
             new RootPathProviderImpl(testClass, messageHandler);
             // Then
-            assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(NoPackageException.class, messageHandler.getAllExceptions().get(0).getClass());
+            assertEquals(1, messageHandler.getAllThrowables().size());
+            assertEquals(NoPackageException.class, messageHandler.getAllThrowables().get(0).getClass());
         }
 
         @Test
@@ -129,8 +129,8 @@ public class RootPathProviderUnitTest {
             // When
             new RootPathProviderImpl(testClass, messageHandler);
             // Then
-            assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(NoCanonicalNameException.class, messageHandler.getAllExceptions().get(0).getClass());
+            assertEquals(1, messageHandler.getAllThrowables().size());
+            assertEquals(NoCanonicalNameException.class, messageHandler.getAllThrowables().get(0).getClass());
         }
     }
 
@@ -179,8 +179,8 @@ public class RootPathProviderUnitTest {
                 new RootPathProviderImpl(this, messageHandler);
             }
             // Then
-            assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(EmptyPathException.class, messageHandler.getAllExceptions().get(0).getClass());
+            assertEquals(1, messageHandler.getAllThrowables().size());
+            assertEquals(EmptyPathException.class, messageHandler.getAllThrowables().get(0).getClass());
         }
 
         @Test
@@ -233,8 +233,8 @@ public class RootPathProviderUnitTest {
                 new RootPathProviderImpl(this, messageHandler);
             }
             // Then
-            assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(ParentDirectoryNotWriteableException.class, messageHandler.getAllExceptions().get(0).getClass());
+            assertEquals(1, messageHandler.getAllThrowables().size());
+            assertEquals(ParentDirectoryNotWriteableException.class, messageHandler.getAllThrowables().get(0).getClass());
         }
 
         @Test
@@ -267,8 +267,8 @@ public class RootPathProviderUnitTest {
                 new RootPathProviderImpl(this, messageHandler);
             }
             // Then
-            assertEquals(1, messageHandler.getAllExceptions().size());
-            assertEquals(ParentDirectoryNotReadableException.class, messageHandler.getAllExceptions().get(0).getClass());
+            assertEquals(1, messageHandler.getAllThrowables().size());
+            assertEquals(ParentDirectoryNotReadableException.class, messageHandler.getAllThrowables().get(0).getClass());
         }
 
         @Test
@@ -351,8 +351,8 @@ public class RootPathProviderUnitTest {
                     new RootPathProviderImpl(this, messageHandler);
                 }
                 // Then
-                assertEquals(1, messageHandler.getAllExceptions().size());
-                assertEquals(DirectoryNotReadableException.class, messageHandler.getAllExceptions().get(0).getClass());
+                assertEquals(1, messageHandler.getAllThrowables().size());
+                assertEquals(DirectoryNotReadableException.class, messageHandler.getAllThrowables().get(0).getClass());
             }
 
             @Test
@@ -387,8 +387,8 @@ public class RootPathProviderUnitTest {
                     new RootPathProviderImpl(this, messageHandler);
                 }
                 // Then
-                assertEquals(1, messageHandler.getAllExceptions().size());
-                assertEquals(DirectoryNotWriteableException.class, messageHandler.getAllExceptions().get(0).getClass());
+                assertEquals(1, messageHandler.getAllThrowables().size());
+                assertEquals(DirectoryNotWriteableException.class, messageHandler.getAllThrowables().get(0).getClass());
             }
 
             @Test
@@ -427,8 +427,8 @@ public class RootPathProviderUnitTest {
                     new RootPathProviderImpl(this, messageHandler);
                 }
                 // Then
-                assertEquals(1, messageHandler.getAllExceptions().size());
-                assertEquals(PathPointsToFileException.class, messageHandler.getAllExceptions().get(0).getClass());
+                assertEquals(1, messageHandler.getAllThrowables().size());
+                assertEquals(PathPointsToFileException.class, messageHandler.getAllThrowables().get(0).getClass());
             }
 
             @Test
@@ -449,7 +449,7 @@ public class RootPathProviderUnitTest {
                 assertFalse(sut.isRootPathAccessible());
                 assertNull(sut.getRootPath());
                 assertFalse(sut.hasUnrecoverableErrors());
-                assertEquals(PathPointsToFileException.class, messageHandler.getAllExceptions().get(0).getClass());
+                assertEquals(PathPointsToFileException.class, messageHandler.getAllThrowables().get(0).getClass());
             }
         }
     }

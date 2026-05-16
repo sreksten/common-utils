@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.persistence.file;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ThrowableHandler;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
 import jakarta.annotation.Nonnull;
 
@@ -17,10 +17,10 @@ public abstract class TextFilePersister<T> extends AbstractFilePersister<T> {
 
     /**
      * @param rootPathProvider to provide the root path where the entity should be persisted
-     * @param exceptionHandler to inform the end user if any error arises
+     * @param ThrowableHandler to inform the end user if any error arises
      */
-    protected TextFilePersister(final @Nonnull RootPathProvider rootPathProvider, final @Nonnull ExceptionHandler exceptionHandler) {
-        super(rootPathProvider, exceptionHandler);
+    protected TextFilePersister(final @Nonnull RootPathProvider rootPathProvider, final @Nonnull ThrowableHandler throwableHandler) {
+        super(rootPathProvider, throwableHandler);
     }
 
     /**

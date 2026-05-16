@@ -157,7 +157,7 @@ public class ContextManager {
                 applicationScopeContext.destroy();
                 destroyedContexts.put(applicationScopeContext, Boolean.TRUE);
             } catch (Exception e) {
-                messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
+                messageHandler.error("Error destroying context: " + e.getMessage());
             }
         }
 
@@ -177,7 +177,7 @@ public class ContextManager {
                 try {
                     scopeContext.destroy();
                 } catch (Exception e) {
-                    messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
+                    messageHandler.error("Error destroying context: " + e.getMessage());
                 } finally {
                     destroyedContexts.put(scopeContext, Boolean.TRUE);
                 }
@@ -220,7 +220,7 @@ public class ContextManager {
         try {
             context.destroy();
         } catch (Exception e) {
-            messageHandler.handleErrorMessage("Error destroying context: " + e.getMessage());
+            messageHandler.error("Error destroying context: " + e.getMessage());
         } finally {
             destroyedContexts.put(context, Boolean.TRUE);
         }
@@ -461,7 +461,7 @@ public class ContextManager {
         try {
             candidate.destroy();
         } catch (Exception e) {
-            messageHandler.handleErrorMessage("Error destroying replaced context: " + e.getMessage());
+            messageHandler.error("Error destroying replaced context: " + e.getMessage());
         } finally {
             destroyed.put(candidate, Boolean.TRUE);
         }

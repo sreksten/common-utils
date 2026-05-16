@@ -3,7 +3,7 @@ package com.threeamigos.common.util.implementations.persistence.file;
 import com.threeamigos.common.util.implementations.TestClass;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.implementations.persistence.file.rootpathprovider.RootPathProviderImpl;
-import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ThrowableHandler;
 import com.threeamigos.common.util.interfaces.persistence.Persister;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
 import jakarta.annotation.Nonnull;
@@ -31,13 +31,13 @@ class TextFilePersisterImplTest {
     private static final String EXPECTED_VALUE =
             "STRING:" + TEST_STRING + System.lineSeparator() + "VALUE:" + TEST_VALUE + System.lineSeparator();
 
-    private ExceptionHandler exceptionHandler;
+    private ThrowableHandler throwableHandler;
     private RootPathProvider rootPathProvider;
 
     @BeforeEach
     void setup() {
-        exceptionHandler = new InMemoryMessageHandler();
-        rootPathProvider = new RootPathProviderImpl(this.getClass(), exceptionHandler);
+        throwableHandler = new InMemoryMessageHandler();
+        rootPathProvider = new RootPathProviderImpl(this.getClass(), throwableHandler);
     }
 
 
@@ -46,7 +46,7 @@ class TextFilePersisterImplTest {
     void shouldSaveToFile() throws IOException {
         // Given
         TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
-        TestClassTextFilePersister sut = new TestClassTextFilePersister(rootPathProvider, exceptionHandler);
+        TestClassTextFilePersister sut = new TestClassTextFilePersister(rootPathProvider, throwableHandler);
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         // When
         sut.save(outputStream, instance);
@@ -59,7 +59,7 @@ class TextFilePersisterImplTest {
     void shouldReadFromInputStream() throws IOException {
         // Given
         TestClass instance = new TestClass();
-        TestClassTextFilePersister sut = new TestClassTextFilePersister(rootPathProvider, exceptionHandler);
+        TestClassTextFilePersister sut = new TestClassTextFilePersister(rootPathProvider, throwableHandler);
         InputStream inputStream = new ByteArrayInputStream(EXPECTED_VALUE.getBytes(StandardCharsets.UTF_8));
         // When
         sut.load(inputStream, instance);
@@ -72,10 +72,10 @@ class TextFilePersisterImplTest {
 
         /**
          * @param rootPathProvider to provide the root path where the entity should be persisted
-         * @param exceptionHandler to inform the end user if any error arises
+         * @param throwableHandler to inform the end user if any error arises
          */
-        protected TestClassTextFilePersister(RootPathProvider rootPathProvider, ExceptionHandler exceptionHandler) {
-            super(rootPathProvider, exceptionHandler);
+        protected TestClassTextFilePersister(RootPathProvider rootPathProvider, ThrowableHandler throwableHandler) {
+            super(rootPathProvider, throwableHandler);
         }
 
         @Override

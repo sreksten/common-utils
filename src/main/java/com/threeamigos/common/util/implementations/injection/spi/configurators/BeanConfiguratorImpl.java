@@ -466,7 +466,7 @@ public class BeanConfiguratorImpl<T> implements BeanConfigurator<T> {
         // Register with knowledge base
         knowledgeBase.addBean(syntheticBean);
 
-        messageHandler.handleInfoMessage("[BeanConfigurator] Created synthetic bean: " +
+        messageHandler.info("[BeanConfigurator] Created synthetic bean: " +
                           beanClass.getSimpleName() +
                           " with scope @" + scope.getSimpleName());
     }

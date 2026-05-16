@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.implementations.persistence.file;
 
 import com.threeamigos.common.util.interfaces.json.Json;
-import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ThrowableHandler;
 import com.threeamigos.common.util.interfaces.persistence.Persister;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
 import jakarta.annotation.Nonnull;
@@ -43,12 +43,12 @@ public class JsonFilePersister<T> extends AbstractFilePersister<T> implements Pe
      *                          retrieve the entity
      * @param entityDescription a human-readable description of the entity
      * @param rootPathProvider  used to find the correct path for the entity
-     * @param exceptionHandler  in case any problems arise
+     * @param throwableHandler  in case any problems arise
      */
     public JsonFilePersister(final @Nonnull String filename, final @Nonnull String entityDescription,
                              final @Nonnull RootPathProvider rootPathProvider,
-                             final @Nonnull ExceptionHandler exceptionHandler, final @Nonnull Json<T> json) {
-        super(rootPathProvider, exceptionHandler);
+                             final @Nonnull ThrowableHandler throwableHandler, final @Nonnull Json<T> json) {
+        super(rootPathProvider, throwableHandler);
         if (filename == null) {
             throw new IllegalArgumentException(getBundle().getString("noFilenameProvided"));
         }

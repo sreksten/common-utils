@@ -89,7 +89,7 @@ public class BasicPreferencesManager<T extends Preferences> implements Preferenc
     }
 
     private void handleError(final String error) {
-        messageHandler.handleErrorMessage(String.format(INVALID_PREFERENCES_TEMPLATE, preferences.getDescription(), error));
+        messageHandler.error(String.format(INVALID_PREFERENCES_TEMPLATE, preferences.getDescription(), error));
     }
 
     @Override
@@ -97,7 +97,7 @@ public class BasicPreferencesManager<T extends Preferences> implements Preferenc
         if (invalidAtLoad || statusTracker.hasChanged()) {
             PersistResult persistResult = persister.save(preferences);
             if (!persistResult.isSuccessful()) {
-                messageHandler.handleErrorMessage(persistResult.getError());
+                messageHandler.error(persistResult.getError());
             }
         }
     }

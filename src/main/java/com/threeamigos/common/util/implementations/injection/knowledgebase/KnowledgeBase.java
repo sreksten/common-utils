@@ -573,7 +573,7 @@ public class KnowledgeBase {
         }
 
         enablementStore.enableAlternative(alternativeClass.getName());
-        messageHandler.handleInfoMessage("[KnowledgeBase] Programmatically enabled alternative: " + alternativeClass.getName());
+        messageHandler.info("[KnowledgeBase] Programmatically enabled alternative: " + alternativeClass.getName());
     }
 
     public boolean isAlternativeEnabledProgrammatically(String className) {
@@ -605,7 +605,7 @@ public class KnowledgeBase {
         extensionRegistrationStore.registerStereotype(stereotype, definitions);
         DynamicAnnotationRegistry.registerDynamicStereotype(stereotype);
 
-        messageHandler.handleInfoMessage("[KnowledgeBase] Registered stereotype: " + stereotype.getSimpleName() +
+        messageHandler.info("[KnowledgeBase] Registered stereotype: " + stereotype.getSimpleName() +
                           " with meta-annotation(s) " + AnnotationsHelper.toList(stereotypeDef));
     }
 
@@ -654,7 +654,7 @@ public class KnowledgeBase {
         extensionRegistrationStore.registerQualifier(qualifier);
         DynamicAnnotationRegistry.registerDynamicQualifier(qualifier);
 
-        messageHandler.handleInfoMessage("[KnowledgeBase] Registered qualifier: " + qualifier.getSimpleName());
+        messageHandler.info("[KnowledgeBase] Registered qualifier: " + qualifier.getSimpleName());
     }
 
     /**
@@ -695,7 +695,7 @@ public class KnowledgeBase {
         extensionRegistrationStore.registerScope(scopeType, metadata);
         DynamicAnnotationRegistry.registerDynamicScope(scopeType);
 
-        messageHandler.handleInfoMessage("[KnowledgeBase] Registered scope: " + scopeType.getSimpleName() +
+        messageHandler.info("[KnowledgeBase] Registered scope: " + scopeType.getSimpleName() +
                           " (normal=" + normal + ", passivating=" + passivating + ")");
     }
 
@@ -775,7 +775,7 @@ public class KnowledgeBase {
         extensionRegistrationStore.registerInterceptorBinding(bindingType, definitions);
         DynamicAnnotationRegistry.registerDynamicInterceptorBinding(bindingType);
 
-        messageHandler.handleInfoMessage("[KnowledgeBase] Registered interceptor binding: " + bindingType.getSimpleName() +
+        messageHandler.info("[KnowledgeBase] Registered interceptor binding: " + bindingType.getSimpleName() +
                           " with  meta-annotation(s) " + AnnotationsHelper.toList(definitions));
     }
 
@@ -838,7 +838,7 @@ public class KnowledgeBase {
             extensionRegistrationStore.registerAnnotatedTypeSource(id, source);
         }
 
-        messageHandler.handleInfoMessage("[KnowledgeBase] Registered annotated type: " + type.getJavaClass().getName() +
+        messageHandler.info("[KnowledgeBase] Registered annotated type: " + type.getJavaClass().getName() +
                           " with ID: " + id);
     }
 
@@ -883,7 +883,7 @@ public class KnowledgeBase {
 
         beanRegistryStore.addSyntheticObserverMethod(observerMethod);
 
-        messageHandler.handleInfoMessage("[KnowledgeBase] Registered synthetic observer method: " +
+        messageHandler.info("[KnowledgeBase] Registered synthetic observer method: " +
                           "observedType=" + observerMethod.getObservedType() +
                           ", async=" + observerMethod.isAsync());
     }
@@ -914,7 +914,7 @@ public class KnowledgeBase {
         // Only add non-empty configurations to avoid clutter
         if (!beansXml.isEmpty()) {
             discoveryStore.addBeansXmlConfiguration(beansXml);
-            messageHandler.handleInfoMessage("[KnowledgeBase] Registered beans.xml configuration: " + beansXml);
+            messageHandler.info("[KnowledgeBase] Registered beans.xml configuration: " + beansXml);
         }
     }
 

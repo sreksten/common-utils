@@ -5,7 +5,7 @@ import com.threeamigos.common.util.implementations.json.JsonBuilderFactory;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
 import com.threeamigos.common.util.implementations.persistence.file.rootpathprovider.RootPathProviderImpl;
 import com.threeamigos.common.util.interfaces.json.Json;
-import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ThrowableHandler;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
@@ -35,15 +35,15 @@ class JsonFilePersisterUnitTest {
     private RootPathProvider rootPathProvider;
     private Json<TestClass> json;
 
-    private ExceptionHandler exceptionHandler;
+    private ThrowableHandler throwableHandler;
 
     @BeforeEach
     void setup(@TempDir File targetDirectory) {
-        exceptionHandler = new InMemoryMessageHandler();
+        throwableHandler = new InMemoryMessageHandler();
         this.targetDirectory = targetDirectory;
         synchronized (System.getProperties()) {
             System.setProperty(RootPathProviderImpl.ROOT_PATH_DIRECTORY_PARAMETER, targetDirectory.getAbsolutePath());
-            rootPathProvider = new RootPathProviderImpl(this, exceptionHandler);
+            rootPathProvider = new RootPathProviderImpl(this, throwableHandler);
         }
         json = JsonBuilderFactory.builder().build(TestClass.class);
     }
@@ -56,23 +56,23 @@ class JsonFilePersisterUnitTest {
     @Test
     @DisplayName("Should throw exception if filename is null")
     void shouldThrowsExceptionIfFilenameIsNull() {
-        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(null, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json));
+        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(null, ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json));
     }
 
     @Test
     @DisplayName("Should throw exception if entity description is null")
     void shouldThrowsExceptionIfEntityDescriptionIsNull() {
-        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, null, rootPathProvider, exceptionHandler, json));
+        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, null, rootPathProvider, throwableHandler, json));
     }
 
     @Test
     @DisplayName("Should throw exception if rootPathProvider is null")
     void shouldThrowsExceptionIfRootPathProviderIsNull() {
-        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, null, exceptionHandler, json));
+        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, null, throwableHandler, json));
     }
 
     @Test
-    @DisplayName("Should throw exception if ExceptionHandler is null")
+    @DisplayName("Should throw exception if ThrowableHandler is null")
     void shouldThrowsExceptionIfExceptionHandlerIsNull() {
         assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, null, json));
     }
@@ -80,14 +80,14 @@ class JsonFilePersisterUnitTest {
     @Test
     @DisplayName("Should throw exception if Json is null")
     void shouldThrowsExceptionIfJsonIsNull() {
-        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, null));
+        assertThrows(IllegalArgumentException.class, () -> new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, null));
     }
 
     @Test
     @DisplayName("Should build a filename adding extension")
     void shouldBuildFilenameAddingExtension() {
         // Given
-        JsonFilePersister<TestClass> sut = new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
         // When
         String filename = sut.getNamePart();
         // Then
@@ -98,7 +98,7 @@ class JsonFilePersisterUnitTest {
     @DisplayName("Should keep track of entity description")
     void shouldKeepsTrackOfEntityDescription() {
         // Given
-        JsonFilePersister<TestClass> sut = new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
         // When
         String entityDescription = sut.getEntityDescription();
         // Then
@@ -109,7 +109,7 @@ class JsonFilePersisterUnitTest {
     @DisplayName("Should build complete filename")
     void shouldBuildCompleteFilename() {
         // Given
-        JsonFilePersister<TestClass> sut = new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>(FILENAME, ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
         String expectedCompleteFilename = targetDirectory.getAbsolutePath() + File.separatorChar +
                 "." + this.getClass().getPackage().getName() + File.separatorChar + sut.getNamePart();
         // When
@@ -124,7 +124,7 @@ class JsonFilePersisterUnitTest {
         // Given
         String illegalFilename = "file" + File.separatorChar + "name";
         // When
-        JsonFilePersister<TestClass> sut = new JsonFilePersister<>(illegalFilename, ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>(illegalFilename, ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
         // Then
         assertThrows(IllegalArgumentException.class, sut::getFilenameWithPath);
     }
@@ -135,7 +135,7 @@ class JsonFilePersisterUnitTest {
         // Given
         TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
         OutputStream outputStream = new ByteArrayOutputStream();
-        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
         // Then
         assertThrows(IllegalArgumentException.class, () -> sut.save(outputStream, null));
     }
@@ -146,7 +146,7 @@ class JsonFilePersisterUnitTest {
         // Given
         TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
         OutputStream outputStream = new ByteArrayOutputStream();
-        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
         // When
         sut.save(outputStream, instance);
         // Then
@@ -159,7 +159,7 @@ class JsonFilePersisterUnitTest {
         // Given
         TestClass instance = new TestClass(TEST_STRING, TEST_VALUE);
         InputStream inputStream = mock(InputStream.class);
-        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
         // Then
         assertThrows(IllegalArgumentException.class, () -> sut.load(inputStream, null));
     }
@@ -170,7 +170,7 @@ class JsonFilePersisterUnitTest {
         // Given
         TestClass instance = new TestClass();
         InputStream inputStream = new ByteArrayInputStream(JSON_REPRESENTATION.getBytes(StandardCharsets.UTF_8));
-        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, exceptionHandler, json);
+        JsonFilePersister<TestClass> sut = new JsonFilePersister<>("filename", ENTITY_DESCRIPTION, rootPathProvider, throwableHandler, json);
         // When
         sut.load(inputStream, instance);
         // Then

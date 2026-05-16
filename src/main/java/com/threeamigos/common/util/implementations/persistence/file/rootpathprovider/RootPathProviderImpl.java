@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.persistence.file.rootpathprovider;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ThrowableHandler;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Nullable;
@@ -26,7 +26,7 @@ public class RootPathProviderImpl implements RootPathProvider {
 
     // End of static methods
 
-    private final ExceptionHandler exceptionHandler;
+    private final ThrowableHandler throwableHandler;
     private String rootPath;
     private boolean rootPathAccessible;
     private boolean hasUnrecoverableErrors;
@@ -41,10 +41,10 @@ public class RootPathProviderImpl implements RootPathProvider {
      * If the {@link #isRootPathAccessible()} method returns true the chosen path can be used to store files.
      *
      * @param object the object to use for root path determination
-     * @param exceptionHandler the exception handler to use
+     * @param throwableHandler the exception handler to use
      */
-    public RootPathProviderImpl(final @Nonnull Object object, final @Nonnull ExceptionHandler exceptionHandler) {
-        this.exceptionHandler = exceptionHandler;
+    public RootPathProviderImpl(final @Nonnull Object object, final @Nonnull ThrowableHandler throwableHandler) {
+        this.throwableHandler = throwableHandler;
         if (object == null) {
             throw new NullObjectException(getBundle().getString("nullObject"));
         }
@@ -61,10 +61,10 @@ public class RootPathProviderImpl implements RootPathProvider {
      * If the {@link #isRootPathAccessible()} method returns true the chosen path can be used to store files.
      *
      * @param clazz the class to use for root path determination
-     * @param exceptionHandler the exception handler to use
+     * @param throwableHandler the exception handler to use
      */
-    public RootPathProviderImpl(final @Nonnull Class<?> clazz, final @Nonnull ExceptionHandler exceptionHandler) {
-        this.exceptionHandler = exceptionHandler;
+    public RootPathProviderImpl(final @Nonnull Class<?> clazz, final @Nonnull ThrowableHandler throwableHandler) {
+        this.throwableHandler = throwableHandler;
         impl(clazz);
     }
 
@@ -72,7 +72,7 @@ public class RootPathProviderImpl implements RootPathProvider {
         if (clazz == null) {
             throw new NullClassException(getBundle().getString("nullClass"));
         }
-        if (exceptionHandler == null) {
+        if (throwableHandler == null) {
             throw new NullExceptionHandlerException(getBundle().getString("nullExceptionHandler"));
         }
         String packageName = extractPackageName(clazz);
@@ -130,7 +130,7 @@ public class RootPathProviderImpl implements RootPathProvider {
         try {
             return extractPackageNameImpl(clazz);
         } catch (NoCanonicalNameException | NoPackageException | EmptyPackageException e) {
-            exceptionHandler.handleException(e);
+            throwableHandler.exception(e);
             return null;
         }
     }
@@ -155,7 +155,7 @@ public class RootPathProviderImpl implements RootPathProvider {
         try {
             return getPreferencesPathImpl();
         } catch (EmptyPathException e) {
-            exceptionHandler.handleException(e);
+            throwableHandler.exception(e);
             return null;
         }
     }
@@ -181,7 +181,7 @@ public class RootPathProviderImpl implements RootPathProvider {
             checkParentPathIsAccessibleImpl(file);
             return true;
         } catch (ParentDirectoryNotReadableException | ParentDirectoryNotWriteableException e) {
-            exceptionHandler.handleException(e);
+            throwableHandler.exception(e);
             return false;
         }
     }
@@ -207,7 +207,7 @@ public class RootPathProviderImpl implements RootPathProvider {
             checkFolderIsAccessibleImpl(file);
             return true;
         } catch (PathPointsToFileException | DirectoryNotReadableException | DirectoryNotWriteableException e) {
-            exceptionHandler.handleException(e);
+            throwableHandler.exception(e);
             return false;
         }
     }

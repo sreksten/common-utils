@@ -24,7 +24,7 @@ final class BceScannedClasses implements ScannedClasses {
             // when archive defaults are annotated/implicit or the class was pre-discovered
             // with a restrictive mode (e.g., NONE in managed bootstrap).
             knowledgeBase.addProgrammatic(clazz, BeanArchiveMode.EXPLICIT);
-            messageHandler.handleInfoMessage("[BCE] Added scanned class " + className);
+            messageHandler.info("[BCE] Added scanned class " + className);
         } catch (ClassNotFoundException e) {
             throw new IllegalArgumentException("Cannot add scanned class " + className, e);
         }

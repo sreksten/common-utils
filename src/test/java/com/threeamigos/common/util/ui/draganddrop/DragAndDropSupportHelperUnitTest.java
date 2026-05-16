@@ -1,7 +1,7 @@
 package com.threeamigos.common.util.ui.draganddrop;
 
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
-import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ThrowableHandler;
 import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -91,25 +91,25 @@ class DragAndDropSupportHelperUnitTest {
         // When
         sut.getDropTarget().drop(mockEvent);
         // Then
-        List<Exception> exceptions = sut.exceptionHandler.getAllExceptions();
+        List<Throwable> exceptions = sut.throwableHandler.getAllThrowables();
         assertEquals(1, exceptions.size());
         assertEquals("Test I/O exception", exceptions.get(0).getMessage());
     }
 
-    private static class DndSupportClass extends Component implements Consumer<List<File>>, ExceptionHandler {
+    private static class DndSupportClass extends Component implements Consumer<List<File>>, ThrowableHandler {
 
         private final List<File> acceptedFiles;
-        InMemoryMessageHandler exceptionHandler;
+        InMemoryMessageHandler throwableHandler;
 
         DndSupportClass() {
             super();
             acceptedFiles = new ArrayList<>();
-            exceptionHandler = new InMemoryMessageHandler();
+            throwableHandler = new InMemoryMessageHandler();
         }
 
         @Override
-        public void handleException(@Nonnull Exception exception) {
-            exceptionHandler.handleException(exception);
+        public void exception(@Nonnull Throwable exception) {
+            throwableHandler.exception(exception);
         }
 
         @Override

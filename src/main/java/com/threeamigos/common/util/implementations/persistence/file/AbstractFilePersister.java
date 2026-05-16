@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.implementations.persistence.file;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ThrowableHandler;
 import com.threeamigos.common.util.interfaces.persistence.PersistResult;
 import com.threeamigos.common.util.interfaces.persistence.Persister;
 import com.threeamigos.common.util.interfaces.persistence.file.RootPathProvider;
@@ -30,22 +30,22 @@ public abstract class AbstractFilePersister<T> implements Persister<T> {
 
     // End of static methods
 
-    protected final ExceptionHandler exceptionHandler;
+    protected final ThrowableHandler throwableHandler;
     private final String rootPath;
     private final boolean rootPathAccessible;
 
     /**
      * @param rootPathProvider to know where to store the entity
-     * @param exceptionHandler to inform the end user if any error arises
+     * @param throwableHandler to inform the end user if any error arises
      */
-    protected AbstractFilePersister(final @Nonnull RootPathProvider rootPathProvider, final @Nonnull ExceptionHandler exceptionHandler) {
+    protected AbstractFilePersister(final @Nonnull RootPathProvider rootPathProvider, final @Nonnull ThrowableHandler throwableHandler) {
         if (rootPathProvider == null) {
             throw new IllegalArgumentException(getBundle().getString("noRootPathProviderProvided"));
         }
-        if (exceptionHandler == null) {
+        if (throwableHandler == null) {
             throw new IllegalArgumentException(getBundle().getString("noExceptionHandlerProvided"));
         }
-        this.exceptionHandler = exceptionHandler;
+        this.throwableHandler = throwableHandler;
         rootPath = rootPathProvider.getRootPath();
         rootPathAccessible = rootPathProvider.isRootPathAccessible();
     }

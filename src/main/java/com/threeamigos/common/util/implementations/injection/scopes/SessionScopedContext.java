@@ -190,7 +190,7 @@ public class SessionScopedContext implements ScopeContext {
                     try {
                         beanImpl.invokePrePassivate(instance);
                     } catch (Exception e) {
-                        messageHandler.handleException(
+                        messageHandler.exception(
                             "Error invoking @PrePassivate on bean " + bean.getBeanClass().getName() +
                                 " in session " + sessionId + ": " + e.getMessage(),
                             e
@@ -288,7 +288,7 @@ public class SessionScopedContext implements ScopeContext {
                 try {
                     beanImpl.invokePostActivate(instance);
                 } catch (Exception e) {
-                    messageHandler.handleException(
+                    messageHandler.exception(
                         "Error invoking @PostActivate on bean " + bean.getBeanClass().getName() +
                             " in session " + sessionId + ": " + e.getMessage(),
                         e
@@ -377,7 +377,7 @@ public class SessionScopedContext implements ScopeContext {
                 try {
                     bean.destroy(instance, ctx);
                 } catch (Exception e) {
-                    messageHandler.handleException(
+                    messageHandler.exception(
                         "Error destroying bean " + bean.getBeanClass().getName() +
                             " in session " + sessionId + ": " + e.getMessage(),
                         e
@@ -440,7 +440,7 @@ public class SessionScopedContext implements ScopeContext {
                 }
             }
         } catch (Exception e) {
-            messageHandler.handleException(
+            messageHandler.exception(
                 "Error invoking @" + annotationType.name() + " on " +
                     instance.getClass().getName() + ": " + e.getMessage(),
                 e

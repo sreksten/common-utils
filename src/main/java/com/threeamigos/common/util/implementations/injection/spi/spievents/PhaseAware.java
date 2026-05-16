@@ -12,7 +12,7 @@ class PhaseAware {
     }
 
     protected void info(Phase phase, String message) {
-        messageHandler.handleInfoMessage("[" + phase.getDescription() + "] " + message);
+        messageHandler.info("[" + phase.getDescription() + "] " + message);
     }
 
     protected void checkNotNull(Object object, String objectName) {

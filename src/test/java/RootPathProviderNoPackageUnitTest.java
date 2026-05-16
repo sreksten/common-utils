@@ -39,7 +39,7 @@ class RootPathProviderNoPackageUnitTest {
         // When
         new RootPathProviderImpl(clazz, messageHandler);
         // Then
-        assertEquals(1, messageHandler.getAllExceptions().size());
-        assertEquals(EmptyPackageException.class, messageHandler.getAllExceptions().get(0).getClass());
+        assertEquals(1, messageHandler.getAllThrowables().size());
+        assertEquals(EmptyPackageException.class, messageHandler.getAllThrowables().get(0).getClass());
     }
 }

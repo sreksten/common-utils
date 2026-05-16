@@ -5859,7 +5859,7 @@ public class Syringe {
             method.setAccessible(true);
             method.invoke(extension, args);
 
-            messageHandler.handleInfoMessage("[Syringe] Invoked extension observer: " +
+            messageHandler.info("[Syringe] Invoked extension observer: " +
                     extension.getClass().getSimpleName() + "." + method.getName() +
                     "(@Observes " + event.getClass().getSimpleName() +
                     ", priority=" + priority + ")");
@@ -6213,14 +6213,14 @@ public class Syringe {
     }
 
     private void info(String message) {
-        messageHandler.handleInfoMessage("[Syringe] " + message);
+        messageHandler.info("[Syringe] " + message);
     }
 
     private void error(String message) {
-        messageHandler.handleErrorMessage("[Syringe] " + message);
+        messageHandler.error("[Syringe] " + message);
     }
 
     private void log(String error, Exception t) {
-        messageHandler.handleException("[Syringe] " + error, t);
+        messageHandler.exception("[Syringe] " + error, t);
     }
 }

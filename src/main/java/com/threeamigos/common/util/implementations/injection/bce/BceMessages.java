@@ -19,7 +19,7 @@ final class BceMessages implements Messages {
 
     @Override
     public void info(String message) {
-        messageHandler.handleInfoMessage("[BCE] " + message);
+        messageHandler.info("[BCE] " + message);
     }
 
     @Override
@@ -39,7 +39,7 @@ final class BceMessages implements Messages {
 
     @Override
     public void warn(String message) {
-        messageHandler.handleWarnMessage("[BCE] " + message);
+        messageHandler.warn("[BCE] " + message);
     }
 
     @Override
@@ -59,7 +59,7 @@ final class BceMessages implements Messages {
 
     @Override
     public void error(String message) {
-        messageHandler.handleErrorMessage("[BCE] " + message);
+        messageHandler.error("[BCE] " + message);
         knowledgeBase.addDefinitionError("[BCE] " + message);
     }
 
@@ -80,7 +80,7 @@ final class BceMessages implements Messages {
 
     @Override
     public void error(Exception exception) {
-        messageHandler.handleException("[BCE]", exception);
+        messageHandler.exception("[BCE]", exception);
         knowledgeBase.addDefinitionError("[BCE] " + exception.getMessage(), exception);
     }
 

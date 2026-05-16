@@ -1,6 +1,6 @@
 package com.threeamigos.common.util.ui.draganddrop;
 
-import com.threeamigos.common.util.interfaces.messagehandler.ExceptionHandler;
+import com.threeamigos.common.util.interfaces.messagehandler.ThrowableHandler;
 import jakarta.annotation.Nonnull;
 
 import java.awt.*;
@@ -15,7 +15,7 @@ import java.util.function.Consumer;
 /**
  * A helper class to add drag-and-drop support for files to a {@link java.awt.Component}.
  * This component must be a {@link Consumer} for a {@link List} of {@link File}s.
- * If the component is not also an {@link ExceptionHandler}, one must be provided
+ * If the component is not also an {@link ThrowableHandler}, one must be provided
  * that will be used if problems arise during the drag-and-drop operation.
  *
  * @author Stefano Reksten.
@@ -25,13 +25,13 @@ public class DragAndDropSupportHelper {
     private DragAndDropSupportHelper() {
     }
 
-    public static <T extends Component & Consumer<List<File>> & ExceptionHandler> void addJavaFileListSupport(
+    public static <T extends Component & Consumer<List<File>> & ThrowableHandler> void addJavaFileListSupport(
             @Nonnull T component) {
         addJavaFileListSupport(component, component);
     }
 
     public static <T extends Component & Consumer<List<File>>> void addJavaFileListSupport(@Nonnull T component,
-                                                                                           @Nonnull ExceptionHandler exceptionHandler) {
+                                                                                           @Nonnull ThrowableHandler throwableHandler) {
         component.setDropTarget(new DropTarget() {
             private static final long serialVersionUID = 1L;
 
@@ -47,7 +47,7 @@ public class DragAndDropSupportHelper {
                     }
                     evt.dropComplete(true);
                 } catch (Exception e) {
-                    exceptionHandler.handleException(e);
+                    throwableHandler.exception(e);
                 }
             }
         });

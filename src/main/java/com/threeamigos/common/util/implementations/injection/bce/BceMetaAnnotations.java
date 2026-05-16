@@ -77,7 +77,7 @@ final class BceMetaAnnotations implements MetaAnnotations {
         boolean passivating = Boolean.TRUE.equals(AnnotationExtractors.getNormalScopePassivatingValue(scopeAnnotation));
         knowledgeBase.addScope(scopeAnnotation, isNormal, isNormal && passivating);
         knowledgeBase.addContextImplementation(scopeAnnotation, contextImplementation);
-        messageHandler.handleInfoMessage("[BCE] Registered context for scope " +
+        messageHandler.info("[BCE] Registered context for scope " +
             scopeAnnotation.getName() + " using " + contextImplementation.getName());
     }
 
@@ -237,7 +237,7 @@ final class BceMetaAnnotations implements MetaAnnotations {
         try {
             return BceMetadata.unwrapAnnotationInfo(annotationBuilderFactory.create(annotationType).build());
         } catch (RuntimeException ex) {
-            messageHandler.handleWarnMessage("[BCE] Unable to materialize annotation @" +
+            messageHandler.warn("[BCE] Unable to materialize annotation @" +
                     annotationType.getName() + " for dynamic meta-annotation registration: " + ex.getMessage());
             return null;
         }
