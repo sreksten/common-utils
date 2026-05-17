@@ -76,9 +76,19 @@ public class SyringeWildFlyArquillianContainer implements DeployableContainer<Sy
         byte[] content = toByteArray(archive);
         ServerDeploymentHelper helper = new ServerDeploymentHelper(client);
         try {
-            helper.deploy(runtimeName, new ByteArrayInputStream(content));
+            helper.deploy(runtimeName, toArchiveStream(content));
         } catch (Exception e) {
-            throw new DeploymentException("Could not deploy archive " + runtimeName, e);
+            if (!isDuplicateDeploymentFailure(e)) {
+                throw new DeploymentException("Could not deploy archive " + runtimeName, e);
+            }
+            try {
+                helper.undeploy(runtimeName);
+                helper.deploy(runtimeName, toArchiveStream(content));
+            } catch (Exception redeployFailure) {
+                throw new DeploymentException(
+                        "Could not deploy archive " + runtimeName + " after removing stale deployment",
+                        redeployFailure);
+            }
         }
 
         ProtocolMetaData metaData = new ProtocolMetaData();
@@ -140,6 +150,25 @@ public class SyringeWildFlyArquillianContainer implements DeployableContainer<Sy
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         archive.as(ZipExporter.class).exportTo(baos);
         return baos.toByteArray();
+    }
+
+    private static ByteArrayInputStream toArchiveStream(byte[] content) {
+        return new ByteArrayInputStream(content);
+    }
+
+    static boolean isDuplicateDeploymentFailure(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null
+                    && message.contains("WFLYCTL0212")
+                    && message.contains("Duplicate resource")
+                    && message.contains("(\"deployment\" => \"")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static String deriveContextRoot(String runtimeName) {

@@ -325,6 +325,7 @@
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <artifactSet>
                                 <includes>
+                                    <include>com.threeamigos:common-utils-messagehandler</include>
                                     <include>jakarta.enterprise:cdi-tck-api</include>
                                 </includes>
                             </artifactSet>

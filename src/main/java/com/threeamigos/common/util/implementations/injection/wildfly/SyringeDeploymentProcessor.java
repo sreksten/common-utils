@@ -39,6 +39,9 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             "META-INF/services/jakarta.enterprise.inject.spi.Extension";
     private static final String BCE_EXTENSION_SERVICE_PATH =
             "META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension";
+    private static final String WELD_DEPLOYMENT_MARKER_CLASS =
+            "org.jboss.as.weld._private.WeldDeploymentMarker";
+    private static final String WELD_DEPLOYMENT_MARKER_FIELD = "MARKER";
 
     @Override
     public void deploy(DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
@@ -125,6 +128,10 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
         try {
             syringe = bootstrap.bootstrap();
 
+            // Ensure WildFly Weld does not bootstrap a second CDI container for the same deployment.
+            // Double bootstrap causes duplicate lifecycle observer notifications.
+            suppressWeldDeploymentMarker(deploymentUnit);
+
             // 3. Attach Syringe to the deployment unit for later use (e.g., in Setup Actions)
             deploymentUnit.putAttachment(SyringeAttachments.SYRINGE_CONTAINER, syringe);
 
@@ -141,6 +148,55 @@ public class SyringeDeploymentProcessor implements DeploymentUnitProcessor {
             }
             throw e;
         }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void suppressWeldDeploymentMarker(DeploymentUnit deploymentUnit) {
+        if (deploymentUnit == null) {
+            return;
+        }
+        try {
+            Class<?> markerClass = loadWeldDeploymentMarkerClass(deploymentUnit);
+            java.lang.reflect.Field markerField = markerClass.getDeclaredField(WELD_DEPLOYMENT_MARKER_FIELD);
+            markerField.setAccessible(true);
+            Object attachmentKey = markerField.get(null);
+            if (!(attachmentKey instanceof AttachmentKey)) {
+                return;
+            }
+            DeploymentUnit current = deploymentUnit;
+            while (current != null) {
+                current.removeAttachment((AttachmentKey) attachmentKey);
+                current = current.getParent();
+            }
+        } catch (ModuleLoadException ignored) {
+            // Weld module is not available in this runtime.
+        } catch (ClassNotFoundException ignored) {
+            // Weld marker class is not available in this runtime.
+        } catch (NoSuchFieldException ignored) {
+            // Weld internals changed; keep deployment resilient.
+        } catch (IllegalAccessException ignored) {
+            // Weld internals not accessible in this runtime.
+        } catch (RuntimeException ignored) {
+            // Best effort only.
+        }
+    }
+
+    private static Class<?> loadWeldDeploymentMarkerClass(DeploymentUnit deploymentUnit)
+            throws ModuleLoadException, ClassNotFoundException {
+        ModuleLoader moduleLoader = deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
+        if (moduleLoader != null) {
+            Module weldModule = moduleLoader.loadModule("org.jboss.as.weld");
+            if (weldModule != null) {
+                ClassLoader weldClassLoader = weldModule.getClassLoader();
+                if (weldClassLoader != null) {
+                    return Class.forName(WELD_DEPLOYMENT_MARKER_CLASS, false, weldClassLoader);
+                }
+            }
+        }
+        return Class.forName(
+                WELD_DEPLOYMENT_MARKER_CLASS,
+                false,
+                SyringeDeploymentProcessor.class.getClassLoader());
     }
 
     private static void registerEeSetupActionAttachments(DeploymentUnit deploymentUnit, SyringeSetupAction setupAction) {

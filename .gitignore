@@ -39,3 +39,8 @@ build/
 
 # Ignore org package tree containing original TCK tests
 org/
+!src/main/java/org/
+!src/main/java/org/jboss/
+!src/main/java/org/jboss/weld/
+!src/main/java/org/jboss/weld/exceptions/
+!src/main/java/org/jboss/weld/exceptions/*.java

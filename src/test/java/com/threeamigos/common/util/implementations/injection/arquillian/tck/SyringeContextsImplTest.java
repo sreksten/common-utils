@@ -2,21 +2,26 @@ package com.threeamigos.common.util.implementations.injection.arquillian.tck;
 
 import com.threeamigos.common.util.implementations.injection.Syringe;
 import com.threeamigos.common.util.implementations.injection.discovery.BeanArchiveMode;
+import com.threeamigos.common.util.implementations.injection.scopes.RequestScopedContext;
 import com.threeamigos.common.util.implementations.injection.spi.BeanManagerImpl;
 import com.threeamigos.common.util.implementations.messagehandler.InMemoryMessageHandler;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.context.spi.Context;
+import jakarta.enterprise.context.spi.Contextual;
 import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import org.junit.jupiter.api.Test;
 
 import java.io.Serializable;
+import java.lang.annotation.Annotation;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -80,6 +85,44 @@ class SyringeContextsImplTest {
         }
     }
 
+    @Test
+    void shouldDeactivateUnknownScopeContextUsingDirectManagedMethod() {
+        DeactivatableManagedContext managedContext = new DeactivatableManagedContext();
+        managedContext.activate();
+        assertTrue(managedContext.isActive());
+
+        SyringeContextsImpl contexts = new SyringeContextsImpl();
+        contexts.setInactive(managedContext);
+
+        assertFalse(managedContext.isActive());
+    }
+
+    @Test
+    void shouldDeactivateManagedContextUnwrappedFromDelegateField() {
+        DeactivatableManagedContext managedContext = new DeactivatableManagedContext();
+        managedContext.activate();
+        assertTrue(managedContext.isActive());
+
+        Context wrapper = new DelegateWrappingContext(managedContext);
+        SyringeContextsImpl contexts = new SyringeContextsImpl();
+        contexts.setInactive(wrapper);
+
+        assertFalse(managedContext.isActive());
+    }
+
+    @Test
+    void shouldReadScopeContextFromSuperclassFieldWhenDeactivatingRequestContext() {
+        RequestScopedContext requestScopedContext = new RequestScopedContext();
+        requestScopedContext.activateRequest();
+        assertTrue(requestScopedContext.isActive());
+
+        Context wrapper = new SuperclassScopeContextWrapper(requestScopedContext);
+        SyringeContextsImpl contexts = new SyringeContextsImpl();
+        contexts.setInactive(wrapper);
+
+        assertFalse(requestScopedContext.isActive());
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static <T> Bean<T> resolveBean(BeanManager beanManager, Class<T> type) {
         Set<Bean<?>> beans = beanManager.getBeans(type);
@@ -102,6 +145,103 @@ class SyringeContextsImplTest {
 
         void setId(int id) {
             this.id = id;
+        }
+    }
+
+    private static class DeactivatableManagedContext implements Context {
+        private boolean active;
+
+        @Override
+        public Class<? extends Annotation> getScope() {
+            return Dependent.class;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+            return null;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual) {
+            return null;
+        }
+
+        @Override
+        public boolean isActive() {
+            return active;
+        }
+
+        void activate() {
+            active = true;
+        }
+
+        public void deactivate() {
+            active = false;
+        }
+    }
+
+    private static class DelegateWrappingContext implements Context {
+        @SuppressWarnings("unused")
+        private final DeactivatableManagedContext delegate;
+
+        private DelegateWrappingContext(DeactivatableManagedContext delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Class<? extends Annotation> getScope() {
+            return Dependent.class;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+            return null;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual) {
+            return null;
+        }
+
+        @Override
+        public boolean isActive() {
+            return delegate.isActive();
+        }
+    }
+
+    private static class ScopeContextHolder {
+        @SuppressWarnings("unused")
+        private final Object scopeContext;
+
+        private ScopeContextHolder(Object scopeContext) {
+            this.scopeContext = scopeContext;
+        }
+    }
+
+    private static class SuperclassScopeContextWrapper extends ScopeContextHolder implements Context {
+
+        private SuperclassScopeContextWrapper(Object scopeContext) {
+            super(scopeContext);
+        }
+
+        @Override
+        public Class<? extends Annotation> getScope() {
+            return RequestScoped.class;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+            return null;
+        }
+
+        @Override
+        public <T> T get(Contextual<T> contextual) {
+            return null;
+        }
+
+        @Override
+        public boolean isActive() {
+            return true;
         }
     }
 }
