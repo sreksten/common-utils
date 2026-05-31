@@ -130,3 +130,6 @@ Revision history:
 1.0.6:
 - added Resolution interface and implementations
 - added PriorityDeque interface and implementations
+
+1.0.7:
+- logging moved to a standalone package

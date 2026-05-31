@@ -1,4 +1,0 @@
-package com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multiplenotannotatedconcreteclasses;
-
-public class MultipleNotAnnotatedConcreteClass2 extends MultipleNotAnnotatedAbstractClass {
-}

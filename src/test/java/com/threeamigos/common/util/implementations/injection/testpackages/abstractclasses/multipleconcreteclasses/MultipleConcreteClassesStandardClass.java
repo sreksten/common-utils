@@ -1,4 +1,0 @@
-package com.threeamigos.common.util.implementations.injection.testpackages.abstractclasses.multipleconcreteclasses;
-
-public class MultipleConcreteClassesStandardClass extends MultipleConcreteClassesAbstractClass {
-}

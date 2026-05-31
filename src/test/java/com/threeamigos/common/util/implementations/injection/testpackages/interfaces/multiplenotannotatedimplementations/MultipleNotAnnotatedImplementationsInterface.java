@@ -1,4 +1,0 @@
-package com.threeamigos.common.util.implementations.injection.testpackages.interfaces.multiplenotannotatedimplementations;
-
-public interface MultipleNotAnnotatedImplementationsInterface {
-}

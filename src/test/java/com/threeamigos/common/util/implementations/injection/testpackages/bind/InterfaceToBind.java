@@ -1,4 +1,0 @@
-package com.threeamigos.common.util.implementations.injection.testpackages.bind;
-
-public interface InterfaceToBind {
-}
