@@ -8,6 +8,14 @@ These classes address the following needs:
 
 **The logging part was overhauled and moved to a standalone package, [common-utils-messagehandler](https://github.com/sreksten/common-utils-messagehandler)**
 
+### Parallel tasks execution
+
+**The parallel task execution part was overhauled and moved to a standalone package, [common-utils-concurrency](https://github.com/sreksten/common-utils-concurrency)**
+
+### Collections and Cache
+
+**The collections and cache part was overhauled and moved to a standalone package, [common-utils-collections](https://github.com/sreksten/common-utils-collections)**
+
 ### JSON conversion
 
 Besides web applications, JSON can be used to store preferences and other data. Based on Google's Gson library,
@@ -132,4 +140,9 @@ Revision history:
 - added PriorityDeque interface and implementations
 
 1.0.7:
-- logging moved to a standalone package
+- logging moved to a standalone package (added as a dependency)
+
+1.0.8:
+- concurrency moved to a standalone package (added as a dependency)
+- collections and cache moved to a standalone package (added as a dependency)
+

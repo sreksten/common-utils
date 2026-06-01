@@ -6,7 +6,7 @@
 
     <groupId>com.threeamigos</groupId>
     <artifactId>common-utils</artifactId>
-    <version>1.0.7</version>
+    <version>1.0.8</version>
 
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
@@ -19,6 +19,16 @@
             <groupId>com.threeamigos</groupId>
             <artifactId>common-utils-messagehandler</artifactId>
             <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.threeamigos</groupId>
+            <artifactId>common-utils-concurrency</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.threeamigos</groupId>
+            <artifactId>common-utils-collections</artifactId>
+            <version>1.0</version>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>
