@@ -14,7 +14,7 @@ import java.util.ResourceBundle;
  *
  * @author Stefano Reksten
  */
-class JsonBuilderImpl implements JsonBuilder {
+public class JsonBuilderImpl implements JsonBuilder {
 
     private static ResourceBundle bundle;
 
